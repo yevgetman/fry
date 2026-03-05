@@ -67,10 +67,10 @@ EOF
 
 ```bash
 # Uses Codex (default) -- generates AGENTS.md + epic.md automatically, then builds
-./fry.sh epic.md
+./fry.sh
 
 # Or use Claude Code instead
-./fry.sh epic.md --engine claude
+./fry.sh --engine claude
 ```
 
 That's it. fry will:
@@ -79,10 +79,12 @@ That's it. fry will:
 3. Generate `epic.md` (sprint definitions)
 4. Execute each sprint, iterating until completion or max iterations
 
+If `AGENTS.md` or `epic.md` already exist, they are **overwritten** by default. Use `--keep-agents` or `--keep-epic` flags on `fry-prepare.sh` to preserve existing files.
+
 ### 3. Validate before running (recommended)
 
 ```bash
-./fry.sh epic.md --dry-run
+./fry.sh --dry-run
 ```
 
 This parses the epic, checks prerequisites, and shows the sprint plan without executing anything.
@@ -90,14 +92,14 @@ This parses the epic, checks prerequisites, and shows the sprint plan without ex
 ## Usage
 
 ```
-./fry.sh <epic.md> [start_sprint] [end_sprint] [options]
+./fry.sh [epic.md] [start_sprint] [end_sprint] [options]
 ```
 
 ### Arguments
 
 | Argument | Description |
 |---|---|
-| `epic.md` | Path to the epic definition file (auto-generated if missing) |
+| `epic.md` | Path to the epic definition file (default: `epic.md`, auto-generated if missing) |
 | `start_sprint` | First sprint to run (default: 1) |
 | `end_sprint` | Last sprint to run (default: last in epic) |
 
@@ -113,14 +115,16 @@ This parses the epic, checks prerequisites, and shows the sprint plan without ex
 ### Examples
 
 ```bash
+./fry.sh                                      # Run all sprints (epic.md default)
+./fry.sh --dry-run                            # Validate and preview
+./fry.sh --engine claude                      # Run all sprints with Claude Code
 ./fry.sh epic.md                              # Run all sprints with Codex
-./fry.sh epic.md --engine claude              # Run all sprints with Claude Code
+./fry.sh epic-phase2.md                       # Use a custom epic filename
 ./fry.sh epic.md 4                            # Resume from sprint 4
 ./fry.sh epic.md 4 4                          # Run only sprint 4
 ./fry.sh epic.md 3 5                          # Run sprints 3 through 5
-./fry.sh epic.md --dry-run                    # Validate and preview
-./fry.sh epic.md --prepare-engine claude      # Use Claude for generation, Codex for build
-FRY_ENGINE=claude ./fry.sh epic.md            # Set engine via environment variable
+./fry.sh --prepare-engine claude              # Use Claude for generation, Codex for build
+FRY_ENGINE=claude ./fry.sh                    # Set engine via environment variable
 ```
 
 ### Engine Selection
@@ -135,7 +139,7 @@ The AI engine is resolved with this precedence (highest wins):
 This lets you mix engines -- for example, generate the epic with Claude and run the build with Codex:
 
 ```bash
-./fry.sh epic.md --prepare-engine claude --engine codex
+./fry.sh --prepare-engine claude --engine codex
 ```
 
 ## Project Structure
@@ -248,7 +252,7 @@ Each sprint prompt follows a 7-part structure:
 
 ## fry-prepare.sh
 
-Generates `AGENTS.md` and `epic.md` from your plan. Called automatically by `fry.sh` when the epic file doesn't exist, or run standalone:
+Generates `AGENTS.md` and `epic.md` from your plan. Called automatically by `fry.sh`, or run standalone:
 
 ```bash
 ./fry-prepare.sh                           # Generate with Codex (default)
@@ -256,9 +260,13 @@ Generates `AGENTS.md` and `epic.md` from your plan. Called automatically by `fry
 ./fry-prepare.sh epic-phase1.md            # Custom output filename
 ./fry-prepare.sh epic.md --engine claude   # Custom filename + engine
 ./fry-prepare.sh --validate-only           # Check prerequisites without generating
+./fry-prepare.sh --keep-agents             # Skip AGENTS.md if it already exists
+./fry-prepare.sh --keep-epic               # Skip epic.md if it already exists
 ```
 
-**Step 1** generates `AGENTS.md` -- an operational rules file with 15-40 numbered rules derived from your plan (technology constraints, architecture patterns, testing rules, prohibitions). Skipped if `AGENTS.md` already exists.
+Both `AGENTS.md` and `epic.md` are **overwritten by default** on each run. Use `--keep-agents` and/or `--keep-epic` to preserve existing files.
+
+**Step 1** generates `AGENTS.md` -- an operational rules file with 15-40 numbered rules derived from your plan (technology constraints, architecture patterns, testing rules, prohibitions).
 
 **Step 2** generates the epic -- a sequenced set of 4-10 sprints decomposed from your plan, each with specific build instructions, verification checklists, and completion tokens.
 
@@ -269,7 +277,7 @@ If you prefer to generate the epic with a different LLM (ChatGPT, Claude web, et
 1. Attach `plans/plan.md` and `epic-example.md` as context
 2. Copy the prompt from the `## The Prompt` section in `GENERATE_EPIC.md`
 3. Save the output as `epic.md`
-4. Validate: `./fry.sh epic.md --dry-run`
+4. Validate: `./fry.sh --dry-run`
 
 ## Sprint Sizing Guidelines
 

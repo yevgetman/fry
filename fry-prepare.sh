@@ -21,7 +21,6 @@
 #
 # Optional:
 #   plans/executive.md     Executive context (used if present, skipped if not)
-#   AGENTS.md              Skips Step 1 if already exists
 #
 # Usage:
 #   ./fry-prepare.sh                           # Generate with codex (default)
@@ -29,6 +28,8 @@
 #   ./fry-prepare.sh epic-phase1.md            # Custom epic filename
 #   ./fry-prepare.sh epic.md --engine claude   # Custom filename + engine
 #   ./fry-prepare.sh --validate-only           # Check prerequisites only
+#   ./fry-prepare.sh --keep-agents             # Skip AGENTS.md if it exists
+#   ./fry-prepare.sh --keep-epic               # Skip epic.md if it exists
 #
 # Engine selection: --engine flag > FRY_ENGINE env var > default (codex)
 #
@@ -60,6 +61,8 @@ has_context() {
 # =============================================================================
 
 ENGINE="${FRY_ENGINE:-codex}"
+KEEP_AGENTS=0
+KEEP_EPIC=0
 
 # Execute a prompt via the configured AI engine.
 # Usage: run_agent "prompt text"
@@ -88,8 +91,8 @@ run_agent() {
 # =============================================================================
 
 generate_agents() {
-  if [[ -f "${AGENTS_FILE}" ]]; then
-    echo "AGENTS.md already exists. Skipping generation."
+  if [[ $KEEP_AGENTS -eq 1 ]] && [[ -f "${AGENTS_FILE}" ]]; then
+    echo "AGENTS.md already exists. Skipping generation (--keep-agents)."
     return 0
   fi
 
@@ -176,14 +179,9 @@ CRITICAL:
 generate_epic() {
   local output_file=$1
 
-  # Guard against overwriting
-  if [[ -f "${output_file}" ]]; then
-    echo "WARNING: ${output_file} already exists."
-    read -rp "Overwrite? [y/N] " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-      echo "Aborted. Existing ${output_file} unchanged."
-      exit 0
-    fi
+  if [[ $KEEP_EPIC -eq 1 ]] && [[ -f "${output_file}" ]]; then
+    echo "${output_file} already exists. Skipping generation (--keep-epic)."
+    return 0
   fi
 
   echo "Step 2: Generating ${output_file} from ${PLAN_FILE} (engine: ${ENGINE})..."
@@ -277,6 +275,14 @@ main() {
         fi
         ENGINE="$2"
         shift 2
+        ;;
+      --keep-agents)
+        KEEP_AGENTS=1
+        shift
+        ;;
+      --keep-epic)
+        KEEP_EPIC=1
+        shift
         ;;
       *)
         output_file="$1"

@@ -37,12 +37,13 @@
 # epic-example.md and GENERATE_EPIC.md alongside fry-prepare.sh.
 #
 # Usage:
-#   ./fry.sh <epic.md>                    # Run all sprints (default engine: codex)
-#   ./fry.sh <epic.md> --engine claude    # Run all sprints with Claude Code
-#   ./fry.sh <epic.md> 4                  # Start from sprint 4
-#   ./fry.sh <epic.md> 4 4               # Run only sprint 4
-#   ./fry.sh <epic.md> 3 5               # Run sprints 3 through 5
-#   ./fry.sh <epic.md> --dry-run          # Parse & validate only
+#   ./fry.sh                              # Run all sprints (epic.md default)
+#   ./fry.sh [epic.md]                    # Run all sprints (default engine: codex)
+#   ./fry.sh [epic.md] --engine claude    # Run all sprints with Claude Code
+#   ./fry.sh [epic.md] 4                  # Start from sprint 4
+#   ./fry.sh [epic.md] 4 4               # Run only sprint 4
+#   ./fry.sh [epic.md] 3 5               # Run sprints 3 through 5
+#   ./fry.sh --dry-run                    # Parse & validate only
 #
 # Epic File Format:
 #
@@ -150,10 +151,10 @@ declare -A SPRINT_DURATIONS
 
 usage() {
   cat <<'EOF'
-Usage: ./fry.sh <epic.md> [start_sprint] [end_sprint] [options]
+Usage: ./fry.sh [epic.md] [start_sprint] [end_sprint] [options]
 
 Arguments:
-  epic.md              Path to the epic definition file
+  epic.md              Path to the epic definition file (default: epic.md)
   start_sprint         First sprint to run (default: 1)
   end_sprint           Last sprint to run (default: last sprint in epic)
 
@@ -168,7 +169,7 @@ Engine selection precedence (highest wins):
   3. FRY_ENGINE env   4. default (codex)
 
 If epic.md doesn't exist, fry-prepare.sh is called automatically to
-generate AGENTS.md (if missing) and epic.md from plans/plan.md.
+generate AGENTS.md and epic.md from plans/plan.md.
 
 Required project structure (before first run):
   plans/plan.md          Holistic build plan (all phases, architecture)
@@ -178,14 +179,15 @@ Optional (used if present):
   AGENTS.md              Operational rules (auto-generated from plan.md if missing)
 
 Examples:
+  ./fry.sh                                      # Run all sprints (epic.md default)
+  ./fry.sh --dry-run                            # Validate epic.md, show plan
   ./fry.sh epic.md                              # Run all sprints with codex
   ./fry.sh epic.md --engine claude              # Run all sprints with claude code
   ./fry.sh epic.md 4                            # Start from sprint 4 to end
   ./fry.sh epic.md 4 4                          # Run only sprint 4
   ./fry.sh epic.md 3 5                          # Run sprints 3 through 5
-  ./fry.sh epic.md --dry-run                    # Validate epic, show plan
-  ./fry.sh epic.md --prepare-engine claude      # Use claude for epic generation
-  FRY_ENGINE=claude ./fry.sh epic.md            # Set engine via env var
+  ./fry.sh --prepare-engine claude              # Use claude for epic generation
+  FRY_ENGINE=claude ./fry.sh                    # Set engine via env var
 
 Run ./fry.sh --help for this message.
 EOF
@@ -979,26 +981,14 @@ print_summary() {
 # =============================================================================
 
 main() {
-  if [[ $# -eq 0 ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
-    usage
-  fi
-
-  EPIC_FILE="$1"
-  shift
-
-  PROJECT_DIR="$(pwd)"
-
-  # Always resolve EPIC_FILE to absolute path
-  if [[ -f "$EPIC_FILE" ]]; then
-    EPIC_FILE="$(cd "$(dirname "$EPIC_FILE")" && pwd)/$(basename "$EPIC_FILE")"
-  else
-    # File doesn't exist yet — resolve to project root (where fry-prepare.sh creates it)
-    EPIC_FILE="${PROJECT_DIR}/$(basename "$EPIC_FILE")"
-  fi
-
   local positional=()
+
+  # Parse all flags first
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --help|-h)
+        usage
+        ;;
       --dry-run)
         DRY_RUN=1
         shift
@@ -1025,6 +1015,25 @@ main() {
         ;;
     esac
   done
+
+  # First positional arg is the epic file (default: epic.md)
+  EPIC_FILE="${positional[0]:-epic.md}"
+  # Remove it so remaining positionals are sprint range
+  if [[ ${#positional[@]} -gt 1 ]]; then
+    positional=("${positional[@]:1}")
+  else
+    positional=()
+  fi
+
+  PROJECT_DIR="$(pwd)"
+
+  # Always resolve EPIC_FILE to absolute path
+  if [[ -f "$EPIC_FILE" ]]; then
+    EPIC_FILE="$(cd "$(dirname "$EPIC_FILE")" && pwd)/$(basename "$EPIC_FILE")"
+  else
+    # File doesn't exist yet — resolve to project root (where fry-prepare.sh creates it)
+    EPIC_FILE="${PROJECT_DIR}/$(basename "$EPIC_FILE")"
+  fi
 
   LOG_DIR="${PROJECT_DIR}/build-logs"
   TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
