@@ -394,6 +394,22 @@ parse_epic() {
 # VERIFICATION PARSER
 # =============================================================================
 
+# Strip surrounding double quotes and process escape sequences in patterns.
+# verification.md uses shell-style quoting: "\"strict\":\\s*true" means the
+# grep pattern "strict":\s*true. Without unquoting, the literal wrapping
+# quotes and backslash escapes are passed to grep, causing false negatives.
+unquote_pattern() {
+  local raw="$1"
+  # Strip surrounding double quotes if present
+  if [[ "$raw" =~ ^\"(.*)\"$ ]]; then
+    raw="${BASH_REMATCH[1]}"
+  fi
+  # Process escape sequences: \" → " and \\ → \
+  raw="${raw//\\\"/\"}"
+  raw="${raw//\\\\/\\}"
+  printf '%s' "$raw"
+}
+
 parse_verification() {
   local vfile=$1
   local current_sprint=0
@@ -415,11 +431,11 @@ parse_verification() {
     [[ $current_sprint -eq 0 ]] && continue
 
     if [[ "$line" =~ ^@check_file_contains[[:space:]]+([^[:space:]]+)[[:space:]]+(.+) ]]; then
-      VERIFICATION_CHECKS+=("${current_sprint}|FILE_CONTAINS|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}")
+      VERIFICATION_CHECKS+=("${current_sprint}|FILE_CONTAINS|${BASH_REMATCH[1]}|$(unquote_pattern "${BASH_REMATCH[2]}")")
     elif [[ "$line" =~ ^@check_file[[:space:]]+(.+) ]]; then
       VERIFICATION_CHECKS+=("${current_sprint}|FILE|${BASH_REMATCH[1]}")
     elif [[ "$line" =~ ^@check_cmd_output[[:space:]]+(.+)[[:space:]]*\|[[:space:]]*(.+) ]]; then
-      VERIFICATION_CHECKS+=("${current_sprint}|CMD_OUTPUT|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}")
+      VERIFICATION_CHECKS+=("${current_sprint}|CMD_OUTPUT|${BASH_REMATCH[1]}|$(unquote_pattern "${BASH_REMATCH[2]}")")
     elif [[ "$line" =~ ^@check_cmd[[:space:]]+(.+) ]]; then
       VERIFICATION_CHECKS+=("${current_sprint}|CMD|${BASH_REMATCH[1]}")
     elif [[ "$line" =~ ^@check_ ]]; then
