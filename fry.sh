@@ -60,12 +60,14 @@
 #     @model <model>                     # Override agent model (alias: @codex_model)
 #     @engine_flags <flags>              # Extra flags for agent exec (alias: @codex_flags)
 #     @verification <file>               # Verification checks file (default: verification.md)
+#     @max_heal_attempts <N>             # Auto-heal attempts after verification failure (default: 3; 0=disabled)
 #
 #   Per-sprint block:
 #     @sprint <N>                        # Sprint number (starts new block)
 #     @name <display name>               # Sprint name for logs/summary
 #     @max_iterations <N>                # Max iterations before failure
 #     @promise <TOKEN>                   # Completion token to detect in output
+#     @max_heal_attempts <N>             # Override global heal attempts for this sprint
 #     @prompt                            # Marks start of prompt text
 #     <prompt text lines...>             # Everything until next @sprint or @end or EOF
 #     @end                               # (Optional) explicitly ends prompt block
@@ -122,11 +124,13 @@ PRE_ITERATION_CMD=""
 AGENT_MODEL=""
 AGENT_FLAGS=""
 VERIFICATION_FILE=""
+MAX_HEAL_ATTEMPTS=3
 TOTAL_SPRINTS=0
 
 declare -A SPRINT_NAMES
 declare -A SPRINT_MAX_ITERS
 declare -A SPRINT_PROMISES
+declare -A SPRINT_HEAL_ATTEMPTS
 
 # =============================================================================
 # GLOBALS — runtime state
@@ -187,6 +191,13 @@ Optional (used if present):
   plans/executive.md     Executive context (project vision, goals, scope)
   AGENTS.md              Operational rules (auto-generated from plan.md if missing)
   verification.md        Independent verification checks (auto-generated)
+
+Self-healing:
+  When verification checks fail after a sprint completes, fry automatically
+  re-runs the AI agent with a targeted fix prompt and re-checks. Repeats
+  up to @max_heal_attempts times (default: 3). Set @max_heal_attempts 0
+  in the epic file to disable and preserve stop-on-fail behavior.
+  Per-sprint overrides are supported via @max_heal_attempts in sprint blocks.
 
 Examples:
   ./fry.sh                                      # Run all sprints (epic.md default)
@@ -316,6 +327,7 @@ parse_epic() {
         [[ "$line" =~ ^@pre_sprint[[:space:]]+(.+) ]]              && PRE_SPRINT_CMD="${BASH_REMATCH[1]}" && continue
         [[ "$line" =~ ^@pre_iteration[[:space:]]+(.+) ]]           && PRE_ITERATION_CMD="${BASH_REMATCH[1]}" && continue
         [[ "$line" =~ ^@verification[[:space:]]+(.+) ]]               && VERIFICATION_FILE="${BASH_REMATCH[1]}" && continue
+        [[ "$line" =~ ^@max_heal_attempts[[:space:]]+([0-9]+) ]]      && MAX_HEAL_ATTEMPTS="${BASH_REMATCH[1]}" && continue
         # @model and @engine_flags (with backward-compat aliases @codex_model, @codex_flags)
         [[ "$line" =~ ^@(model|codex_model)[[:space:]]+(.+) ]]     && AGENT_MODEL="${BASH_REMATCH[2]}" && continue
         [[ "$line" =~ ^@(engine_flags|codex_flags)[[:space:]]+(.+) ]] && AGENT_FLAGS="${BASH_REMATCH[2]}" && continue
@@ -328,6 +340,7 @@ parse_epic() {
         [[ "$line" =~ ^@name[[:space:]]+(.+) ]]              && SPRINT_NAMES[$current_sprint]="${BASH_REMATCH[1]}" && continue
         [[ "$line" =~ ^@max_iterations[[:space:]]+([0-9]+) ]] && SPRINT_MAX_ITERS[$current_sprint]="${BASH_REMATCH[1]}" && continue
         [[ "$line" =~ ^@promise[[:space:]]+(.+) ]]           && SPRINT_PROMISES[$current_sprint]="${BASH_REMATCH[1]}" && continue
+        [[ "$line" =~ ^@max_heal_attempts[[:space:]]+([0-9]+) ]] && SPRINT_HEAL_ATTEMPTS[$current_sprint]="${BASH_REMATCH[1]}" && continue
         if [[ "$line" =~ ^@prompt[[:space:]]*$ ]]; then
           state="SPRINT_PROMPT"
           continue
@@ -489,6 +502,167 @@ run_verification_checks() {
 }
 
 # =============================================================================
+# FAILED-CHECK COLLECTOR (for heal prompts)
+# =============================================================================
+
+collect_failed_checks() {
+  local sprint_num=$1
+  local output_file=$2
+  local total=0
+  local passed=0
+  local failed_details=""
+
+  for entry in "${VERIFICATION_CHECKS[@]+"${VERIFICATION_CHECKS[@]}"}"; do
+    local snum="${entry%%|*}"
+    [[ "$snum" -ne "$sprint_num" ]] && continue
+
+    local rest="${entry#*|}"
+    local check_type="${rest%%|*}"
+    local args="${rest#*|}"
+    total=$((total + 1))
+
+    case "$check_type" in
+      FILE)
+        if [[ -s "${PROJECT_DIR}/${args}" ]]; then
+          passed=$((passed + 1))
+        else
+          failed_details+="- FAILED: File missing or empty: ${args}"$'\n'
+        fi
+        ;;
+      FILE_CONTAINS)
+        local fpath="${args%%|*}"
+        local pattern="${args#*|}"
+        if grep -qE "$pattern" "${PROJECT_DIR}/${fpath}" 2>/dev/null; then
+          passed=$((passed + 1))
+        else
+          failed_details+="- FAILED: File '${fpath}' does not contain pattern: ${pattern}"$'\n'
+        fi
+        ;;
+      CMD)
+        local err_output
+        local cmd_exit=0
+        err_output=$(cd "$PROJECT_DIR" && eval "$args" 2>&1) || cmd_exit=$?
+        if [[ $cmd_exit -eq 0 ]]; then
+          passed=$((passed + 1))
+        else
+          failed_details+="- FAILED: Command failed: ${args}"$'\n'
+          if [[ -n "$err_output" ]]; then
+            failed_details+="  Output (truncated):"$'\n'"$(echo "$err_output" | head -20)"$'\n'
+          fi
+        fi
+        ;;
+      CMD_OUTPUT)
+        local cmd="${args%%|*}"
+        local pattern="${args#*|}"
+        local output
+        output=$(cd "$PROJECT_DIR" && eval "$cmd" 2>/dev/null) || true
+        if echo "$output" | grep -qE "$pattern" 2>/dev/null; then
+          passed=$((passed + 1))
+        else
+          failed_details+="- FAILED: Command output mismatch: ${cmd}"$'\n'
+          failed_details+="  Expected pattern: ${pattern}"$'\n'
+          failed_details+="  Got: $(echo "$output" | head -10)"$'\n'
+        fi
+        ;;
+    esac
+  done
+
+  {
+    echo "Verification: ${passed}/${total} checks passed."
+    echo ""
+    if [[ -n "$failed_details" ]]; then
+      echo "Failed checks:"
+      printf '%s' "$failed_details"
+    fi
+  } > "$output_file"
+}
+
+# =============================================================================
+# HEAL LOOP — automatic fix attempts after verification failure
+# =============================================================================
+
+run_heal_loop() {
+  local sprint_num=$1
+  local sprint_name="${SPRINT_NAMES[$sprint_num]:-Sprint ${sprint_num}}"
+  local max_heals="${SPRINT_HEAL_ATTEMPTS[$sprint_num]:-$MAX_HEAL_ATTEMPTS}"
+
+  if [[ "$max_heals" -eq 0 ]]; then
+    return 1  # Healing disabled
+  fi
+
+  local heal_attempt=0
+
+  while [[ $heal_attempt -lt $max_heals ]]; do
+    heal_attempt=$((heal_attempt + 1))
+    log "  Heal attempt ${heal_attempt}/${max_heals} for Sprint ${sprint_num}..."
+
+    # 1. Collect failed checks into a report file
+    local fail_report="${WORK_DIR}/heal_report_s${sprint_num}_h${heal_attempt}.txt"
+    collect_failed_checks "$sprint_num" "$fail_report"
+
+    # 2. Build the heal prompt
+    local heal_prompt_file="${PROJECT_DIR}/prompt.md"
+    {
+      echo "# HEAL MODE — Sprint ${sprint_num}: ${sprint_name}"
+      echo ""
+      echo "## What happened"
+      echo "The sprint finished its work but FAILED independent verification checks."
+      echo "Your job is to fix ONLY the issues described below. Do not start the sprint over."
+      echo "Do not refactor or reorganize. Make the minimum changes needed to pass the checks."
+      echo ""
+      echo "## Failed verification checks"
+      echo ""
+      cat "$fail_report"
+      echo ""
+      echo "## Instructions"
+      echo "1. Read progress.txt for context on what was built"
+      echo "2. Read the failed checks above carefully"
+      echo "3. Fix each failure — create missing files, fix build errors, correct config"
+      echo "4. After fixing, do a final sanity check (e.g., run the build command if applicable)"
+      echo "5. Append a brief note to progress.txt about what you fixed in this heal pass"
+      echo ""
+      echo "## Context files"
+      echo "- Read progress.txt for iteration history"
+      echo "- Read ${PLAN_FILE} for the overall project plan"
+      if [[ -f "${PROJECT_DIR}/${CONTEXT_FILE}" ]]; then
+        echo "- Read ${CONTEXT_FILE} for executive context"
+      fi
+      echo ""
+      echo "Do NOT output any promise tokens. Just fix the issues."
+    } > "$heal_prompt_file"
+
+    log "  Wrote heal prompt ($(wc -l < "$heal_prompt_file" | tr -d ' ') lines)"
+
+    # 3. Run the agent
+    local heal_log="${LOG_DIR}/sprint${sprint_num}_heal${heal_attempt}_${TIMESTAMP}.log"
+
+    cd "$PROJECT_DIR"
+    run_agent \
+      "Read and execute ALL instructions in prompt.md in the project root. This is a HEAL pass — fix the verification failures described in the prompt." \
+      2>&1 | tee -a "$heal_log" "${LOG_DIR}/sprint${sprint_num}_${TIMESTAMP}.log"
+
+    # 4. Re-run verification
+    log "  Re-running verification checks after heal attempt ${heal_attempt}..."
+    if run_verification_checks "$sprint_num"; then
+      log "  Heal attempt ${heal_attempt} SUCCEEDED — all checks now pass"
+      return 0
+    else
+      log "  Heal attempt ${heal_attempt} — checks still failing"
+      # Append heal result to progress.txt so next heal attempt has context
+      {
+        echo ""
+        echo "--- Heal attempt ${heal_attempt} ($(date)) ---"
+        echo "Attempted to fix verification failures. Some checks still failing."
+        cat "$fail_report"
+      } >> "${PROJECT_DIR}/progress.txt"
+    fi
+  done
+
+  log "  All ${max_heals} heal attempts exhausted. Sprint ${sprint_num} remains failed."
+  return 1
+}
+
+# =============================================================================
 # VALIDATION
 # =============================================================================
 
@@ -575,6 +749,7 @@ dry_run_report() {
   echo "    model:               ${AGENT_MODEL:-<default>}"
   echo "    engine_flags:        ${AGENT_FLAGS:-<none>}"
   echo "    verification:        ${VERIFICATION_FILE:-$DEFAULT_VERIFICATION_FILE}"
+  echo "    max_heal_attempts:   ${MAX_HEAL_ATTEMPTS}"
   if [[ ${#PREFLIGHT_CMDS[@]} -gt 0 ]]; then
     echo "    preflight_cmds:"
     for cmd in "${PREFLIGHT_CMDS[@]}"; do
@@ -603,6 +778,8 @@ dry_run_report() {
       [[ "$snum" -eq "$n" ]] && check_count=$((check_count + 1))
     done
     echo "      checks:         ${check_count}"
+    local effective_heals="${SPRINT_HEAL_ATTEMPTS[$n]:-$MAX_HEAL_ATTEMPTS}"
+    echo "      heal_attempts:  ${effective_heals}"
   done
 
   echo ""
@@ -1089,11 +1266,18 @@ PROMISE_SIGNAL
           SPRINT_RESULTS[$sprint_num]="PASS"
           git_checkpoint "$sprint_num" "complete"
         else
-          log "SPRINT ${sprint_num} FAILED — promise found but verification failed (${minutes}m ${seconds}s)"
-          log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
-          SPRINT_RESULTS[$sprint_num]="FAIL (promise found, verification failed)"
-          git_checkpoint "$sprint_num" "failed-verification"
-          return 1
+          log "  Verification failed. Attempting self-heal..."
+          if run_heal_loop "$sprint_num"; then
+            log "SPRINT ${sprint_num} COMPLETED — healed, verification now passes (${minutes}m ${seconds}s)"
+            SPRINT_RESULTS[$sprint_num]="PASS (healed)"
+            git_checkpoint "$sprint_num" "complete-healed"
+          else
+            log "SPRINT ${sprint_num} FAILED — verification failed, healing exhausted (${minutes}m ${seconds}s)"
+            log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
+            SPRINT_RESULTS[$sprint_num]="FAIL (verification failed, heal exhausted)"
+            git_checkpoint "$sprint_num" "failed-verification"
+            return 1
+          fi
         fi
       else
         log "SPRINT ${sprint_num} COMPLETED (${minutes}m ${seconds}s, ${iter} iterations)"
@@ -1109,11 +1293,18 @@ PROMISE_SIGNAL
           SPRINT_RESULTS[$sprint_num]="PASS (verification passed, no promise)"
           git_checkpoint "$sprint_num" "complete-no-promise"
         else
-          log "SPRINT ${sprint_num} FAILED — promise not found, verification failed (${minutes}m ${seconds}s)"
-          log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
-          SPRINT_RESULTS[$sprint_num]="FAIL (no promise, verification failed)"
-          git_checkpoint "$sprint_num" "failed-partial"
-          return 1
+          log "  Promise not found and verification failed. Attempting self-heal..."
+          if run_heal_loop "$sprint_num"; then
+            log "SPRINT ${sprint_num} COMPLETED — healed, verification now passes (${minutes}m ${seconds}s)"
+            SPRINT_RESULTS[$sprint_num]="PASS (healed, no promise)"
+            git_checkpoint "$sprint_num" "complete-healed"
+          else
+            log "SPRINT ${sprint_num} FAILED — no promise, verification failed, healing exhausted (${minutes}m ${seconds}s)"
+            log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
+            SPRINT_RESULTS[$sprint_num]="FAIL (no promise, verification failed, heal exhausted)"
+            git_checkpoint "$sprint_num" "failed-partial"
+            return 1
+          fi
         fi
       else
         log "SPRINT ${sprint_num} FAILED — promise not found after ${max_iter} iterations (${minutes}m ${seconds}s)"
@@ -1132,11 +1323,18 @@ PROMISE_SIGNAL
         SPRINT_RESULTS[$sprint_num]="PASS"
         git_checkpoint "$sprint_num" "complete"
       else
-        log "SPRINT ${sprint_num} FAILED — verification failed (${minutes}m ${seconds}s)"
-        log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
-        SPRINT_RESULTS[$sprint_num]="FAIL (verification failed, no promise)"
-        git_checkpoint "$sprint_num" "failed-verification"
-        return 1
+        log "  Verification failed. Attempting self-heal..."
+        if run_heal_loop "$sprint_num"; then
+          log "SPRINT ${sprint_num} FINISHED — healed, verification now passes (${minutes}m ${seconds}s)"
+          SPRINT_RESULTS[$sprint_num]="PASS (healed)"
+          git_checkpoint "$sprint_num" "complete-healed"
+        else
+          log "SPRINT ${sprint_num} FAILED — verification failed, healing exhausted (${minutes}m ${seconds}s)"
+          log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
+          SPRINT_RESULTS[$sprint_num]="FAIL (verification failed, heal exhausted)"
+          git_checkpoint "$sprint_num" "failed-verification"
+          return 1
+        fi
       fi
     else
       log "SPRINT ${sprint_num} FINISHED (${minutes}m ${seconds}s, ${iter} iterations, no promise check)"

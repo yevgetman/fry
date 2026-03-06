@@ -71,6 +71,9 @@
 # - Results are reported as "N/M checks passed" per sprint
 # - If this file doesn't exist, fry.sh falls back to promise-only behavior
 # - The @verification directive in epic.md can override this filename
+# - When checks fail, fry.sh automatically attempts to heal by re-running
+#   the AI agent with a targeted fix prompt (up to @max_heal_attempts times,
+#   default 3). Set @max_heal_attempts 0 in the epic to disable healing.
 #
 # =============================================================================
 

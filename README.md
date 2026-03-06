@@ -16,6 +16,7 @@ plans/executive.md     Optional -- why to build it (vision, goals, scope)
         v
      fry.sh             Executes sprints via AI agent loop
         |                + runs independent verification checks
+        |                + auto-heals on verification failure
         v
   Working software      Git-checkpointed after each sprint
 ```
@@ -28,6 +29,7 @@ fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loo
 - **progress.txt** -- Append-only memory file that persists across iterations so the agent knows what prior passes accomplished
 - **Promise tokens** -- Each sprint defines a `<promise>TOKEN</promise>` string. The loop ends when the agent outputs it, or fails after max iterations
 - **verification.md** -- Machine-executable checks per sprint, run independently by fry.sh after the agent signals completion (or after max iterations as a fallback)
+- **Self-healing** -- When verification checks fail, fry automatically re-runs the AI agent with a targeted fix prompt containing the specific failures and diagnostic output, then re-checks. Repeats up to `@max_heal_attempts` times (default: 3, set to 0 to disable)
 - **Git checkpoints** -- Automatic commits after each sprint completes or fails
 
 ## Quick Start

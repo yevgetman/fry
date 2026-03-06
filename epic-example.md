@@ -92,6 +92,8 @@
 # @pre_iteration <cmd>            Run before every agent exec call
 # @model <model>                  Override the agent model (alias: @codex_model)
 # @engine_flags <flags>           Extra flags for agent exec (alias: @codex_flags)
+# @verification <file>            Verification checks file (default: verification.md)
+# @max_heal_attempts <N>          Auto-heal attempts after verification failure (default: 3; 0=disabled)
 
 # =============================================================================
 # Sprint 1 — Scaffolding & Infrastructure
@@ -153,6 +155,7 @@ Output <promise>SPRINT1_DONE</promise> when [specific exit criteria].
 @sprint 2
 @name [Layer Name]
 @max_iterations 20
+@max_heal_attempts 5
 @promise SPRINT2_DONE
 @prompt
 Sprint 2: [Layer Name] for [Project Name].
