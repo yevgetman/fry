@@ -251,6 +251,7 @@ Placed before any `@sprint` block:
 | `@model <model>` | Override the agent model (alias: `@codex_model`) |
 | `@engine_flags <flags>` | Extra CLI flags for the agent (alias: `@codex_flags`) |
 | `@verification <file>` | Verification checks file (default: `verification.md`) |
+| `@max_heal_attempts <N>` | Auto-heal attempts after verification failure (default: 3; 0 = disabled). Per-sprint override supported in sprint blocks. |
 
 ### Sprint Blocks
 

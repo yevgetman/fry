@@ -1385,7 +1385,7 @@ print_summary() {
     local duration="${SPRINT_DURATIONS[$sprint_num]:-n/a}"
     local name="${SPRINT_NAMES[$sprint_num]:-Sprint ${sprint_num}}"
     local icon="?"
-    [[ "$result" = "PASS" ]] && icon="PASS"
+    [[ "$result" == PASS* ]] && icon="PASS"
     [[ "$result" == FAIL* ]] && icon="FAIL"
     log "  [${icon}] Sprint ${sprint_num}: ${name}"
     log "          ${result}  (${duration})"
