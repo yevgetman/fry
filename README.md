@@ -8,6 +8,7 @@ Supports **OpenAI Codex** (default) and **Claude Code** as interchangeable AI en
 
 ```
 plans/plan.md          You write this -- what to build
+plans/executive.md     Optional -- why to build it (vision, goals, scope)
         |
         v
   fry-prepare.sh       AI generates AGENTS.md + epic.md + verification.md
@@ -41,10 +42,14 @@ fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loo
 
 ### 1. Write your plan
 
-The only required input is `plans/plan.md`. Write it in any format -- prose, bullets, tables -- as long as it has enough detail for an AI to decompose into implementation sprints.
+The only required input is `plans/plan.md` -- the technical build plan. Write it in any format -- prose, bullets, tables -- as long as it has enough detail for an AI to decompose into implementation sprints. This is the primary source material that fry uses to generate everything else.
+
+Optionally, add `plans/executive.md` -- a higher-level document that describes the project's purpose, business goals, target users, and scope. When present, fry feeds it into every generation step so the AI understands *why* the project exists, not just *what* to build. This leads to better-aligned AGENTS.md rules, more coherent sprint decomposition, and smarter verification checks. If omitted, fry derives all context from plan.md alone.
 
 ```bash
 mkdir -p plans
+
+# Required -- what to build
 cat > plans/plan.md << 'EOF'
 # My Project -- Build Plan
 
@@ -61,6 +66,16 @@ cat > plans/plan.md << 'EOF'
 ...
 
 **Tests:** Jest for unit tests, supertest for integration tests.
+EOF
+
+# Optional -- why to build it
+cat > plans/executive.md << 'EOF'
+# My Project -- Executive Context
+
+**Vision:** A lightweight blogging platform for small teams.
+**Target users:** Non-technical content creators who need a simple API-driven CMS.
+**Success criteria:** Sub-100ms API responses, zero-downtime deploys, <30 min onboarding.
+**Scope boundaries:** No auth provider integration in phase 1. No rich text -- markdown only.
 EOF
 ```
 
@@ -169,8 +184,8 @@ This lets you mix engines -- for example, generate the epic with Claude and run 
 ```
 project-root/
   plans/
-    plan.md              # Required -- your build plan (any format)
-    executive.md         # Optional -- project vision, goals, scope
+    plan.md              # Required -- technical build plan (what to build)
+    executive.md         # Optional -- project vision, goals, scope (why to build it)
 ```
 
 ### What fry ships with
