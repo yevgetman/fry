@@ -43,6 +43,7 @@
 #   ./fry.sh [epic.md] 4                  # Start from sprint 4
 #   ./fry.sh [epic.md] 4 4               # Run only sprint 4
 #   ./fry.sh [epic.md] 3 5               # Run sprints 3 through 5
+#   ./fry.sh --verbose                     # Print agent output to terminal
 #   ./fry.sh --dry-run                    # Parse & validate only
 #
 # Epic File Format:
@@ -146,6 +147,7 @@ BUILD_START_TIME=0
 WORK_DIR=""
 DOCKER_COMPOSE=""
 DRY_RUN=0
+VERBOSE=0
 LOCK_FILE=""
 CLI_ENGINE=""
 CLI_PREPARE_ENGINE=""
@@ -170,6 +172,7 @@ Arguments:
 Options:
   --engine <eng>       AI engine: codex or claude (default: codex)
   --prepare-engine <eng>  Engine for auto-generating epic via fry-prepare.sh
+  --verbose, -v        Print agent output to terminal (default: silent, logs only)
   --dry-run            Parse epic and show plan without running anything
   --help, -h           Show this message
 
@@ -207,6 +210,7 @@ Examples:
   ./fry.sh epic.md 4                            # Start from sprint 4 to end
   ./fry.sh epic.md 4 4                          # Run only sprint 4
   ./fry.sh epic.md 3 5                          # Run sprints 3 through 5
+  ./fry.sh --verbose                            # Print agent output to terminal
   ./fry.sh --prepare-engine claude              # Use claude for epic generation
   FRY_ENGINE=claude ./fry.sh                    # Set engine via env var
 
@@ -637,9 +641,16 @@ run_heal_loop() {
     local heal_log="${LOG_DIR}/sprint${sprint_num}_heal${heal_attempt}_${TIMESTAMP}.log"
 
     cd "$PROJECT_DIR"
-    run_agent \
-      "Read and execute ALL instructions in prompt.md in the project root. This is a HEAL pass — fix the verification failures described in the prompt." \
-      2>&1 | tee -a "$heal_log" "${LOG_DIR}/sprint${sprint_num}_${TIMESTAMP}.log"
+    if [[ $VERBOSE -eq 1 ]]; then
+      run_agent \
+        "Read and execute ALL instructions in prompt.md in the project root. This is a HEAL pass — fix the verification failures described in the prompt." \
+        2>&1 | tee -a "$heal_log" "${LOG_DIR}/sprint${sprint_num}_${TIMESTAMP}.log"
+    else
+      run_agent \
+        "Read and execute ALL instructions in prompt.md in the project root. This is a HEAL pass — fix the verification failures described in the prompt." \
+        >> "$heal_log" 2>&1
+      cat "$heal_log" >> "${LOG_DIR}/sprint${sprint_num}_${TIMESTAMP}.log"
+    fi
 
     # 4. Re-run verification
     log "  Re-running verification checks after heal attempt ${heal_attempt}..."
@@ -736,6 +747,7 @@ dry_run_report() {
   echo ""
   echo "  Config:"
   echo "    engine:              ${ENGINE}"
+  echo "    verbose:             $( [[ $VERBOSE -eq 1 ]] && echo "yes" || echo "no (agent output to logs only)" )"
   if [[ $DOCKER_FROM_SPRINT -gt 0 ]]; then
     echo "    docker_from_sprint:  ${DOCKER_FROM_SPRINT}"
   else
@@ -1216,11 +1228,18 @@ PROMISE_SIGNAL
     cd "$PROJECT_DIR"
     local iter_log="${LOG_DIR}/sprint${sprint_num}_iter${iter}_${TIMESTAMP}.log"
 
-    run_agent \
-      "Read and execute ALL instructions in prompt.md in the project root. Before starting, read progress.txt for context from previous iterations. Also read ${PLAN_FILE} for strategic context on how this sprint fits the overall plan. After completing your work, append your progress to progress.txt." \
-      2>&1 | tee -a "$iter_log" "${LOG_DIR}/sprint${sprint_num}_${TIMESTAMP}.log"
-
-    last_exit_code=${PIPESTATUS[0]}
+    if [[ $VERBOSE -eq 1 ]]; then
+      run_agent \
+        "Read and execute ALL instructions in prompt.md in the project root. Before starting, read progress.txt for context from previous iterations. Also read ${PLAN_FILE} for strategic context on how this sprint fits the overall plan. After completing your work, append your progress to progress.txt." \
+        2>&1 | tee -a "$iter_log" "${LOG_DIR}/sprint${sprint_num}_${TIMESTAMP}.log"
+      last_exit_code=${PIPESTATUS[0]}
+    else
+      run_agent \
+        "Read and execute ALL instructions in prompt.md in the project root. Before starting, read progress.txt for context from previous iterations. Also read ${PLAN_FILE} for strategic context on how this sprint fits the overall plan. After completing your work, append your progress to progress.txt." \
+        >> "$iter_log" 2>&1
+      last_exit_code=$?
+      cat "$iter_log" >> "${LOG_DIR}/sprint${sprint_num}_${TIMESTAMP}.log"
+    fi
 
     if [[ -n "$promise" ]] && grep -qF "<promise>${promise}</promise>" "$iter_log" 2>/dev/null; then
       log "  Promise '${promise}' found on iteration ${iter}."
@@ -1395,6 +1414,10 @@ main() {
         DRY_RUN=1
         shift
         ;;
+      --verbose|-v)
+        VERBOSE=1
+        shift
+        ;;
       --engine)
         if [[ -z "${2:-}" ]]; then
           echo "ERROR: --engine requires a value (codex or claude)."
@@ -1549,6 +1572,7 @@ main() {
   log "========================================="
   log "${EPIC_NAME:-Ralph Build}"
   log "Engine: ${ENGINE}"
+  log "Verbose: $( [[ $VERBOSE -eq 1 ]] && echo "yes" || echo "no" )"
   log "Sprints: ${START_SPRINT} through ${END_SPRINT}"
   log "Project: ${PROJECT_DIR}"
   log "Logs: ${LOG_DIR}"

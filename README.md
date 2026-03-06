@@ -146,6 +146,7 @@ Options (flags) can appear anywhere in the command -- before, after, or between 
 |---|---|
 | `--engine <codex\|claude>` | AI engine to use (default: codex) |
 | `--prepare-engine <codex\|claude>` | Engine for auto-generating via fry-prepare.sh (defaults to `--engine` or `FRY_ENGINE`) |
+| `--verbose`, `-v` | Print agent output to terminal (default: silent, logs only) |
 | `--dry-run` | Parse epic and show plan without running anything |
 | `--help`, `-h` | Show usage information |
 
@@ -160,6 +161,7 @@ Options (flags) can appear anywhere in the command -- before, after, or between 
 ./fry.sh epic.md 4                            # Resume from sprint 4
 ./fry.sh epic.md 4 4                          # Run only sprint 4
 ./fry.sh epic.md 3 5                          # Run sprints 3 through 5
+./fry.sh --verbose                            # Print agent output to terminal
 ./fry.sh --prepare-engine claude              # Use Claude for generation, Codex for build
 FRY_ENGINE=claude ./fry.sh                    # Set engine via environment variable
 ```
