@@ -67,7 +67,7 @@ EOF
 ### 2. Run
 
 ```bash
-# Uses Codex (default) -- generates AGENTS.md + epic.md automatically, then builds
+# Uses Codex (default) -- generates AGENTS.md + epic.md + verification.md, then builds
 ./fry.sh
 
 # Or use Claude Code instead
@@ -95,25 +95,38 @@ This parses the epic, checks prerequisites, and shows the sprint plan without ex
 ## Usage
 
 ```
-./fry.sh [epic.md] [start_sprint] [end_sprint] [options]
+./fry.sh [epic_file] [start_sprint] [end_sprint] [options]
 ```
 
-### Arguments
+All arguments are optional. With no arguments, fry uses `epic.md` as the epic file and runs all sprints.
 
-| Argument | Description |
-|---|---|
-| `epic.md` | Path to the epic definition file (default: `epic.md`, auto-generated if missing) |
-| `start_sprint` | First sprint to run (default: 1) |
-| `end_sprint` | Last sprint to run (default: last in epic) |
+### Positional Arguments
+
+Positional arguments are order-dependent: the epic file must come first, followed by sprint numbers.
+
+| Position | Argument | Description |
+|---|---|---|
+| 1 | `epic_file` | Path to the epic definition file (default: `epic.md`). Auto-generated via `fry-prepare.sh` if the file doesn't exist. |
+| 2 | `start_sprint` | First sprint to run (default: 1) |
+| 3 | `end_sprint` | Last sprint to run (default: last sprint in epic) |
+
+To specify a sprint range, you must also specify the epic file:
+
+```bash
+./fry.sh epic.md 3 5       # Correct: run sprints 3-5
+./fry.sh 3 5               # Wrong: treats "3" as the epic filename
+```
 
 ### Options
+
+Options (flags) can appear anywhere in the command -- before, after, or between positional arguments.
 
 | Flag | Description |
 |---|---|
 | `--engine <codex\|claude>` | AI engine to use (default: codex) |
-| `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic via fry-prepare.sh |
+| `--prepare-engine <codex\|claude>` | Engine for auto-generating via fry-prepare.sh (defaults to `--engine` or `FRY_ENGINE`) |
 | `--dry-run` | Parse epic and show plan without running anything |
-| `--help` | Show usage information |
+| `--help`, `-h` | Show usage information |
 
 ### Examples
 
@@ -236,6 +249,7 @@ Build:
 ...
 
 Verify:
+Verification checks are defined in verification.md (sprint 1).
 - npm run build succeeds
 - npm test passes
 - Docker services start and become healthy
@@ -244,7 +258,7 @@ CRITICAL: This is a TypeScript project. No JavaScript files.
 
 If stuck after 10 iterations: check import paths and tsconfig paths.
 
-Output <promise>SPRINT1_DONE</promise> when all verifications pass.
+Output <promise>SPRINT1_DONE</promise> when all checks pass.
 ```
 
 Each sprint prompt follows a 7-part structure:
@@ -253,26 +267,39 @@ Each sprint prompt follows a 7-part structure:
 2. **References** -- "Read AGENTS.md, then plans/plan.md [relevant sections]."
 3. **Build list** -- Numbered, specific: exact filenames, function signatures, SQL DDL
 4. **Constraints** -- "CRITICAL: [thing that will go wrong if ignored]."
-5. **Verification** -- Bulleted checklist of concrete commands/outcomes
+5. **Verification** -- Reference to verification.md checks, plus prose summary of key outcomes
 6. **Stuck hint** -- "If stuck after N iterations: [most likely cause + fix]."
 7. **Promise** -- "Output `<promise>TOKEN</promise>` when [exit criteria]."
 
 ## fry-prepare.sh
 
-Generates `AGENTS.md` and `epic.md` from your plan. Called automatically by `fry.sh`, or run standalone:
+Generates `AGENTS.md`, `epic.md`, and `verification.md` from your plan. Called automatically by `fry.sh` when the epic file doesn't exist, or run standalone:
 
-```bash
-./fry-prepare.sh                           # Generate with Codex (default)
-./fry-prepare.sh --engine claude           # Generate with Claude Code
-./fry-prepare.sh epic-phase1.md            # Custom output filename
-./fry-prepare.sh epic.md --engine claude   # Custom filename + engine
-./fry-prepare.sh --validate-only           # Check prerequisites without generating
-./fry-prepare.sh --keep-agents             # Skip AGENTS.md if it already exists
-./fry-prepare.sh --keep-epic               # Skip epic.md if it already exists
-./fry-prepare.sh --keep-verification       # Skip verification.md if it already exists
+```
+./fry-prepare.sh [epic_filename] [options]
 ```
 
-`AGENTS.md`, `epic.md`, and `verification.md` are **overwritten by default** on each run. Use `--keep-agents`, `--keep-epic`, and/or `--keep-verification` to preserve existing files.
+| Argument / Flag | Description |
+|---|---|
+| `epic_filename` | Output filename for the epic (default: `epic.md`) |
+| `--engine <codex\|claude>` | AI engine for generation (default: codex, or `FRY_ENGINE` env var) |
+| `--keep-agents` | Skip AGENTS.md generation if the file already exists |
+| `--keep-epic` | Skip epic.md generation if the file already exists |
+| `--keep-verification` | Skip verification.md generation if the file already exists |
+| `--validate-only` | Check that all prerequisites are present, then exit |
+
+`AGENTS.md`, `epic.md`, and `verification.md` are **overwritten by default** on each run.
+
+```bash
+./fry-prepare.sh                           # Generate all with Codex (default)
+./fry-prepare.sh --engine claude           # Generate all with Claude Code
+./fry-prepare.sh epic-phase1.md            # Custom epic filename
+./fry-prepare.sh epic.md --engine claude   # Custom filename + engine
+./fry-prepare.sh --validate-only           # Check prerequisites only
+./fry-prepare.sh --keep-agents             # Preserve existing AGENTS.md
+./fry-prepare.sh --keep-epic               # Preserve existing epic.md
+./fry-prepare.sh --keep-verification       # Preserve existing verification.md
+```
 
 **Step 1** generates `AGENTS.md` -- an operational rules file with 15-40 numbered rules derived from your plan (technology constraints, architecture patterns, testing rules, prohibitions).
 
@@ -320,34 +347,57 @@ fry supports independent verification of each sprint's deliverables. When a `ver
 ### How It Works
 
 1. `fry-prepare.sh` generates `verification.md` as Step 3 (from plan.md + epic.md)
-2. Each sprint block defines checks using four primitives:
+2. Each sprint block in `verification.md` defines checks using four primitives:
 
 | Primitive | Example | Passes when |
 |---|---|---|
 | `@check_file <path>` | `@check_file src/index.ts` | File exists and is non-empty |
-| `@check_file_contains <path> <pattern>` | `@check_file_contains package.json "typescript"` | File contains pattern |
+| `@check_file_contains <path> <pattern>` | `@check_file_contains package.json "typescript"` | File contains pattern (grep -E) |
 | `@check_cmd <command>` | `@check_cmd npm run build` | Command exits 0 |
-| `@check_cmd_output <cmd> \| <pattern>` | `@check_cmd_output curl -s /health \| "ok"` | Output matches pattern |
+| `@check_cmd_output <cmd> \| <pattern>` | `@check_cmd_output curl -s /health \| "ok"` | stdout matches pattern |
 
 3. After the agent outputs its promise token, fry.sh runs all checks for that sprint
-4. All checks must pass for the sprint to succeed
+4. All checks run to completion (failures don't short-circuit) and results are reported as "N/M checks passed"
+5. All checks must pass for the sprint to succeed
 
 ### Outcome Matrix
+
+When a sprint defines a `@promise` token:
 
 | Promise Token | Checks Pass | Result |
 |---|---|---|
 | Found | All pass | **PASS** |
 | Found | Some fail | **FAIL** -- "promise found, verification failed" |
-| Not found | All pass | **PASS** -- auto-recovery from missing token |
+| Not found | All pass | **PASS** -- auto-recovery (work done, token forgotten) |
 | Not found | Some fail | **FAIL** |
 
-### Backward Compatibility
+When a sprint has no `@promise` token but has verification checks, the checks determine the outcome after all iterations run. When neither is defined, the sprint always passes after running all iterations.
 
-If `verification.md` does not exist, fry.sh falls back to promise-only behavior. The verification layer is fully optional.
+### Verification File Format
+
+`verification.md` uses the same `@sprint N` block structure as the epic file. See `verification-example.md` for the full format reference. The file can be auto-generated, hand-authored, or a mix (generate first, then edit).
+
+The `@verification` directive in the epic file can override the default filename:
+
+```
+@verification checks-phase2.md
+```
+
+### Graceful Degradation
+
+- If `verification.md` does not exist, fry.sh falls back to promise-only behavior
+- If `fry-prepare.sh` fails to generate `verification.md`, it logs a WARNING and continues (it does not abort the build)
+- If a sprint has no checks defined in `verification.md`, it behaves as if no verification file exists for that sprint
 
 ## Resuming Failed Builds
 
-If a sprint fails (promise not found after max iterations), fry commits partial work and stops:
+A sprint can fail for several reasons:
+
+- Promise token not found after max iterations (and no verification checks, or checks also fail)
+- Promise token found but verification checks fail
+- No promise defined and verification checks fail
+
+In all cases, fry commits partial work and stops with a resume command:
 
 ```
 Build stopped at Sprint 4.

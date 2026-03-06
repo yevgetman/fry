@@ -173,7 +173,11 @@ Engine selection precedence (highest wins):
   3. FRY_ENGINE env   4. default (codex)
 
 If epic.md doesn't exist, fry-prepare.sh is called automatically to
-generate AGENTS.md and epic.md from plans/plan.md.
+generate AGENTS.md, epic.md, and verification.md from plans/plan.md.
+
+Positional arguments are order-dependent: the epic file must come
+first, followed by sprint numbers. To specify a sprint range, you
+must also specify the epic file (e.g., ./fry.sh epic.md 3 5).
 
 Required project structure (before first run):
   plans/plan.md          Holistic build plan (all phases, architecture)
@@ -181,6 +185,7 @@ Required project structure (before first run):
 Optional (used if present):
   plans/executive.md     Executive context (project vision, goals, scope)
   AGENTS.md              Operational rules (auto-generated from plan.md if missing)
+  verification.md        Independent verification checks (auto-generated)
 
 Examples:
   ./fry.sh                                      # Run all sprints (epic.md default)
