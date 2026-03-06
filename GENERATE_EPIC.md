@@ -92,11 +92,11 @@ DO UPDATE, metadata merge via JSONB || operator."
 These come from patterns you observe in the plan — technology choices,
 naming conventions, security requirements, things the agent will get wrong.
 
-**VERIFICATION**: Bulleted checklist the agent runs after each iteration.
-Every item must be a concrete command or observable outcome:
-- "go build ./... succeeds with zero errors"
-- "npm test passes"
-- "curl localhost:8080/health returns 200"
+**VERIFICATION**: Reference verification.md for the concrete, machine-executable
+checks that fry.sh runs independently. The sprint prompt should describe what
+success looks like in prose and point to verification.md as the source of truth:
+- "Verification checks are defined in verification.md (sprint N)."
+- Include a brief bulleted summary of key outcomes for the agent's guidance.
 NOT vague items like "code is clean" or "everything works."
 
 **STUCK HINT**: "If stuck after N iterations: [most likely cause + fix]."
@@ -142,7 +142,7 @@ title comment) and be directly saveable as a file.
 - [ ] Every sprint has @name, @max_iterations, @promise, @prompt
 - [ ] Every prompt follows the 7-part structure
 - [ ] Build lists use exact filenames and signatures, not vague descriptions
-- [ ] Verification checklists use concrete commands, not subjective criteria
+- [ ] Verification sections reference verification.md for concrete checks
 - [ ] Dependencies only flow forward (Sprint 4 never depends on Sprint 5)
 - [ ] Sprint 1 is scaffolding, final sprint is integration/E2E
 - [ ] Global directives match the project's technology stack and chosen engine
@@ -171,6 +171,7 @@ The full workflow from plan to running build:
       └── fry-prepare.sh is called automatically:
           Step 1: generates AGENTS.md from plan.md (skipped if exists)
           Step 2: generates epic.md from plan.md + AGENTS.md
+          Step 3: generates verification.md from plan.md + epic.md
 
    b) Standalone — run fry-prepare.sh directly:
       └── ./fry-prepare.sh epic.md

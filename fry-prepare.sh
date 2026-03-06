@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-# fry-prepare.sh — Generate AGENTS.md and epic.md from plans/plan.md via AI
+# fry-prepare.sh — Generate AGENTS.md, epic.md, and verification.md from plans/plan.md via AI
 # =============================================================================
 #
-# Two-step preparation:
+# Three-step preparation:
 #   Step 1: Generate AGENTS.md from plan.md (+ executive.md if present)
 #   Step 2: Generate epic.md from plan.md, AGENTS.md, and format references
+#   Step 3: Generate verification.md from plan.md, epic.md, and format reference
 #
 # Can be run standalone or is called automatically by fry.sh when the
 # specified epic file doesn't exist yet.
@@ -15,9 +16,10 @@
 #   claude:          Claude Code CLI
 #
 # Required:
-#   plans/plan.md          Holistic build plan (your source material)
-#   epic-example.md        Format reference for epic generation
-#   GENERATE_EPIC.md       Generation prompt/instructions
+#   plans/plan.md              Holistic build plan (your source material)
+#   epic-example.md            Format reference for epic generation
+#   GENERATE_EPIC.md           Generation prompt/instructions
+#   verification-example.md    Format reference for verification generation
 #
 # Optional:
 #   plans/executive.md     Executive context (used if present, skipped if not)
@@ -30,6 +32,7 @@
 #   ./fry-prepare.sh --validate-only           # Check prerequisites only
 #   ./fry-prepare.sh --keep-agents             # Skip AGENTS.md if it exists
 #   ./fry-prepare.sh --keep-epic               # Skip epic.md if it exists
+#   ./fry-prepare.sh --keep-verification       # Skip verification.md if it exists
 #
 # Engine selection: --engine flag > FRY_ENGINE env var > default (codex)
 #
@@ -47,6 +50,7 @@ readonly CONTEXT_FILE="${PLANS_DIR}/executive.md"
 readonly AGENTS_FILE="AGENTS.md"
 readonly EXAMPLE_FILE="epic-example.md"
 readonly PROMPT_REF="GENERATE_EPIC.md"
+readonly VERIFICATION_EXAMPLE="verification-example.md"
 
 # =============================================================================
 # HELPERS
@@ -63,6 +67,7 @@ has_context() {
 ENGINE="${FRY_ENGINE:-codex}"
 KEEP_AGENTS=0
 KEEP_EPIC=0
+KEEP_VERIFICATION=0
 
 # Execute a prompt via the configured AI engine.
 # Usage: run_agent "prompt text"
@@ -254,6 +259,87 @@ CRITICAL RULES:
 }
 
 # =============================================================================
+# STEP 3: Generate verification.md
+# =============================================================================
+
+generate_verification() {
+  local epic_file=$1
+  local vfile="verification.md"
+
+  if [[ $KEEP_VERIFICATION -eq 1 ]] && [[ -f "${vfile}" ]]; then
+    echo "${vfile} already exists. Skipping generation (--keep-verification)."
+    return 0
+  fi
+
+  echo "Step 3: Generating ${vfile} from ${PLAN_FILE} + ${epic_file} (engine: ${ENGINE})..."
+  echo "  Plan:      ${PLAN_FILE}"
+  echo "  Epic:      ${epic_file}"
+  echo "  Reference: ${VERIFICATION_EXAMPLE}"
+  echo ""
+
+  local context_line=""
+  if has_context; then
+    context_line="Also read \`${CONTEXT_FILE}\` for executive context about the project."
+  fi
+
+  run_agent \
+    "You are generating a verification.md file for an autonomous AI build system.
+
+Read these files carefully:
+1. \`${VERIFICATION_EXAMPLE}\` — The FORMAT REFERENCE showing exact syntax and check primitives. Your output must match this format precisely.
+2. \`${PLAN_FILE}\` — The build plan describing what is being built. Derive checks from the concrete deliverables described here.
+3. \`${epic_file}\` — The sprint definitions. Each sprint block tells you what files and features that sprint creates. Write checks that verify those specific deliverables.
+4. \`${AGENTS_FILE}\` — Operational rules that apply to the project.
+${context_line}
+
+Generate the verification file and write it to \`${vfile}\` in the project root.
+
+CRITICAL RULES:
+- Output ONLY the verification.md file content — write it directly to \`${vfile}\`.
+- Use ONLY these four check primitives: @check_file, @check_file_contains, @check_cmd, @check_cmd_output
+- Every @sprint block in the epic must have a corresponding @sprint block in verification.md.
+- Every check must be a concrete, executable assertion. No prose. No subjective criteria.
+- @check_cmd commands must exit 0 on success and non-0 on failure.
+- @check_cmd_output uses a pipe (|) to separate the command from the grep pattern.
+- Derive checks from SPECIFIC deliverables in the plan and epic: exact filenames, build commands, required config values, API endpoints.
+- Do NOT write checks for things that earlier sprints already verified — only check the current sprint's new deliverables. Cumulative checks (like 'npm run build') are fine since they validate nothing is broken.
+- Do NOT include any output other than writing the file. No explanations, no summaries."
+
+  local exit_code=$?
+
+  if [[ $exit_code -ne 0 ]]; then
+    echo ""
+    echo "WARNING: Verification file generation failed (exit ${exit_code})."
+    echo "Continuing without verification.md — promise-only behavior will be used."
+    return 0
+  fi
+
+  if [[ ! -f "${vfile}" ]]; then
+    echo ""
+    echo "WARNING: Agent did not produce ${vfile}."
+    echo "Continuing without verification.md — promise-only behavior will be used."
+    return 0
+  fi
+
+  local check_count
+  check_count=$(grep -c '^@check_' "${vfile}" 2>/dev/null || echo "0")
+
+  if [[ "$check_count" -eq 0 ]]; then
+    echo ""
+    echo "WARNING: Generated ${vfile} contains no @check_* directives."
+    echo "The file may be malformed. Review it manually or regenerate."
+    echo "Continuing without effective verification checks."
+    return 0
+  fi
+
+  local sprint_count
+  sprint_count=$(grep -c '^@sprint ' "${vfile}" 2>/dev/null || echo "0")
+
+  echo ""
+  echo "Generated ${vfile} with ${sprint_count} sprint blocks and ${check_count} checks."
+}
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -284,6 +370,10 @@ main() {
         KEEP_EPIC=1
         shift
         ;;
+      --keep-verification)
+        KEEP_VERIFICATION=1
+        shift
+        ;;
       *)
         output_file="$1"
         shift
@@ -294,7 +384,7 @@ main() {
   # --- Check prerequisites ---
   local failed=0
 
-  for f in "$PLAN_FILE" "$EXAMPLE_FILE" "$PROMPT_REF"; do
+  for f in "$PLAN_FILE" "$EXAMPLE_FILE" "$PROMPT_REF" "$VERIFICATION_EXAMPLE"; do
     if [[ ! -f "${f}" ]]; then
       echo "ERROR: Required file missing: ${f}"
       failed=1
@@ -341,6 +431,7 @@ main() {
     echo "  ${PLAN_FILE}              Your build plan"
     echo "  ${EXAMPLE_FILE}          Format reference (ships with fry.sh)"
     echo "  ${PROMPT_REF}          Generation instructions (ships with fry.sh)"
+    echo "  ${VERIFICATION_EXAMPLE}  Verification format reference (ships with fry.sh)"
     echo ""
     echo "Optional files:"
     echo "  ${CONTEXT_FILE}        Executive context (project vision/goals)"
@@ -362,6 +453,11 @@ main() {
 
   # --- Step 2: Generate epic.md ---
   generate_epic "$output_file"
+
+  # --- Step 3: Generate verification.md ---
+  if [[ -f "$output_file" ]]; then
+    generate_verification "$output_file"
+  fi
 }
 
 main "$@"

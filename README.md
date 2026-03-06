@@ -10,11 +10,11 @@ Supports **OpenAI Codex** (default) and **Claude Code** as interchangeable AI en
 plans/plan.md          You write this -- what to build
         |
         v
-  fry-prepare.sh       AI generates AGENTS.md (rules) + epic.md (sprints)
+  fry-prepare.sh       AI generates AGENTS.md + epic.md + verification.md
         |
         v
-     fry.sh             Executes sprints sequentially via AI agent loop
-        |
+     fry.sh             Executes sprints via AI agent loop
+        |                + runs independent verification checks
         v
   Working software      Git-checkpointed after each sprint
 ```
@@ -26,6 +26,7 @@ fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loo
 - **prompt.md** -- Assembled per sprint with layered context: executive overview, strategic plan pointer, sprint tasks, iteration memory, and completion signal
 - **progress.txt** -- Append-only memory file that persists across iterations so the agent knows what prior passes accomplished
 - **Promise tokens** -- Each sprint defines a `<promise>TOKEN</promise>` string. The loop ends when the agent outputs it, or fails after max iterations
+- **verification.md** -- Machine-executable checks per sprint, run independently by fry.sh after the agent signals completion (or after max iterations as a fallback)
 - **Git checkpoints** -- Automatic commits after each sprint completes or fails
 
 ## Quick Start
@@ -77,9 +78,11 @@ That's it. fry will:
 1. Detect that `epic.md` doesn't exist and call `fry-prepare.sh`
 2. Generate `AGENTS.md` (operational rules for the AI)
 3. Generate `epic.md` (sprint definitions)
-4. Execute each sprint, iterating until completion or max iterations
+4. Generate `verification.md` (independent checks per sprint)
+5. Execute each sprint, iterating until completion or max iterations
+6. Run independent verification checks after each sprint
 
-If `AGENTS.md` or `epic.md` already exist, they are **overwritten** by default. Use `--keep-agents` or `--keep-epic` flags on `fry-prepare.sh` to preserve existing files.
+If `AGENTS.md`, `epic.md`, or `verification.md` already exist, they are **overwritten** by default. Use `--keep-agents`, `--keep-epic`, or `--keep-verification` flags on `fry-prepare.sh` to preserve existing files.
 
 ### 3. Validate before running (recommended)
 
@@ -157,8 +160,9 @@ project-root/
 
 ```
 fry.sh                   # Main build runner
-fry-prepare.sh           # Generates AGENTS.md + epic.md from plan.md
+fry-prepare.sh           # Generates AGENTS.md + epic.md + verification.md from plan.md
 epic-example.md          # Epic format template/reference
+verification-example.md  # Verification format template/reference
 GENERATE_EPIC.md         # Prompt for manually generating epics with any LLM
 ```
 
@@ -167,6 +171,7 @@ GENERATE_EPIC.md         # Prompt for manually generating epics with any LLM
 ```
 AGENTS.md                # Operational rules for the AI agent (auto-generated)
 epic.md                  # Sprint definitions (auto-generated or hand-authored)
+verification.md          # Independent verification checks (auto-generated or hand-authored)
 prompt.md                # Assembled per sprint (gitignored)
 progress.txt             # Append-only iteration memory (committed)
 build-logs/              # Per-iteration logs (gitignored)
@@ -193,6 +198,7 @@ Placed before any `@sprint` block:
 @pre_iteration npm run lint:fix
 @model gpt-4.1
 @engine_flags --full-auto
+@verification verification.md
 ```
 
 | Directive | Description |
@@ -208,6 +214,7 @@ Placed before any `@sprint` block:
 | `@pre_iteration <cmd>` | Run before each agent invocation |
 | `@model <model>` | Override the agent model (alias: `@codex_model`) |
 | `@engine_flags <flags>` | Extra CLI flags for the agent (alias: `@codex_flags`) |
+| `@verification <file>` | Verification checks file (default: `verification.md`) |
 
 ### Sprint Blocks
 
@@ -262,13 +269,16 @@ Generates `AGENTS.md` and `epic.md` from your plan. Called automatically by `fry
 ./fry-prepare.sh --validate-only           # Check prerequisites without generating
 ./fry-prepare.sh --keep-agents             # Skip AGENTS.md if it already exists
 ./fry-prepare.sh --keep-epic               # Skip epic.md if it already exists
+./fry-prepare.sh --keep-verification       # Skip verification.md if it already exists
 ```
 
-Both `AGENTS.md` and `epic.md` are **overwritten by default** on each run. Use `--keep-agents` and/or `--keep-epic` to preserve existing files.
+`AGENTS.md`, `epic.md`, and `verification.md` are **overwritten by default** on each run. Use `--keep-agents`, `--keep-epic`, and/or `--keep-verification` to preserve existing files.
 
 **Step 1** generates `AGENTS.md` -- an operational rules file with 15-40 numbered rules derived from your plan (technology constraints, architecture patterns, testing rules, prohibitions).
 
-**Step 2** generates the epic -- a sequenced set of 4-10 sprints decomposed from your plan, each with specific build instructions, verification checklists, and completion tokens.
+**Step 2** generates the epic -- a sequenced set of 4-10 sprints decomposed from your plan, each with specific build instructions, verification references, and completion tokens.
+
+**Step 3** generates `verification.md` -- machine-executable checks per sprint derived from the plan and epic. These are run independently by fry.sh to verify the agent's work.
 
 ## Manual Epic Generation
 
@@ -303,6 +313,38 @@ fry manages Docker automatically when configured:
 
 Docker is only required when running sprints at or after the configured sprint number. Earlier sprints can run without Docker installed.
 
+## Verification
+
+fry supports independent verification of each sprint's deliverables. When a `verification.md` file is present, fry.sh runs machine-executable checks after the agent signals completion, closing the gap between the agent's self-reported promise and actual results.
+
+### How It Works
+
+1. `fry-prepare.sh` generates `verification.md` as Step 3 (from plan.md + epic.md)
+2. Each sprint block defines checks using four primitives:
+
+| Primitive | Example | Passes when |
+|---|---|---|
+| `@check_file <path>` | `@check_file src/index.ts` | File exists and is non-empty |
+| `@check_file_contains <path> <pattern>` | `@check_file_contains package.json "typescript"` | File contains pattern |
+| `@check_cmd <command>` | `@check_cmd npm run build` | Command exits 0 |
+| `@check_cmd_output <cmd> \| <pattern>` | `@check_cmd_output curl -s /health \| "ok"` | Output matches pattern |
+
+3. After the agent outputs its promise token, fry.sh runs all checks for that sprint
+4. All checks must pass for the sprint to succeed
+
+### Outcome Matrix
+
+| Promise Token | Checks Pass | Result |
+|---|---|---|
+| Found | All pass | **PASS** |
+| Found | Some fail | **FAIL** -- "promise found, verification failed" |
+| Not found | All pass | **PASS** -- auto-recovery from missing token |
+| Not found | Some fail | **FAIL** |
+
+### Backward Compatibility
+
+If `verification.md` does not exist, fry.sh falls back to promise-only behavior. The verification layer is fully optional.
+
 ## Resuming Failed Builds
 
 If a sprint fails (promise not found after max iterations), fry commits partial work and stops:
@@ -319,13 +361,15 @@ Progress is preserved in `progress.txt` and git history. The agent picks up wher
 | File | Purpose | Created by |
 |---|---|---|
 | `fry.sh` | Main build runner -- parser, preflight, sprint loop, Docker, git | Ships with fry |
-| `fry-prepare.sh` | Generates AGENTS.md + epic.md from plan.md | Ships with fry |
+| `fry-prepare.sh` | Generates AGENTS.md + epic.md + verification.md from plan.md | Ships with fry |
 | `epic-example.md` | Epic format template with full documentation | Ships with fry |
+| `verification-example.md` | Verification format template with check primitives | Ships with fry |
 | `GENERATE_EPIC.md` | Prompt for manual epic generation with any LLM | Ships with fry |
 | `plans/plan.md` | Your build plan (required input) | You |
 | `plans/executive.md` | Executive context -- project vision/goals (optional) | You |
 | `AGENTS.md` | Operational rules for the AI agent | Auto-generated |
 | `epic.md` | Sprint definitions | Auto-generated or hand-authored |
+| `verification.md` | Independent verification checks per sprint | Auto-generated or hand-authored |
 | `prompt.md` | Assembled per-sprint prompt (gitignored) | fry.sh at runtime |
 | `progress.txt` | Append-only iteration memory | fry.sh at runtime |
 | `build-logs/` | Per-iteration and per-sprint logs (gitignored) | fry.sh at runtime |

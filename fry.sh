@@ -59,6 +59,7 @@
 #     @pre_iteration <command>           # Run before each agent exec call
 #     @model <model>                     # Override agent model (alias: @codex_model)
 #     @engine_flags <flags>              # Extra flags for agent exec (alias: @codex_flags)
+#     @verification <file>               # Verification checks file (default: verification.md)
 #
 #   Per-sprint block:
 #     @sprint <N>                        # Sprint number (starts new block)
@@ -102,6 +103,7 @@ readonly PLANS_DIR="plans"
 readonly CONTEXT_FILE="${PLANS_DIR}/executive.md"
 readonly PLAN_FILE="${PLANS_DIR}/plan.md"
 readonly AGENTS_FILE="AGENTS.md"
+readonly DEFAULT_VERIFICATION_FILE="verification.md"
 
 # =============================================================================
 # GLOBALS — populated by parse_epic()
@@ -118,6 +120,7 @@ PRE_SPRINT_CMD=""
 PRE_ITERATION_CMD=""
 AGENT_MODEL=""
 AGENT_FLAGS=""
+VERIFICATION_FILE=""
 TOTAL_SPRINTS=0
 
 declare -A SPRINT_NAMES
@@ -144,6 +147,7 @@ CLI_PREPARE_ENGINE=""
 
 declare -A SPRINT_RESULTS
 declare -A SPRINT_DURATIONS
+VERIFICATION_CHECKS=()
 
 # =============================================================================
 # USAGE
@@ -305,6 +309,7 @@ parse_epic() {
         [[ "$line" =~ ^@preflight_cmd[[:space:]]+(.+) ]]           && PREFLIGHT_CMDS+=("${BASH_REMATCH[1]}") && continue
         [[ "$line" =~ ^@pre_sprint[[:space:]]+(.+) ]]              && PRE_SPRINT_CMD="${BASH_REMATCH[1]}" && continue
         [[ "$line" =~ ^@pre_iteration[[:space:]]+(.+) ]]           && PRE_ITERATION_CMD="${BASH_REMATCH[1]}" && continue
+        [[ "$line" =~ ^@verification[[:space:]]+(.+) ]]               && VERIFICATION_FILE="${BASH_REMATCH[1]}" && continue
         # @model and @engine_flags (with backward-compat aliases @codex_model, @codex_flags)
         [[ "$line" =~ ^@(model|codex_model)[[:space:]]+(.+) ]]     && AGENT_MODEL="${BASH_REMATCH[2]}" && continue
         [[ "$line" =~ ^@(engine_flags|codex_flags)[[:space:]]+(.+) ]] && AGENT_FLAGS="${BASH_REMATCH[2]}" && continue
@@ -360,6 +365,121 @@ parse_epic() {
       printf '%s\n' "$cleaned" > "$pfile"
     fi
   done
+}
+
+# =============================================================================
+# VERIFICATION PARSER
+# =============================================================================
+
+parse_verification() {
+  local vfile=$1
+  local current_sprint=0
+
+  if [[ ! -f "$vfile" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Skip blank lines and comments
+    [[ -z "$line" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+    if [[ "$line" =~ ^@sprint[[:space:]]+([0-9]+)[[:space:]]*$ ]]; then
+      current_sprint=$((10#${BASH_REMATCH[1]}))
+      continue
+    fi
+
+    [[ $current_sprint -eq 0 ]] && continue
+
+    if [[ "$line" =~ ^@check_file_contains[[:space:]]+([^[:space:]]+)[[:space:]]+(.+) ]]; then
+      VERIFICATION_CHECKS+=("${current_sprint}|FILE_CONTAINS|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}")
+    elif [[ "$line" =~ ^@check_file[[:space:]]+(.+) ]]; then
+      VERIFICATION_CHECKS+=("${current_sprint}|FILE|${BASH_REMATCH[1]}")
+    elif [[ "$line" =~ ^@check_cmd_output[[:space:]]+(.+)[[:space:]]*\|[[:space:]]*(.+) ]]; then
+      VERIFICATION_CHECKS+=("${current_sprint}|CMD_OUTPUT|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}")
+    elif [[ "$line" =~ ^@check_cmd[[:space:]]+(.+) ]]; then
+      VERIFICATION_CHECKS+=("${current_sprint}|CMD|${BASH_REMATCH[1]}")
+    elif [[ "$line" =~ ^@check_ ]]; then
+      echo "WARNING: Unrecognized verification directive: ${line}"
+    fi
+  done < "$vfile"
+}
+
+# =============================================================================
+# VERIFICATION RUNNER
+# =============================================================================
+
+run_verification_checks() {
+  local sprint_num=$1
+  local total=0
+  local passed=0
+
+  for entry in "${VERIFICATION_CHECKS[@]+"${VERIFICATION_CHECKS[@]}"}"; do
+    local snum="${entry%%|*}"
+    [[ "$snum" -ne "$sprint_num" ]] && continue
+
+    local rest="${entry#*|}"
+    local check_type="${rest%%|*}"
+    local args="${rest#*|}"
+
+    total=$((total + 1))
+
+    case "$check_type" in
+      FILE)
+        local fpath="$args"
+        if [[ -s "${PROJECT_DIR}/${fpath}" ]]; then
+          log "    [PASS] check_file: ${fpath}"
+          passed=$((passed + 1))
+        else
+          log "    [FAIL] check_file: ${fpath} (missing or empty)"
+        fi
+        ;;
+      FILE_CONTAINS)
+        local fpath="${args%%|*}"
+        local pattern="${args#*|}"
+        if grep -qE "$pattern" "${PROJECT_DIR}/${fpath}" 2>/dev/null; then
+          log "    [PASS] check_file_contains: ${fpath} =~ ${pattern}"
+          passed=$((passed + 1))
+        else
+          log "    [FAIL] check_file_contains: ${fpath} =~ ${pattern}"
+        fi
+        ;;
+      CMD)
+        local cmd="$args"
+        log "    Running: ${cmd}"
+        if (cd "$PROJECT_DIR" && eval "$cmd") &>/dev/null; then
+          log "    [PASS] check_cmd: ${cmd}"
+          passed=$((passed + 1))
+        else
+          log "    [FAIL] check_cmd: ${cmd}"
+        fi
+        ;;
+      CMD_OUTPUT)
+        local cmd="${args%%|*}"
+        local pattern="${args#*|}"
+        local output
+        output=$(cd "$PROJECT_DIR" && eval "$cmd" 2>/dev/null) || true
+        if echo "$output" | grep -qE "$pattern" 2>/dev/null; then
+          log "    [PASS] check_cmd_output: ${cmd} | ${pattern}"
+          passed=$((passed + 1))
+        else
+          log "    [FAIL] check_cmd_output: ${cmd} | ${pattern}"
+        fi
+        ;;
+    esac
+  done
+
+  if [[ $total -eq 0 ]]; then
+    log "  No verification checks defined for sprint ${sprint_num}."
+    return 0
+  fi
+
+  log "  Verification: ${passed}/${total} checks passed."
+  if [[ $passed -eq $total ]]; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 # =============================================================================
@@ -427,6 +547,12 @@ dry_run_report() {
   else
     echo "    [skip]  ${CONTEXT_FILE} (optional)"
   fi
+  local vfile="${VERIFICATION_FILE:-$DEFAULT_VERIFICATION_FILE}"
+  if [[ -f "${PROJECT_DIR}/${vfile}" ]]; then
+    echo "    [ok]    ${vfile}"
+  else
+    echo "    [skip]  ${vfile} (optional — no independent verification)"
+  fi
   echo ""
   echo "  Config:"
   echo "    engine:              ${ENGINE}"
@@ -442,6 +568,7 @@ dry_run_report() {
   echo "    pre_iteration:       ${PRE_ITERATION_CMD:-<none>}"
   echo "    model:               ${AGENT_MODEL:-<default>}"
   echo "    engine_flags:        ${AGENT_FLAGS:-<none>}"
+  echo "    verification:        ${VERIFICATION_FILE:-$DEFAULT_VERIFICATION_FILE}"
   if [[ ${#PREFLIGHT_CMDS[@]} -gt 0 ]]; then
     echo "    preflight_cmds:"
     for cmd in "${PREFLIGHT_CMDS[@]}"; do
@@ -464,6 +591,12 @@ dry_run_report() {
     echo "      max_iterations: ${SPRINT_MAX_ITERS[$n]:-?}"
     echo "      promise:        ${SPRINT_PROMISES[$n]:-<none — will run all iterations>}"
     echo "      prompt:         ${prompt_lines} lines"
+    local check_count=0
+    for entry in "${VERIFICATION_CHECKS[@]+"${VERIFICATION_CHECKS[@]}"}"; do
+      local snum="${entry%%|*}"
+      [[ "$snum" -eq "$n" ]] && check_count=$((check_count + 1))
+    done
+    echo "      checks:         ${check_count}"
   done
 
   echo ""
@@ -923,22 +1056,79 @@ PROMISE_SIGNAL
   local seconds=$(( duration % 60 ))
   SPRINT_DURATIONS[$sprint_num]="${minutes}m ${seconds}s"
 
+  # --- Determine outcome (promise + verification) ---
+  local has_checks=0
+  for entry in "${VERIFICATION_CHECKS[@]+"${VERIFICATION_CHECKS[@]}"}"; do
+    local snum="${entry%%|*}"
+    if [[ "$snum" -eq "$sprint_num" ]]; then
+      has_checks=1
+      break
+    fi
+  done
+
   if [[ -n "$promise" ]]; then
     if [[ $found_promise -eq 1 ]]; then
-      log "SPRINT ${sprint_num} COMPLETED (${minutes}m ${seconds}s, ${iter} iterations)"
-      SPRINT_RESULTS[$sprint_num]="PASS"
-      git_checkpoint "$sprint_num" "complete"
+      if [[ $has_checks -eq 1 ]]; then
+        log "  Running independent verification checks..."
+        if run_verification_checks "$sprint_num"; then
+          log "SPRINT ${sprint_num} COMPLETED — promise found, verification passed (${minutes}m ${seconds}s, ${iter} iterations)"
+          SPRINT_RESULTS[$sprint_num]="PASS"
+          git_checkpoint "$sprint_num" "complete"
+        else
+          log "SPRINT ${sprint_num} FAILED — promise found but verification failed (${minutes}m ${seconds}s)"
+          log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
+          SPRINT_RESULTS[$sprint_num]="FAIL (promise found, verification failed)"
+          git_checkpoint "$sprint_num" "failed-verification"
+          return 1
+        fi
+      else
+        log "SPRINT ${sprint_num} COMPLETED (${minutes}m ${seconds}s, ${iter} iterations)"
+        SPRINT_RESULTS[$sprint_num]="PASS"
+        git_checkpoint "$sprint_num" "complete"
+      fi
     else
-      log "SPRINT ${sprint_num} FAILED — promise not found after ${max_iter} iterations (${minutes}m ${seconds}s)"
-      log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
-      SPRINT_RESULTS[$sprint_num]="FAIL (no promise after ${max_iter} iters)"
-      git_checkpoint "$sprint_num" "failed-partial"
-      return 1
+      # No promise found — run verification as fallback
+      if [[ $has_checks -eq 1 ]]; then
+        log "  Promise not found. Running verification checks as fallback..."
+        if run_verification_checks "$sprint_num"; then
+          log "SPRINT ${sprint_num} COMPLETED — all checks passed despite missing promise (${minutes}m ${seconds}s, ${max_iter} iterations)"
+          SPRINT_RESULTS[$sprint_num]="PASS (verification passed, no promise)"
+          git_checkpoint "$sprint_num" "complete-no-promise"
+        else
+          log "SPRINT ${sprint_num} FAILED — promise not found, verification failed (${minutes}m ${seconds}s)"
+          log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
+          SPRINT_RESULTS[$sprint_num]="FAIL (no promise, verification failed)"
+          git_checkpoint "$sprint_num" "failed-partial"
+          return 1
+        fi
+      else
+        log "SPRINT ${sprint_num} FAILED — promise not found after ${max_iter} iterations (${minutes}m ${seconds}s)"
+        log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
+        SPRINT_RESULTS[$sprint_num]="FAIL (no promise after ${max_iter} iters)"
+        git_checkpoint "$sprint_num" "failed-partial"
+        return 1
+      fi
     fi
   else
-    log "SPRINT ${sprint_num} FINISHED (${minutes}m ${seconds}s, ${iter} iterations, no promise check)"
-    SPRINT_RESULTS[$sprint_num]="PASS"
-    git_checkpoint "$sprint_num" "complete"
+    # No promise defined — run verification if checks exist
+    if [[ $has_checks -eq 1 ]]; then
+      log "  No promise defined. Running verification checks..."
+      if run_verification_checks "$sprint_num"; then
+        log "SPRINT ${sprint_num} FINISHED — verification passed (${minutes}m ${seconds}s, ${iter} iterations)"
+        SPRINT_RESULTS[$sprint_num]="PASS"
+        git_checkpoint "$sprint_num" "complete"
+      else
+        log "SPRINT ${sprint_num} FAILED — verification failed (${minutes}m ${seconds}s)"
+        log "Resume: $0 ${EPIC_FILE} ${sprint_num}"
+        SPRINT_RESULTS[$sprint_num]="FAIL (verification failed, no promise)"
+        git_checkpoint "$sprint_num" "failed-verification"
+        return 1
+      fi
+    else
+      log "SPRINT ${sprint_num} FINISHED (${minutes}m ${seconds}s, ${iter} iterations, no promise check)"
+      SPRINT_RESULTS[$sprint_num]="PASS"
+      git_checkpoint "$sprint_num" "complete"
+    fi
   fi
 }
 
@@ -1106,6 +1296,14 @@ main() {
 
   parse_epic "$EPIC_FILE"
   resolve_engine
+
+  # --- Parse verification file (optional) ---
+  local vfile="${PROJECT_DIR}/${VERIFICATION_FILE:-$DEFAULT_VERIFICATION_FILE}"
+  if [[ -f "$vfile" ]]; then
+    parse_verification "$vfile"
+    log "Parsed verification file: $(basename "$vfile") (${#VERIFICATION_CHECKS[@]} checks)"
+  fi
+
   validate_epic
 
   START_SPRINT="${positional[0]:-1}"

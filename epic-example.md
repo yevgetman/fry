@@ -128,7 +128,10 @@ Build:
 
 Dependencies to install: [list packages/modules with exact names]
 
-Verify after each iteration:
+Verify:
+Concrete verification checks are defined in verification.md (sprint 1).
+Review those checks — they will be run independently after you signal completion.
+Additionally, confirm after each iteration:
 - [Build command succeeds — e.g., go build ./..., npm run build, pytest --collect-only]
 - [Lint/vet passes — e.g., go vet ./..., eslint, ruff check]
 - [Docker services start and become healthy]
@@ -162,7 +165,9 @@ Read AGENTS.md [relevant rules], then plans/plan.md [relevant sections].
  exact filenames, function signatures, SQL DDL, API shapes, etc.]
 
 Verify:
-- [Verification checklist specific to this sprint's deliverables]
+Concrete verification checks are defined in verification.md (sprint 2).
+Review those checks — they will be run independently after you signal completion.
+- [Additional verification specific to this sprint's deliverables]
 
 CRITICAL: [Key constraint for this sprint]
 
@@ -188,6 +193,7 @@ Read AGENTS.md, then plans/plan.md [relevant sections].
 [Build instructions.]
 
 Verify:
+Concrete verification checks are defined in verification.md (sprint 3).
 - [Checklist]
 
 If stuck: [Hint]
@@ -231,7 +237,9 @@ PART 3 — Integration tests:
 PART 4 — End-to-end smoke test:
 [Curl commands or equivalent to verify the running application]
 
-Verify against acceptance criteria (ALL must pass):
+Verify:
+Concrete verification checks are defined in verification.md (sprint N).
+All acceptance criteria (ALL must pass):
 - [Exhaustive checklist from the plan document]
 
 If stuck after 15 iterations: [Most likely wiring issue — e.g., "interface mismatch in DI" or "DB connection in tests"]
