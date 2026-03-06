@@ -1,6 +1,8 @@
 # fry
 
-An automated build orchestration engine that uses AI coding agents to build software projects from a plan document. Write a plan, and fry decomposes it into sprints and executes them autonomously -- one iteration at a time, fresh context each pass -- until the project is built.
+An automated build orchestration engine that uses AI agents to execute complex plans autonomously. Write a plan, and fry decomposes it into sprints and executes them -- one iteration at a time, fresh context each pass -- until the project is done.
+
+Works for **software projects** (code, tests, infrastructure) and **planning projects** (business plans, research reports, strategic analyses, trip planning -- any endeavor requiring rigorous phased document creation). See [Planning Mode](#planning-mode-non-code-projects).
 
 Supports **OpenAI Codex** (default) and **Claude Code** as interchangeable AI engines.
 
@@ -195,11 +197,12 @@ project-root/
 ### What fry ships with
 
 ```
-fry.sh                   # Main build runner
-fry-prepare.sh           # Generates AGENTS.md + epic.md + verification.md from plan.md
-epic-example.md          # Epic format template/reference
-verification-example.md  # Verification format template/reference
-GENERATE_EPIC.md         # Prompt for manually generating epics with any LLM
+fry.sh                       # Main build runner
+fry-prepare.sh               # Generates AGENTS.md + epic.md + verification.md (software projects)
+fry-prepare-planning.sh      # Same generation, planning-domain prompts (non-code projects)
+epic-example.md              # Epic format template/reference
+verification-example.md      # Verification format template/reference
+GENERATE_EPIC.md             # Prompt for manually generating epics with any LLM
 ```
 
 ### What gets generated at runtime
@@ -548,7 +551,8 @@ Progress is preserved in `progress.txt` and git history. The agent picks up wher
 | File | Purpose | Created by |
 |---|---|---|
 | `fry.sh` | Main build runner -- parser, preflight, sprint loop, Docker, git | Ships with fry |
-| `fry-prepare.sh` | Generates AGENTS.md + epic.md + verification.md from plan.md | Ships with fry |
+| `fry-prepare.sh` | Generates AGENTS.md + epic.md + verification.md from plan.md (software projects) | Ships with fry |
+| `fry-prepare-planning.sh` | Same as above, but for planning projects (non-code document output) | Ships with fry |
 | `epic-example.md` | Epic format template with full documentation | Ships with fry |
 | `verification-example.md` | Verification format template with check primitives | Ships with fry |
 | `GENERATE_EPIC.md` | Prompt for manual epic generation with any LLM | Ships with fry |
@@ -560,6 +564,126 @@ Progress is preserved in `progress.txt` and git history. The agent picks up wher
 | `prompt.md` | Assembled per-sprint prompt (gitignored) | fry.sh at runtime |
 | `progress.txt` | Append-only iteration memory | fry.sh at runtime |
 | `build-logs/` | Per-iteration and per-sprint logs (gitignored) | fry.sh at runtime |
+
+## Planning Mode (Non-Code Projects)
+
+fry's execution engine is project-agnostic -- the sprint loop, verification runner, and heal loop work identically regardless of whether the output is code or documents. The only software-specific parts are the generation prompts in `fry-prepare.sh`.
+
+`fry-prepare-planning.sh` is a planning-domain fork that generates sprints for producing structured documents instead of code. Use it for business plans, trip planning, research reports, strategic analyses, or any endeavor that requires rigorous, phased document creation.
+
+### How It Differs
+
+| Aspect | `fry-prepare.sh` (software) | `fry-prepare-planning.sh` (planning) |
+|---|---|---|
+| AGENTS.md | Technology constraints, architecture rules, testing rules, coding patterns | Domain boundaries, analytical frameworks, document quality standards, research requirements |
+| Sprint phasing | Scaffolding → Schema → Logic → Integration → E2E | Research → Analysis → Strategy → Detailed Planning → Synthesis |
+| Sprint deliverables | Source files, configs, tests | Markdown documents, analyses, strategies |
+| Verification | Build succeeds, tests pass, files exist | Documents exist, contain required sections/topics, meet minimum depth |
+| Prerequisites | `GENERATE_EPIC.md` required | Not required (guidance embedded in prompts) |
+
+### Quick Start (Planning)
+
+```bash
+# 1. Write your high-level plan
+mkdir -p plans
+cat > plans/plan.md << 'EOF'
+# Coffee Shop Launch Plan
+
+## Vision
+Open a specialty coffee shop in downtown Portland targeting remote workers.
+
+## Key Challenges
+- Location selection and lease negotiation
+- Menu development and supplier sourcing
+- Staffing plan (baristas, manager, part-time)
+- Financial projections and funding strategy
+- Marketing and pre-launch buzz
+- Permits, licensing, health code compliance
+
+## Budget
+Initial investment: $150K-$200K. Must reach break-even within 12 months.
+
+## Timeline
+Target opening: Q3 2026.
+EOF
+
+# 2. Optionally add executive context
+cat > plans/executive.md << 'EOF'
+# Coffee Shop -- Executive Context
+
+**Vision:** A third-wave coffee shop that doubles as a productive workspace.
+**Target customers:** Remote workers, freelancers, small meeting groups.
+**Differentiator:** Premium coffee + fast wifi + bookable meeting nooks.
+**Success criteria:** 200+ daily customers by month 6, 4.5+ star reviews.
+EOF
+
+# 3. Generate the planning epic
+./fry-prepare-planning.sh --engine claude
+
+# 4. Review and validate
+./fry.sh --dry-run
+
+# 5. Run -- the AI produces documents, not code
+./fry.sh --engine claude
+```
+
+### What Gets Produced
+
+Each sprint generates document deliverables in the `plans/` directory:
+
+```
+plans/
+  plan.md                    # Your input (high-level plan)
+  executive.md               # Your input (optional context)
+  market-analysis.md         # Sprint 1: Research & Discovery
+  competitive-landscape.md   # Sprint 1: Research & Discovery
+  customer-segments.md       # Sprint 1: Research & Discovery
+  financial-projections.md   # Sprint 2: Deep Analysis
+  risk-assessment.md         # Sprint 2: Deep Analysis
+  location-strategy.md       # Sprint 3: Strategy & Design
+  marketing-plan.md          # Sprint 3: Strategy & Design
+  operations-roadmap.md      # Sprint 4: Detailed Planning
+  launch-timeline.md         # Sprint 4: Detailed Planning
+  executive-summary.md       # Sprint 5: Synthesis & Review
+```
+
+### Verification for Documents
+
+The same four check primitives verify document deliverables:
+
+```
+# Document exists
+@check_file plans/market-analysis.md
+
+# Contains required sections
+@check_file_contains plans/market-analysis.md "## Market Size"
+@check_file_contains plans/market-analysis.md "TAM|SAM|SOM"
+
+# Meets minimum depth (at least 500 words)
+@check_cmd test $(wc -w < plans/market-analysis.md) -ge 500
+
+# Has sufficient structure (at least 5 sections)
+@check_cmd_output grep -c '^## ' plans/market-analysis.md | ^[5-9]
+```
+
+When verification fails, the heal loop re-runs the AI with the specific failures ("market-analysis.md is missing the '## Competitive Threats' section") and the agent revises the document.
+
+### Usage
+
+```bash
+# Standalone generation
+./fry-prepare-planning.sh                           # Generate with Codex
+./fry-prepare-planning.sh --engine claude           # Generate with Claude Code
+./fry-prepare-planning.sh epic-phase1.md            # Custom epic filename
+./fry-prepare-planning.sh --validate-only           # Check prerequisites only
+./fry-prepare-planning.sh --keep-agents             # Preserve existing AGENTS.md
+
+# Then run with fry.sh as normal
+./fry.sh --engine claude
+./fry.sh epic.md 3 5 --engine claude                # Run specific sprints
+```
+
+Unlike `fry-prepare.sh`, the planning variant does not require `GENERATE_EPIC.md` -- all planning-domain decomposition guidance is embedded in its generation prompts.
 
 ## Environment Variables
 
