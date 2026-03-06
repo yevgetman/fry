@@ -427,9 +427,11 @@ When a sprint defines a `@promise` token:
 | Promise Token | Checks Pass | Result |
 |---|---|---|
 | Found | All pass | **PASS** |
-| Found | Some fail | **FAIL** -- "promise found, verification failed" |
+| Found | Some fail | Enters **heal loop** (see [Self-Healing](#self-healing)) |
 | Not found | All pass | **PASS** -- auto-recovery (work done, token forgotten) |
-| Not found | Some fail | **FAIL** |
+| Not found | Some fail | Enters **heal loop** (see [Self-Healing](#self-healing)) |
+
+If the heal loop exhausts all attempts without passing, the sprint is marked **FAIL**. If healing succeeds, the sprint is marked **PASS (healed)**.
 
 When a sprint has no `@promise` token but has verification checks, the checks determine the outcome after all iterations run. When neither is defined, the sprint always passes after running all iterations.
 
@@ -449,13 +451,88 @@ The `@verification` directive in the epic file can override the default filename
 - If `fry-prepare.sh` fails to generate `verification.md`, it logs a WARNING and continues (it does not abort the build)
 - If a sprint has no checks defined in `verification.md`, it behaves as if no verification file exists for that sprint
 
+## Self-Healing
+
+When verification checks fail after a sprint completes, fry doesn't immediately give up. Instead, it enters a **heal loop** that automatically re-runs the AI agent with a targeted fix prompt, then re-verifies. This closes the gap between "almost done" and "actually passing" without manual intervention.
+
+### How It Works
+
+1. **Verification fails** -- one or more checks return non-zero after the agent signals completion (or after max iterations)
+2. **Diagnostics collected** -- `collect_failed_checks()` re-runs only the failing checks, capturing their stderr/stdout (truncated to 20 lines per check) into a diagnostic report
+3. **Heal prompt assembled** -- fry builds a targeted prompt containing:
+   - The sprint's original prompt (full context)
+   - The list of failed checks with exact commands and error output
+   - Instructions to fix only the failing checks without breaking passing ones
+   - The sprint's promise token for signaling completion
+4. **Agent re-runs** -- the AI agent executes with the heal prompt, working to fix the specific failures
+5. **Re-verification** -- all checks for the sprint run again (not just the previously-failing ones)
+6. **Repeat or exit** -- if checks still fail, steps 2-5 repeat. The loop exits when:
+   - All checks pass → sprint marked **PASS (healed)**
+   - Max heal attempts exhausted → sprint marked **FAIL**
+
+### Configuration
+
+| Directive | Scope | Default | Description |
+|---|---|---|---|
+| `@max_heal_attempts <N>` | Global | 3 | Maximum heal attempts for all sprints |
+| `@max_heal_attempts <N>` | Per-sprint | Inherits global | Override for a specific sprint |
+
+Set `@max_heal_attempts 0` globally or per-sprint to disable healing entirely. When disabled, verification failures immediately result in a FAIL.
+
+```
+# Global: allow up to 5 heal attempts for all sprints
+@max_heal_attempts 5
+
+@sprint 3
+@name Complex Integration
+@max_heal_attempts 8       # This sprint gets more attempts
+```
+
+### What the Heal Prompt Contains
+
+The heal prompt gives the agent maximum context to fix failures efficiently:
+
+```
+Sprint N for [Epic Name] — some verification checks FAILED.
+Below are the failures. Fix ONLY what is broken. Do NOT re-do work that already passes.
+
+FAILED CHECKS:
+- FAILED: Command failed: npm run build
+  Output (truncated):
+  src/index.ts(42,5): error TS2322: Type 'string' is not assignable to type 'number'.
+  ...
+
+Original sprint prompt (for full context):
+[full sprint prompt text]
+
+Output <promise>TOKEN</promise> when all issues are fixed.
+```
+
+### Logging
+
+Each heal attempt is logged to `build-logs/` alongside regular sprint logs:
+
+- Agent output goes to `build-logs/sprint{N}_{timestamp}.log`
+- Heal attempt number and verification results are printed to the terminal regardless of `--verbose` setting
+- The build summary at the end shows healed sprints with a distinct status: `PASS (healed after N attempts)`
+
+### Git Checkpoints
+
+Git commits happen after the heal loop completes (pass or fail), not between individual heal attempts. This means:
+
+- A successful heal produces one checkpoint commit for the sprint, same as a normal pass
+- A failed heal (all attempts exhausted) commits partial work before stopping
+
 ## Resuming Failed Builds
 
-A sprint can fail for several reasons:
+When a sprint fails, fry first attempts to [self-heal](#self-healing) by re-running the agent with targeted fix prompts. Only after exhausting all heal attempts (default: 3) does the build actually stop.
 
-- Promise token not found after max iterations (and no verification checks, or checks also fail)
-- Promise token found but verification checks fail
-- No promise defined and verification checks fail
+A sprint reaches final failure for these reasons:
+
+- Promise token not found after max iterations, verification checks fail, and healing exhausted
+- Promise token found but verification checks fail and healing exhausted
+- No promise defined, verification checks fail, and healing exhausted
+- Healing disabled (`@max_heal_attempts 0`) and verification checks fail
 
 In all cases, fry commits partial work and stops with a resume command:
 
