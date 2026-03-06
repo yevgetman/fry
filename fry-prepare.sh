@@ -51,6 +51,7 @@ readonly AGENTS_FILE="AGENTS.md"
 readonly EXAMPLE_FILE="epic-example.md"
 readonly PROMPT_REF="GENERATE_EPIC.md"
 readonly VERIFICATION_EXAMPLE="verification-example.md"
+readonly AGENTS_PLACEHOLDER="# AGENTS.md — PLACEHOLDER"
 
 # =============================================================================
 # HELPERS
@@ -97,8 +98,12 @@ run_agent() {
 
 generate_agents() {
   if [[ $KEEP_AGENTS -eq 1 ]] && [[ -f "${AGENTS_FILE}" ]]; then
-    echo "AGENTS.md already exists. Skipping generation (--keep-agents)."
-    return 0
+    if head -1 "${AGENTS_FILE}" | grep -qF "$AGENTS_PLACEHOLDER"; then
+      echo "AGENTS.md is a placeholder — generating despite --keep-agents."
+    else
+      echo "AGENTS.md already exists. Skipping generation (--keep-agents)."
+      return 0
+    fi
   fi
 
   echo "Step 1: Generating ${AGENTS_FILE} from ${PLAN_FILE} (engine: ${ENGINE})..."

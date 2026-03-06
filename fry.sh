@@ -103,6 +103,7 @@ readonly PLANS_DIR="plans"
 readonly CONTEXT_FILE="${PLANS_DIR}/executive.md"
 readonly PLAN_FILE="${PLANS_DIR}/plan.md"
 readonly AGENTS_FILE="AGENTS.md"
+readonly AGENTS_PLACEHOLDER="# AGENTS.md — PLACEHOLDER"
 readonly DEFAULT_VERIFICATION_FILE="verification.md"
 
 # =============================================================================
@@ -660,6 +661,14 @@ preflight() {
   if [[ ! -f "${PROJECT_DIR}/${AGENTS_FILE}" ]]; then
     log "ERROR: Required file missing: ${AGENTS_FILE}"
     log "       Run fry-prepare.sh first, or create it manually."
+    failed=1
+  elif head -1 "${PROJECT_DIR}/${AGENTS_FILE}" | grep -qF "$AGENTS_PLACEHOLDER"; then
+    log "ERROR: ${AGENTS_FILE} is still the placeholder template."
+    log "       Run fry-prepare.sh to generate it, or replace it with real content."
+    failed=1
+  elif [[ $(wc -l < "${PROJECT_DIR}/${AGENTS_FILE}") -lt 5 ]]; then
+    log "ERROR: ${AGENTS_FILE} has fewer than 5 lines — likely not real content."
+    log "       Run fry-prepare.sh to generate it, or replace it with real content."
     failed=1
   fi
 

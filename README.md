@@ -79,10 +79,14 @@ That's it. fry will:
 2. Generate `AGENTS.md` (operational rules for the AI)
 3. Generate `epic.md` (sprint definitions)
 4. Generate `verification.md` (independent checks per sprint)
-5. Execute each sprint, iterating until completion or max iterations
-6. Run independent verification checks after each sprint
+5. Parse the epic file and validate its structure
+6. Run preflight checks (tools, project structure, AGENTS.md content validation)
+7. Execute each sprint, iterating until completion or max iterations
+8. Run independent verification checks after each sprint
 
-If `AGENTS.md`, `epic.md`, or `verification.md` already exist, they are **overwritten** by default. Use `--keep-agents`, `--keep-epic`, or `--keep-verification` flags on `fry-prepare.sh` to preserve existing files.
+**Auto-generation trigger:** fry.sh calls `fry-prepare.sh` only when the epic file does not exist on disk. This is a simple file-existence check — if `epic.md` is present (even from a prior `--dry-run`), the prepare step is skipped entirely and fry uses the existing files as-is. This means a successful dry-run creates all files, and a subsequent real run reuses them without regeneration.
+
+If `AGENTS.md`, `epic.md`, or `verification.md` already exist, they are **overwritten** by `fry-prepare.sh` by default. Use `--keep-agents`, `--keep-epic`, or `--keep-verification` flags to preserve existing files.
 
 ### 3. Validate before running (recommended)
 
@@ -283,7 +287,7 @@ Generates `AGENTS.md`, `epic.md`, and `verification.md` from your plan. Called a
 |---|---|
 | `epic_filename` | Output filename for the epic (default: `epic.md`) |
 | `--engine <codex\|claude>` | AI engine for generation (default: codex, or `FRY_ENGINE` env var) |
-| `--keep-agents` | Skip AGENTS.md generation if the file already exists |
+| `--keep-agents` | Skip AGENTS.md generation if the file already exists (unless it is the placeholder — placeholders are always regenerated) |
 | `--keep-epic` | Skip epic.md generation if the file already exists |
 | `--keep-verification` | Skip verification.md generation if the file already exists |
 | `--validate-only` | Check that all prerequisites are present, then exit |
@@ -339,6 +343,42 @@ fry manages Docker automatically when configured:
 - Custom health checks via `@docker_ready_cmd`
 
 Docker is only required when running sprints at or after the configured sprint number. Earlier sprints can run without Docker installed.
+
+## Preflight Checks
+
+Before executing any sprints, `fry.sh` runs a preflight validation phase. All checks must pass or the build is aborted.
+
+### What's checked
+
+| Check | Fails when |
+|---|---|
+| AI engine CLI | `codex` or `claude` binary not on PATH |
+| `git` | Not installed |
+| `plans/` directory | Missing |
+| `plans/plan.md` | Missing |
+| `AGENTS.md` existence | Missing |
+| `AGENTS.md` placeholder | First line matches the standard placeholder marker (`# AGENTS.md — PLACEHOLDER`) |
+| `AGENTS.md` content | Fewer than 5 lines (likely empty or stub content) |
+| Docker | Not installed or daemon not running (only when sprints at or after `@docker_from_sprint` are in the run range) |
+| `@require_tool` | Any declared tool not on PATH |
+| `@preflight_cmd` | Any custom preflight command exits non-zero |
+| Disk space | Warning (not fatal) if less than 2 GB free |
+
+### Content validation
+
+File existence alone is not sufficient for `AGENTS.md`. The repo ships with a standard placeholder file:
+
+```
+# AGENTS.md — PLACEHOLDER
+#
+# This file has not been generated yet.
+# Run ./fry-prepare.sh to generate it, or replace this content
+# with your project's operational rules for the AI coding agent.
+```
+
+Preflight checks for the placeholder literal first, then falls back to a minimum line count. This prevents fry from running a build against placeholder or near-empty operational rules. The same placeholder detection is used by `fry-prepare.sh` — if `--keep-agents` is passed but the file is still the placeholder, it regenerates anyway.
+
+`plans/plan.md` and `verification.md` are not content-validated: `plan.md` is user-authored input (the user owns its quality), and bad verification checks fail safely at runtime with clear error messages.
 
 ## Verification
 
@@ -417,7 +457,7 @@ Progress is preserved in `progress.txt` and git history. The agent picks up wher
 | `GENERATE_EPIC.md` | Prompt for manual epic generation with any LLM | Ships with fry |
 | `plans/plan.md` | Your build plan (required input) | You |
 | `plans/executive.md` | Executive context -- project vision/goals (optional) | You |
-| `AGENTS.md` | Operational rules for the AI agent | Auto-generated |
+| `AGENTS.md` | Operational rules for the AI agent (ships as placeholder, must be generated or authored before build) | Auto-generated |
 | `epic.md` | Sprint definitions | Auto-generated or hand-authored |
 | `verification.md` | Independent verification checks per sprint | Auto-generated or hand-authored |
 | `prompt.md` | Assembled per-sprint prompt (gitignored) | fry.sh at runtime |
