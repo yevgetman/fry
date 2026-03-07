@@ -6,6 +6,8 @@ Works for **software projects** (code, tests, infrastructure) and **planning pro
 
 Supports **OpenAI Codex** (default) and **Claude Code** as interchangeable AI engines.
 
+For detailed documentation on specific topics, see the [docs/](docs/) directory.
+
 ## How It Works
 
 ```
@@ -203,6 +205,7 @@ fry-prepare-planning.sh      # Same generation, planning-domain prompts (non-cod
 epic-example.md              # Epic format template/reference
 verification-example.md      # Verification format template/reference
 GENERATE_EPIC.md             # Prompt for manually generating epics with any LLM
+docs/                        # Detailed documentation on specific topics
 ```
 
 ### What gets generated at runtime
@@ -461,15 +464,16 @@ When verification checks fail after a sprint completes, fry doesn't immediately 
 ### How It Works
 
 1. **Verification fails** -- one or more checks return non-zero after the agent signals completion (or after max iterations)
-2. **Diagnostics collected** -- `collect_failed_checks()` re-runs only the failing checks, capturing their stderr/stdout (truncated to 20 lines per check) into a diagnostic report
-3. **Heal prompt assembled** -- fry builds a targeted prompt containing:
-   - The sprint's original prompt (full context)
-   - The list of failed checks with exact commands and error output
-   - Instructions to fix only the failing checks without breaking passing ones
-   - The sprint's promise token for signaling completion
-4. **Agent re-runs** -- the AI agent executes with the heal prompt, working to fix the specific failures
-5. **Re-verification** -- all checks for the sprint run again (not just the previously-failing ones)
-6. **Repeat or exit** -- if checks still fail, steps 2-5 repeat. The loop exits when:
+2. **Diagnostics collected** -- `collect_failed_checks()` re-runs all checks for the sprint, capturing pass/fail status and stderr/stdout (truncated to 20 lines per check) into a diagnostic report
+3. **Heal prompt assembled** -- fry overwrites `prompt.md` with a targeted heal prompt containing:
+   - The specific failed checks with exact error output
+   - Instructions to make minimum changes (no refactoring, no starting over)
+   - Pointers to context files (`progress.txt`, `plans/plan.md`, `executive.md`)
+   - Explicit instruction to NOT output promise tokens
+4. **Agent re-runs** -- a fresh agent session executes with the heal prompt, reading `progress.txt` for context on what was built
+5. **Pre-sprint hook re-runs** -- if configured (e.g., `npm install`), runs again to pick up any dependency changes from the heal pass
+6. **Re-verification** -- all checks for the sprint run again (not just the previously-failing ones)
+7. **Repeat or exit** -- if checks still fail, the failure report is appended to `progress.txt` (so the next attempt has context), and steps 2-6 repeat. The loop exits when:
    - All checks pass → sprint marked **PASS (healed)**
    - Max heal attempts exhausted → sprint marked **FAIL**
 
@@ -493,22 +497,38 @@ Set `@max_heal_attempts 0` globally or per-sprint to disable healing entirely. W
 
 ### What the Heal Prompt Contains
 
-The heal prompt gives the agent maximum context to fix failures efficiently:
+The heal prompt is a standalone document written to `prompt.md` (replacing the sprint prompt). It gives the agent targeted context to fix failures without re-doing the entire sprint. See [docs/self-heal.md](docs/self-heal.md) for the full prompt structure breakdown.
 
 ```
-Sprint N for [Epic Name] — some verification checks FAILED.
-Below are the failures. Fix ONLY what is broken. Do NOT re-do work that already passes.
+# HEAL MODE — Sprint 3: Setup Auth
 
-FAILED CHECKS:
+## What happened
+The sprint finished its work but FAILED independent verification checks.
+Your job is to fix ONLY the issues described below. Do not start the sprint over.
+Do not refactor or reorganize. Make the minimum changes needed to pass the checks.
+
+## Failed verification checks
+Verification: 2/5 checks passed.
+
+Failed checks:
+- FAILED: File missing or empty: src/auth.ts
 - FAILED: Command failed: npm run build
   Output (truncated):
-  src/index.ts(42,5): error TS2322: Type 'string' is not assignable to type 'number'.
-  ...
+  src/index.ts(42,5): error TS2322: Type 'string' is not assignable ...
 
-Original sprint prompt (for full context):
-[full sprint prompt text]
+## Instructions
+1. Read progress.txt for context on what was built
+2. Read the failed checks above carefully
+3. Fix each failure — create missing files, fix build errors, correct config
+4. After fixing, do a final sanity check (e.g., run the build command if applicable)
+5. Append a brief note to progress.txt about what you fixed in this heal pass
 
-Output <promise>TOKEN</promise> when all issues are fixed.
+## Context files
+- Read progress.txt for iteration history
+- Read plans/plan.md for the overall project plan
+- Read executive.md for executive context (if it exists)
+
+Do NOT output any promise tokens. Just fix the issues.
 ```
 
 ### Logging
@@ -556,6 +576,7 @@ Progress is preserved in `progress.txt` and git history. The agent picks up wher
 | `epic-example.md` | Epic format template with full documentation | Ships with fry |
 | `verification-example.md` | Verification format template with check primitives | Ships with fry |
 | `GENERATE_EPIC.md` | Prompt for manual epic generation with any LLM | Ships with fry |
+| `docs/` | Detailed documentation on specific topics (self-heal flow, etc.) | Ships with fry |
 | `plans/plan.md` | Your build plan (required input) | You |
 | `plans/executive.md` | Executive context -- project vision/goals (optional) | You |
 | `AGENTS.md` | Operational rules for the AI agent (ships as placeholder, must be generated or authored before build) | Auto-generated |

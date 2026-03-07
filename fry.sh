@@ -299,6 +299,10 @@ parse_epic() {
   fi
 
   while IFS= read -r line || [[ -n "$line" ]]; do
+    # Trim trailing whitespace from directives (but not from @prompt content)
+    if [[ "$state" != "SPRINT_PROMPT" ]]; then
+      line="${line%"${line##*[![:space:]]}"}"
+    fi
 
     if [[ "$line" =~ ^@sprint[[:space:]]+([0-9]+)[[:space:]]*$ ]]; then
       current_sprint=$((10#${BASH_REMATCH[1]}))
@@ -419,6 +423,9 @@ parse_verification() {
   fi
 
   while IFS= read -r line || [[ -n "$line" ]]; do
+    # Trim trailing whitespace (prevents invisible breakage in unquote_pattern)
+    line="${line%"${line##*[![:space:]]}"}"
+
     # Skip blank lines and comments
     [[ -z "$line" ]] && continue
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -476,7 +483,7 @@ run_verification_checks() {
       FILE_CONTAINS)
         local fpath="${args%%|*}"
         local pattern="${args#*|}"
-        if grep -qE "$pattern" "${PROJECT_DIR}/${fpath}" 2>/dev/null; then
+        if grep -qE -- "$pattern" "${PROJECT_DIR}/${fpath}" 2>/dev/null; then
           log "    [PASS] check_file_contains: ${fpath} =~ ${pattern}"
           passed=$((passed + 1))
         else
@@ -494,11 +501,11 @@ run_verification_checks() {
         fi
         ;;
       CMD_OUTPUT)
-        local cmd="${args%%|*}"
-        local pattern="${args#*|}"
+        local cmd="${args%|*}"
+        local pattern="${args##*|}"
         local output
         output=$(cd "$PROJECT_DIR" && eval "$cmd" 2>/dev/null) || true
-        if echo "$output" | grep -qE "$pattern" 2>/dev/null; then
+        if echo "$output" | grep -qE -- "$pattern" 2>/dev/null; then
           log "    [PASS] check_cmd_output: ${cmd} | ${pattern}"
           passed=$((passed + 1))
         else
@@ -552,7 +559,7 @@ collect_failed_checks() {
       FILE_CONTAINS)
         local fpath="${args%%|*}"
         local pattern="${args#*|}"
-        if grep -qE "$pattern" "${PROJECT_DIR}/${fpath}" 2>/dev/null; then
+        if grep -qE -- "$pattern" "${PROJECT_DIR}/${fpath}" 2>/dev/null; then
           passed=$((passed + 1))
         else
           failed_details+="- FAILED: File '${fpath}' does not contain pattern: ${pattern}"$'\n'
@@ -572,11 +579,11 @@ collect_failed_checks() {
         fi
         ;;
       CMD_OUTPUT)
-        local cmd="${args%%|*}"
-        local pattern="${args#*|}"
+        local cmd="${args%|*}"
+        local pattern="${args##*|}"
         local output
         output=$(cd "$PROJECT_DIR" && eval "$cmd" 2>/dev/null) || true
-        if echo "$output" | grep -qE "$pattern" 2>/dev/null; then
+        if echo "$output" | grep -qE -- "$pattern" 2>/dev/null; then
           passed=$((passed + 1))
         else
           failed_details+="- FAILED: Command output mismatch: ${cmd}"$'\n'
@@ -668,7 +675,13 @@ run_heal_loop() {
       cat "$heal_log" >> "${LOG_DIR}/sprint${sprint_num}_${TIMESTAMP}.log"
     fi
 
-    # 4. Re-run verification
+    # 4. Re-run pre-sprint hook (e.g., npm install) to pick up any dependency changes
+    if [[ -n "$PRE_SPRINT_CMD" ]]; then
+      cd "$PROJECT_DIR"
+      eval "$PRE_SPRINT_CMD" 2>/dev/null || true
+    fi
+
+    # 5. Re-run verification
     log "  Re-running verification checks after heal attempt ${heal_attempt}..."
     if run_verification_checks "$sprint_num"; then
       log "  Heal attempt ${heal_attempt} SUCCEEDED — all checks now pass"
