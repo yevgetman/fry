@@ -1,0 +1,67 @@
+# Planning Mode
+
+fry's execution engine is project-agnostic — the sprint loop, verification runner, and heal loop work identically regardless of whether the output is code or documents.
+
+Pass `--planning` to use planning-domain prompts that generate sprints for producing structured documents instead of code. Use it for business plans, trip planning, research reports, strategic analyses, or any endeavor that requires rigorous, phased document creation.
+
+## Usage
+
+```bash
+# Generate and run in planning mode
+fry --planning --engine claude
+
+# Generate artifacts only
+fry prepare --planning --engine claude
+```
+
+## How It Differs from Software Mode
+
+| Aspect | Default (software) | `--planning` |
+|---|---|---|
+| `.fry/AGENTS.md` | Technology constraints, architecture rules, testing patterns | Domain boundaries, analytical frameworks, document quality standards |
+| Sprint phasing | Scaffolding → Schema → Logic → Integration → E2E | Research → Analysis → Strategy → Detailed Planning → Synthesis |
+| Sprint deliverables | Source files, configs, tests | Markdown documents, analyses, strategies |
+| Verification | Build succeeds, tests pass, files exist | Documents exist, contain required sections, meet minimum depth |
+
+## Quick Start
+
+```bash
+mkdir -p plans
+cat > plans/plan.md << 'EOF'
+# Coffee Shop Launch Plan
+
+## Vision
+Open a specialty coffee shop in downtown Portland targeting remote workers.
+
+## Key Challenges
+- Location selection and lease negotiation
+- Menu development and supplier sourcing
+- Financial projections and funding strategy
+- Marketing and pre-launch buzz
+EOF
+
+# Generate and run
+fry --planning --engine claude
+```
+
+## Verification for Documents
+
+The same four [verification check primitives](verification.md) work for document deliverables:
+
+```
+@check_file plans/market-analysis.md
+@check_file_contains plans/market-analysis.md "## Market Size"
+@check_cmd test $(wc -w < plans/market-analysis.md) -ge 500
+@check_cmd_output grep -c '^## ' plans/market-analysis.md | ^[5-9]
+```
+
+These checks ensure documents exist, contain required sections, meet minimum word counts, and have sufficient heading structure.
+
+## When to Use Planning Mode
+
+- Business plans and strategies
+- Research reports and literature reviews
+- Trip itineraries and travel planning
+- Strategic analyses and competitive assessments
+- Project proposals and feasibility studies
+- Any multi-phase document creation that benefits from structured decomposition
