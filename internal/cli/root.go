@@ -12,7 +12,7 @@ var (
 		Use:   "fry",
 		Short: "Automated AI build orchestration engine",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCmd.RunE(runCmd, args)
+			return runCmd.RunE(cmd, args)
 		},
 	}
 )
