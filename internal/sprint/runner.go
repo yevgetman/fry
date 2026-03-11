@@ -14,6 +14,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/heal"
+	"github.com/yevgetman/fry/internal/shellhook"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/verify"
 )
@@ -76,14 +77,16 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		userPrompt = readOptionalPromptFile(filepath.Join(cfg.ProjectDir, config.UserPromptFile))
 	}
 
-	AssemblePrompt(PromptOpts{
+	if _, err := AssemblePrompt(PromptOpts{
 		ProjectDir:         cfg.ProjectDir,
 		UserPrompt:         userPrompt,
 		SprintPrompt:       cfg.Sprint.Prompt,
 		SprintProgressFile: config.SprintProgressFile,
 		EpicProgressFile:   config.EpicProgressFile,
 		Promise:            cfg.Sprint.Promise,
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("run sprint: %w", err)
+	}
 
 	buildLogsDir := filepath.Join(cfg.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
@@ -116,7 +119,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		default:
 		}
 
-		if err := runShellHook(ctx, cfg.ProjectDir, cfg.Epic.PreIterationCmd); err != nil {
+		if err := shellhook.Run(ctx, cfg.ProjectDir, cfg.Epic.PreIterationCmd); err != nil {
 			return nil, fmt.Errorf("run sprint pre-iteration hook: %w", err)
 		}
 
@@ -308,22 +311,11 @@ func gitDiffStat(ctx context.Context, projectDir string) string {
 	cmd.Dir = projectDir
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		// Return a unique value so pre/post diffs never falsely compare equal
+		// when git is broken, which would trigger premature early exit.
+		frylog.Log("WARNING: git diff --stat failed: %v", err)
+		return fmt.Sprintf("__git_error_%d__", time.Now().UnixNano())
 	}
 	return string(out)
 }
 
-func runShellHook(ctx context.Context, projectDir, cmd string) error {
-	if strings.TrimSpace(cmd) == "" {
-		return nil
-	}
-
-	command := exec.CommandContext(ctx, "bash", "-c", cmd)
-	command.Dir = projectDir
-	command.Stdout = io.Discard
-	command.Stderr = io.Discard
-	if err := command.Run(); err != nil {
-		return fmt.Errorf("run %q: %w", cmd, err)
-	}
-	return nil
-}

@@ -31,7 +31,9 @@ func Log(format string, args ...interface{}) {
 
 	_, _ = io.WriteString(os.Stdout, line)
 	if logFile != nil {
-		_, _ = io.WriteString(logFile, line)
+		if _, err := io.WriteString(logFile, line); err != nil {
+			fmt.Fprintf(os.Stderr, "fry: log write failed: %v\n", err)
+		}
 	}
 }
 

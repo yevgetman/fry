@@ -37,7 +37,7 @@ type RunReviewOpts struct {
 	Verbose         bool
 }
 
-func AssembleReviewPrompt(opts ReviewPromptOpts) string {
+func AssembleReviewPrompt(opts ReviewPromptOpts) (string, error) {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("# Sprint Review — After Sprint %d: %s\n\n", opts.SprintNum, opts.SprintName))
 	b.WriteString("## Your Role\n")
@@ -96,13 +96,18 @@ func AssembleReviewPrompt(opts ReviewPromptOpts) string {
 	b.WriteString("  - Sprint X: what specifically needs to change in the @prompt block\n")
 	b.WriteString("- **Risk assessment**: Low | Medium | High — 1 sentence\n")
 
+	prompt := b.String()
 	if opts.ProjectDir != "" {
 		path := filepath.Join(opts.ProjectDir, config.ReviewPromptFile)
-		_ = os.MkdirAll(filepath.Dir(path), 0o755)
-		_ = os.WriteFile(path, []byte(b.String()), 0o644)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return "", fmt.Errorf("assemble review prompt: create dir: %w", err)
+		}
+		if err := os.WriteFile(path, []byte(prompt), 0o644); err != nil {
+			return "", fmt.Errorf("assemble review prompt: write file: %w", err)
+		}
 	}
 
-	return b.String()
+	return prompt, nil
 }
 
 func ParseVerdict(output string) ReviewVerdict {
@@ -180,7 +185,9 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 	if err != nil {
 		return nil, fmt.Errorf("run sprint review: %w", err)
 	}
-	AssembleReviewPrompt(promptOpts)
+	if _, err := AssembleReviewPrompt(promptOpts); err != nil {
+		return nil, fmt.Errorf("run sprint review: %w", err)
+	}
 
 	if verdict := strings.ToUpper(strings.TrimSpace(opts.SimulateVerdict)); verdict != "" {
 		frylog.Log("  SIMULATION MODE: injecting %s verdict", verdict)

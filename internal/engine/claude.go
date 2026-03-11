@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os/exec"
 )
 
@@ -41,7 +42,7 @@ func exitCodeFromError(err error) int {
 		return 0
 	}
 	var exitErr *exec.ExitError
-	if ok := errorAs(err, &exitErr); ok {
+	if ok := errors.As(err, &exitErr); ok {
 		return exitErr.ExitCode()
 	}
 	return -1

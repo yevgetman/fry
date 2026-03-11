@@ -18,13 +18,14 @@ func TestPromptAssembly(t *testing.T) {
 	projectDir := t.TempDir()
 	executive := "Executive context line.\n"
 
-	prompt := AssemblePrompt(PromptOpts{
+	prompt, err := AssemblePrompt(PromptOpts{
 		ProjectDir:       projectDir,
 		ExecutiveContent: executive,
 		UserPrompt:       "User directive.",
 		SprintPrompt:     "Sprint instructions.",
 		Promise:          "TOKEN",
 	})
+	require.NoError(t, err)
 
 	// Layer 1: Executive context with orientation disclaimer
 	assert.Contains(t, prompt, "# ===== PROJECT CONTEXT =====\n")
@@ -65,11 +66,12 @@ func TestPromptAssembly(t *testing.T) {
 func TestPromptAssemblyPartialLayers(t *testing.T) {
 	projectDir := t.TempDir()
 
-	prompt := AssemblePrompt(PromptOpts{
+	prompt, err := AssemblePrompt(PromptOpts{
 		ProjectDir:   projectDir,
 		SprintPrompt: "Only sprint instructions.",
 		Promise:      "TOKEN",
 	})
+	require.NoError(t, err)
 
 	assert.NotContains(t, prompt, "# ===== PROJECT CONTEXT =====")
 	assert.NotContains(t, prompt, "# ===== USER DIRECTIVE =====")
@@ -81,11 +83,12 @@ func TestPromptAssemblyPartialLayers(t *testing.T) {
 func TestPromptAssemblyNoPromise(t *testing.T) {
 	projectDir := t.TempDir()
 
-	prompt := AssemblePrompt(PromptOpts{
+	prompt, err := AssemblePrompt(PromptOpts{
 		ProjectDir:   projectDir,
 		SprintPrompt: "Do the work.",
 		Promise:      "",
 	})
+	require.NoError(t, err)
 
 	assert.NotContains(t, prompt, "# ===== COMPLETION SIGNAL =====")
 	assert.NotContains(t, prompt, "===PROMISE:")
@@ -93,13 +96,14 @@ func TestPromptAssemblyNoPromise(t *testing.T) {
 
 func TestPromptAssemblyExactHeaders(t *testing.T) {
 	projectDir := t.TempDir()
-	prompt := AssemblePrompt(PromptOpts{
+	prompt, err := AssemblePrompt(PromptOpts{
 		ProjectDir:       projectDir,
 		ExecutiveContent: "Executive\n",
 		UserPrompt:       "Directive",
 		SprintPrompt:     "Instructions",
 		Promise:          "TOKEN",
 	})
+	require.NoError(t, err)
 
 	headers := []string{
 		"# ===== PROJECT CONTEXT =====",
@@ -114,13 +118,14 @@ func TestPromptAssemblyExactHeaders(t *testing.T) {
 	}
 
 	// Without promise, COMPLETION SIGNAL should be absent
-	promptNoPromise := AssemblePrompt(PromptOpts{
+	promptNoPromise, err := AssemblePrompt(PromptOpts{
 		ProjectDir:       projectDir,
 		ExecutiveContent: "Executive\n",
 		UserPrompt:       "Directive",
 		SprintPrompt:     "Instructions",
 		Promise:          "",
 	})
+	require.NoError(t, err)
 	assert.NotContains(t, promptNoPromise, "# ===== COMPLETION SIGNAL =====")
 }
 

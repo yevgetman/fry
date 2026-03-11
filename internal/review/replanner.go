@@ -14,6 +14,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 type ReplanOpts struct {
@@ -99,6 +100,7 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 		runOpts.Stdout = os.Stdout
 		runOpts.Stderr = os.Stdout
 	}
+	beforeMod := textutil.FileModTime(epicPath)
 	output, _, runErr := opts.Engine.Run(ctx,
 		"Read and execute ALL instructions in .fry/replan-prompt.md. Output ONLY the complete updated epic.md file content. No explanation, no code fences.",
 		runOpts,
@@ -107,7 +109,18 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 		return fmt.Errorf("run replan: replanner agent failed: %w", runErr)
 	}
 
-	updatedContent := stripMarkdownFences(output)
+	// If the engine wrote the epic file directly, read its clean content.
+	// Otherwise fall back to the captured output (stripped of markdown fences).
+	var updatedContent string
+	if textutil.FileModTime(epicPath).After(beforeMod) {
+		data, err := os.ReadFile(epicPath)
+		if err != nil {
+			return fmt.Errorf("run replan: read engine-written epic: %w", err)
+		}
+		updatedContent = string(data)
+	} else {
+		updatedContent = textutil.StripMarkdownFences(output)
+	}
 	if strings.TrimSpace(updatedContent) == "" {
 		return fmt.Errorf("run replan: replanner produced empty output")
 	}
@@ -254,22 +267,6 @@ The output should start exactly as the input file starts.
 `, completedSprint, deviationSpec, epicContents, planContents, deviationLogContents)
 }
 
-func stripMarkdownFences(output string) string {
-	trimmed := strings.TrimSpace(output)
-	if !strings.HasPrefix(trimmed, "```") {
-		return output
-	}
-	lines := strings.Split(trimmed, "\n")
-	if len(lines) == 0 {
-		return ""
-	}
-	lines = lines[1:]
-	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
-		lines = lines[:len(lines)-1]
-	}
-	return strings.Join(lines, "\n")
-}
-
 func validateReplanWithRaw(originalParsed, updatedParsed *epic.Epic, originalContent, updatedContent string, completedSprint, maxScope int) error {
 	if err := ValidateReplan(originalParsed, updatedParsed, completedSprint, maxScope); err != nil {
 		return err
@@ -373,8 +370,10 @@ func equalStructuralDirectives(a, b *epic.Epic) bool {
 	return true
 }
 
+var reSprintNumber = regexp.MustCompile(`^@sprint\s+(\d+)`)
+
 func parseSprintNumber(line string) int {
-	matches := regexp.MustCompile(`^@sprint\s+(\d+)`).FindStringSubmatch(line)
+	matches := reSprintNumber.FindStringSubmatch(line)
 	if len(matches) != 2 {
 		return 0
 	}

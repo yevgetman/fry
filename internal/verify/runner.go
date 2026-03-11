@@ -46,16 +46,18 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 	case CheckCmd:
 		cmd := exec.CommandContext(ctx, "bash", "-c", check.Command)
 		cmd.Dir = projectDir
-		output, err := cmd.CombinedOutput()
-		result.Output = string(output)
+		var combined cappedBuffer
+		cmd.Stdout = &combined
+		cmd.Stderr = &combined
+		err := cmd.Run()
+		result.Output = combined.String()
 		result.Passed = err == nil
 	case CheckCmdOutput:
 		command := exec.CommandContext(ctx, "bash", "-c", check.Command)
 		command.Dir = projectDir
 
-		var stdout bytes.Buffer
+		var stdout, stderr cappedBuffer
 		command.Stdout = &stdout
-		var stderr bytes.Buffer
 		command.Stderr = &stderr
 
 		err := command.Run()
@@ -79,3 +81,26 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
+
+// maxCheckOutput caps the amount of output captured from verification commands
+// to prevent unbounded memory growth on pathologically verbose checks.
+const maxCheckOutput = 10 * 1024 * 1024 // 10 MB
+
+// cappedBuffer is a bytes.Buffer that stops accepting writes after maxCheckOutput.
+type cappedBuffer struct {
+	buf bytes.Buffer
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	remaining := maxCheckOutput - c.buf.Len()
+	if remaining <= 0 {
+		return len(p), nil // discard silently
+	}
+	if len(p) > remaining {
+		p = p[:remaining]
+	}
+	return c.buf.Write(p)
+}
+
+func (c *cappedBuffer) String() string { return c.buf.String() }
+func (c *cappedBuffer) Len() int       { return c.buf.Len() }

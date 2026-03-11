@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,10 +13,9 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/shellhook"
 	"github.com/yevgetman/fry/internal/verify"
 )
-
-var execCommandContext = exec.CommandContext
 
 type HealOpts struct {
 	ProjectDir    string
@@ -89,7 +87,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 			return false, err
 		}
 
-		if err := runShellHook(ctx, opts.ProjectDir, opts.Epic.PreSprintCmd); err != nil {
+		if err := shellhook.Run(ctx, opts.ProjectDir, opts.Epic.PreSprintCmd); err != nil {
 			return false, fmt.Errorf("run heal loop: pre-sprint hook: %w", err)
 		}
 
@@ -191,21 +189,6 @@ func runAgentWithDualLogs(ctx context.Context, opts HealOpts, prompt, iterPath s
 		return output, nil
 	}
 	return output, runErr
-}
-
-func runShellHook(ctx context.Context, projectDir, cmd string) error {
-	if strings.TrimSpace(cmd) == "" {
-		return nil
-	}
-
-	command := execCommandContext(ctx, "bash", "-c", cmd)
-	command.Dir = projectDir
-	command.Stdout = io.Discard
-	command.Stderr = io.Discard
-	if err := command.Run(); err != nil {
-		return fmt.Errorf("run %q: %w", cmd, err)
-	}
-	return nil
 }
 
 func appendToSprintProgress(projectDir, entry string) error {

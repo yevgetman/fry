@@ -21,7 +21,7 @@ func Acquire(projectDir string) error {
 
 	if data, err := os.ReadFile(lockPath); err == nil {
 		pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
-		if parseErr == nil && processAlive(pid) {
+		if parseErr == nil && pid > 0 && processAlive(pid) {
 			return fmt.Errorf("another fry instance is running (PID %d)", pid)
 		}
 		if err := os.Remove(lockPath); err != nil && !os.IsNotExist(err) {

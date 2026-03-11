@@ -12,6 +12,7 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/textutil"
 	"github.com/yevgetman/fry/templates"
 )
 
@@ -74,15 +75,16 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if err != nil {
 			return fmt.Errorf("run prepare: read executive: %w", err)
 		}
+		if err := os.MkdirAll(filepath.Dir(planPath), 0o755); err != nil {
+			return err
+		}
 		prompt := step0Prompt(opts.Planning, string(executiveContent))
+		beforeMod := textutil.FileModTime(planPath)
 		output, err := runPrepareStep(ctx, eng, projectDir, prompt)
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(planPath), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(planPath, []byte(stripMarkdownFences(output)), 0o644); err != nil {
+		if err := textutil.ResolveArtifact(planPath, beforeMod, output); err != nil {
 			return err
 		}
 		if err := validateStep0(planPath); err != nil {
@@ -101,11 +103,12 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	agentsPath := filepath.Join(projectDir, config.AgentsFile)
 	frylog.Log("Step 1: Generating %s (engine: %s)...", config.AgentsFile, engName)
 	prompt := step1Prompt(opts.Planning, planContent, executiveContent)
+	beforeMod := textutil.FileModTime(agentsPath)
 	output, err := runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(agentsPath, []byte(stripMarkdownFences(output)), 0o644); err != nil {
+	if err := textutil.ResolveArtifact(agentsPath, beforeMod, output); err != nil {
 		return fmt.Errorf("run prepare: write agents: %w", err)
 	}
 	if err := validateStep1(agentsPath); err != nil {
@@ -130,11 +133,12 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	frylog.Log("Step 2: Generating %s (engine: %s)...", epicFilename, engName)
 	prompt = step2Prompt(opts.Planning, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt)
+	beforeMod = textutil.FileModTime(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(epicPath, []byte(stripMarkdownFences(output)), 0o644); err != nil {
+	if err := textutil.ResolveArtifact(epicPath, beforeMod, output); err != nil {
 		return fmt.Errorf("run prepare: write epic: %w", err)
 	}
 	if err := validateStep2(epicPath); err != nil {
@@ -149,12 +153,13 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	frylog.Log("Step 3: Generating %s (engine: %s)...", config.DefaultVerificationFile, engName)
 	prompt = step3Prompt(opts.Planning, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt)
+	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
+	beforeMod = textutil.FileModTime(verificationPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
 		return err
 	}
-	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
-	if err := os.WriteFile(verificationPath, []byte(stripMarkdownFences(output)), 0o644); err != nil {
+	if err := textutil.ResolveArtifact(verificationPath, beforeMod, output); err != nil {
 		return fmt.Errorf("run prepare: write verification: %w", err)
 	}
 	if err := validateStep3(verificationPath); err != nil {
@@ -304,18 +309,3 @@ func countDirective(content, prefix string) int {
 	return count
 }
 
-func stripMarkdownFences(output string) string {
-	trimmed := strings.TrimSpace(output)
-	if !strings.HasPrefix(trimmed, "```") {
-		return output
-	}
-	lines := strings.Split(trimmed, "\n")
-	if len(lines) == 0 {
-		return ""
-	}
-	lines = lines[1:]
-	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
-		lines = lines[:len(lines)-1]
-	}
-	return strings.Join(lines, "\n")
-}

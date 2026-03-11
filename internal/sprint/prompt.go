@@ -20,7 +20,7 @@ type PromptOpts struct {
 	Promise            string
 }
 
-func AssemblePrompt(opts PromptOpts) string {
+func AssemblePrompt(opts PromptOpts) (string, error) {
 	var b strings.Builder
 
 	// Layer 1: Executive context (only if content exists)
@@ -108,9 +108,14 @@ func AssemblePrompt(opts PromptOpts) string {
 	}
 
 	prompt := b.String()
-	_ = os.MkdirAll(filepath.Dir(filepath.Join(opts.ProjectDir, config.PromptFile)), 0o755)
-	_ = os.WriteFile(filepath.Join(opts.ProjectDir, config.PromptFile), []byte(prompt), 0o644)
-	return prompt
+	promptPath := filepath.Join(opts.ProjectDir, config.PromptFile)
+	if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
+		return "", fmt.Errorf("assemble prompt: create dir: %w", err)
+	}
+	if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
+		return "", fmt.Errorf("assemble prompt: write file: %w", err)
+	}
+	return prompt, nil
 }
 
 func readOptionalPromptFile(path string) string {

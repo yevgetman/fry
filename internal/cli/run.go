@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -21,6 +20,7 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/lock"
+	"github.com/yevgetman/fry/internal/shellhook"
 	frlog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/preflight"
 	"github.com/yevgetman/fry/internal/prepare"
@@ -192,7 +192,7 @@ var runCmd = &cobra.Command{
 				}
 			}
 
-			if err := runShellHook(ctx, projectPath, ep.PreSprintCmd); err != nil {
+			if err := shellhook.Run(ctx, projectPath, ep.PreSprintCmd); err != nil {
 				return err
 			}
 
@@ -519,20 +519,6 @@ func printBuildSummary(w io.Writer, results []sprint.SprintResult) {
 		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", result.Number, result.Name, result.Status, result.Duration.Round(1e9))
 	}
 	_ = tw.Flush()
-}
-
-func runShellHook(ctx context.Context, projectDir, command string) error {
-	if strings.TrimSpace(command) == "" {
-		return nil
-	}
-	cmd := exec.CommandContext(ctx, "bash", "-c", command)
-	cmd.Dir = projectDir
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("run %q: %w", command, err)
-	}
-	return nil
 }
 
 func isPassStatus(status string) bool {

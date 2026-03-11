@@ -35,7 +35,8 @@ func truncateLines(s string, maxLines int) string {
 		return "  "
 	}
 	if len(lines) > maxLines {
-		lines = lines[:maxLines]
+		omitted := len(lines) - maxLines
+		lines = append(lines[:maxLines], fmt.Sprintf("... (%d more lines)", omitted))
 	}
 	return strings.Join(lines, "\n")
 }
