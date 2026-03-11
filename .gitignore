@@ -1,0 +1,7 @@
+bin/
+.env
+.DS_Store
+*.log
+.fry/
+plans/
+fry

@@ -1,0 +1,30 @@
+package epic
+
+import "fmt"
+
+func ValidateEpic(e *Epic) error {
+	if len(e.Sprints) == 0 {
+		return fmt.Errorf("epic must contain at least one sprint")
+	}
+
+	for i, sprint := range e.Sprints {
+		expected := i + 1
+		if sprint.Number != expected {
+			return fmt.Errorf("sprint numbering must be sequential: expected sprint %d, got %d", expected, sprint.Number)
+		}
+		if sprint.Name == "" {
+			return fmt.Errorf("sprint %d is missing @name", sprint.Number)
+		}
+		if sprint.MaxIterations <= 0 {
+			return fmt.Errorf("sprint %d must have @max_iterations greater than 0", sprint.Number)
+		}
+		if sprint.Promise == "" {
+			return fmt.Errorf("sprint %d is missing @promise", sprint.Number)
+		}
+		if sprint.Prompt == "" {
+			return fmt.Errorf("sprint %d is missing @prompt content", sprint.Number)
+		}
+	}
+
+	return nil
+}
