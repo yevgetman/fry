@@ -12,6 +12,7 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
+	frylog "github.com/yevgetman/fry/internal/log"
 )
 
 type ReviewPromptOpts struct {
@@ -173,6 +174,8 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 		return nil, fmt.Errorf("run sprint review: project dir is required")
 	}
 
+	frylog.Log("  --- SPRINT REVIEW: after Sprint %d ---", opts.SprintNum)
+
 	promptOpts, err := buildReviewPromptOpts(opts)
 	if err != nil {
 		return nil, fmt.Errorf("run sprint review: %w", err)
@@ -180,6 +183,7 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 	AssembleReviewPrompt(promptOpts)
 
 	if verdict := strings.ToUpper(strings.TrimSpace(opts.SimulateVerdict)); verdict != "" {
+		frylog.Log("  SIMULATION MODE: injecting %s verdict", verdict)
 		output, err := simulatedReviewOutput(verdict, opts.SprintNum, opts.TotalSprints)
 		if err != nil {
 			return nil, fmt.Errorf("run sprint review: %w", err)
@@ -188,6 +192,7 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 		if result.Verdict == VerdictDeviate {
 			result.Deviation = ExtractDeviationSpec(output)
 		}
+		frylog.Log("  Review verdict: %s", result.Verdict)
 		return result, nil
 	}
 
@@ -223,6 +228,7 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 	if result.Verdict == VerdictDeviate {
 		result.Deviation = ExtractDeviationSpec(output)
 	}
+	frylog.Log("  Review verdict: %s", result.Verdict)
 	return result, nil
 }
 

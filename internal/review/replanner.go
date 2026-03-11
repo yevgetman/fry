@@ -13,6 +13,7 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
+	frylog "github.com/yevgetman/fry/internal/log"
 )
 
 type ReplanOpts struct {
@@ -89,6 +90,7 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 	}
 	defer os.Remove(promptPath)
 
+	frylog.Log("  Running replanner agent...")
 	runOpts := engine.RunOpts{
 		Model:   opts.Model,
 		WorkDir: opts.ProjectDir,
@@ -135,6 +137,7 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 		return fmt.Errorf("run replan: write updated epic: %w", err)
 	}
 
+	frylog.Log("  Epic updated successfully.")
 	return nil
 }
 

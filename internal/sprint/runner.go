@@ -104,6 +104,11 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 
 	consecutiveNoop := 0
 
+	frylog.Log("=========================================")
+	frylog.Log("STARTING SPRINT %d: %s", cfg.Sprint.Number, cfg.Sprint.Name)
+	frylog.Log("Max iterations: %d", cfg.Sprint.MaxIterations)
+	frylog.Log("=========================================")
+
 	for iter := 1; iter <= cfg.Sprint.MaxIterations; iter++ {
 		select {
 		case <-ctx.Done():
@@ -148,18 +153,27 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		}
 	}
 
+	if len(checks) > 0 {
+		frylog.Log("  Running verification checks...")
+	}
 	results, passCount, totalCount := verify.RunChecks(ctx, checks, cfg.Sprint.Number, cfg.ProjectDir)
+	if totalCount > 0 {
+		frylog.Log("  Verification: %d/%d checks passed.", passCount, totalCount)
+	}
 
 	status, err := determineOutcome(ctx, cfg, checks, promiseFound, results, passCount, totalCount, sprintLogPath)
 	if err != nil {
 		return nil, err
 	}
 
+	elapsed := time.Since(started)
+	frylog.Log("SPRINT %d %s (%s)", cfg.Sprint.Number, status, elapsed.Round(time.Second))
+
 	return &SprintResult{
 		Number:   cfg.Sprint.Number,
 		Name:     cfg.Sprint.Name,
 		Status:   status,
-		Duration: time.Since(started),
+		Duration: elapsed,
 	}, nil
 }
 

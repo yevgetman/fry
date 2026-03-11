@@ -38,7 +38,7 @@ fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loo
 - **Promise tokens** -- Each sprint defines a `===PROMISE: TOKEN===` string. The loop ends when the agent outputs it, or after 2 consecutive no-op iterations with passing verification, or fails after max iterations
 - **`.fry/verification.md`** -- Machine-executable checks per sprint, run independently by fry after the agent signals completion (or after max iterations as a fallback)
 - **Self-healing** -- When verification checks fail, fry automatically re-runs the AI agent with a targeted fix prompt containing the specific failures and diagnostic output, then re-checks. Repeats up to `@max_heal_attempts` times (default: 3, set to 0 to disable)
-- **Agent session banners** -- Every time a new AI agent session starts (sprint iteration, heal attempt, reviewer, replanner, compaction, or artifact generation), fry prints a `▶ AGENT` banner to the terminal showing the engine, model, and reason. Always on -- not gated by `--verbose`
+- **Status output** -- fry prints progress banners at every phase (prepare steps, preflight, sprint start/end, verification results, heal attempts, review verdicts, replan). Always on -- not gated by `--verbose`. The `--verbose` flag additionally streams the full agent transcript to the terminal
 - **Git checkpoints** -- Automatic commits after each sprint completes or fails
 
 ## Quick Start
@@ -202,7 +202,7 @@ fry run 3 5               # Wrong: treats "3" as the epic filename
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt (saved to `.fry/user-prompt.txt`, reused on subsequent runs unless overridden) |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
-| `--verbose` | Print agent output to terminal (default: silent, logs only) |
+| `--verbose` | Stream full agent output to terminal (default: status banners only, full output to logs) |
 | `--dry-run` | Parse epic and show plan without running anything |
 
 #### Examples
@@ -589,14 +589,77 @@ Set `@max_heal_attempts 0` globally or per-sprint to disable healing entirely.
 @max_heal_attempts 8       # This sprint gets more attempts
 ```
 
-## Agent Session Banners
+## Terminal Output
 
-Every time fry starts a new AI agent session, it prints a `▶ AGENT` banner to the terminal. This is always on -- not gated by `--verbose`.
+fry provides status output at every phase so you always know what it's doing, even without `--verbose`. The `--verbose` flag adds the full agent transcript to the terminal; without it, you see progress banners and status lines only.
+
+### Prepare phase
+
+Each generation step prints a start and completion message:
 
 ```
-[2026-03-10 12:00:00] ▶ AGENT  sprint 3/8 "Auth & Permissions"  iter 1/5  engine=claude  model=default
-[2026-03-10 12:05:12] ▶ AGENT  sprint 3/8 "Auth & Permissions"  iter 2/5  engine=claude  model=default
+[2026-03-10 11:50:00] Step 0: Generating plans/plan.md from plans/executive.md (engine: claude)...
+[2026-03-10 11:51:12] Generated plans/plan.md.
+[2026-03-10 11:51:12] Step 1: Generating .fry/AGENTS.md (engine: claude)...
+[2026-03-10 11:52:05] Generated .fry/AGENTS.md.
+[2026-03-10 11:52:05] Step 2: Generating .fry/epic.md (engine: claude)...
+[2026-03-10 11:53:30] Generated .fry/epic.md.
+[2026-03-10 11:53:30] Step 3: Generating .fry/verification.md (engine: claude)...
+[2026-03-10 11:54:15] Generated .fry/verification.md.
+```
+
+### Preflight
+
+```
+[2026-03-10 11:54:16] Preflight checks passed.
+```
+
+### Sprint execution
+
+Each sprint gets a start banner, per-iteration agent banners, verification results, and a completion line:
+
+```
+[2026-03-10 12:00:00] =========================================
+[2026-03-10 12:00:00] STARTING SPRINT 3: Auth & Permissions
+[2026-03-10 12:00:00] Max iterations: 25
+[2026-03-10 12:00:00] =========================================
+[2026-03-10 12:00:01] ▶ AGENT  sprint 3/8 "Auth & Permissions"  iter 1/25  engine=claude  model=default
+[2026-03-10 12:05:12] ▶ AGENT  sprint 3/8 "Auth & Permissions"  iter 2/25  engine=claude  model=default
+[2026-03-10 12:10:30] Running verification checks...
+[2026-03-10 12:10:35] Verification: 4/4 checks passed.
+[2026-03-10 12:10:35] SPRINT 3 PASS (2m35s)
+```
+
+### Self-healing
+
+```
 [2026-03-10 12:10:30] ▶ AGENT  sprint 3/8 "Auth & Permissions"  heal 1/3  engine=claude  model=default
+[2026-03-10 12:12:00] Re-running verification after heal attempt 1...
+[2026-03-10 12:12:05] Heal attempt 1 SUCCEEDED — all checks now pass.
+```
+
+### Sprint review and replan
+
+```
+[2026-03-10 12:15:00] --- SPRINT REVIEW: after Sprint 3 ---
+[2026-03-10 12:16:30] Review verdict: CONTINUE
+```
+
+Or when a deviation is needed:
+
+```
+[2026-03-10 12:15:00] --- SPRINT REVIEW: after Sprint 3 ---
+[2026-03-10 12:16:30] Review verdict: DEVIATE
+[2026-03-10 12:16:31] Running replanner agent...
+[2026-03-10 12:18:00] Epic updated successfully.
+```
+
+### Compaction
+
+When `@compact_with_agent` is enabled:
+
+```
+[2026-03-10 12:18:01] Compacting sprint progress with agent...
 ```
 
 ## Dynamic Sprint Review

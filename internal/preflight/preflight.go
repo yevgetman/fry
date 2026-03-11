@@ -86,6 +86,7 @@ func RunPreflight(cfg PreflightConfig) error {
 		frylog.Log("WARNING: Less than 2GB free disk space available.")
 	}
 
+	frylog.Log("Preflight checks passed.")
 	return nil
 }
 

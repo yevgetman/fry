@@ -11,6 +11,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
+	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/templates"
 )
 
@@ -68,6 +69,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	executivePath := filepath.Join(projectDir, config.ExecutiveFile)
 
 	if _, err := os.Stat(planPath); os.IsNotExist(err) {
+		frylog.Log("Step 0: Generating %s from %s (engine: %s)...", config.PlanFile, config.ExecutiveFile, engName)
 		executiveContent, err := os.ReadFile(executivePath)
 		if err != nil {
 			return fmt.Errorf("run prepare: read executive: %w", err)
@@ -86,6 +88,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if err := validateStep0(planPath); err != nil {
 			return err
 		}
+		frylog.Log("Generated %s.", config.PlanFile)
 	}
 
 	planContentBytes, err := os.ReadFile(planPath)
@@ -96,6 +99,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	executiveContent, _ := readPrepareOptional(executivePath)
 
 	agentsPath := filepath.Join(projectDir, config.AgentsFile)
+	frylog.Log("Step 1: Generating %s (engine: %s)...", config.AgentsFile, engName)
 	prompt := step1Prompt(opts.Planning, planContent, executiveContent)
 	output, err := runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
@@ -107,6 +111,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if err := validateStep1(agentsPath); err != nil {
 		return err
 	}
+	frylog.Log("Generated %s.", config.AgentsFile)
 
 	agentsContentBytes, err := os.ReadFile(agentsPath)
 	if err != nil {
@@ -123,6 +128,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 	epicPath := filepath.Join(projectDir, epicFilename)
 
+	frylog.Log("Step 2: Generating %s (engine: %s)...", epicFilename, engName)
 	prompt = step2Prompt(opts.Planning, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
@@ -134,12 +140,14 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if err := validateStep2(epicPath); err != nil {
 		return err
 	}
+	frylog.Log("Generated %s.", epicFilename)
 
 	epicContentBytes, err := os.ReadFile(epicPath)
 	if err != nil {
 		return fmt.Errorf("run prepare: read epic: %w", err)
 	}
 
+	frylog.Log("Step 3: Generating %s (engine: %s)...", config.DefaultVerificationFile, engName)
 	prompt = step3Prompt(opts.Planning, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
@@ -150,9 +158,10 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		return fmt.Errorf("run prepare: write verification: %w", err)
 	}
 	if err := validateStep3(verificationPath); err != nil {
-		// Warning only, matching bash behavior.
+		frylog.Log("WARNING: %s has no @check_* directives. Continuing without verification.", config.DefaultVerificationFile)
 		return nil
 	}
+	frylog.Log("Generated %s.", config.DefaultVerificationFile)
 
 	return nil
 }

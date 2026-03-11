@@ -93,11 +93,14 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 			return false, fmt.Errorf("run heal loop: pre-sprint hook: %w", err)
 		}
 
+		frylog.Log("  Re-running verification after heal attempt %d...", attempt)
 		results, passCount, totalCount = verify.RunChecks(ctx, opts.Checks, opts.Sprint.Number, opts.ProjectDir)
 		if totalCount == passCount {
+			frylog.Log("  Heal attempt %d SUCCEEDED — all checks now pass.", attempt)
 			return true, nil
 		}
 
+		frylog.Log("  Heal attempt %d — %d/%d checks still failing.", attempt, totalCount-passCount, totalCount)
 		failureReport = verify.CollectFailures(results, passCount, totalCount)
 		entry := fmt.Sprintf("--- Heal attempt %d failed ---\n\n%s\n\n", attempt, failureReport)
 		if err := appendToSprintProgress(opts.ProjectDir, entry); err != nil {
@@ -105,6 +108,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 		}
 	}
 
+	frylog.Log("  All %d heal attempts exhausted.", maxAttempts)
 	return false, nil
 }
 
