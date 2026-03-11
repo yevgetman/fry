@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
@@ -116,6 +117,45 @@ func TestBuildSummaryIncludesSprintName(t *testing.T) {
 	require.Contains(t, out.String(), "Wire CLI")
 	require.Contains(t, out.String(), "PASS")
 	require.Contains(t, out.String(), "2s")
+}
+
+func TestResolveSprintRange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		args         []string
+		totalSprints int
+		wantStart    int
+		wantEnd      int
+		wantErr      string
+	}{
+		{"no args defaults to full range", []string{}, 5, 1, 5, ""},
+		{"start only", []string{"3"}, 5, 3, 5, ""},
+		{"start and end", []string{"2", "4"}, 5, 2, 4, ""},
+		{"single sprint", []string{"1", "1"}, 5, 1, 1, ""},
+		{"last sprint only", []string{"5", "5"}, 5, 5, 5, ""},
+		{"invalid start", []string{"abc"}, 5, 0, 0, "invalid start sprint"},
+		{"invalid end", []string{"1", "xyz"}, 5, 0, 0, "invalid end sprint"},
+		{"start too low", []string{"0"}, 5, 0, 0, "invalid sprint range"},
+		{"end exceeds total", []string{"1", "6"}, 5, 0, 0, "invalid sprint range"},
+		{"start after end", []string{"3", "2"}, 5, 0, 0, "invalid sprint range"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			start, end, err := resolveSprintRange(tt.args, tt.totalSprints)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantStart, start)
+				assert.Equal(t, tt.wantEnd, end)
+			}
+		})
+	}
 }
 
 func runRepoCommand(t *testing.T, name string, args ...string) {

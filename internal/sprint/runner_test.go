@@ -12,6 +12,7 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/verify"
 )
 
 func TestPromptAssembly(t *testing.T) {
@@ -236,6 +237,193 @@ func TestRunSprintFailsWithoutPrompt(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, StatusFailNoPrompt, result.Status)
+}
+
+func TestRunSprintPassesWithPromiseNoChecks(t *testing.T) {
+	projectDir := t.TempDir()
+	mockEngine := &stubEngine{
+		name:    "codex",
+		outputs: []string{"work done\n===PROMISE: DONE===\n"},
+	}
+
+	result, err := RunSprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:    1,
+			MaxHealAttempts: 1,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Solo",
+			MaxIterations: 1,
+			Promise:       "DONE",
+			Prompt:        "Do it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, result.Status)
+}
+
+func TestRunSprintNoPromiseNoChecks(t *testing.T) {
+	projectDir := t.TempDir()
+	mockEngine := &stubEngine{
+		name:    "codex",
+		outputs: []string{"did some work"},
+	}
+
+	result, err := RunSprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints: 1,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Incomplete",
+			MaxIterations: 1,
+			Promise:       "DONE",
+			Prompt:        "Try it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result.Status, "FAIL (no promise after")
+}
+
+func TestRunSprintNoPromiseChecksPass(t *testing.T) {
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file result.txt\n")
+	writeFile(t, filepath.Join(projectDir, "result.txt"), "ok\n")
+
+	mockEngine := &stubEngine{
+		name:    "codex",
+		outputs: []string{"work done but no promise"},
+	}
+
+	result, err := RunSprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:     1,
+			VerificationFile: config.DefaultVerificationFile,
+			MaxHealAttempts:  1,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "No Promise",
+			MaxIterations: 1,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusPassVerificationPassedNoPromise, result.Status)
+}
+
+func TestDetermineOutcome(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		promiseFound bool
+		totalCount   int
+		passCount    int
+		checks       []verify.Check
+		createFile   string
+		wantStatus   string
+	}{
+		{
+			name:         "promise found no checks",
+			promiseFound: true,
+			wantStatus:   StatusPass,
+		},
+		{
+			name:         "promise found checks pass",
+			promiseFound: true,
+			totalCount:   2,
+			passCount:    2,
+			wantStatus:   StatusPass,
+		},
+		{
+			name:         "promise found checks fail heal succeeds",
+			promiseFound: true,
+			totalCount:   1,
+			passCount:    0,
+			checks:       []verify.Check{{Sprint: 1, Type: verify.CheckFile, Path: "exists.txt"}},
+			createFile:   "exists.txt",
+			wantStatus:   StatusPassHealed,
+		},
+		{
+			name:         "promise found checks fail heal exhausted",
+			promiseFound: true,
+			totalCount:   1,
+			passCount:    0,
+			checks:       []verify.Check{{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"}},
+			wantStatus:   StatusFailVerificationFailedHealExhausted,
+		},
+		{
+			name:       "no promise no checks",
+			totalCount: 0,
+			passCount:  0,
+			wantStatus: "FAIL (no promise after 2 iters)",
+		},
+		{
+			name:       "no promise checks pass",
+			totalCount: 1,
+			passCount:  1,
+			wantStatus: StatusPassVerificationPassedNoPromise,
+		},
+		{
+			name:       "no promise checks fail heal succeeds",
+			totalCount: 1,
+			passCount:  0,
+			checks:     []verify.Check{{Sprint: 1, Type: verify.CheckFile, Path: "exists.txt"}},
+			createFile: "exists.txt",
+			wantStatus: StatusPassHealedNoPromise,
+		},
+		{
+			name:       "no promise checks fail heal exhausted",
+			totalCount: 1,
+			passCount:  0,
+			checks:     []verify.Check{{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"}},
+			wantStatus: StatusFailNoPromiseVerificationHealExhaust,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			projectDir := t.TempDir()
+			writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+			sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+			require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+			if tt.createFile != "" {
+				writeFile(t, filepath.Join(projectDir, tt.createFile), "content\n")
+			}
+
+			cfg := RunConfig{
+				ProjectDir: projectDir,
+				Epic: &epic.Epic{
+					TotalSprints:    1,
+					MaxHealAttempts: 1,
+				},
+				Sprint: &epic.Sprint{
+					Number:        1,
+					Name:          "Test",
+					MaxIterations: 2,
+				},
+				Engine: &stubEngine{name: "codex"},
+			}
+
+			status, err := determineOutcome(
+				context.Background(), cfg, tt.checks, tt.promiseFound,
+				nil, tt.passCount, tt.totalCount, sprintLog,
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStatus, status)
+		})
+	}
 }
 
 type stubEngine struct {

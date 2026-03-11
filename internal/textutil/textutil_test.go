@@ -87,7 +87,25 @@ func TestResolveArtifactFallsBackWhenFileUnchanged(t *testing.T) {
 func TestStripMarkdownFences(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "content", StripMarkdownFences("```\ncontent\n```"))
-	assert.Equal(t, "content", StripMarkdownFences("```markdown\ncontent\n```"))
-	assert.Equal(t, "no fences here", StripMarkdownFences("no fences here"))
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"basic fences", "```\ncontent\n```", "content"},
+		{"language tag", "```markdown\ncontent\n```", "content"},
+		{"no fences", "no fences here", "no fences here"},
+		{"empty input", "", ""},
+		{"go language tag", "```go\nfunc main() {}\n```", "func main() {}"},
+		{"surrounding whitespace", "  ```\ncontent\n```  ", "content"},
+		{"no closing fence", "```\ncontent\nmore", "content\nmore"},
+		{"multi-line content", "```\nline1\nline2\nline3\n```", "line1\nline2\nline3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, StripMarkdownFences(tt.input))
+		})
+	}
 }

@@ -134,6 +134,35 @@ func TestHealPerSprintOverride(t *testing.T) {
 	assert.Len(t, mockEngine.prompts, 1)
 }
 
+func TestHealLoopSucceeds(t *testing.T) {
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	writeFile(t, filepath.Join(projectDir, "target.txt"), "content\n")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	healed, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir: projectDir,
+		Sprint: &epic.Sprint{
+			Number: 1,
+			Name:   "Heal",
+		},
+		Epic: &epic.Epic{
+			TotalSprints:    1,
+			MaxHealAttempts: 2,
+		},
+		Engine:        mockEngine,
+		SprintLogFile: sprintLog,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "target.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, healed)
+	assert.Empty(t, mockEngine.prompts, "engine should not run when checks already pass")
+}
+
 type stubEngine struct {
 	name    string
 	prompts []string

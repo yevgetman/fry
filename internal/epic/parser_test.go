@@ -276,6 +276,39 @@ func TestValidateEpic(t *testing.T) {
 	assert.Contains(t, err.Error(), "missing @prompt")
 }
 
+func TestParseEpicBadSprintNumber(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "epic.md")
+	require.NoError(t, os.WriteFile(path, []byte("@epic Bad\n@sprint abc\n"), 0o600))
+
+	_, err := ParseEpic(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requires an integer")
+}
+
+func TestParseEpicBadMaxIterations(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "epic.md")
+	content := "@epic Bad\n@sprint 1\n@name One\n@max_iterations xyz\n@promise ONE\n@prompt\nDo it.\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	_, err := ParseEpic(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requires an integer")
+}
+
+func TestParseEpicFileNotFound(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseEpic("/nonexistent/path/epic.md")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "open epic file")
+}
+
 func parseTempEpic(t *testing.T, contents string) *Epic {
 	t.Helper()
 

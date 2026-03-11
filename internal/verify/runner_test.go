@@ -183,6 +183,45 @@ func TestShellQuote(t *testing.T) {
 	assert.Equal(t, "'$HOME *.go'", shellQuote("$HOME *.go"))
 }
 
+func TestRunChecksFileContains(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte("module example.com/test\n\ngo 1.21\n"), 0o644))
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckFileContains, Path: "go.mod", Pattern: "module example"},
+		{Sprint: 1, Type: CheckFileContains, Path: "go.mod", Pattern: "^nonexistent$"},
+		{Sprint: 1, Type: CheckFileContains, Path: "missing.txt", Pattern: "anything"},
+	}
+
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, projectDir)
+	require.Len(t, results, 3)
+	assert.Equal(t, 1, passCount)
+	assert.Equal(t, 3, totalCount)
+	assert.True(t, results[0].Passed)
+	assert.False(t, results[1].Passed)
+	assert.False(t, results[2].Passed)
+}
+
+func TestRunChecksCmdOutput(t *testing.T) {
+	t.Parallel()
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckCmdOutput, Command: "echo hello", Pattern: "^hello$"},
+		{Sprint: 1, Type: CheckCmdOutput, Command: "echo world", Pattern: "^nope$"},
+		{Sprint: 1, Type: CheckCmdOutput, Command: "false", Pattern: "anything"},
+	}
+
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, t.TempDir())
+	require.Len(t, results, 3)
+	assert.Equal(t, 1, passCount)
+	assert.Equal(t, 3, totalCount)
+	assert.True(t, results[0].Passed)
+	assert.False(t, results[1].Passed)
+	assert.False(t, results[2].Passed)
+}
+
 func writeVerificationFile(t *testing.T, contents string) string {
 	t.Helper()
 

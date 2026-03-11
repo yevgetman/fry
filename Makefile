@@ -2,7 +2,7 @@ build:
 	go build -o bin/fry ./cmd/fry
 
 test:
-	go test ./...
+	go test -race ./...
 
 lint:
 	golangci-lint run
