@@ -9,6 +9,7 @@ Placed before any `@sprint` block:
 ```
 @epic My Project Phase 1
 @engine codex
+@effort medium
 @docker_from_sprint 2
 @docker_ready_cmd docker compose exec -T postgres pg_isready -U myapp
 @docker_ready_timeout 30
@@ -30,6 +31,7 @@ Placed before any `@sprint` block:
 |---|---|
 | `@epic <name>` | Display name for logs and summaries |
 | `@engine <codex\|claude>` | AI engine (default: codex) |
+| `@effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `@docker_from_sprint <N>` | Start docker-compose from sprint N |
 | `@docker_ready_cmd <cmd>` | Custom health check after docker-compose up |
 | `@docker_ready_timeout <s>` | Health check timeout in seconds (default: 30) |
@@ -110,6 +112,7 @@ The epic parser enforces:
 - At least one sprint must be present
 - Sprint numbers must be sequential (1, 2, 3, ...)
 - Each sprint must have `@name`, `@max_iterations` > 0, `@promise`, and prompt content
+- When `@effort` is set, sprint count must not exceed the level's maximum (low: 2, medium: 4, high/max: 10)
 
 ## Manual Epic Authoring
 

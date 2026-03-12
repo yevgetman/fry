@@ -61,11 +61,17 @@ EOF
 ### 2. Run
 
 ```bash
-# Uses Codex (default)
+# Uses Codex (default) — auto-detects effort level from plan complexity
 fry
 
 # Or use Claude Code
 fry --engine claude
+
+# For a simple task, use low effort (1-2 sprints)
+fry --effort low --engine claude
+
+# For a critical build, use max effort (extended prompts, thorough reviews)
+fry --effort max --engine claude
 ```
 
 fry will automatically:

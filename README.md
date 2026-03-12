@@ -33,6 +33,7 @@ fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loo
 
 **Key mechanisms:**
 
+- **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Layered prompts** -- assembled per sprint with executive context, user directives, plan references, sprint tasks, iteration memory, and completion signals
 - **Two-file progress tracking** -- per-sprint iteration log + cross-sprint compacted summary for bounded context
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
@@ -77,10 +78,12 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 ```bash
 fry                                    # Run all sprints
 fry --engine claude                    # Use Claude Code
+fry --effort low                       # Simple task: 1-2 sprints, minimal overhead
+fry --effort max --engine claude       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
 fry --planning --engine claude         # Planning mode (documents, not code)
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive
-fry prepare --engine claude            # Generate artifacts only
+fry prepare --effort medium            # Generate artifacts with medium effort sizing
 ```
 
 See [Commands](docs/commands.md) for complete flag and argument reference.
@@ -91,6 +94,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 |---|---|
 | [Getting Started](docs/getting-started.md) | Prerequisites, installation, first build walkthrough |
 | [Commands](docs/commands.md) | Full CLI reference: `run`, `prepare`, `replan`, `version` |
+| [Effort Levels](docs/effort-levels.md) | Effort triage: `low`, `medium`, `high`, `max` -- controls sprint count, density, and review rigor |
 | [Epic Format](docs/epic-format.md) | Epic file syntax: global directives, sprint blocks, validation rules, sizing guidelines |
 | [AI Engines](docs/engines.md) | Codex and Claude engine configuration, mixing engines, model overrides |
 | [Sprint Execution](docs/sprint-execution.md) | Agent iteration loop, prompt assembly, progress tracking, promise tokens |

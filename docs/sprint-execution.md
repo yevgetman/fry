@@ -32,6 +32,7 @@ Each sprint prompt is assembled in layers, giving the AI agent structured contex
 |---|---|---|
 | 1 | Executive context | `plans/executive.md` (if exists) |
 | 1.5 | User directive | `--user-prompt` or `.fry/user-prompt.txt` |
+| 1.75 | Quality directive | Injected at `max` effort only — instructs agent to handle all edge cases, write defensive code, validate assumptions |
 | 2 | Strategic plan reference | Pointer to `plans/plan.md` |
 | 3 | Sprint instructions | `@prompt` block from epic |
 | 4 | Iteration memory | `.fry/sprint-progress.txt` + `.fry/epic-progress.txt` |
@@ -57,7 +58,7 @@ The agent should output:
 
 The agent loop exits when any of these occur:
 1. **Promise found** — the agent output contains the promise token string
-2. **No-op detection** — 2 consecutive iterations with no meaningful changes and verification passes
+2. **No-op detection** — 2 consecutive iterations with no meaningful changes and verification passes (3 consecutive at `max` effort, to allow more rumination)
 3. **Max iterations reached** — the `@max_iterations` limit is hit
 
 ## Progress Tracking

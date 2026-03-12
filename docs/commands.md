@@ -39,6 +39,7 @@ fry run 3 5               # Wrong: treats "3" as the epic filename
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <codex\|claude>` | AI engine to use (default: codex) |
+| `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic (defaults to `--engine` or `FRY_ENGINE`) |
 | `--planning` | Use planning-domain prompts for auto-generation |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt |
@@ -53,6 +54,9 @@ fry run 3 5               # Wrong: treats "3" as the epic filename
 fry                                               # Run all sprints (.fry/epic.md default)
 fry --dry-run                                     # Validate and preview
 fry --engine claude                               # Run all sprints with Claude Code
+fry --effort low                                  # Quick task: 1-2 sprints, minimal overhead
+fry --effort medium --engine claude               # Moderate task: 2-4 sprints
+fry --effort max --engine claude                  # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md                                   # Run all sprints with Codex
 fry run epic-phase2.md                            # Use a custom epic filename
 fry run epic.md 4                                 # Resume from sprint 4
@@ -82,6 +86,7 @@ fry prepare [epic_filename] [flags]
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <codex\|claude>` | AI engine for generation (default: codex, or `FRY_ENGINE`) |
+| `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--user-prompt <text>` | Top-level directive to guide artifact generation |
 | `--validate-only` | Check that the epic is valid, then exit |
 | `--planning` | Use planning-domain prompts |
@@ -102,6 +107,8 @@ All artifacts are **always regenerated** (overwritten) on each run.
 ```bash
 fry prepare                                        # Generate all with Codex (default)
 fry prepare --engine claude                        # Generate all with Claude Code
+fry prepare --effort low                           # Generate a compact 1-2 sprint epic
+fry prepare --effort max --engine claude           # Generate with maximum detail
 fry prepare epic-phase1.md                         # Custom epic filename
 fry prepare --project-dir /path                    # Operate on a different project
 fry prepare --user-prompt "no ORMs, use raw SQL only"

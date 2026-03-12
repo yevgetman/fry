@@ -14,6 +14,12 @@ This is fully opt-in. When disabled (the default), fry proceeds directly from on
 
 The reviewer has an explicit **bias toward CONTINUE** — it only recommends deviation when a downstream sprint prompt references something that was built differently than assumed.
 
+**Effort level effects on reviews:**
+- At `low` effort, sprint reviews are **skipped entirely**, even if `@review_between_sprints` is enabled
+- At `max` effort, the reviewer bias shifts to **THOROUGH REVIEW** — it applies heightened scrutiny and recommends DEVIATE for any deviation that could affect system correctness, not just downstream prompt mismatches
+
+See [Effort Levels](effort-levels.md) for full details.
+
 ## Configuration
 
 ```
