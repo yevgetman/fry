@@ -1,642 +1,282 @@
-# Build Plan: Effort-Level Triage System for Fry
+# Build Plan: Planning Output Directory & Ordered Filenames
 
 ## Problem Statement
 
-Simple tasks currently consume excessive resources — a basic HTML/CSS page might get decomposed into 7 sprints when 1-2 would suffice. The system has no concept of task complexity or effort scaling. Sprint count and density are determined solely by the AI's decomposition with no guidance on proportionality.
+When `fry prepare --planning` runs and the resulting sprints execute, all output documents (deliverables like `brand-positioning.md`, `market-analysis.md`, etc.) land directly in `plans/`. This directory also contains the input files `executive.md` and `plan.md`, polluting the scope and making it hard to distinguish inputs from outputs.
+
+Additionally, the produced documents have flat, unordered filenames with no indication of when they were generated relative to each other or how they relate logically. A user scanning `plans/` sees an undifferentiated list of files with no sense of sequence or grouping.
 
 ## Solution Overview
 
-Introduce an **effort level** system that controls:
-1. How many sprints the AI generates during `prepare` (Step 2)
-2. How dense/detailed each sprint's prompt and iteration budget is
-3. How much rumination and verification rigor is applied per sprint
+Two changes:
 
-The system supports both **auto-detection** (AI analyzes the plan and assigns an effort level) and **manual override** (user specifies `--effort low|medium|high|max`).
+1. **Output directory separation**: Route all planning-mode deliverables to `plans/output/` instead of `plans/`. The input files (`executive.md`, `plan.md`) remain at `plans/`.
 
-## Effort Level Definitions
+2. **Ordered, categorized filenames**: Instruct the epic generator (Step 2) to produce sprint prompts that use a naming convention encoding sequence order and logical category:
+   ```
+   plans/output/1--research--market-landscape.md
+   plans/output/2--research--competitor-profiles.md
+   plans/output/3--analysis--positioning-options.md
+   plans/output/4--analysis--pricing-model.md
+   plans/output/5--strategy--go-to-market.md
+   plans/output/6--synthesis--executive-summary.md
+   ```
 
-| Level    | Sprint Count | Max Iterations/Sprint | Prompt Detail       | Review Rigor | Use Case |
-|----------|-------------|----------------------|---------------------|-------------|----------|
-| `low`    | 1-2         | 10-15                | Concise, essential  | No review   | Simple pages, config changes, small features |
-| `medium` | 2-4         | 15-25                | Moderate detail     | Optional    | Multi-component features, moderate integrations |
-| `high`   | 4-10        | 15-35 (current)      | Full 7-part (current) | Full review | Complex systems, current default behavior |
-| `max`    | 4-10 (same as high) | 30-50 (extended) | Extended 7-part + analysis sections | Enhanced review + mandatory deviation analysis | Mission-critical, high-stakes builds |
+## Architecture: Where Filenames Are Determined
 
-## Architecture
-
-### New Type: `EffortLevel`
-
-Location: `internal/epic/types.go`
-
-```go
-type EffortLevel string
-
-const (
-    EffortLow    EffortLevel = "low"
-    EffortMedium EffortLevel = "medium"
-    EffortHigh   EffortLevel = "high"
-    EffortMax    EffortLevel = "max"
-    EffortAuto   EffortLevel = ""  // empty = auto-detect
-)
-```
-
-### Data Flow
+Output filenames are **not hardcoded** in Go. They flow through the system like this:
 
 ```
-User Input (--effort flag or auto)
+plans/plan.md (Section 4: "Document Deliverables")
     ↓
-PrepareOpts.EffortLevel
+Step 2 prompt (PlanningStep2Prompt) tells the LLM:
+  "Sprint prompts must specify exact output filenames from plans/plan.md"
     ↓
-Step 2 prompt (epic generation) ← effort-aware sizing guidance injected
+LLM generates epic.md with @sprint blocks whose @prompt text says:
+  "Write your analysis to plans/market-analysis.md"
     ↓
-@effort directive written to epic.md ← parsed back by epic parser
+Sprint execution: AI agent reads the prompt and writes the file
     ↓
-Epic.EffortLevel field populated
-    ↓
-Sprint execution uses effort to:
-  - Scale max_iterations (if not explicitly overridden per-sprint)
-  - Control review behavior
-  - Adjust prompt assembly context
-    ↓
-Build summary displays effort level
+Step 3 prompt (PlanningStep3Prompt) generates verification.md
+  with @check_file directives referencing those same paths
 ```
+
+The fix is therefore primarily **prompt engineering** — we change the instructions given to the LLM in Steps 0, 2, and 3 to specify the new directory and naming convention. We also need minor code changes to ensure the directory exists and to update any hardcoded path references.
 
 ---
 
 ## Detailed Changes
 
-### 1. `internal/epic/types.go` — Add EffortLevel to Epic
+### 1. `internal/config/config.go` — Add output directory constant
 
-**What**: Add `EffortLevel` field to the `Epic` struct and define the `EffortLevel` type with constants.
-
-```go
-type EffortLevel string
-
-const (
-    EffortLow    EffortLevel = "low"
-    EffortMedium EffortLevel = "medium"
-    EffortHigh   EffortLevel = "high"
-    EffortMax    EffortLevel = "max"
-)
-
-func ParseEffortLevel(s string) (EffortLevel, error) {
-    switch strings.ToLower(strings.TrimSpace(s)) {
-    case "low":
-        return EffortLow, nil
-    case "medium":
-        return EffortMedium, nil
-    case "high":
-        return EffortHigh, nil
-    case "max":
-        return EffortMax, nil
-    case "":
-        return "", nil  // auto-detect
-    default:
-        return "", fmt.Errorf("invalid effort level %q: must be low, medium, high, or max", s)
-    }
-}
-
-func (e EffortLevel) String() string {
-    if e == "" {
-        return "auto"
-    }
-    return string(e)
-}
-
-// DefaultMaxIterations returns the default max_iterations for sprints
-// at this effort level (used when @max_iterations is not set per-sprint).
-func (e EffortLevel) DefaultMaxIterations() int {
-    switch e {
-    case EffortLow:
-        return 12
-    case EffortMedium:
-        return 20
-    case EffortHigh:
-        return 25
-    case EffortMax:
-        return 40
-    default:
-        return 25 // default = high
-    }
-}
-
-// MaxSprintCount returns the maximum number of sprints for this effort level.
-func (e EffortLevel) MaxSprintCount() int {
-    switch e {
-    case EffortLow:
-        return 2
-    case EffortMedium:
-        return 4
-    case EffortHigh:
-        return 10
-    case EffortMax:
-        return 10
-    default:
-        return 10
-    }
-}
-
-type Epic struct {
-    // ... existing fields ...
-    EffortLevel          EffortLevel  // NEW
-    // ... rest of existing fields ...
-}
-```
-
-**Edge cases**:
-- Empty string = auto-detect (backward compatible)
-- Case-insensitive parsing
-- Unknown values produce a clear error message
-
-### 2. `internal/epic/parser.go` — Parse @effort directive
-
-**What**: Add `@effort` directive parsing in the `stateGlobal` case.
-
-```go
-case "@effort":
-    ep.EffortLevel, err = ParseEffortLevel(value)
-    if err != nil {
-        return nil, fmt.Errorf("parse epic line %d: %w", lineNo, err)
-    }
-```
-
-**Where**: In the `stateGlobal` switch, alongside existing global directives like `@epic`, `@engine`, etc.
-
-**Edge cases**:
-- `@effort` placed in sprint meta section should be warned (it's a global directive)
-- `@effort` with no value should default to auto (empty string, no error)
-
-### 3. `internal/epic/validator.go` — Validate effort constraints
-
-**What**: Add validation that sprint count respects effort level constraints.
-
-```go
-func ValidateEpic(e *Epic) error {
-    // ... existing validation ...
-
-    // Validate sprint count against effort level (if set)
-    if e.EffortLevel != "" {
-        maxSprints := e.EffortLevel.MaxSprintCount()
-        if len(e.Sprints) > maxSprints {
-            return fmt.Errorf("effort level %q allows at most %d sprints, but epic has %d",
-                e.EffortLevel, maxSprints, len(e.Sprints))
-        }
-    }
-
-    return nil
-}
-```
-
-**Edge cases**:
-- Effort level "" (auto/unset) skips the check entirely — backward compatible
-- Manually authored epics with explicit sprint counts that exceed the limit get a clear error
-
-### 4. `internal/config/config.go` — Add effort-related constants
-
-**What**: Add default constants for effort levels.
+**What**: Add a constant for the planning output directory.
 
 ```go
 const (
     // ... existing constants ...
-    DefaultEffortLevel = ""  // auto-detect
+    PlanningOutputDir = "plans/output"
 )
 ```
 
-No new iteration constants needed — those live in the `EffortLevel` methods on the type itself.
+**Why**: Single source of truth for the output path, referenced by both code and prompt templates. Keeps the convention consistent if the path ever changes.
 
-### 5. `internal/cli/run.go` — Add `--effort` flag to run command
+### 2. `internal/prepare/prepare.go` — Ensure output directory exists
 
-**What**: Add `--effort` flag, pass it through to prepare and validate against parsed epic.
+**What**: Before running Step 2 in planning mode, create the `plans/output/` directory.
+
+**Where**: In `RunPrepare()`, after the plan file is read (around line 102), add:
 
 ```go
-var (
-    // ... existing vars ...
-    runEffort string
-)
-```
-
-In `init()`:
-```go
-runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
-```
-
-In `RunE`:
-```go
-// After parsing the effort flag, validate it
-effortLevel, err := epic.ParseEffortLevel(runEffort)
-if err != nil {
-    return err
-}
-
-// Pass to prepare if auto-preparing
-if !epicExists {
-    if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-        // ... existing fields ...
-        EffortLevel: effortLevel,
-    }); err != nil {
-        return err
+if opts.Planning {
+    outputDir := filepath.Join(projectDir, config.PlanningOutputDir)
+    if err := os.MkdirAll(outputDir, 0o755); err != nil {
+        return fmt.Errorf("run prepare: create planning output dir: %w", err)
     }
 }
-
-// After parsing epic, apply effort override if user specified one
-// and the epic doesn't have one
-ep, err := epic.ParseEpic(epicPath)
-if err != nil {
-    return err
-}
-if effortLevel != "" && ep.EffortLevel == "" {
-    ep.EffortLevel = effortLevel
-}
 ```
 
-Also update `printDryRunReport` to show effort level:
-```go
-fmt.Fprintf(w, "Effort: %s\n", ep.EffortLevel)
+**Why**: The AI agent writing output during sprint execution needs the directory to exist. Creating it during prepare is deterministic and early.
+
+### 3. `internal/prepare/planning.go` — Update Step 0 prompt (plan generation)
+
+**What**: When the LLM generates `plans/plan.md` from `plans/executive.md`, it includes a "Document Deliverables" section that lists the output filenames. This section currently doesn't specify a subdirectory or naming convention. Update the Step 0 prompt to instruct the LLM to:
+
+- Place all deliverable documents under `plans/output/`
+- Use ordered, categorized filenames
+
+**Where**: `PlanningStep0Prompt()`, line 22-26. Expand the "Document Deliverables" instruction:
+
+Current:
+```
+4. **Document Deliverables**
 ```
 
-And `printBuildSummary` header:
-```go
-fmt.Fprintln(tw, "SPRINT\tNAME\tSTATUS\tDURATION")
-// Add effort level above the table:
-if ep.EffortLevel != "" {
-    fmt.Fprintf(w, "Effort level: %s\n", ep.EffortLevel)
-}
+Updated:
 ```
-
-Also add to root command flags (since root delegates to run):
-```go
-rootCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
+4. **Document Deliverables** — List every output document with its FULL path under plans/output/.
+   Use ordered, categorized filenames following this convention:
+     {sequence}--{category}--{name}.md
+   Where:
+   - {sequence} is a number (1, 2, 3...) indicating production order
+   - {category} is a short grouping label (e.g., research, analysis, strategy, synthesis)
+   - {name} is a descriptive kebab-case name
+   Example: plans/output/1--research--market-landscape.md
+   Group related documents under the same category. The sequence should reflect
+   the logical dependency order (documents that inform later ones come first).
 ```
 
 **Edge cases**:
-- `--effort` on run command overrides epic's `@effort` directive
-- `--effort` with no epic file triggers auto-prepare with effort passed through
-- Invalid effort values caught early with clear error
+- Step 0 only runs when `plans/plan.md` doesn't exist yet (conditional on line 74)
+- If a user writes `plan.md` manually, their "Document Deliverables" section may not follow this convention — Step 2 should still enforce it (see below)
 
-### 6. `internal/cli/prepare.go` — Add `--effort` flag to prepare command
+### 4. `internal/prepare/planning.go` — Update Step 2 prompt (epic generation)
 
-**What**: Add `--effort` flag to the prepare command.
+**What**: This is the critical change. The Step 2 prompt generates the `epic.md` file whose sprint prompts contain the actual output filenames the agent will write to. Update `PlanningStep2Prompt()` to enforce the output directory and naming convention.
 
+**Where**: `PlanningStep2Prompt()`, lines 87-97. Add new rules and modify existing ones:
+
+Current line 94:
+```
+- Sprint prompts must specify exact output filenames, required sections, and concrete
+  analytical requirements from plans/plan.md — never vague instructions.
+```
+
+Replace with:
+```
+- ALL document deliverables MUST be written to the plans/output/ directory, NOT to plans/ directly.
+  The plans/ directory is reserved for input files (executive.md, plan.md).
+- Sprint prompts must specify exact output filenames using the ordered category convention:
+    {sequence}--{category}--{name}.md
+  Where:
+  - {sequence} is a global sequence number across ALL sprints (not per-sprint). If Sprint 1
+    produces documents 1-3 and Sprint 2 produces documents 4-5, the numbering is continuous.
+  - {category} is a short grouping label (research, analysis, strategy, synthesis, etc.)
+  - {name} is a descriptive kebab-case name
+  Example paths: plans/output/1--research--market-landscape.md, plans/output/4--analysis--pricing-model.md
+- Sprint prompts must include the required sections and concrete analytical requirements
+  from plans/plan.md for each deliverable — never vague instructions.
+- If plans/plan.md lists deliverables with paths that don't follow this convention, translate
+  them to the correct convention in the sprint prompts.
+```
+
+**Why**: The Step 2 prompt is the authoritative source for output filenames. Even if `plan.md` was authored manually without the convention, Step 2 normalizes everything.
+
+### 5. `internal/prepare/planning.go` — Update Step 3 prompt (verification generation)
+
+**What**: The verification file uses `@check_file` directives to verify output documents exist. These must reference the new `plans/output/` paths.
+
+**Where**: `PlanningStep3Prompt()`, lines 186-188. Add a rule:
+
+```
+- All document deliverable paths in @check_file and @check_file_contains directives
+  must reference the plans/output/ directory (e.g., plans/output/1--research--market-landscape.md).
+  Do NOT reference plans/ directly for output documents.
+```
+
+### 6. `internal/prepare/planning.go` — Update Step 1 prompt (AGENTS.md generation)
+
+**What**: The AGENTS.md rules should include a rule about the output directory convention so the sprint-executing agent knows where to write.
+
+**Where**: `PlanningStep1Prompt()`, lines 53-55. Add to the rule topics:
+
+Current:
+```
+Rules should cover scope and domain boundaries, analytical frameworks and methodology,
+document quality standards, research and evidence standards, and explicit prohibitions.
+```
+
+Updated:
+```
+Rules should cover scope and domain boundaries, analytical frameworks and methodology,
+document quality standards, research and evidence standards, output file conventions,
+and explicit prohibitions.
+
+One rule MUST state: "All document deliverables must be written to plans/output/ using
+the naming convention {sequence}--{category}--{name}.md. Never write output documents
+directly to plans/."
+```
+
+### 7. `internal/sprint/prompt.go` — No changes needed
+
+The sprint prompt assembly (`AssemblePrompt`) references `plans/plan.md` as strategic context (line 67). This is correct — `plan.md` is an input file and stays in `plans/`. The actual output paths are embedded in the sprint prompt text from `epic.md`, which is already updated by changes #4 above.
+
+### 8. `internal/review/reviewer.go` — No changes needed
+
+The reviewer references `plans/plan.md` (line 92) as the original plan. Output document paths only appear in the sprint prompts that the reviewer reads from `epic.md`, which are already correctly formatted by the time review runs.
+
+### 9. `internal/verify/runner.go` — No changes needed
+
+The verification runner reads `@check_file` paths from `verification.md`. As long as Step 3 generates the correct `plans/output/` paths (change #5), the runner works as-is.
+
+### 10. `internal/config/config.go` — Update `AgentInvocationPrompt`
+
+**What**: The agent invocation prompt tells the AI to "read plans/plan.md for strategic context." This is correct and unchanged. But verify there are no references to output file locations in this constant.
+
+Current (line 23):
 ```go
-var (
-    // ... existing vars ...
-    prepareEffort string
-)
+AgentInvocationPrompt = "Read and execute ALL instructions in .fry/prompt.md. Before starting,
+read .fry/sprint-progress.txt for context from previous iterations in this sprint, and
+.fry/epic-progress.txt for summaries of prior sprints. Also read plans/plan.md for
+strategic context on how this sprint fits the overall plan. After completing your work,
+append your progress to .fry/sprint-progress.txt."
 ```
 
-In `init()`:
-```go
-prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
+**Status**: No change needed. The output paths are in the sprint prompt, not here.
+
+---
+
+## Naming Convention Specification
+
+### Format
+```
+{sequence}--{category}--{name}.md
 ```
 
-In `RunE`:
-```go
-effortLevel, err := epic.ParseEffortLevel(prepareEffort)
-if err != nil {
-    return err
-}
+### Rules
 
-return prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-    // ... existing fields ...
-    EffortLevel: effortLevel,
-})
+| Component | Format | Examples |
+|-----------|--------|----------|
+| `sequence` | Integer, 1-indexed, globally unique across all sprints | `1`, `2`, `10` |
+| `category` | Lowercase kebab-case, 1-2 words | `research`, `analysis`, `strategy`, `synthesis`, `deep-dive` |
+| `name` | Lowercase kebab-case, descriptive | `market-landscape`, `competitor-profiles`, `pricing-model` |
+| Separator | Double dash `--` | Distinguishes from single `-` used within kebab-case segments |
+
+### Sequencing
+
+- Numbering is **global** across all sprints, not per-sprint
+- Numbers reflect **production order** (Sprint 1 outputs come before Sprint 2 outputs)
+- Within a sprint, documents are numbered in the order they should be read/referenced
+- Gaps are acceptable if documents are removed during replanning
+
+### Categories
+
+Categories are determined by the LLM based on the plan content, but common patterns include:
+
+| Category | Typical Use |
+|----------|------------|
+| `research` | Primary research, data gathering, landscape surveys |
+| `analysis` | Analytical frameworks applied to research |
+| `deep-dive` | Focused investigation of a specific subtopic |
+| `strategy` | Strategic recommendations, positioning, roadmaps |
+| `specs` | Detailed specifications, requirements |
+| `synthesis` | Cross-cutting summaries, executive reports |
+| `appendix` | Supporting data, reference materials |
+
+### Example Directory Layout
+
 ```
-
-### 7. `internal/prepare/prepare.go` — Pass effort through prepare pipeline
-
-**What**: Add `EffortLevel` to `PrepareOpts` and pass it to Step 2 prompts.
-
-```go
-type PrepareOpts struct {
-    // ... existing fields ...
-    EffortLevel epic.EffortLevel
-}
-```
-
-In `RunPrepare`, modify the `step2Prompt` call:
-```go
-prompt = step2Prompt(opts.Planning, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel)
-```
-
-Update `step2Prompt` helper:
-```go
-func step2Prompt(planning bool, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel) string {
-    if planning {
-        return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort)
-    }
-    return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort)
-}
-```
-
-### 8. `internal/prepare/software.go` — Effort-aware epic generation prompts
-
-**What**: Modify `SoftwareStep2Prompt` to inject effort-level sizing guidance.
-
-This is the critical change — the AI that generates the epic needs clear instructions on how effort level affects sprint count and density.
-
-```go
-func SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel) string {
-    effortGuidance := effortSizingGuidance(effort)
-    // ... existing prompt assembly ...
-    // Insert effortGuidance into the prompt
-}
-
-func effortSizingGuidance(effort epic.EffortLevel) string {
-    switch effort {
-    case epic.EffortLow:
-        return `
-EFFORT LEVEL: LOW
-The user has indicated this is a low-effort task. You MUST:
-- Generate AT MOST 2 sprints total
-- Use max_iterations of 10-15 per sprint
-- Write concise sprint prompts — skip the REFERENCES and STUCK HINT sections
-- Combine all work into 1-2 dense but focused sprints
-- Skip scaffolding as a separate sprint — include it in Sprint 1's build list
-- Focus only on the core deliverables; omit exhaustive edge cases
-- Add the @effort low directive to the epic header
-
-If the plan is genuinely trivial (single file, simple config), use exactly 1 sprint.
-`
-    case epic.EffortMedium:
-        return `
-EFFORT LEVEL: MEDIUM
-The user has indicated this is a medium-effort task. You MUST:
-- Generate 2-4 sprints total (prefer the lower end)
-- Use max_iterations of 15-25 per sprint
-- Write moderately detailed sprint prompts — include all 7 parts but keep them concise
-- Merge layers that would be separate at HIGH effort (e.g., combine schema + domain types)
-- Include essential edge cases but don't be exhaustive
-- Add the @effort medium directive to the epic header
-`
-    case epic.EffortHigh:
-        return `
-EFFORT LEVEL: HIGH
-This is the standard effort level. Follow all existing epic generation rules as-is.
-- Generate 4-10 sprints as appropriate
-- Use max_iterations of 15-35 per sprint per the standard sizing guidelines
-- Write fully detailed 7-part sprint prompts
-- Include comprehensive edge cases and verification
-- Add the @effort high directive to the epic header
-`
-    case epic.EffortMax:
-        return `
-EFFORT LEVEL: MAX
-The user has indicated this is a maximum-effort, mission-critical task. You MUST:
-- Generate the same number of sprints as HIGH effort (4-10)
-- Use max_iterations of 30-50 per sprint (higher than normal)
-- Write EXTENDED sprint prompts that go beyond the standard 7-part structure:
-  - Add an 8th section: "ANALYSIS & EDGE CASES" — enumerate every edge case, race condition,
-    error scenario, and boundary condition relevant to this sprint
-  - Add a 9th section: "QUALITY GATES" — explicit quality criteria beyond verification checks
-    (performance targets, security considerations, code review checklist items)
-- Include exhaustive edge cases, error handling requirements, and defensive coding instructions
-- Specify exact error messages, log formats, and observability requirements
-- Add the @effort max directive to the epic header
-- Enable @review_between_sprints and @compact_with_agent
-- Set @max_heal_attempts to 5 (increased from default 3)
-`
-    default: // auto-detect
-        return `
-EFFORT LEVEL: AUTO-DETECT
-No effort level was specified. Analyze the plan document and determine the appropriate effort level:
-
-- If the plan describes a simple, well-bounded task (single page, config change, small utility,
-  1-3 files to create/modify): use LOW effort (1-2 sprints, @effort low)
-- If the plan describes a moderate feature (multiple components, some integration,
-  4-15 files): use MEDIUM effort (2-4 sprints, @effort medium)
-- If the plan describes a complex system (many components, database, APIs, extensive
-  testing, 15+ files): use HIGH effort (4-10 sprints, @effort high)
-
-Add the @effort directive matching your assessment to the epic header.
-Do NOT default to HIGH — genuinely evaluate the plan's complexity.
-
-Common over-engineering signals to watch for:
-- Creating separate scaffolding sprints for projects that need no scaffolding
-- Splitting 3-file changes across 3+ sprints
-- Adding schema/migration sprints for projects with no database
-- Creating separate "wiring" sprints for simple, flat architectures
-`
-    }
-}
-```
-
-### 9. `internal/prepare/planning.go` — Effort-aware planning prompts
-
-**What**: Same treatment as software.go — modify `PlanningStep2Prompt` to accept and inject effort level guidance.
-
-```go
-func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string, effort epic.EffortLevel) string {
-    effortGuidance := effortSizingGuidancePlanning(effort)
-    // ... inject into existing prompt ...
-}
-```
-
-The planning-mode effort guidance is similar but focused on document deliverables rather than code files.
-
-### 10. `templates/GENERATE_EPIC.md` — Update with effort level documentation
-
-**What**: Add effort level section to the template that guides manual epic generation.
-
-Add after the "### 2. Right-sizes each sprint" section:
-
-```markdown
-### 2a. Applies effort-level sizing
-
-If an `@effort` level is specified, it constrains sprint count and density:
-
-| Level    | Max Sprints | Max Iterations | Prompt Detail | Notes |
-|----------|------------|----------------|---------------|-------|
-| `low`    | 2          | 10-15          | Concise       | Combine layers, skip scaffolding sprint |
-| `medium` | 4          | 15-25          | Moderate      | Merge related layers |
-| `high`   | 10         | 15-35          | Full 7-part   | Current default behavior |
-| `max`    | 10         | 30-50          | Extended      | Add analysis + quality gate sections |
-
-If no effort level is specified, auto-detect based on plan complexity:
-- 1-3 files → low
-- 4-15 files → medium
-- 15+ files → high
-```
-
-### 11. `templates/epic-example.md` — Add @effort to example
-
-**What**: Add `@effort` directive to the global configuration section.
-
-```markdown
-@effort high
-```
-
-Add to the directive reference comment block:
-
-```markdown
-# @effort <low|medium|high|max>  Effort level — controls sprint count and density
-```
-
-### 12. `internal/sprint/runner.go` — Effort-aware iteration scaling
-
-**What**: When `@max_iterations` is not explicitly set for a sprint, use the effort level's default. For `max` effort, also enable more aggressive no-op detection thresholds.
-
-In `RunSprint`, the `MaxIterations` value comes from the parsed epic. The scaling happens at epic generation time (Step 2), so no runtime override is strictly needed. However, we should log the effort level:
-
-```go
-frylog.Log("=========================================")
-frylog.Log("STARTING SPRINT %d: %s", cfg.Sprint.Number, cfg.Sprint.Name)
-frylog.Log("Max iterations: %d", cfg.Sprint.MaxIterations)
-if cfg.Epic.EffortLevel != "" {
-    frylog.Log("Effort level: %s", cfg.Epic.EffortLevel)
-}
-frylog.Log("=========================================")
-```
-
-For `max` effort, increase the no-op threshold from 2 to 3 consecutive iterations (giving the agent more room to "think" without producing file changes):
-
-```go
-noopThreshold := 2
-if cfg.Epic.EffortLevel == epic.EffortMax {
-    noopThreshold = 3
-}
-if consecutiveNoop >= noopThreshold && ... {
-```
-
-### 13. `internal/sprint/prompt.go` — Effort context in prompt assembly
-
-**What**: For `max` effort, add an extra prompt layer that instructs the agent to be more thorough.
-
-Add to `PromptOpts`:
-```go
-type PromptOpts struct {
-    // ... existing fields ...
-    EffortLevel epic.EffortLevel
-}
-```
-
-In `AssemblePrompt`, after Layer 1.5 (User Directive):
-
-```go
-// Layer 1.75: Effort directive (only for max)
-if opts.EffortLevel == epic.EffortMax {
-    b.WriteString("# ===== QUALITY DIRECTIVE =====\n")
-    b.WriteString("# This build is running at MAX effort. Apply heightened rigor:\n")
-    b.WriteString("# - Consider and handle ALL edge cases, not just common ones\n")
-    b.WriteString("# - Add comprehensive error handling with descriptive messages\n")
-    b.WriteString("# - Write defensive code — validate assumptions, check invariants\n")
-    b.WriteString("# - Consider performance implications of every data structure choice\n")
-    b.WriteString("# - Review your own output each iteration for correctness before proceeding\n\n")
-}
-```
-
-Update `RunSprint` to pass effort level to `AssemblePrompt`:
-
-```go
-if _, err := AssemblePrompt(PromptOpts{
-    // ... existing fields ...
-    EffortLevel: cfg.Epic.EffortLevel,
-}); err != nil {
-    return nil, fmt.Errorf("run sprint: %w", err)
-}
-```
-
-### 14. `internal/review/reviewer.go` — Effort-aware review behavior
-
-**What**: For `low` effort, disable reviews entirely (even if `@review_between_sprints` is set). For `max` effort, make the reviewer more conservative (lower threshold for DEVIATE).
-
-In `cli/run.go`, the review gate:
-
-```go
-if ep.ReviewBetweenSprints && !runNoReview && spr.Number < ep.TotalSprints {
-    // For low effort, skip reviews
-    if ep.EffortLevel == epic.EffortLow {
-        continue
-    }
-    // ... existing review logic ...
-}
-```
-
-For `max` effort, modify the review prompt bias in `AssembleReviewPrompt`:
-
-```go
-if opts.EffortLevel == epic.EffortMax {
-    b.WriteString("## Bias: THOROUGH REVIEW\n")
-    b.WriteString("At MAX effort level, apply heightened scrutiny. Recommend DEVIATE when:\n")
-    b.WriteString("- Any deviation from the plan that could affect system correctness\n")
-    b.WriteString("- Missing error handling or edge case coverage in completed sprint\n")
-    b.WriteString("- Performance or security concerns that downstream sprints should account for\n")
-} else {
-    // ... existing CONTINUE bias ...
-}
-```
-
-Add `EffortLevel` to `ReviewPromptOpts`:
-```go
-type ReviewPromptOpts struct {
-    // ... existing fields ...
-    EffortLevel epic.EffortLevel
-}
-```
-
-### 15. Test Coverage
-
-#### `internal/epic/types_test.go` (new file)
-```go
-- TestParseEffortLevel_Valid: all four levels + empty + whitespace
-- TestParseEffortLevel_Invalid: "extreme", "123", "LOW " (case insensitivity)
-- TestParseEffortLevel_CaseInsensitive: "Low", "LOW", "lOw" all → EffortLow
-- TestEffortLevel_String: all levels including empty → "auto"
-- TestEffortLevel_DefaultMaxIterations: verify each level returns expected value
-- TestEffortLevel_MaxSprintCount: verify each level returns expected value
-```
-
-#### `internal/epic/parser_test.go` (extend existing)
-```go
-- TestParseEpic_EffortDirective: epic with @effort medium → EffortMedium
-- TestParseEpic_EffortDirectiveInvalid: @effort extreme → error
-- TestParseEpic_EffortDirectiveMissing: epic without @effort → "" (auto)
-- TestParseEpic_EffortDirectiveCaseInsensitive: @effort LOW → EffortLow
-```
-
-#### `internal/epic/validator_test.go` (extend or new)
-```go
-- TestValidateEpic_EffortLow_TooManySprints: 3 sprints with effort=low → error
-- TestValidateEpic_EffortLow_Valid: 2 sprints with effort=low → nil
-- TestValidateEpic_EffortMedium_TooManySprints: 5 sprints with effort=medium → error
-- TestValidateEpic_EffortUnset_AnySprints: 10 sprints with effort="" → nil
-```
-
-#### `internal/prepare/software_test.go` (extend or new)
-```go
-- TestEffortSizingGuidance_Low: verify LOW guidance includes "AT MOST 2 sprints"
-- TestEffortSizingGuidance_Max: verify MAX guidance includes "30-50"
-- TestEffortSizingGuidance_Auto: verify auto-detect guidance includes "analyze the plan"
-- TestSoftwareStep2Prompt_IncludesEffort: verify effort guidance is embedded in prompt
-```
-
-#### `internal/sprint/prompt_test.go` (extend existing)
-```go
-- TestAssemblePrompt_MaxEffort: verify QUALITY DIRECTIVE section appears
-- TestAssemblePrompt_LowEffort: verify QUALITY DIRECTIVE section does NOT appear
-- TestAssemblePrompt_NoEffort: verify QUALITY DIRECTIVE section does NOT appear
-```
-
-#### `internal/cli/run_test.go` (extend or new)
-```go
-- TestRunCmd_EffortFlag_Valid: --effort medium parses correctly
-- TestRunCmd_EffortFlag_Invalid: --effort extreme returns error
+plans/
+├── executive.md                              # INPUT: human-authored context
+├── plan.md                                   # INPUT: generated planning methodology
+└── output/                                   # OUTPUT: all deliverables
+    ├── 1--research--market-landscape.md
+    ├── 2--research--competitor-profiles.md
+    ├── 3--research--user-interviews.md
+    ├── 4--analysis--market-positioning.md
+    ├── 5--analysis--competitive-gaps.md
+    ├── 6--strategy--brand-positioning.md
+    ├── 7--strategy--pricing-model.md
+    ├── 8--strategy--go-to-market.md
+    └── 9--synthesis--executive-summary.md
 ```
 
 ---
 
 ## Implementation Order
 
-### Sprint 1: Core Types, Parser & Validation
-**Files**: `internal/epic/types.go`, `internal/epic/parser.go`, `internal/epic/validator.go`, `internal/epic/types_test.go`, `internal/epic/parser_test.go`
-**Scope**: Define `EffortLevel` type + methods, add `@effort` directive parsing, add sprint count validation, full test coverage for all new type logic.
+### Sprint 1: Config & Directory Setup
+**Files**: `internal/config/config.go`, `internal/prepare/prepare.go`
+**Scope**: Add `PlanningOutputDir` constant, create `plans/output/` during prepare in planning mode.
+**Tests**: Verify directory creation in `prepare_test.go`.
 
-### Sprint 2: CLI Integration & Prepare Pipeline
-**Files**: `internal/cli/root.go`, `internal/cli/run.go`, `internal/cli/prepare.go`, `internal/prepare/prepare.go`, `internal/prepare/software.go`, `internal/prepare/planning.go`
-**Scope**: Add `--effort` flag to run/prepare/root commands, plumb `EffortLevel` through `PrepareOpts`, inject effort-aware sizing guidance into Step 2 prompts, update dry-run output.
+### Sprint 2: Prompt Engineering — Steps 0, 1, 2, 3
+**Files**: `internal/prepare/planning.go`
+**Scope**: Update all four planning step prompts to enforce the `plans/output/` directory and the `{sequence}--{category}--{name}.md` naming convention. This is the core change — everything else is supporting infrastructure.
+**Tests**: Verify prompt strings contain the new instructions in `planning_test.go` or `prepare_test.go`.
 
-### Sprint 3: Runtime Behavior, Templates & Review
-**Files**: `internal/sprint/runner.go`, `internal/sprint/prompt.go`, `internal/review/reviewer.go`, `templates/GENERATE_EPIC.md`, `templates/epic-example.md`, `internal/sprint/prompt_test.go`
-**Scope**: Add effort-level logging, max-effort quality directive in prompts, effort-aware no-op threshold, effort-aware review bias, update templates with effort documentation, build summary display.
+### Sprint 3: Documentation & End-to-End Validation
+**Files**: `docs/` (if applicable), `templates/` (if planning examples exist)
+**Scope**: Update any docs that reference the `plans/` directory for output. Run a full `fry prepare --planning` cycle against a test `executive.md` to verify the LLM produces correctly-pathed output filenames in `epic.md` and `verification.md`.
 
 ---
 
@@ -644,42 +284,33 @@ type ReviewPromptOpts struct {
 
 | Risk | Severity | Mitigation |
 |------|----------|-----------|
-| Breaking existing epic files that don't have `@effort` | LOW | Empty string = auto/backward compatible, no validation when unset |
-| AI ignoring effort guidance in Step 2 | MEDIUM | Make guidance prominent (ALL CAPS constraints), validate output sprint count |
-| `max` effort producing excessively long prompts | LOW | Cap extended sections, review agent handles the check |
-| Effort validation rejecting valid manual epics | MEDIUM | Only validate when `@effort` is explicitly set, not on auto |
-| Review behavior change at `low` effort | LOW | Low-effort tasks rarely have `@review_between_sprints` set anyway |
+| LLM ignores naming convention in Step 2 output | MEDIUM | Make instructions prominent with examples. Could add post-generation validation that checks epic.md sprint prompts reference `plans/output/` |
+| LLM ignores naming convention in Step 0 plan | LOW | Step 2 has a fallback instruction to translate non-conforming paths |
+| Existing manually-authored plan.md files reference old paths | LOW | Step 2 explicitly handles this: "If plans/plan.md lists deliverables with paths that don't follow this convention, translate them" |
+| Breaking existing verification checks | LOW | Verification is regenerated each time `fry prepare` runs; old checks are overwritten |
+| Category names become inconsistent across runs | LOW | Acceptable — categories are descriptive labels, not schema. The sequence number provides the canonical ordering |
+| `plans/output/` not in `.gitignore` | N/A | `plans/` is already in `.gitignore` (line 6), which covers `plans/output/` |
 
 ## Backward Compatibility
 
-- **No `@effort` in epic file**: Treated as auto-detect / high (current behavior)
-- **No `--effort` flag**: Defaults to empty string (auto)
-- **Existing tests**: All pass unchanged — no existing behavior modified
-- **Existing epics**: Continue to work identically
-- **Existing CLI usage**: `fry run`, `fry prepare` — unchanged behavior when no `--effort` flag
+- **Software mode** (`fry prepare` without `--planning`): Completely unaffected. Software mode uses different prompt functions (`SoftwareStep*Prompt`) and writes output files to the project source tree, not `plans/`.
+- **Existing planning runs**: The `plans/output/` directory won't exist from prior runs. New runs create it. Old output files in `plans/` are not migrated — they remain as-is.
+- **Manual plan.md files**: Step 2 prompt explicitly handles the case where `plan.md` deliverables don't follow the convention.
 
 ## Files Modified (Complete List)
 
 | File | Type of Change |
 |------|---------------|
-| `internal/epic/types.go` | Add `EffortLevel` type, methods, add field to `Epic` struct |
-| `internal/epic/parser.go` | Parse `@effort` directive |
-| `internal/epic/validator.go` | Sprint count validation against effort level |
-| `internal/config/config.go` | Add `DefaultEffortLevel` constant |
-| `internal/cli/root.go` | Add `--effort` flag |
-| `internal/cli/run.go` | Add `--effort` flag, pass to prepare, display in output |
-| `internal/cli/prepare.go` | Add `--effort` flag |
-| `internal/prepare/prepare.go` | Add `EffortLevel` to `PrepareOpts`, pass to step2 |
-| `internal/prepare/software.go` | Add effort-aware sizing guidance function, update Step 2 prompt |
-| `internal/prepare/planning.go` | Same as software.go for planning mode |
-| `internal/sprint/runner.go` | Log effort level, effort-aware no-op threshold |
-| `internal/sprint/prompt.go` | Add `EffortLevel` to `PromptOpts`, quality directive for max |
-| `internal/review/reviewer.go` | Effort-aware review bias, add EffortLevel to ReviewPromptOpts |
-| `templates/GENERATE_EPIC.md` | Add effort level documentation |
-| `templates/epic-example.md` | Add `@effort` to example and directive reference |
+| `internal/config/config.go` | Add `PlanningOutputDir` constant |
+| `internal/prepare/prepare.go` | Create `plans/output/` in planning mode |
+| `internal/prepare/planning.go` | Update Steps 0, 1, 2, 3 prompts for output dir and naming convention |
 
-## Files Created
+## Files NOT Modified (and why)
 
-| File | Purpose |
-|------|---------|
-| `internal/epic/types_test.go` | Tests for EffortLevel type, parsing, methods |
+| File | Reason |
+|------|--------|
+| `internal/sprint/prompt.go` | References `plans/plan.md` (input file), not output paths |
+| `internal/review/reviewer.go` | References `plans/plan.md` (input file); output paths come from epic.md |
+| `internal/verify/runner.go` | Reads paths from `verification.md`, which is regenerated with correct paths |
+| `internal/epic/parser.go` | No file path awareness; just parses directives |
+| `internal/sprint/runner.go` | Executes prompts; doesn't construct output paths |

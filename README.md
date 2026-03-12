@@ -26,7 +26,9 @@ plans/executive.md     You write this -- why to build it       is required)
         |                + auto-heals on verification failure
         v
   Working software       Git-checkpointed after each sprint
-  (or planning docs)
+  (or plans/output/)     Planning docs use ordered filenames:
+                           1--research--market-landscape.md
+                           2--analysis--positioning-options.md
 ```
 
 fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loop where the AI agent gets a prompt, does work, and logs progress. The next iteration reads what the previous one accomplished and continues. When the agent signals completion (via a promise token), the sprint ends and the next one begins.

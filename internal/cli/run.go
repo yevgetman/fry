@@ -95,6 +95,8 @@ var runCmd = &cobra.Command{
 		// Apply effort override if user specified one and the epic doesn't have one
 		if effortLevel != "" && ep.EffortLevel == "" {
 			ep.EffortLevel = effortLevel
+		} else if effortLevel != "" && ep.EffortLevel != "" && effortLevel != ep.EffortLevel {
+			frlog.Log("WARNING: --effort %s ignored; epic already specifies @effort %s. To change effort level, re-run fry prepare with --effort %s.", effortLevel, ep.EffortLevel, effortLevel)
 		}
 		if err := epic.ValidateEpic(ep); err != nil {
 			return err

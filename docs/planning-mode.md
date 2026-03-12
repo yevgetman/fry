@@ -44,15 +44,43 @@ EOF
 fry --planning --engine claude
 ```
 
+## Output Directory and Naming Convention
+
+In planning mode, all document deliverables are written to `plans/output/`, keeping the `plans/` directory reserved for input files (`executive.md`, `plan.md`).
+
+Output filenames use an ordered, categorized naming convention:
+
+```
+{sequence}--{category}--{name}.md
+```
+
+- **sequence** — a globally unique number (1, 2, 3...) indicating production order across all sprints
+- **category** — a short grouping label (e.g., `research`, `analysis`, `strategy`, `synthesis`)
+- **name** — a descriptive kebab-case name
+
+Example directory layout:
+
+```
+plans/
+  executive.md                              # INPUT: your executive context
+  plan.md                                   # INPUT: generated or authored plan
+  output/                                   # OUTPUT: all deliverables
+    1--research--market-landscape.md
+    2--research--competitor-profiles.md
+    3--analysis--positioning-options.md
+    4--strategy--go-to-market.md
+    5--synthesis--executive-summary.md
+```
+
 ## Verification for Documents
 
 The same four [verification check primitives](verification.md) work for document deliverables:
 
 ```
-@check_file plans/market-analysis.md
-@check_file_contains plans/market-analysis.md "## Market Size"
-@check_cmd test $(wc -w < plans/market-analysis.md) -ge 500
-@check_cmd_output grep -c '^## ' plans/market-analysis.md | ^[5-9]
+@check_file plans/output/1--research--market-landscape.md
+@check_file_contains plans/output/1--research--market-landscape.md "## Market Size"
+@check_cmd test $(wc -w < plans/output/1--research--market-landscape.md) -ge 500
+@check_cmd_output grep -c '^## ' plans/output/1--research--market-landscape.md | ^[5-9]
 ```
 
 These checks ensure documents exist, contain required sections, meet minimum word counts, and have sufficient heading structure.

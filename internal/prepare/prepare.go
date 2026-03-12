@@ -68,6 +68,13 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		return fmt.Errorf("run prepare: write embedded templates: %w", err)
 	}
 
+	if opts.Planning {
+		outputDir := filepath.Join(projectDir, config.PlanningOutputDir)
+		if err := os.MkdirAll(outputDir, 0o755); err != nil {
+			return fmt.Errorf("run prepare: create planning output dir: %w", err)
+		}
+	}
+
 	planPath := filepath.Join(projectDir, config.PlanFile)
 	executivePath := filepath.Join(projectDir, config.ExecutiveFile)
 
