@@ -37,6 +37,7 @@ var (
 	runSimulateReview string
 	runPrepareEngine  string
 	runPlanning       bool
+	runEffort         string
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -47,6 +48,11 @@ var runCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectPath, err := resolveProjectDir(projectDir)
+		if err != nil {
+			return err
+		}
+
+		effortLevel, err := epic.ParseEffortLevel(runEffort)
 		if err != nil {
 			return err
 		}
@@ -76,6 +82,7 @@ var runCmd = &cobra.Command{
 				Engine:       prepareEngineName,
 				UserPrompt:   userPrompt,
 				Planning:     runPlanning,
+				EffortLevel:  effortLevel,
 			}); err != nil {
 				return err
 			}
@@ -84,6 +91,10 @@ var runCmd = &cobra.Command{
 		ep, err := epic.ParseEpic(epicPath)
 		if err != nil {
 			return err
+		}
+		// Apply effort override if user specified one and the epic doesn't have one
+		if effortLevel != "" && ep.EffortLevel == "" {
+			ep.EffortLevel = effortLevel
 		}
 		if err := epic.ValidateEpic(ep); err != nil {
 			return err
@@ -241,7 +252,7 @@ var runCmd = &cobra.Command{
 					return err
 				}
 
-				if ep.ReviewBetweenSprints && !runNoReview && spr.Number < ep.TotalSprints {
+				if ep.ReviewBetweenSprints && !runNoReview && spr.Number < ep.TotalSprints && ep.EffortLevel != epic.EffortLow {
 					reviewSummary.ReviewsConducted++
 
 					reviewEngine, err := resolveReviewEngine(engineName, ep.ReviewEngine)
@@ -333,6 +344,9 @@ var runCmd = &cobra.Command{
 		mu.Lock()
 		summaryCopy := append([]sprint.SprintResult(nil), results...)
 		mu.Unlock()
+		if ep.EffortLevel != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Effort level: %s\n", ep.EffortLevel)
+		}
 		printBuildSummary(cmd.OutOrStdout(), summaryCopy)
 
 		if ep.ReviewBetweenSprints && !runNoReview {
@@ -358,6 +372,7 @@ func init() {
 	runCmd.Flags().StringVar(&runSimulateReview, "simulate-review", "", "Simulate review verdict")
 	runCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")
 	runCmd.Flags().BoolVar(&runPlanning, "planning", false, "Use planning mode")
+	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -466,6 +481,7 @@ func printDryRunReport(w io.Writer, projectDir, epicPath string, ep *epic.Epic, 
 	fmt.Fprintf(w, "Project dir: %s\n", projectDir)
 	fmt.Fprintf(w, "Epic file: %s\n", epicPath)
 	fmt.Fprintf(w, "Engine: %s\n", engineName)
+	fmt.Fprintf(w, "Effort: %s\n", ep.EffortLevel)
 	fmt.Fprintf(w, "Sprints: %d-%d of %d\n", startSprint, endSprint, ep.TotalSprints)
 	fmt.Fprintln(w, "Verification checks:")
 	verificationPath := ep.VerificationFile

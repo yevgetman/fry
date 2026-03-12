@@ -11,6 +11,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
+	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/textutil"
 	"github.com/yevgetman/fry/templates"
@@ -23,6 +24,7 @@ type PrepareOpts struct {
 	UserPrompt   string
 	ValidateOnly bool
 	Planning     bool
+	EffortLevel  epic.EffortLevel
 }
 
 var newEngine = engine.NewEngine
@@ -132,7 +134,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	epicPath := filepath.Join(projectDir, epicFilename)
 
 	frylog.Log("Step 2: Generating %s (engine: %s)...", epicFilename, engName)
-	prompt = step2Prompt(opts.Planning, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt)
+	prompt = step2Prompt(opts.Planning, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel)
 	beforeMod = textutil.FileModTime(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
@@ -274,11 +276,11 @@ func step1Prompt(planning bool, planContent, executiveContent string) string {
 	return SoftwareStep1Prompt(planContent, executiveContent)
 }
 
-func step2Prompt(planning bool, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string) string {
+func step2Prompt(planning bool, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel) string {
 	if planning {
-		return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt)
+		return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort)
 	}
-	return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt)
+	return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort)
 }
 
 func step3Prompt(planning bool, planContent, epicContent, verificationExamplePath, userPrompt string) string {

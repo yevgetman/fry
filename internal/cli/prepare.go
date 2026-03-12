@@ -13,6 +13,7 @@ var (
 	prepareUserPrompt   string
 	prepareValidateOnly bool
 	preparePlanning     bool
+	prepareEffort       string
 )
 
 var prepareCmd = &cobra.Command{
@@ -33,6 +34,11 @@ var prepareCmd = &cobra.Command{
 		epicArg := "epic.md"
 		if len(args) > 0 {
 			epicArg = args[0]
+		}
+
+		effortLevel, err := epic.ParseEffortLevel(prepareEffort)
+		if err != nil {
+			return err
 		}
 
 		if prepareValidateOnly {
@@ -58,6 +64,7 @@ var prepareCmd = &cobra.Command{
 			UserPrompt:   userPrompt,
 			ValidateOnly: false,
 			Planning:     preparePlanning,
+			EffortLevel:  effortLevel,
 		})
 	},
 }
@@ -67,4 +74,5 @@ func init() {
 	prepareCmd.Flags().StringVar(&prepareUserPrompt, "user-prompt", "", "Additional user prompt")
 	prepareCmd.Flags().BoolVar(&prepareValidateOnly, "validate-only", false, "Validate without generating files")
 	prepareCmd.Flags().BoolVar(&preparePlanning, "planning", false, "Use planning prepare mode")
+	prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 }

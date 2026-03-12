@@ -1,6 +1,7 @@
 package epic
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -307,6 +308,127 @@ func TestParseEpicFileNotFound(t *testing.T) {
 	_, err := ParseEpic("/nonexistent/path/epic.md")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "open epic file")
+}
+
+func TestParseEpic_EffortDirective(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic Effort Test
+@effort medium
+@sprint 1
+@name One
+@max_iterations 2
+@promise ONE
+@prompt
+Do it.
+`)
+
+	assert.Equal(t, EffortMedium, ep.EffortLevel)
+}
+
+func TestParseEpic_EffortDirectiveInvalid(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "epic.md")
+	require.NoError(t, os.WriteFile(path, []byte("@epic Bad\n@effort extreme\n@sprint 1\n@name One\n@max_iterations 1\n@promise ONE\n@prompt\nDo it.\n"), 0o600))
+
+	_, err := ParseEpic(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid effort level")
+}
+
+func TestParseEpic_EffortDirectiveMissing(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic No Effort
+@sprint 1
+@name One
+@max_iterations 2
+@promise ONE
+@prompt
+Do it.
+`)
+
+	assert.Equal(t, EffortLevel(""), ep.EffortLevel)
+}
+
+func TestParseEpic_EffortDirectiveCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic Case Test
+@effort LOW
+@sprint 1
+@name One
+@max_iterations 2
+@promise ONE
+@prompt
+Do it.
+`)
+
+	assert.Equal(t, EffortLow, ep.EffortLevel)
+}
+
+func TestValidateEpic_EffortLow_TooManySprints(t *testing.T) {
+	t.Parallel()
+
+	ep := &Epic{
+		EffortLevel: EffortLow,
+		Sprints: []Sprint{
+			{Number: 1, Name: "One", MaxIterations: 1, Promise: "ONE", Prompt: "Prompt."},
+			{Number: 2, Name: "Two", MaxIterations: 1, Promise: "TWO", Prompt: "Prompt."},
+			{Number: 3, Name: "Three", MaxIterations: 1, Promise: "THREE", Prompt: "Prompt."},
+		},
+	}
+	err := ValidateEpic(ep)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "effort level \"low\" allows at most 2 sprints, but epic has 3")
+}
+
+func TestValidateEpic_EffortLow_Valid(t *testing.T) {
+	t.Parallel()
+
+	ep := &Epic{
+		EffortLevel: EffortLow,
+		Sprints: []Sprint{
+			{Number: 1, Name: "One", MaxIterations: 1, Promise: "ONE", Prompt: "Prompt."},
+			{Number: 2, Name: "Two", MaxIterations: 1, Promise: "TWO", Prompt: "Prompt."},
+		},
+	}
+	assert.NoError(t, ValidateEpic(ep))
+}
+
+func TestValidateEpic_EffortMedium_TooManySprints(t *testing.T) {
+	t.Parallel()
+
+	sprints := make([]Sprint, 5)
+	for i := range sprints {
+		sprints[i] = Sprint{Number: i + 1, Name: fmt.Sprintf("Sprint %d", i+1), MaxIterations: 1, Promise: fmt.Sprintf("S%d", i+1), Prompt: "Prompt."}
+	}
+	ep := &Epic{
+		EffortLevel: EffortMedium,
+		Sprints:     sprints,
+	}
+	err := ValidateEpic(ep)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "effort level \"medium\" allows at most 4 sprints, but epic has 5")
+}
+
+func TestValidateEpic_EffortUnset_AnySprints(t *testing.T) {
+	t.Parallel()
+
+	sprints := make([]Sprint, 10)
+	for i := range sprints {
+		sprints[i] = Sprint{Number: i + 1, Name: fmt.Sprintf("Sprint %d", i+1), MaxIterations: 1, Promise: fmt.Sprintf("S%d", i+1), Prompt: "Prompt."}
+	}
+	ep := &Epic{
+		EffortLevel: "",
+		Sprints:     sprints,
+	}
+	assert.NoError(t, ValidateEpic(ep))
 }
 
 func parseTempEpic(t *testing.T, contents string) *Epic {

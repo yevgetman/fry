@@ -1,6 +1,10 @@
 package prepare
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/yevgetman/fry/internal/epic"
+)
 
 func SoftwareStep0Prompt(executiveContent string) string {
 	return fmt.Sprintf(`You are a senior software architect. Your job is to produce a detailed, actionable build plan.
@@ -76,11 +80,13 @@ Executive context:
 `, contextLine, planContent, executiveContent)
 }
 
-func SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string) string {
+func SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel) string {
 	userPromptLine := ""
 	if userPrompt != "" {
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive for the build: %q. Ensure sprint prompts align with this directive.\n", userPrompt)
 	}
+
+	effortGuidance := effortSizingGuidance(effort)
 
 	return fmt.Sprintf(`You are generating an epic.md file for an autonomous AI build system.
 
@@ -91,7 +97,7 @@ Read these files carefully:
 4. .fry/AGENTS.md — Operational rules that apply to the project.
 
 Generate the epic and write it to .fry/epic.md.
-
+%s
 CRITICAL RULES:
 - Output ONLY the epic.md file content — write it directly to .fry/epic.md.
 - The file must start with a # comment header and @epic directive.
@@ -110,7 +116,85 @@ Plan:
 
 AGENTS.md:
 %s
-`, generateEpicPath, epicExamplePath, userPromptLine, planContent, agentsContent)
+`, generateEpicPath, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent)
+}
+
+func effortSizingGuidance(effort epic.EffortLevel) string {
+	switch effort {
+	case epic.EffortLow:
+		return `
+EFFORT LEVEL: LOW
+The user has indicated this is a low-effort task. You MUST:
+- Generate AT MOST 2 sprints total
+- Use max_iterations of 10-15 per sprint
+- Write concise sprint prompts — skip the REFERENCES and STUCK HINT sections
+- Combine all work into 1-2 dense but focused sprints
+- Skip scaffolding as a separate sprint — include it in Sprint 1's build list
+- Focus only on the core deliverables; omit exhaustive edge cases
+- Add the @effort low directive to the epic header
+
+If the plan is genuinely trivial (single file, simple config), use exactly 1 sprint.
+`
+	case epic.EffortMedium:
+		return `
+EFFORT LEVEL: MEDIUM
+The user has indicated this is a medium-effort task. You MUST:
+- Generate 2-4 sprints total (prefer the lower end)
+- Use max_iterations of 15-25 per sprint
+- Write moderately detailed sprint prompts — include all 7 parts but keep them concise
+- Merge layers that would be separate at HIGH effort (e.g., combine schema + domain types)
+- Include essential edge cases but don't be exhaustive
+- Add the @effort medium directive to the epic header
+`
+	case epic.EffortHigh:
+		return `
+EFFORT LEVEL: HIGH
+This is the standard effort level. Follow all existing epic generation rules as-is.
+- Generate 4-10 sprints as appropriate
+- Use max_iterations of 15-35 per sprint per the standard sizing guidelines
+- Write fully detailed 7-part sprint prompts
+- Include comprehensive edge cases and verification
+- Add the @effort high directive to the epic header
+`
+	case epic.EffortMax:
+		return `
+EFFORT LEVEL: MAX
+The user has indicated this is a maximum-effort, mission-critical task. You MUST:
+- Generate the same number of sprints as HIGH effort (4-10)
+- Use max_iterations of 30-50 per sprint (higher than normal)
+- Write EXTENDED sprint prompts that go beyond the standard 7-part structure:
+  - Add an 8th section: "ANALYSIS & EDGE CASES" — enumerate every edge case, race condition,
+    error scenario, and boundary condition relevant to this sprint
+  - Add a 9th section: "QUALITY GATES" — explicit quality criteria beyond verification checks
+    (performance targets, security considerations, code review checklist items)
+- Include exhaustive edge cases, error handling requirements, and defensive coding instructions
+- Specify exact error messages, log formats, and observability requirements
+- Add the @effort max directive to the epic header
+- Enable @review_between_sprints and @compact_with_agent
+- Set @max_heal_attempts to 5 (increased from default 3)
+`
+	default: // auto-detect
+		return `
+EFFORT LEVEL: AUTO-DETECT
+No effort level was specified. Analyze the plan document and determine the appropriate effort level:
+
+- If the plan describes a simple, well-bounded task (single page, config change, small utility,
+  1-3 files to create/modify): use LOW effort (1-2 sprints, @effort low)
+- If the plan describes a moderate feature (multiple components, some integration,
+  4-15 files): use MEDIUM effort (2-4 sprints, @effort medium)
+- If the plan describes a complex system (many components, database, APIs, extensive
+  testing, 15+ files): use HIGH effort (4-10 sprints, @effort high)
+
+Add the @effort directive matching your assessment to the epic header.
+Do NOT default to HIGH — genuinely evaluate the plan's complexity.
+
+Common over-engineering signals to watch for:
+- Creating separate scaffolding sprints for projects that need no scaffolding
+- Splitting 3-file changes across 3+ sprints
+- Adding schema/migration sprints for projects with no database
+- Creating separate "wiring" sprints for simple, flat architectures
+`
+	}
 }
 
 func SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt string) string {

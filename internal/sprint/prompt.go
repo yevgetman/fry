@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/epic"
 )
 
 type PromptOpts struct {
@@ -18,6 +19,7 @@ type PromptOpts struct {
 	SprintProgressFile string
 	EpicProgressFile   string
 	Promise            string
+	EffortLevel        epic.EffortLevel
 }
 
 func AssemblePrompt(opts PromptOpts) (string, error) {
@@ -44,6 +46,17 @@ func AssemblePrompt(opts PromptOpts) (string, error) {
 		b.WriteString("# Treat this as a priority directive that applies to all sprints.\n\n")
 		b.WriteString(ensureTrailingNewline(strings.TrimSpace(opts.UserPrompt)))
 		b.WriteString("\n")
+	}
+
+	// Layer 1.75: Effort directive (only for max)
+	if opts.EffortLevel == epic.EffortMax {
+		b.WriteString("# ===== QUALITY DIRECTIVE =====\n")
+		b.WriteString("# This build is running at MAX effort. Apply heightened rigor:\n")
+		b.WriteString("# - Consider and handle ALL edge cases, not just common ones\n")
+		b.WriteString("# - Add comprehensive error handling with descriptive messages\n")
+		b.WriteString("# - Write defensive code — validate assumptions, check invariants\n")
+		b.WriteString("# - Consider performance implications of every data structure choice\n")
+		b.WriteString("# - Review your own output each iteration for correctness before proceeding\n\n")
 	}
 
 	// Layer 2: Strategic plan reference

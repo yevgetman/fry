@@ -69,6 +69,22 @@ Each sprint should:
 If a layer from the plan would produce 30+ files, split it into two sprints.
 If it would produce 1-3 files, merge it into an adjacent sprint.
 
+### 2a. Applies effort-level sizing
+
+If an `@effort` level is specified, it constrains sprint count and density:
+
+| Level    | Max Sprints | Max Iterations | Prompt Detail | Notes |
+|----------|------------|----------------|---------------|-------|
+| `low`    | 2          | 10-15          | Concise       | Combine layers, skip scaffolding sprint |
+| `medium` | 4          | 15-25          | Moderate      | Merge related layers |
+| `high`   | 10         | 15-35          | Full 7-part   | Current default behavior |
+| `max`    | 10         | 30-50          | Extended      | Add analysis + quality gate sections |
+
+If no effort level is specified, auto-detect based on plan complexity:
+- 1-3 files -> low
+- 4-15 files -> medium
+- 15+ files -> high
+
 ### 3. Writes specific, actionable sprint prompts
 
 Each sprint prompt MUST follow this 7-part structure:

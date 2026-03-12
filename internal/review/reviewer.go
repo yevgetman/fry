@@ -24,6 +24,7 @@ type ReviewPromptOpts struct {
 	EpicProgressContent    string
 	SprintProgressContent  string
 	DeviationLogContent    string
+	EffortLevel            epic.EffortLevel
 }
 
 type RunReviewOpts struct {
@@ -44,13 +45,26 @@ func AssembleReviewPrompt(opts ReviewPromptOpts) (string, error) {
 	b.WriteString(fmt.Sprintf("You are a build plan reviewer. You have just observed the completion of Sprint %d.\n", opts.SprintNum))
 	b.WriteString(fmt.Sprintf("Your job is to decide whether the remaining sprints (Sprint %d through %d)\n", opts.SprintNum+1, opts.TotalSprints))
 	b.WriteString("need adjustment based on what actually happened.\n\n")
-	b.WriteString("## Bias: CONTINUE\n")
-	b.WriteString("Your default answer is CONTINUE. Only recommend DEVIATE when:\n")
-	b.WriteString("- A file path, module name, or API shape in a downstream sprint prompt references\n")
-	b.WriteString("  something that was built differently than the prompt assumes\n")
-	b.WriteString("- A technical decision made during the sprint makes a downstream sprint's approach\n")
-	b.WriteString("  infeasible or significantly suboptimal\n")
-	b.WriteString("- A dependency assumed by a downstream sprint was not created or was created differently\n\n")
+	if opts.EffortLevel == epic.EffortMax {
+		b.WriteString("## Bias: THOROUGH REVIEW\n")
+		b.WriteString("At MAX effort level, apply heightened scrutiny. Recommend DEVIATE when:\n")
+		b.WriteString("- Any deviation from the plan that could affect system correctness\n")
+		b.WriteString("- Missing error handling or edge case coverage in completed sprint\n")
+		b.WriteString("- Performance or security concerns that downstream sprints should account for\n")
+		b.WriteString("- A file path, module name, or API shape in a downstream sprint prompt references\n")
+		b.WriteString("  something that was built differently than the prompt assumes\n")
+		b.WriteString("- A technical decision made during the sprint makes a downstream sprint's approach\n")
+		b.WriteString("  infeasible or significantly suboptimal\n")
+		b.WriteString("- A dependency assumed by a downstream sprint was not created or was created differently\n\n")
+	} else {
+		b.WriteString("## Bias: CONTINUE\n")
+		b.WriteString("Your default answer is CONTINUE. Only recommend DEVIATE when:\n")
+		b.WriteString("- A file path, module name, or API shape in a downstream sprint prompt references\n")
+		b.WriteString("  something that was built differently than the prompt assumes\n")
+		b.WriteString("- A technical decision made during the sprint makes a downstream sprint's approach\n")
+		b.WriteString("  infeasible or significantly suboptimal\n")
+		b.WriteString("- A dependency assumed by a downstream sprint was not created or was created differently\n\n")
+	}
 	b.WriteString("Do NOT recommend DEVIATE for:\n")
 	b.WriteString("- Minor style differences (naming conventions, comment style)\n")
 	b.WriteString("- Implementation details that don't affect downstream sprints\n")
@@ -263,6 +277,11 @@ func buildReviewPromptOpts(opts RunReviewOpts) (ReviewPromptOpts, error) {
 		}
 	}
 
+	var effortLevel epic.EffortLevel
+	if opts.Epic != nil {
+		effortLevel = opts.Epic.EffortLevel
+	}
+
 	return ReviewPromptOpts{
 		ProjectDir:             opts.ProjectDir,
 		SprintNum:              opts.SprintNum,
@@ -272,6 +291,7 @@ func buildReviewPromptOpts(opts RunReviewOpts) (ReviewPromptOpts, error) {
 		EpicProgressContent:    epicProgress,
 		SprintProgressContent:  sprintProgress,
 		DeviationLogContent:    deviationLog,
+		EffortLevel:            effortLevel,
 	}, nil
 }
 

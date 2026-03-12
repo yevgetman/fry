@@ -26,5 +26,14 @@ func ValidateEpic(e *Epic) error {
 		}
 	}
 
+	// Validate sprint count against effort level (if set)
+	if e.EffortLevel != "" {
+		maxSprints := e.EffortLevel.MaxSprintCount()
+		if len(e.Sprints) > maxSprints {
+			return fmt.Errorf("effort level %q allows at most %d sprints, but epic has %d",
+				e.EffortLevel, maxSprints, len(e.Sprints))
+		}
+	}
+
 	return nil
 }

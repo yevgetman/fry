@@ -1,6 +1,10 @@
 package prepare
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/yevgetman/fry/internal/epic"
+)
 
 func PlanningStep0Prompt(executiveContent string) string {
 	return fmt.Sprintf(`You are a senior strategic planner. Your job is to produce a detailed, actionable planning document.
@@ -63,11 +67,13 @@ Executive context:
 `, contextLine, planContent, executiveContent)
 }
 
-func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string) string {
+func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string, effort epic.EffortLevel) string {
 	userPromptLine := ""
 	if userPrompt != "" {
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive for the build: %q. Ensure sprint prompts align with this directive.\n", userPrompt)
 	}
+
+	effortGuidance := effortSizingGuidancePlanning(effort)
 
 	return fmt.Sprintf(`You are generating an epic.md file for an autonomous AI planning system.
 
@@ -79,7 +85,7 @@ Read these files carefully:
 3. .fry/AGENTS.md — Operational rules for the AI planning agent.
 
 Generate the epic and write it to .fry/epic.md.
-
+%s
 CRITICAL RULES:
 - Output ONLY the epic.md file content — write it directly to .fry/epic.md.
 - Every @sprint block must have @name, @max_iterations, @promise, and @prompt.
@@ -95,7 +101,64 @@ Plan:
 
 AGENTS.md:
 %s
-`, epicExamplePath, userPromptLine, planContent, agentsContent)
+`, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent)
+}
+
+func effortSizingGuidancePlanning(effort epic.EffortLevel) string {
+	switch effort {
+	case epic.EffortLow:
+		return `
+EFFORT LEVEL: LOW
+The user has indicated this is a low-effort planning task. You MUST:
+- Generate AT MOST 2 sprints total
+- Use max_iterations of 10-15 per sprint
+- Write concise sprint prompts focused on essential deliverables
+- Combine research and analysis into a single sprint where possible
+- Add the @effort low directive to the epic header
+`
+	case epic.EffortMedium:
+		return `
+EFFORT LEVEL: MEDIUM
+The user has indicated this is a medium-effort planning task. You MUST:
+- Generate 2-4 sprints total (prefer the lower end)
+- Use max_iterations of 15-25 per sprint
+- Write moderately detailed sprint prompts
+- Merge related analysis phases where practical
+- Add the @effort medium directive to the epic header
+`
+	case epic.EffortHigh:
+		return `
+EFFORT LEVEL: HIGH
+This is the standard effort level for planning. Follow all existing rules as-is.
+- Generate 4-10 sprints as appropriate
+- Use max_iterations of 15-35 per sprint
+- Write fully detailed sprint prompts with comprehensive analytical requirements
+- Add the @effort high directive to the epic header
+`
+	case epic.EffortMax:
+		return `
+EFFORT LEVEL: MAX
+The user has indicated this is a maximum-effort, mission-critical planning task. You MUST:
+- Generate the same number of sprints as HIGH effort (4-10)
+- Use max_iterations of 30-50 per sprint (higher than normal)
+- Write EXTENDED sprint prompts with additional analysis sections
+- Include exhaustive research requirements and quality gates
+- Add the @effort max directive to the epic header
+- Enable @review_between_sprints and @compact_with_agent
+`
+	default: // auto-detect
+		return `
+EFFORT LEVEL: AUTO-DETECT
+No effort level was specified. Analyze the plan document and determine the appropriate effort level:
+
+- If the plan describes a simple, well-bounded task (1-2 documents): use LOW effort (1-2 sprints, @effort low)
+- If the plan describes a moderate analysis (3-5 documents): use MEDIUM effort (2-4 sprints, @effort medium)
+- If the plan describes a complex, multi-dimensional analysis (6+ documents): use HIGH effort (4-10 sprints, @effort high)
+
+Add the @effort directive matching your assessment to the epic header.
+Do NOT default to HIGH — genuinely evaluate the plan's complexity.
+`
+	}
 }
 
 func PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt string) string {

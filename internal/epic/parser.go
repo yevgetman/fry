@@ -92,6 +92,8 @@ func ParseEpic(path string) (*Epic, error) {
 					ep.ReviewModel = value
 				case "@max_deviation_scope":
 					ep.MaxDeviationScope, err = parseIntDirective(directive, value)
+				case "@effort":
+					ep.EffortLevel, err = ParseEffortLevel(value)
 				case "@sprint":
 					current = Sprint{}
 					current.Number, err = parseIntDirective(directive, value)

@@ -36,15 +36,47 @@ func TestPrepareValidation(t *testing.T) {
 func TestSoftwareStep2ReferencesGenerateEpic(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "")
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "")
 	assert.Contains(t, prompt, "/tmp/GENERATE_EPIC.md")
 }
 
 func TestPlanningStep2NoGenerateEpic(t *testing.T) {
 	t.Parallel()
 
-	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "")
+	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "")
 	assert.NotContains(t, prompt, "GENERATE_EPIC.md")
+}
+
+func TestEffortSizingGuidance_Low(t *testing.T) {
+	t.Parallel()
+
+	guidance := effortSizingGuidance("low")
+	assert.Contains(t, guidance, "AT MOST 2 sprints")
+	assert.Contains(t, guidance, "EFFORT LEVEL: LOW")
+}
+
+func TestEffortSizingGuidance_Max(t *testing.T) {
+	t.Parallel()
+
+	guidance := effortSizingGuidance("max")
+	assert.Contains(t, guidance, "30-50")
+	assert.Contains(t, guidance, "EFFORT LEVEL: MAX")
+}
+
+func TestEffortSizingGuidance_Auto(t *testing.T) {
+	t.Parallel()
+
+	guidance := effortSizingGuidance("")
+	assert.Contains(t, guidance, "AUTO-DETECT")
+	assert.Contains(t, guidance, "Analyze the plan")
+}
+
+func TestSoftwareStep2Prompt_IncludesEffort(t *testing.T) {
+	t.Parallel()
+
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "low")
+	assert.Contains(t, prompt, "EFFORT LEVEL: LOW")
+	assert.Contains(t, prompt, "AT MOST 2 sprints")
 }
 
 func TestPreparePrerequisites(t *testing.T) {

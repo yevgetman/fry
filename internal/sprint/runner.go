@@ -84,6 +84,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		SprintProgressFile: config.SprintProgressFile,
 		EpicProgressFile:   config.EpicProgressFile,
 		Promise:            cfg.Sprint.Promise,
+		EffortLevel:        cfg.Epic.EffortLevel,
 	}); err != nil {
 		return nil, fmt.Errorf("run sprint: %w", err)
 	}
@@ -110,6 +111,9 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	frylog.Log("=========================================")
 	frylog.Log("STARTING SPRINT %d: %s", cfg.Sprint.Number, cfg.Sprint.Name)
 	frylog.Log("Max iterations: %d", cfg.Sprint.MaxIterations)
+	if cfg.Epic.EffortLevel != "" {
+		frylog.Log("Effort level: %s", cfg.Epic.EffortLevel)
+	}
 	frylog.Log("=========================================")
 
 	for iter := 1; iter <= cfg.Sprint.MaxIterations; iter++ {
@@ -147,7 +151,11 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 			consecutiveNoop = 0
 		}
 
-		if consecutiveNoop >= 2 && cfg.Sprint.Promise != "" && len(checks) > 0 {
+		noopThreshold := 2
+		if cfg.Epic.EffortLevel == epic.EffortMax {
+			noopThreshold = 3
+		}
+		if consecutiveNoop >= noopThreshold && cfg.Sprint.Promise != "" && len(checks) > 0 {
 			_, passCount, totalCount := verify.RunChecks(ctx, checks, cfg.Sprint.Number, cfg.ProjectDir)
 			if totalCount > 0 && passCount == totalCount {
 				frylog.Log("  No file changes for %d consecutive iterations and verification passes — exiting early.", consecutiveNoop)
