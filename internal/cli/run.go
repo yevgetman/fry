@@ -261,8 +261,25 @@ var runCmd = &cobra.Command{
 						return err
 					}
 					if !auditResult.Passed {
-						frlog.Log("  AUDIT: %s issues remain after %d passes (advisory)",
+						if auditResult.Blocking {
+							frlog.Log("  AUDIT: FAILED — %s issues remain after %d passes",
+								auditResult.MaxSeverity, auditResult.Iterations)
+							if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
+								frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
+							}
+							mu.Lock()
+							results[sprintNum-startSprint].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
+							mu.Unlock()
+							fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run %s %d\n", resumeEpicArg, spr.Number)
+							exitErr = errBuildFailed
+							break
+						}
+						warning := fmt.Sprintf("%s issues remain after %d audit passes (advisory)",
 							auditResult.MaxSeverity, auditResult.Iterations)
+						frlog.Log("  AUDIT: %s", warning)
+						mu.Lock()
+						results[sprintNum-startSprint].AuditWarning = warning
+						mu.Unlock()
 					}
 					if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
 						frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
@@ -572,6 +589,13 @@ func printBuildSummary(w io.Writer, results []sprint.SprintResult) {
 		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", result.Number, result.Name, result.Status, result.Duration.Round(1e9))
 	}
 	_ = tw.Flush()
+
+	// Print audit warnings after the table
+	for _, result := range results {
+		if result.AuditWarning != "" {
+			fmt.Fprintf(w, "  ⚠ Sprint %d: %s\n", result.Number, result.AuditWarning)
+		}
+	}
 }
 
 func isPassStatus(status string) bool {

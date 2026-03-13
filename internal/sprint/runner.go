@@ -32,10 +32,11 @@ const (
 )
 
 type SprintResult struct {
-	Number   int
-	Name     string
-	Status   string
-	Duration time.Duration
+	Number       int
+	Name         string
+	Status       string
+	Duration     time.Duration
+	AuditWarning string // non-empty when MODERATE audit issues remain (advisory)
 }
 
 type RunConfig struct {

@@ -43,7 +43,7 @@ fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loo
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
 - **Independent verification** -- machine-executable checks run after each sprint
 - **Self-healing** -- automatic re-runs with targeted fix prompts on verification failure
-- **Sprint audit** -- optional post-sprint semantic review by a separate AI agent, with automatic fix loop
+- **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop (CRITICAL/HIGH block the build; MODERATE is advisory)
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
 

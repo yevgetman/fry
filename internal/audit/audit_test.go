@@ -156,6 +156,14 @@ func TestIsAuditPass(t *testing.T) {
 	assert.False(t, isAuditPass("CRITICAL"))
 }
 
+func TestIsBlockingSeverity(t *testing.T) {
+	assert.True(t, isBlockingSeverity("CRITICAL"))
+	assert.True(t, isBlockingSeverity("HIGH"))
+	assert.False(t, isBlockingSeverity("MODERATE"))
+	assert.False(t, isBlockingSeverity("LOW"))
+	assert.False(t, isBlockingSeverity(""))
+}
+
 func TestCleanup(t *testing.T) {
 	projectDir := t.TempDir()
 
@@ -197,7 +205,7 @@ func TestRunAuditLoopPassesImmediately(t *testing.T) {
 	assert.Equal(t, config.AuditInvocationPrompt, eng.prompts[0])
 }
 
-func TestRunAuditLoopExhausts(t *testing.T) {
+func TestRunAuditLoopExhaustsCritical(t *testing.T) {
 	eng := &stubEngine{
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
@@ -212,10 +220,49 @@ func TestRunAuditLoopExhausts(t *testing.T) {
 	result, err := RunAuditLoop(context.Background(), opts)
 	require.NoError(t, err)
 	assert.False(t, result.Passed)
+	assert.True(t, result.Blocking)
 	assert.Equal(t, 2, result.Iterations)
 	assert.Equal(t, "CRITICAL", result.MaxSeverity)
 	// 2 audit + 2 fix + 1 final audit = 5 agent calls
 	assert.Len(t, eng.prompts, 5)
+}
+
+func TestRunAuditLoopExhaustsModerateAdvisory(t *testing.T) {
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				"## Summary\nMinor issues.\n\n## Findings\n- **Severity:** MODERATE\n\n## Verdict\nFAIL\n")
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.MaxAuditIterations = 2
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	assert.False(t, result.Blocking)
+	assert.Equal(t, 2, result.Iterations)
+	assert.Equal(t, "MODERATE", result.MaxSeverity)
+}
+
+func TestRunAuditLoopExhaustsHighBlocking(t *testing.T) {
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				"## Summary\nBugs found.\n\n## Findings\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n")
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.MaxAuditIterations = 2
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	assert.True(t, result.Blocking)
+	assert.Equal(t, 2, result.Iterations)
+	assert.Equal(t, "HIGH", result.MaxSeverity)
 }
 
 func TestRunAuditLoopNoFindingsFile(t *testing.T) {

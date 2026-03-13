@@ -27,6 +27,7 @@ type AuditOpts struct {
 
 type AuditResult struct {
 	Passed      bool
+	Blocking    bool   // true when CRITICAL or HIGH issues remain after all iterations
 	Iterations  int
 	MaxSeverity string // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
 }
@@ -175,7 +176,12 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		return &AuditResult{Passed: true, Iterations: maxIter, MaxSeverity: maxSev}, nil
 	}
 
-	return &AuditResult{Passed: false, Iterations: maxIter, MaxSeverity: maxSev}, nil
+	return &AuditResult{
+		Passed:      false,
+		Blocking:    isBlockingSeverity(maxSev),
+		Iterations:  maxIter,
+		MaxSeverity: maxSev,
+	}, nil
 }
 
 func buildAuditPrompt(opts AuditOpts) string {
@@ -332,6 +338,10 @@ func severityRank(sev string) int {
 
 func isAuditPass(maxSeverity string) bool {
 	return maxSeverity == "" || maxSeverity == "LOW"
+}
+
+func isBlockingSeverity(maxSeverity string) bool {
+	return maxSeverity == "CRITICAL" || maxSeverity == "HIGH"
 }
 
 func Cleanup(projectDir string) error {

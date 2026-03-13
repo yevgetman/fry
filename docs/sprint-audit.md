@@ -20,7 +20,10 @@ Sprint passes verification
        │       ▼
        │   Re-audit (loop up to @max_audit_iterations)
        │
-       └─ Exhausted iterations → advisory warning, build continues
+       └─ Exhausted iterations
+               │
+               ├─ CRITICAL or HIGH → sprint FAILS, epic stops
+               └─ MODERATE → advisory warning, build continues
 ```
 
 The audit runs **after** verification passes but **before** the git checkpoint, so that the checkpoint commits both the sprint's work and any audit fixes in one clean commit.
@@ -34,15 +37,21 @@ The audit uses two separate agent sessions:
 
 This separation mirrors the existing verify→heal pattern and keeps the audit agent's context focused on review.
 
-## Advisory, Not Blocking
+## Blocking vs Advisory
 
-If the audit loop exhausts its iterations with issues remaining, the sprint still passes -- it already passed verification. The build continues with an advisory log message:
+After the audit loop exhausts its iterations, the outcome depends on the highest remaining severity:
+
+- **CRITICAL or HIGH** -- The sprint **fails** and the epic stops. The build summary shows `FAIL (audit: CRITICAL)` or `FAIL (audit: HIGH)`. You can resume with `fry run <epic> <sprint>` after fixing the issues.
+- **MODERATE** -- The sprint **continues** with an advisory warning logged to the build output and build summary. This prevents moderate semantic disagreements between two AI agents from stalling the entire build.
+- **LOW or none** -- The audit passes cleanly.
 
 ```
-[2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 passes (advisory)
-```
+# Blocking (CRITICAL/HIGH):
+[2026-03-10 12:20:00]   AUDIT: FAILED — HIGH issues remain after 3 passes
 
-This prevents a semantic disagreement between two AI agents from stalling the entire build.
+# Advisory (MODERATE):
+[2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 audit passes (advisory)
+```
 
 ## Configuration
 
@@ -84,12 +93,12 @@ To disable audits for a specific epic, add `@no_audit`:
 
 The audit agent classifies each finding with a severity level:
 
-| Level | Description | Action |
-|---|---|---|
-| CRITICAL | Data loss, security breach, or crash under normal use | Fix agent remediates |
-| HIGH | Significant bug; affects core functionality | Fix agent remediates |
-| MODERATE | Edge case gaps, poor error handling, quality concerns | Fix agent remediates |
-| LOW | Style, naming, cosmetic | Ignored by fix agent |
+| Level | Description | Action | If unresolved |
+|---|---|---|---|
+| CRITICAL | Data loss, security breach, or crash under normal use | Fix agent remediates | **Blocks** sprint |
+| HIGH | Significant bug; affects core functionality | Fix agent remediates | **Blocks** sprint |
+| MODERATE | Edge case gaps, poor error handling, quality concerns | Fix agent remediates | Advisory warning |
+| LOW | Style, naming, cosmetic | Ignored by fix agent | Ignored |
 
 Severity is parsed from structured `**Severity:**` lines in the audit output, preventing false positives from severity keywords appearing in code diffs or prose.
 
@@ -161,9 +170,15 @@ The git diff is refreshed before each audit pass (via a callback) so that fixes 
 [2026-03-10 12:16:00]   AUDIT: pass (max severity: LOW)
 ```
 
-### Issues persist (advisory):
+### CRITICAL/HIGH issues persist (blocking):
 ```
-[2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 passes (advisory)
+[2026-03-10 12:20:00]   AUDIT: FAILED — HIGH issues remain after 3 passes
+Resume: fry run my-epic.md 3
+```
+
+### MODERATE issues persist (advisory):
+```
+[2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 audit passes (advisory)
 ```
 
 ## Build Logs

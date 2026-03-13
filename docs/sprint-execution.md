@@ -19,7 +19,7 @@ FOR each sprint in range:
   │   └─ Continue until: promise found OR no-op OR max iterations
   ├─ Run verification checks
   ├─ If checks fail: enter heal loop
-  ├─ Sprint audit (if enabled): audit→fix loop
+  ├─ Sprint audit: audit→fix loop (CRITICAL/HIGH block; MODERATE advisory)
   ├─ Git checkpoint
   ├─ Compact progress
   └─ Sprint review (if enabled)
