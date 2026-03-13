@@ -6,7 +6,7 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 )
 
-func PlanningStep0Prompt(executiveContent string) string {
+func PlanningStep0Prompt(executiveContent, mediaManifest string) string {
 	return fmt.Sprintf(`You are a senior strategic planner. Your job is to produce a detailed, actionable planning document.
 
 Read plans/executive.md carefully — it contains the executive context for this project: vision, goals, target audience, scope, and constraints.
@@ -40,15 +40,16 @@ CRITICAL:
 - ALL output documents MUST use paths under plans/output/ — never write deliverables directly to plans/.
   The plans/ directory is reserved for input files (executive.md, plan.md).
 - Align every decision with the goals, constraints, and scope defined in plans/executive.md.
+- If a media/ directory exists, reference the available assets by their paths in the relevant sections of the plan. Describe where and how each asset should be used in the deliverables.
 - Write the file directly to plans/plan.md. No other output.
 - The output format should be markdown.
 
 Executive context:
 %s
-`, executiveContent)
+%s`, executiveContent, mediaSection(mediaManifest))
 }
 
-func PlanningStep1Prompt(planContent, executiveContent string) string {
+func PlanningStep1Prompt(planContent, executiveContent, mediaManifest string) string {
 	contextLine := ""
 	if executiveContent != "" {
 		contextLine = "Also read plans/executive.md for executive context about the project's purpose, goals, and constraints.\n\n"
@@ -70,6 +71,7 @@ One rule MUST state: "All document deliverables must be written to plans/output/
 CRITICAL:
 - Derive ALL rules from the plan document — do not invent rules not supported by the plan.
 - This is a PLANNING project. The agent produces documents, analyses, and strategies — NOT code.
+- If a media/ directory exists, include a rule that the agent should reference assets from media/ as specified in the plan.
 - Write the file directly to .fry/AGENTS.md. No other output.
 
 Plan:
@@ -77,10 +79,10 @@ Plan:
 
 Executive context:
 %s
-`, contextLine, planContent, executiveContent)
+%s`, contextLine, planContent, executiveContent, mediaSection(mediaManifest))
 }
 
-func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string, effort epic.EffortLevel) string {
+func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string, effort epic.EffortLevel, mediaManifest string) string {
 	userPromptLine := ""
 	if userPrompt != "" {
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive for the build: %q. Ensure sprint prompts align with this directive.\n", userPrompt)
@@ -120,6 +122,7 @@ CRITICAL RULES:
   them to the correct convention in the sprint prompts.
 - All deliverables are DOCUMENTS, not code.
 - Sprint 1 is always research/discovery. The final sprint is always synthesis/review.
+- If media assets exist, sprint prompts that need those assets must instruct the agent to reference them from the media/ directory.
 - Do NOT include any output other than writing the file. No explanations, no summaries.%s
 
 Plan:
@@ -127,7 +130,7 @@ Plan:
 
 AGENTS.md:
 %s
-`, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent)
+%s`, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent, mediaSection(mediaManifest))
 }
 
 func effortSizingGuidancePlanning(effort epic.EffortLevel) string {
@@ -187,7 +190,7 @@ Do NOT default to HIGH — genuinely evaluate the plan's complexity.
 	}
 }
 
-func PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt string) string {
+func PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
 	userPromptLine := ""
 	if userPrompt != "" {
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive: %q. If it affects what should or should not be verified, factor it in.\n", userPrompt)
@@ -222,5 +225,5 @@ Plan:
 
 Epic:
 %s
-`, verificationExamplePath, userPromptLine, planContent, epicContent)
+%s`, verificationExamplePath, userPromptLine, planContent, epicContent, mediaSection(mediaManifest))
 }

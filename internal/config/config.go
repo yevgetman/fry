@@ -19,9 +19,10 @@ const (
 	PlanFile                  = "plans/plan.md"
 	ExecutiveFile             = "plans/executive.md"
 	PlanningOutputDir         = "plans/output"
+	MediaDir                  = "media"
 	AgentsFile                = ".fry/AGENTS.md"
 	Version                   = "0.1.0"
-	AgentInvocationPrompt     = "Read and execute ALL instructions in .fry/prompt.md. Before starting, read .fry/sprint-progress.txt for context from previous iterations in this sprint, and .fry/epic-progress.txt for summaries of prior sprints. Also read plans/plan.md for strategic context on how this sprint fits the overall plan. After completing your work, append your progress to .fry/sprint-progress.txt."
+	AgentInvocationPrompt     = "Read and execute ALL instructions in .fry/prompt.md. Before starting, read .fry/sprint-progress.txt for context from previous iterations in this sprint, and .fry/epic-progress.txt for summaries of prior sprints. Also read plans/plan.md for strategic context on how this sprint fits the overall plan. If a media/ directory exists, it contains assets (images, PDFs, etc.) that may be referenced in the plan — use or copy them as instructed. After completing your work, append your progress to .fry/sprint-progress.txt."
 	HealInvocationPrompt      = "Read and execute ALL instructions in .fry/prompt.md. This is a HEAL pass — fix the verification failures described in the prompt."
 	DefaultEffortLevel        = "" // auto-detect
 )

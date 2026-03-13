@@ -6,7 +6,17 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 )
 
-func SoftwareStep0Prompt(executiveContent string) string {
+func mediaSection(mediaManifest string) string {
+	if mediaManifest == "" {
+		return ""
+	}
+	return fmt.Sprintf(`
+A media/ directory exists with the following assets. Reference these in the plan where appropriate — the build agent will copy or use them as needed:
+
+%s`, mediaManifest)
+}
+
+func SoftwareStep0Prompt(executiveContent, mediaManifest string) string {
 	return fmt.Sprintf(`You are a senior software architect. Your job is to produce a detailed, actionable build plan.
 
 Read plans/executive.md carefully — it contains the executive context for this project: vision, goals, target users, scope, and constraints.
@@ -37,15 +47,16 @@ CRITICAL:
 - Make DECISIVE choices. Do not present alternatives.
 - Be SPECIFIC. Include exact file paths, function signatures, table schemas, endpoint definitions.
 - Align every decision with the goals, constraints, and scope defined in plans/executive.md.
+- If a media/ directory exists, reference the available assets by their paths (e.g., media/logo.png) in the relevant sections of the plan. Describe where and how each asset should be used.
 - Write the file directly to plans/plan.md. No other output.
 - The output format should be markdown.
 
 Executive context:
 %s
-`, executiveContent)
+%s`, executiveContent, mediaSection(mediaManifest))
 }
 
-func SoftwareStep1Prompt(planContent, executiveContent string) string {
+func SoftwareStep1Prompt(planContent, executiveContent, mediaManifest string) string {
 	contextLine := ""
 	if executiveContent != "" {
 		contextLine = "Also read plans/executive.md for executive context about the project's purpose, goals, and business constraints.\n\n"
@@ -70,6 +81,7 @@ Write 15-40 rules total. Do NOT include vague rules like 'write clean code.'
 
 CRITICAL:
 - Derive ALL rules from the plan document — do not invent rules not supported by the plan.
+- If a media/ directory exists, include a rule that the agent should use assets from media/ as specified in the plan.
 - Write the file directly to .fry/AGENTS.md. No other output.
 
 Plan:
@@ -77,10 +89,10 @@ Plan:
 
 Executive context:
 %s
-`, contextLine, planContent, executiveContent)
+%s`, contextLine, planContent, executiveContent, mediaSection(mediaManifest))
 }
 
-func SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel) string {
+func SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel, mediaManifest string) string {
 	userPromptLine := ""
 	if userPrompt != "" {
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive for the build: %q. Ensure sprint prompts align with this directive.\n", userPrompt)
@@ -109,6 +121,7 @@ CRITICAL RULES:
 - Verification references should point to .fry/verification.md.
 - Sprint 1 is always scaffolding. The final sprint is always wiring + integration + E2E.
 - The @promise token inside the prompt text must match the @promise directive value.
+- If media assets exist, sprint prompts that need those assets must instruct the agent to copy or reference them from the media/ directory.
 - Do NOT include any output other than writing the file. No explanations, no summaries.%s
 
 Plan:
@@ -116,7 +129,7 @@ Plan:
 
 AGENTS.md:
 %s
-`, generateEpicPath, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent)
+%s`, generateEpicPath, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent, mediaSection(mediaManifest))
 }
 
 func effortSizingGuidance(effort epic.EffortLevel) string {
@@ -197,7 +210,7 @@ Common over-engineering signals to watch for:
 	}
 }
 
-func SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt string) string {
+func SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
 	userPromptLine := ""
 	if userPrompt != "" {
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive: %q. If it affects what should or should not be verified, factor it in.\n", userPrompt)
@@ -220,6 +233,7 @@ CRITICAL RULES:
 - Every check must be a concrete, executable assertion. No prose. No subjective criteria.
 - Derive checks from SPECIFIC deliverables in the plan and epic: exact filenames, build commands, required config values, API endpoints.
 - Do NOT write checks for things that earlier sprints already verified — only check the current sprint's new deliverables. Cumulative checks are fine.
+- If media assets are referenced in the plan, add @check_file checks to verify they were copied to their target locations.
 - Do NOT include any output other than writing the file. No explanations, no summaries.%s
 
 Plan:
@@ -227,5 +241,5 @@ Plan:
 
 Epic:
 %s
-`, verificationExamplePath, userPromptLine, planContent, epicContent)
+%s`, verificationExamplePath, userPromptLine, planContent, epicContent, mediaSection(mediaManifest))
 }

@@ -1,14 +1,14 @@
 # Codebase Audit Report
 
-**Date**: 2026-03-12 (Iteration 2 — post-remediation)
-**Scope**: Full codebase audit of fry-go, including recent changes to planning output directory and ordered filenames.
+**Date**: 2026-03-12 — Iteration 2 (post-remediation)
+**Scope**: `internal/media/` package and all integration points
 
 ---
 
 ## Build & Test Status
 
 - `go build ./...` — PASS
-- `go test ./...` — PASS (all packages)
+- `go test ./...` — PASS (all packages, 16 media tests)
 
 ---
 
@@ -16,60 +16,43 @@
 
 | Severity | Count |
 |----------|-------|
-| CRITICAL | 0 |
-| HIGH | 0 |
-| MODERATE | 0 |
-| LOW | 4 |
+| CRITICAL | 0     |
+| HIGH     | 0     |
+| MODERATE | 0     |
+| LOW      | 3     |
 
 ---
 
-## Remediated Issues
+## Remediated Issues (from Iteration 1)
 
-### 1. (was MODERATE) Silent effort level override when CLI flag conflicts with epic directive — FIXED
-
-**File**: `internal/cli/run.go:96-100`
-**Original Issue**: When the user passes `--effort low` but the epic already contains `@effort high`, the CLI flag was silently ignored.
-**Fix Applied**: Added a warning log when the CLI effort flag conflicts with the epic's `@effort` directive, informing the user to re-run `fry prepare` with the desired effort level.
-
----
-
-## LOW Issues
-
-### 1. Test type safety — string literals instead of EffortLevel constants
-
-**File**: `internal/prepare/prepare_test.go:39,46,53,61,69,77`
-**Issue**: Tests pass raw string literals (`""`, `"low"`, `"max"`) where `epic.EffortLevel` type is expected. Works because Go allows implicit conversion of untyped string constants to named string types, but reduces refactoring safety.
-
-### 2. Inconsistent error variable naming in verify/parser.go
-
-**File**: `internal/verify/parser.go:43,61`
-**Issue**: Uses `parseErr` instead of the conventional `err` used everywhere else in the codebase.
-
-### 3. Deferred file.Close() ignores close error in appendFile
-
-**File**: `internal/sprint/progress.go:63`
-**Issue**: `defer file.Close()` does not capture the error return. For append-mode writes this is practically harmless since the write error is already checked, but technically a close failure could mean data loss on some filesystems.
-
-### 4. No jitter on docker ready check polling
-
-**File**: `internal/docker/docker.go:94`
-**Issue**: The polling loop uses a fixed `time.Sleep(1 * time.Second)` without jitter. In single-instance use this is fine; in theoretical multi-instance scenarios it could cause thundering herd effects.
+| Issue | Was | Fix Applied |
+|-------|-----|-------------|
+| H1 — Symlink following / path traversal | HIGH | Switched to `filepath.WalkDir`, skip symlinks via `d.Type()&ModeSymlink`, validate relative paths stay within `media/`, use `Lstat` for root check |
+| M1 — Silent error swallowing in prepare.go | MODERATE | Added `frylog.Log("WARNING: ...")` on scan error |
+| M2 — Identical error messages | MODERATE | Differentiated to `"scan media: stat:"` vs `"scan media: walk:"` |
+| M3 — Dotfiles in manifest | MODERATE | Skip files/dirs starting with `.`; hidden dirs get `SkipDir` |
+| L1 — O(n*m) categorization | LOW | Built flat `extToCategory` map at init for O(1) lookup |
+| Dead code — `d.IsDir()` on symlink branch | n/a | Found during re-audit; simplified symlink check |
+| Stale doc comment mentioning "Truncated" | n/a | Found during re-audit; fixed comment |
 
 ---
 
-## Verified False Positives
+## LOW Issues (remaining)
 
-The following issues were reported by automated scanning but confirmed as non-issues after manual code review:
+### L1 — `PromptSection` swallows scan errors silently
 
-| Claimed Issue | Verdict | Reason |
-|---|---|---|
-| Race condition on `results` slice (run.go:160 vs 232) | **Not a race** | Both accesses are protected by `mu.Lock()`/`mu.Unlock()` |
-| File descriptor leak in heal.go and sprint/runner.go | **No leak** | `defer iterLog.Close()` is set before the error return path |
-| Resource leak in parseEpicContent (replanner.go:313-326) | **No leak** | `defer os.Remove()` handles cleanup; explicit `Close()` on error path |
-| Deferred prompt deletion race (replanner.go:89-92) | **Not a race** | `defer` fires after `RunReplan` returns, which is after engine finishes |
-| Command injection in docker/preflight/shellhook | **By design** | Commands come from epic.md — a trusted user-authored configuration file |
-| Missing error check in heal.go:67 | **False positive** | Error IS checked: `if err := os.WriteFile(...); err != nil { return }` |
-| Error suppression in runAgentWithDualLogs | **Intentional** | Engine errors are suppressed only when context is not cancelled — allows partial output from LLM engines that exit non-zero |
+**File**: `internal/media/media.go:173`
+**Description**: When `Scan` returns an error, `PromptSection` returns empty string with no logging. This is by design — `PromptSection` is called from `sprint/prompt.go` where there's no logger available, and the prepare path already logs warnings. The sprint path silently degrades, which is acceptable since media is optional context.
+
+### L2 — `truncated` variable unused
+
+**File**: `internal/media/media.go:135`
+**Description**: The `truncated` bool is set when `MaxAssets` is exceeded but only consumed as `_ = truncated`. Callers (prepare.go) could log a warning if truncation occurred, but this would require changing the `Scan` return signature. Current behavior (silently returning first 10,000 files) is adequate.
+
+### L3 — Test string literals for EffortLevel in prepare_test.go
+
+**File**: `internal/prepare/prepare_test.go:39,77`
+**Description**: Tests pass raw string literals (`""`, `"low"`) where `epic.EffortLevel` type is expected. Works due to Go's implicit string constant conversion but reduces refactoring safety. Pre-existing issue, not introduced by media feature.
 
 ---
 
@@ -77,5 +60,4 @@ The following issues were reported by automated scanning but confirmed as non-is
 
 **EXIT CONDITION MET: No issues of CRITICAL, HIGH, or MODERATE severity found.**
 
-All remaining issues are LOW severity and do not require remediation. The implementation is complete,
-well-tested, backward compatible, and follows existing code patterns consistently.
+All remaining issues are LOW severity and do not impact correctness, security, or usability.

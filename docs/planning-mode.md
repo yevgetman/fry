@@ -85,6 +85,20 @@ The same four [verification check primitives](verification.md) work for document
 
 These checks ensure documents exist, contain required sections, meet minimum word counts, and have sufficient heading structure.
 
+## Using Media Assets in Planning Mode
+
+Place supporting materials (charts, data files, reference PDFs) in the `media/` directory. Reference them in your plan and the AI agent will incorporate them into the deliverable documents.
+
+```
+media/
+  market-data.csv
+  competitor-logos/
+    acme.png
+    globex.png
+```
+
+In your plan: "Use the data in `media/market-data.csv` to inform the market sizing section." See [Media Assets](media-assets.md) for details.
+
 ## When to Use Planning Mode
 
 - Business plans and strategies

@@ -13,6 +13,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/media"
 	"github.com/yevgetman/fry/internal/textutil"
 	"github.com/yevgetman/fry/templates"
 )
@@ -75,6 +76,13 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		}
 	}
 
+	// Scan media directory for available assets (optional).
+	mediaAssets, mediaErr := media.Scan(projectDir)
+	if mediaErr != nil {
+		frylog.Log("WARNING: could not scan media directory: %v", mediaErr)
+	}
+	mediaManifest := media.BuildManifest(mediaAssets)
+
 	planPath := filepath.Join(projectDir, config.PlanFile)
 	executivePath := filepath.Join(projectDir, config.ExecutiveFile)
 
@@ -87,7 +95,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if err := os.MkdirAll(filepath.Dir(planPath), 0o755); err != nil {
 			return err
 		}
-		prompt := step0Prompt(opts.Planning, string(executiveContent))
+		prompt := step0Prompt(opts.Planning, string(executiveContent), mediaManifest)
 		beforeMod := textutil.FileModTime(planPath)
 		output, err := runPrepareStep(ctx, eng, projectDir, prompt)
 		if err != nil {
@@ -111,7 +119,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	agentsPath := filepath.Join(projectDir, config.AgentsFile)
 	frylog.Log("Step 1: Generating %s (engine: %s)...", config.AgentsFile, engName)
-	prompt := step1Prompt(opts.Planning, planContent, executiveContent)
+	prompt := step1Prompt(opts.Planning, planContent, executiveContent, mediaManifest)
 	beforeMod := textutil.FileModTime(agentsPath)
 	output, err := runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
@@ -141,7 +149,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	epicPath := filepath.Join(projectDir, epicFilename)
 
 	frylog.Log("Step 2: Generating %s (engine: %s)...", epicFilename, engName)
-	prompt = step2Prompt(opts.Planning, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel)
+	prompt = step2Prompt(opts.Planning, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, mediaManifest)
 	beforeMod = textutil.FileModTime(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
@@ -161,7 +169,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 
 	frylog.Log("Step 3: Generating %s (engine: %s)...", config.DefaultVerificationFile, engName)
-	prompt = step3Prompt(opts.Planning, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt)
+	prompt = step3Prompt(opts.Planning, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest)
 	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	beforeMod = textutil.FileModTime(verificationPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
@@ -269,32 +277,32 @@ func writeEmbeddedTemplates(dir string) (epicExamplePath, verificationExamplePat
 	return epicExamplePath, verificationExamplePath, generateEpicPath, nil
 }
 
-func step0Prompt(planning bool, executiveContent string) string {
+func step0Prompt(planning bool, executiveContent, mediaManifest string) string {
 	if planning {
-		return PlanningStep0Prompt(executiveContent)
+		return PlanningStep0Prompt(executiveContent, mediaManifest)
 	}
-	return SoftwareStep0Prompt(executiveContent)
+	return SoftwareStep0Prompt(executiveContent, mediaManifest)
 }
 
-func step1Prompt(planning bool, planContent, executiveContent string) string {
+func step1Prompt(planning bool, planContent, executiveContent, mediaManifest string) string {
 	if planning {
-		return PlanningStep1Prompt(planContent, executiveContent)
+		return PlanningStep1Prompt(planContent, executiveContent, mediaManifest)
 	}
-	return SoftwareStep1Prompt(planContent, executiveContent)
+	return SoftwareStep1Prompt(planContent, executiveContent, mediaManifest)
 }
 
-func step2Prompt(planning bool, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel) string {
+func step2Prompt(planning bool, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel, mediaManifest string) string {
 	if planning {
-		return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort)
+		return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, mediaManifest)
 	}
-	return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort)
+	return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort, mediaManifest)
 }
 
-func step3Prompt(planning bool, planContent, epicContent, verificationExamplePath, userPrompt string) string {
+func step3Prompt(planning bool, planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
 	if planning {
-		return PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt)
+		return PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
 	}
-	return SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt)
+	return SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
 }
 
 func readPrepareOptional(path string) (string, error) {

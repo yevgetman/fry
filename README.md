@@ -14,6 +14,7 @@ Supports **OpenAI Codex** (default) and **Claude Code** as interchangeable AI en
 plans/plan.md          You write this -- what to build        (at least one
   OR                                                           of these two
 plans/executive.md     You write this -- why to build it       is required)
+media/                 Optional assets (images, PDFs, fonts, etc.) referenced in plans
         |
         v
   fry prepare           Step 0 (if needed): AI generates plans/plan.md from executive.md
@@ -36,7 +37,8 @@ fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loo
 **Key mechanisms:**
 
 - **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
-- **Layered prompts** -- assembled per sprint with executive context, user directives, plan references, sprint tasks, iteration memory, and completion signals
+- **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
+- **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, plan references, sprint tasks, iteration memory, and completion signals
 - **Two-file progress tracking** -- per-sprint iteration log + cross-sprint compacted summary for bounded context
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
 - **Independent verification** -- machine-executable checks run after each sprint
@@ -106,6 +108,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Docker Support](docs/docker.md) | Docker Compose lifecycle, health checks, sprint scoping |
 | [Preflight Checks](docs/preflight.md) | Pre-build validation, required tools, custom commands |
 | [Planning Mode](docs/planning-mode.md) | Non-code project support: documents, analyses, strategies |
+| [Media Assets](docs/media-assets.md) | Optional `media/` directory for images, PDFs, fonts, and other build assets |
 | [User Prompt](docs/user-prompt.md) | Injecting directives, prompt hierarchy, persistence |
 | [Project Structure](docs/project-structure.md) | Directory layout, generated artifacts, file reference |
 | [Terminal Output](docs/terminal-output.md) | Status banners, verbose mode, log format |

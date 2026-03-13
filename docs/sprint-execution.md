@@ -31,6 +31,7 @@ Each sprint prompt is assembled in layers, giving the AI agent structured contex
 | Layer | Content | Source |
 |---|---|---|
 | 1 | Executive context | `plans/executive.md` (if exists) |
+| 1.25 | Media assets | Manifest of files in `media/` (if directory exists) |
 | 1.5 | User directive | `--user-prompt` or `.fry/user-prompt.txt` |
 | 1.75 | Quality directive | Injected at `max` effort only — instructs agent to handle all edge cases, write defensive code, validate assumptions |
 | 2 | Strategic plan reference | Pointer to `plans/plan.md` |

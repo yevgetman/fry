@@ -8,6 +8,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/media"
 )
 
 type PromptOpts struct {
@@ -37,6 +38,11 @@ func AssemblePrompt(opts PromptOpts) (string, error) {
 		b.WriteString("# NOT derive implementation decisions from this section.\n\n")
 		b.WriteString(ensureTrailingNewline(executiveContent))
 		b.WriteString("\n")
+	}
+
+	// Layer 1.25: Media assets (only if media/ directory exists)
+	if mediaSection := media.PromptSection(opts.ProjectDir); mediaSection != "" {
+		b.WriteString(mediaSection)
 	}
 
 	// Layer 1.5: User directive (only if provided)

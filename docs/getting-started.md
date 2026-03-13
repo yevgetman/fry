@@ -112,3 +112,15 @@ fry automatically creates the `.fry/` directory, initializes git (if needed), an
 | Both files | fry uses `executive.md` as alignment context alongside your detailed `plan.md` for better-aligned artifacts |
 
 When `plan.md` is auto-generated from `executive.md`, the LLM makes all design, architecture, and implementation decisions. The generated file is written to `plans/` so you can review it before building.
+
+## Media Assets (Optional)
+
+Place images, PDFs, fonts, data files, or other assets in a `media/` directory at the project root. Reference them in your plan (e.g., "use `media/logo.png` for the header") and fry will include a categorized manifest in every prompt so the AI agent knows what assets are available and where to find them.
+
+```bash
+mkdir -p media
+cp ~/designs/logo.png media/
+cp ~/docs/wireframe.pdf media/
+```
+
+The agent can then copy or reference these files as instructed in the plan. See [Media Assets](media-assets.md) for details.

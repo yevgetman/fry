@@ -16,6 +16,7 @@ internal/
   heal/                  Self-healing loop (re-run agent on verification failure)
   lock/                  File-based concurrency lock (PID-based)
   log/                   Timestamped logging with verbose mode
+  media/                 Media directory scanner and manifest builder
   preflight/             Pre-build validation checks
   prepare/               Artifact generation (Steps 0-3)
   review/                Dynamic sprint review, replanning, deviation tracking
@@ -44,10 +45,11 @@ type Engine interface {
 ## Data Flow
 
 ```
-User Input (plans/)
+User Input (plans/, media/)
        │
        ▼
    fry prepare ──► .fry/AGENTS.md, epic.md, verification.md
+                   (scans media/ for asset manifest)
        │
        ▼
    fry run
