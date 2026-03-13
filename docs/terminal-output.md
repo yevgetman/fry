@@ -56,7 +56,7 @@ Each sprint gets a start banner, per-iteration agent banners, verification resul
 
 ## Sprint Audit
 
-When `@audit_after_sprint` is enabled:
+Sprint audits run by default after each sprint passes verification:
 
 ```
 [2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude

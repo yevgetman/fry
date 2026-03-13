@@ -1,6 +1,6 @@
 # Sprint Audit
 
-The sprint audit is an optional semantic quality gate that runs after each sprint passes verification. A separate AI agent session reviews the sprint's work holistically -- checking correctness, security, edge cases, and code quality -- then a fix agent remediates any issues found. This complements the syntactic verification system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
+The sprint audit is a semantic quality gate that runs by default after each sprint passes verification. A separate AI agent session reviews the sprint's work holistically -- checking correctness, security, edge cases, and code quality -- then a fix agent remediates any issues found. This complements the syntactic verification system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
 
 ## How It Works
 
@@ -44,30 +44,32 @@ If the audit loop exhausts its iterations with issues remaining, the sprint stil
 
 This prevents a semantic disagreement between two AI agents from stalling the entire build.
 
-## Enabling
+## Configuration
 
-Add `@audit_after_sprint` to your epic's global directives:
+Sprint audits are **enabled by default**. No directive is needed -- audits will run automatically after each sprint passes verification.
 
-```
-@epic My Project
-@engine claude
-@audit_after_sprint
-```
-
-Or combine with other audit settings:
+To customize audit settings:
 
 ```
-@audit_after_sprint
 @max_audit_iterations 5
 @audit_engine claude
 @audit_model claude-sonnet-4-20250514
+```
+
+To disable audits for a specific epic, add `@no_audit`:
+
+```
+@epic Quick Prototype
+@engine claude
+@no_audit
 ```
 
 ## Epic Directives
 
 | Directive | Description |
 |---|---|
-| `@audit_after_sprint` | Enable post-sprint audit (default: disabled) |
+| `@audit_after_sprint` | Enable post-sprint audit (default: enabled) |
+| `@no_audit` | Disable post-sprint audit |
 | `@max_audit_iterations <N>` | Maximum audit→fix cycles per sprint (default: 3) |
 | `@audit_engine <codex\|claude>` | AI engine for audit/fix sessions (default: same as `@engine`) |
 | `@audit_model <model>` | Model override for audit/fix sessions |
@@ -76,7 +78,7 @@ Or combine with other audit settings:
 
 | Flag | Description |
 |---|---|
-| `--no-audit` | Disable sprint audit even if `@audit_after_sprint` is set |
+| `--no-audit` | Disable sprint audit for this run |
 
 ## Severity Classification
 
@@ -140,7 +142,7 @@ The git diff is refreshed before each audit pass (via a callback) so that fixes 
 
 ## Effort Level Interaction
 
-- **`low`** -- Sprint audits are skipped entirely, even if `@audit_after_sprint` is enabled. This matches the behavior of sprint reviews at low effort.
+- **`low`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at low effort.
 - **`medium`**, **`high`**, **`max`** -- Audit runs normally when enabled.
 
 ## Terminal Output
@@ -185,17 +187,15 @@ After the audit completes (pass or fail), fry removes `.fry/sprint-audit.txt` an
 ```
 @epic My API
 @engine claude
-@audit_after_sprint
 ```
 
-Runs audit with defaults: 3 max iterations, same engine and model as the build agent.
+Audits run by default: 3 max iterations, same engine and model as the build agent.
 
 ### Custom audit configuration
 
 ```
 @epic Payment System
 @engine codex
-@audit_after_sprint
 @max_audit_iterations 5
 @audit_engine claude
 @audit_model claude-sonnet-4-20250514
@@ -203,9 +203,16 @@ Runs audit with defaults: 3 max iterations, same engine and model as the build a
 
 Uses Codex for building but Claude for auditing, with up to 5 audit→fix cycles.
 
+### Disable in epic
+
+```
+@epic Quick Prototype
+@engine claude
+@no_audit
+```
+
 ### Disable at runtime
 
 ```bash
-# Epic has @audit_after_sprint, but skip it for this run
 fry --no-audit --engine claude
 ```

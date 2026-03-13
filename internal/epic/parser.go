@@ -26,7 +26,9 @@ func ParseEpic(path string) (*Epic, error) {
 	}
 	defer file.Close()
 
-	ep := &Epic{}
+	ep := &Epic{
+		AuditAfterSprint: true, // on by default; use @no_audit to disable
+	}
 	state := stateGlobal
 	scanner := bufio.NewScanner(file)
 	lineNo := 0
@@ -94,6 +96,8 @@ func ParseEpic(path string) (*Epic, error) {
 					ep.MaxDeviationScope, err = parseIntDirective(directive, value)
 				case "@audit_after_sprint":
 					ep.AuditAfterSprint = true
+				case "@no_audit":
+					ep.AuditAfterSprint = false
 				case "@max_audit_iterations":
 					ep.MaxAuditIterations, err = parseIntDirective(directive, value)
 				case "@audit_engine":

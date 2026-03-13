@@ -19,7 +19,7 @@ For simple, well-bounded work: a single page, a config change, a small utility, 
 - Skips scaffolding as a separate sprint — folds it into Sprint 1
 - Sprint prompts omit REFERENCES and STUCK HINT sections for brevity
 - Sprint reviews are skipped entirely, even if `@review_between_sprints` is enabled
-- Sprint audits are skipped entirely, even if `@audit_after_sprint` is enabled
+- Sprint audits are skipped entirely (regardless of audit settings)
 - Focus is on core deliverables only; exhaustive edge cases are omitted
 
 ```bash

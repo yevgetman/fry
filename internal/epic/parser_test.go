@@ -396,11 +396,29 @@ Do it.
 	assert.Equal(t, config.DefaultMaxAuditIterations, ep.MaxAuditIterations)
 }
 
-func TestParseEpic_AuditNotSet(t *testing.T) {
+func TestParseEpic_AuditDefaultEnabled(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic No Audit Directive
+@sprint 1
+@name One
+@max_iterations 2
+@promise ONE
+@prompt
+Do it.
+`)
+
+	assert.True(t, ep.AuditAfterSprint)
+	assert.Equal(t, config.DefaultMaxAuditIterations, ep.MaxAuditIterations)
+}
+
+func TestParseEpic_NoAuditDirective(t *testing.T) {
 	t.Parallel()
 
 	ep := parseTempEpic(t, `
 @epic No Audit
+@no_audit
 @sprint 1
 @name One
 @max_iterations 2

@@ -44,7 +44,7 @@ fry run 3 5               # Wrong: treats "3" as the epic filename
 | `--planning` | Use planning-domain prompts for auto-generation |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
-| `--no-audit` | Disable sprint audit even if the epic enables `@audit_after_sprint` |
+| `--no-audit` | Disable sprint audit for this run |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 | `--dry-run` | Parse epic and show plan without running anything |
