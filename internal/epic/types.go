@@ -95,6 +95,10 @@ type Epic struct {
 	ReviewEngine         string
 	ReviewModel          string
 	MaxDeviationScope    int
+	AuditAfterSprint     bool
+	MaxAuditIterations   int
+	AuditEngine          string
+	AuditModel           string
 	Sprints              []Sprint
 	TotalSprints         int
 }

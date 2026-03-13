@@ -54,6 +54,30 @@ Each sprint gets a start banner, per-iteration agent banners, verification resul
 [2026-03-10 12:12:05] Heal attempt 1 SUCCEEDED — all checks now pass.
 ```
 
+## Sprint Audit
+
+When `@audit_after_sprint` is enabled:
+
+```
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
+[2026-03-10 12:12:00]   AUDIT: pass (max severity: none)
+```
+
+When issues are found and remediated:
+
+```
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
+[2026-03-10 12:12:00]   AUDIT: HIGH issues found — running fix agent...
+[2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2/3  engine=claude
+[2026-03-10 12:16:00]   AUDIT: pass (max severity: LOW)
+```
+
+When issues persist after all passes (advisory, non-blocking):
+
+```
+[2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 passes (advisory)
+```
+
 ## Sprint Review and Replan
 
 ```

@@ -25,6 +25,8 @@ your-project/
     deviation-log.md                     #   Review decision audit trail
     review-prompt.md                     #   Assembled reviewer prompt (transient)
     replan-prompt.md                     #   Assembled replanner prompt (transient)
+    audit-prompt.md                      #   Assembled audit prompt (transient, cleaned up after audit)
+    sprint-audit.txt                     #   Audit findings (transient, cleaned up after audit)
     build-logs/                          #   Per-iteration logs
     .fry.lock                            #   Concurrency lock
 ```
@@ -56,6 +58,8 @@ Unlike the bash version, fry is installed as a standalone binary — it does not
 | `.fry/deviation-log.md` | Audit trail of review decisions | `fry run` at runtime |
 | `.fry/review-prompt.md` | Assembled reviewer prompt (transient) | `fry run` at runtime |
 | `.fry/replan-prompt.md` | Assembled replanner prompt (transient) | `fry run` at runtime |
+| `.fry/audit-prompt.md` | Assembled audit/fix prompt (transient) | `fry run` at runtime |
+| `.fry/sprint-audit.txt` | Audit findings from the audit agent (transient) | `fry run` at runtime |
 | `.fry/build-logs/` | Per-iteration and per-sprint logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 

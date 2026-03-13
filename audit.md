@@ -1,63 +1,40 @@
-# Codebase Audit Report
-
-**Date**: 2026-03-12 — Iteration 2 (post-remediation)
-**Scope**: `internal/media/` package and all integration points
-
----
-
-## Build & Test Status
-
-- `go build ./...` — PASS
-- `go test ./...` — PASS (all packages, 16 media tests)
-
----
+# Codebase Audit — Iteration 2
 
 ## Summary
+Re-audited after remediating 3 MODERATE and 2 LOW issues from Iteration 1. All MODERATE issues have been fixed. A few LOW issues remain.
 
-| Severity | Count |
-|----------|-------|
-| CRITICAL | 0     |
-| HIGH     | 0     |
-| MODERATE | 0     |
-| LOW      | 3     |
+## Remediated (from Iteration 1)
 
----
+| # | Issue | Was | Fix |
+|---|-------|-----|-----|
+| 1 | `parseAuditSeverity` too greedy | MODERATE | Now only matches severity keywords on lines that also contain "severity" as a label |
+| 2 | Sprint progress unbounded in audit prompt | MODERATE | Capped at 50KB with truncation indicator |
+| 3 | Git diff stale across audit fix iterations | MODERATE | Added `DiffFn` option; caller passes `git.GitDiffForAudit` closure; diff refreshed before each audit pass |
+| 4 | `audit.Cleanup` error ignored | LOW | Now logs warning on failure |
+| 5 | `GitDiffForAudit` reset failure silent | LOW | Now prints warning to stderr |
 
-## Remediated Issues (from Iteration 1)
+## Remaining Findings
 
-| Issue | Was | Fix Applied |
-|-------|-----|-------------|
-| H1 — Symlink following / path traversal | HIGH | Switched to `filepath.WalkDir`, skip symlinks via `d.Type()&ModeSymlink`, validate relative paths stay within `media/`, use `Lstat` for root check |
-| M1 — Silent error swallowing in prepare.go | MODERATE | Added `frylog.Log("WARNING: ...")` on scan error |
-| M2 — Identical error messages | MODERATE | Differentiated to `"scan media: stat:"` vs `"scan media: walk:"` |
-| M3 — Dotfiles in manifest | MODERATE | Skip files/dirs starting with `.`; hidden dirs get `SkipDir` |
-| L1 — O(n*m) categorization | LOW | Built flat `extToCategory` map at init for O(1) lookup |
-| Dead code — `d.IsDir()` on symlink branch | n/a | Found during re-audit; simplified symlink check |
-| Stale doc comment mentioning "Truncated" | n/a | Found during re-audit; fixed comment |
+### 1. `parseAuditSeverity` could false-positive on negation phrases
+- **Location:** `internal/audit/audit.go:291-316`
+- **Severity:** LOW
+- **Description:** A line like "No high-severity issues found" would match because it contains both "SEVERITY" and "HIGH" on the same line. In practice, audit agents following the structured output format would not produce such lines in the findings section — the Verdict section uses PASS/FAIL, not severity words. Risk is minimal.
+- **Fix:** Could require a stricter pattern (e.g., `Severity:\s+(CRITICAL|HIGH|MODERATE|LOW)`), but the current approach is robust enough for the structured output format the audit agent is instructed to use.
 
----
+### 2. `maxCheckOutput` is a package-scoped constant
+- **Location:** `internal/verify/runner.go:87`
+- **Severity:** LOW
+- **Description:** `10 * 1024 * 1024` is a constant in the verify package rather than in `config`. This is a valid Go pattern for single-use constants and consistent with how `maxProgressBytes` is defined in audit.go.
+- **Fix:** None needed.
 
-## LOW Issues (remaining)
+### 3. `equalGlobalDirectives` grows linearly with Epic struct
+- **Location:** `internal/review/replanner.go:338-364`
+- **Severity:** LOW
+- **Description:** Every new field added to `Epic` must be manually added to this comparison function. The function correctly includes all 4 new audit fields. This coupling is documented by the function's proximity to the struct usage.
+- **Fix:** None needed — follows existing pattern.
 
-### L1 — `PromptSection` swallows scan errors silently
-
-**File**: `internal/media/media.go:173`
-**Description**: When `Scan` returns an error, `PromptSection` returns empty string with no logging. This is by design — `PromptSection` is called from `sprint/prompt.go` where there's no logger available, and the prepare path already logs warnings. The sprint path silently degrades, which is acceptable since media is optional context.
-
-### L2 — `truncated` variable unused
-
-**File**: `internal/media/media.go:135`
-**Description**: The `truncated` bool is set when `MaxAssets` is exceeded but only consumed as `_ = truncated`. Callers (prepare.go) could log a warning if truncation occurred, but this would require changing the `Scan` return signature. Current behavior (silently returning first 10,000 files) is adequate.
-
-### L3 — Test string literals for EffortLevel in prepare_test.go
-
-**File**: `internal/prepare/prepare_test.go:39,77`
-**Description**: Tests pass raw string literals (`""`, `"low"`) where `epic.EffortLevel` type is expected. Works due to Go's implicit string constant conversion but reduces refactoring safety. Pre-existing issue, not introduced by media feature.
-
----
-
-## Conclusion
-
-**EXIT CONDITION MET: No issues of CRITICAL, HIGH, or MODERATE severity found.**
-
-All remaining issues are LOW severity and do not impact correctness, security, or usability.
+### 4. `GitDiffForAudit` uses stderr instead of `frylog`
+- **Location:** `internal/git/git.go:146`
+- **Severity:** LOW
+- **Description:** The reset warning uses `fmt.Fprintf(os.Stderr, ...)` while most of the codebase uses `frylog.Log("WARNING: ...")`. The git package intentionally avoids importing frylog to stay decoupled from application-level logging. This is a reasonable design choice.
+- **Fix:** None needed.

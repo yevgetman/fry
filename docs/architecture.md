@@ -7,6 +7,7 @@ fry is a single static Go binary organized into focused internal packages. This 
 ```
 cmd/fry/                 Entry point — calls cli.Execute()
 internal/
+  audit/                 Post-sprint semantic audit loop (audit agent + fix agent)
   cli/                   Cobra command definitions (root, run, prepare, replan, version)
   config/                Constants: file paths, defaults, version string
   docker/                Docker Compose lifecycle management
@@ -66,8 +67,9 @@ User Input (plans/, media/)
        │   ├─ Agent loop (sprint/runner.go → engine/)
        │   ├─ Verification (verify/)
        │   ├─ Heal loop (heal/ → engine/ → verify/)
-       │   ├─ Compact progress (sprint/compactor.go)
+       │   ├─ Sprint audit (audit/ → engine/)
        │   ├─ Git checkpoint (git/)
+       │   ├─ Compact progress (sprint/compactor.go)
        │   └─ Sprint review (review/)
        │
        └─ Release lock, print summary

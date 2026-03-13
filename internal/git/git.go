@@ -128,6 +128,31 @@ func runBash(projectDir, command string) error {
 	return nil
 }
 
+func GitDiffForAudit(projectDir string) (string, error) {
+	// Record intent-to-add for untracked files so they appear in the diff
+	if err := runBash(projectDir, "git add -N -- . ':!.fry/'"); err != nil {
+		// Non-fatal: if this fails, we still try to get a diff of tracked files
+		_ = err
+	}
+
+	cmd := execCommand("bash", "-c", "git diff HEAD -- . ':!.fry/'")
+	cmd.Dir = projectDir
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = nil
+	err := cmd.Run()
+
+	// Undo intent-to-add regardless of diff outcome
+	if resetErr := runBash(projectDir, "git reset -- ."); resetErr != nil {
+		fmt.Fprintf(os.Stderr, "fry: warning: git reset after diff failed: %v\n", resetErr)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("git diff for audit: %w", err)
+	}
+	return stdout.String(), nil
+}
+
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

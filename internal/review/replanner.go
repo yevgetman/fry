@@ -353,7 +353,11 @@ func equalGlobalDirectives(a, b *epic.Epic) bool {
 		a.ReviewBetweenSprints == b.ReviewBetweenSprints &&
 		a.ReviewEngine == b.ReviewEngine &&
 		a.ReviewModel == b.ReviewModel &&
-		a.MaxDeviationScope == b.MaxDeviationScope
+		a.MaxDeviationScope == b.MaxDeviationScope &&
+		a.AuditAfterSprint == b.AuditAfterSprint &&
+		a.MaxAuditIterations == b.MaxAuditIterations &&
+		a.AuditEngine == b.AuditEngine &&
+		a.AuditModel == b.AuditModel
 }
 
 func equalStructuralDirectives(a, b *epic.Epic) bool {

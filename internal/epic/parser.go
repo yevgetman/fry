@@ -92,6 +92,14 @@ func ParseEpic(path string) (*Epic, error) {
 					ep.ReviewModel = value
 				case "@max_deviation_scope":
 					ep.MaxDeviationScope, err = parseIntDirective(directive, value)
+				case "@audit_after_sprint":
+					ep.AuditAfterSprint = true
+				case "@max_audit_iterations":
+					ep.MaxAuditIterations, err = parseIntDirective(directive, value)
+				case "@audit_engine":
+					ep.AuditEngine = value
+				case "@audit_model":
+					ep.AuditModel = value
 				case "@effort":
 					ep.EffortLevel, err = ParseEffortLevel(value)
 				case "@sprint":
@@ -180,6 +188,9 @@ func ParseEpic(path string) (*Epic, error) {
 	}
 	if ep.MaxHealAttempts == 0 && !maxHealAttemptsSet {
 		ep.MaxHealAttempts = config.DefaultMaxHealAttempts
+	}
+	if ep.MaxAuditIterations == 0 && ep.AuditAfterSprint {
+		ep.MaxAuditIterations = config.DefaultMaxAuditIterations
 	}
 	ep.TotalSprints = len(ep.Sprints)
 

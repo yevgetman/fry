@@ -48,6 +48,10 @@ Placed before any `@sprint` block:
 | `@review_engine <codex\|claude>` | AI engine for reviewer session (default: same as `@engine`) |
 | `@review_model <model>` | Model override for the reviewer session |
 | `@max_deviation_scope <N>` | Maximum sprints a single deviation can touch (default: 3) |
+| `@audit_after_sprint` | Enable post-sprint semantic audit by a separate AI agent (default: disabled). See [Sprint Audit](sprint-audit.md). |
+| `@max_audit_iterations <N>` | Maximum audit→fix cycles per sprint (default: 3) |
+| `@audit_engine <codex\|claude>` | AI engine for audit/fix sessions (default: same as `@engine`) |
+| `@audit_model <model>` | Model override for audit/fix sessions |
 
 ## Sprint Blocks
 

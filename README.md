@@ -43,6 +43,7 @@ fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loo
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
 - **Independent verification** -- machine-executable checks run after each sprint
 - **Self-healing** -- automatic re-runs with targeted fix prompts on verification failure
+- **Sprint audit** -- optional post-sprint semantic review by a separate AI agent, with automatic fix loop
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
 
@@ -104,6 +105,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Sprint Execution](docs/sprint-execution.md) | Agent iteration loop, prompt assembly, progress tracking, promise tokens |
 | [Verification](docs/verification.md) | Check primitives, file format, outcome matrix, graceful degradation |
 | [Self-Healing](docs/self-healing.md) | Heal loop mechanics, configuration, diagnostics |
+| [Sprint Audit](docs/sprint-audit.md) | Post-sprint semantic code review by AI, audit/fix loop, severity classification |
 | [Sprint Review](docs/sprint-review.md) | Dynamic mid-build review, replanning, deviation specs, safeguards |
 | [Docker Support](docs/docker.md) | Docker Compose lifecycle, health checks, sprint scoping |
 | [Preflight Checks](docs/preflight.md) | Pre-build validation, required tools, custom commands |

@@ -19,8 +19,9 @@ FOR each sprint in range:
   │   └─ Continue until: promise found OR no-op OR max iterations
   ├─ Run verification checks
   ├─ If checks fail: enter heal loop
-  ├─ Compact progress
+  ├─ Sprint audit (if enabled): audit→fix loop
   ├─ Git checkpoint
+  ├─ Compact progress
   └─ Sprint review (if enabled)
 ```
 
@@ -103,8 +104,11 @@ After each sprint completes, progress is compacted:
 Per-iteration logs are written to `.fry/build-logs/`:
 ```
 .fry/build-logs/
-  sprint1_20060102_150405.log         # Iteration log
-  sprint1_heal1_20060102_150405.log   # Heal attempt log
+  sprint1_20060102_150405.log           # Iteration log
+  sprint1_heal1_20060102_150405.log     # Heal attempt log
+  sprint1_audit1_20060102_150405.log    # Audit pass log
+  sprint1_auditfix_1_20060102_150405.log # Audit fix agent log
+  sprint1_audit_final_20060102_150405.log # Final audit pass log
 ```
 
 ## Shell Hooks

@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/docker"
 	"github.com/yevgetman/fry/internal/engine"
@@ -38,6 +39,7 @@ var (
 	runPrepareEngine  string
 	runPlanning       bool
 	runEffort         string
+	runNoAudit        bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -235,6 +237,38 @@ var runCmd = &cobra.Command{
 			mu.Unlock()
 
 			if isPassStatus(result.Status) {
+				// Sprint audit
+				if ep.AuditAfterSprint && !runNoAudit && ep.EffortLevel != epic.EffortLow {
+					auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
+					if err != nil {
+						return err
+					}
+					gitDiff, err := git.GitDiffForAudit(projectPath)
+					if err != nil {
+						frlog.Log("WARNING: could not capture git diff for audit: %v", err)
+						gitDiff = "(git diff unavailable)"
+					}
+					auditResult, err := audit.RunAuditLoop(ctx, audit.AuditOpts{
+						ProjectDir: projectPath,
+						Sprint:     spr,
+						Epic:       ep,
+						Engine:     auditEngine,
+						GitDiff:    gitDiff,
+						DiffFn:     func() (string, error) { return git.GitDiffForAudit(projectPath) },
+						Verbose:    frlog.Verbose,
+					})
+					if err != nil {
+						return err
+					}
+					if !auditResult.Passed {
+						frlog.Log("  AUDIT: %s issues remain after %d passes (advisory)",
+							auditResult.MaxSeverity, auditResult.Iterations)
+					}
+					if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
+						frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
+					}
+				}
+
 				if err := git.GitCheckpoint(projectPath, ep.Name, spr.Number, "complete"); err != nil {
 					return err
 				}
@@ -375,6 +409,7 @@ func init() {
 	runCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")
 	runCmd.Flags().BoolVar(&runPlanning, "planning", false, "Use planning mode")
 	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
+	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint audit")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -541,6 +576,14 @@ func printBuildSummary(w io.Writer, results []sprint.SprintResult) {
 
 func isPassStatus(status string) bool {
 	return strings.HasPrefix(status, "PASS")
+}
+
+func resolveAuditEngine(buildEngineName, auditEngineName string) (engine.Engine, error) {
+	name := buildEngineName
+	if strings.TrimSpace(auditEngineName) != "" {
+		name = auditEngineName
+	}
+	return engine.NewEngine(name)
 }
 
 func resolveReviewEngine(buildEngineName, reviewEngineName string) (engine.Engine, error) {
