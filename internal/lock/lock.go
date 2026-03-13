@@ -35,6 +35,12 @@ func Acquire(projectDir string) error {
 	pid := os.Getpid()
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
+		// Another process may have raced us to create the lock. Re-check.
+		if data, readErr := os.ReadFile(lockPath); readErr == nil {
+			if otherPid, parseErr := strconv.Atoi(strings.TrimSpace(string(data))); parseErr == nil && otherPid > 0 {
+				return fmt.Errorf("another fry instance is running (PID %d)", otherPid)
+			}
+		}
 		return fmt.Errorf("acquire lock: write lock file: %w", err)
 	}
 	_, writeErr := f.WriteString(strconv.Itoa(pid))

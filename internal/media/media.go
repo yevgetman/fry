@@ -52,27 +52,27 @@ func categorize(ext string) string {
 }
 
 // Scan walks the media directory and returns all assets found.
-// Returns nil, nil if the media directory does not exist.
+// Returns nil, false, nil if the media directory does not exist.
 // Symlinks are skipped. Hidden files/directories (names starting with '.') are skipped.
-// At most MaxAssets files are returned; any beyond that are silently dropped.
-func Scan(projectDir string) (assets []Asset, err error) {
+// At most MaxAssets files are returned; the truncated return value indicates whether
+// more files existed beyond the cap.
+func Scan(projectDir string) (assets []Asset, truncated bool, err error) {
 	mediaPath := filepath.Join(projectDir, config.MediaDir)
 	info, err := os.Lstat(mediaPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, nil
 		}
-		return nil, fmt.Errorf("scan media: stat: %w", err)
+		return nil, false, fmt.Errorf("scan media: stat: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, nil
+		return nil, false, nil
 	}
 	// If the media dir itself is a symlink, skip it.
 	if info.Mode()&os.ModeSymlink != 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 
-	truncated := false
 	err = filepath.WalkDir(mediaPath, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -128,9 +128,8 @@ func Scan(projectDir string) (assets []Asset, err error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("scan media: walk: %w", err)
+		return nil, false, fmt.Errorf("scan media: walk: %w", err)
 	}
-	_ = truncated // logged by caller if needed; manifest still useful with first N
 
 	sort.Slice(assets, func(i, j int) bool {
 		if assets[i].Category != assets[j].Category {
@@ -139,7 +138,7 @@ func Scan(projectDir string) (assets []Asset, err error) {
 		return assets[i].RelPath < assets[j].RelPath
 	})
 
-	return assets, nil
+	return assets, truncated, nil
 }
 
 // BuildManifest generates a formatted manifest string listing all media assets
@@ -167,7 +166,7 @@ func BuildManifest(assets []Asset) string {
 // PromptSection returns the full prompt section for media assets, or empty
 // string if no media directory or assets exist.
 func PromptSection(projectDir string) string {
-	assets, err := Scan(projectDir)
+	assets, _, err := Scan(projectDir)
 	if err != nil || len(assets) == 0 {
 		return ""
 	}

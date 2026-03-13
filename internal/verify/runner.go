@@ -8,7 +8,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/yevgetman/fry/internal/textutil"
 )
+
+// defaultCheckTimeout is the maximum time a single verification check command
+// is allowed to run before being killed. This prevents hanging builds.
+const defaultCheckTimeout = 120 * time.Second
 
 func RunChecks(ctx context.Context, checks []Check, sprintNum int, projectDir string) ([]CheckResult, int, int) {
 	var filtered []Check
@@ -41,10 +48,12 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		result.Passed = err == nil && info.Size() > 0
 	case CheckFileContains:
 		targetPath := filepath.Join(projectDir, check.Path)
-		cmd := exec.CommandContext(ctx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", shellQuote(check.Pattern), shellQuote(targetPath)))
+		cmd := exec.CommandContext(ctx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", textutil.ShellQuote(check.Pattern), textutil.ShellQuote(targetPath)))
 		result.Passed = cmd.Run() == nil
 	case CheckCmd:
-		cmd := exec.CommandContext(ctx, "bash", "-c", check.Command)
+		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
+		defer checkCancel()
+		cmd := exec.CommandContext(checkCtx, "bash", "-c", check.Command)
 		cmd.Dir = projectDir
 		var combined cappedBuffer
 		cmd.Stdout = &combined
@@ -53,7 +62,9 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		result.Output = combined.String()
 		result.Passed = err == nil
 	case CheckCmdOutput:
-		command := exec.CommandContext(ctx, "bash", "-c", check.Command)
+		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
+		defer checkCancel()
+		command := exec.CommandContext(checkCtx, "bash", "-c", check.Command)
 		command.Dir = projectDir
 
 		var stdout, stderr cappedBuffer
@@ -70,16 +81,12 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 			return result
 		}
 
-		grep := exec.CommandContext(ctx, "bash", "-c", fmt.Sprintf("grep -qE -- %s", shellQuote(check.Pattern)))
+		grep := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s", textutil.ShellQuote(check.Pattern)))
 		grep.Stdin = strings.NewReader(stdout.String())
 		result.Passed = grep.Run() == nil
 	}
 
 	return result
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // maxCheckOutput caps the amount of output captured from verification commands

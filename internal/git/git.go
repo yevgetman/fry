@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 var execCommand = exec.Command
@@ -38,7 +40,7 @@ func InitGit(projectDir string) error {
 func GitCheckpoint(projectDir, epicName string, sprintNum int, label string) error {
 	cmd := fmt.Sprintf(
 		"git add -A && git commit --allow-empty -m %s",
-		shellQuote(fmt.Sprintf("%s: Sprint %d %s [automated]", epicName, sprintNum, label)),
+		textutil.ShellQuote(fmt.Sprintf("%s: Sprint %d %s [automated]", epicName, sprintNum, label)),
 	)
 	if err := runBash(projectDir, cmd); err != nil {
 		return fmt.Errorf("git checkpoint: %w", err)
@@ -65,7 +67,7 @@ func ensureLocalIdentity(projectDir string) error {
 }
 
 func gitConfigValue(projectDir, key string) string {
-	cmd := execCommand("bash", "-c", "git config --get "+shellQuote(key))
+	cmd := execCommand("bash", "-c", "git config --get "+textutil.ShellQuote(key))
 	cmd.Dir = projectDir
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -151,8 +153,4 @@ func GitDiffForAudit(projectDir string) (string, error) {
 		return "", fmt.Errorf("git diff for audit: %w", err)
 	}
 	return stdout.String(), nil
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

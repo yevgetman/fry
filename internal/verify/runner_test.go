@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 func TestParseVerification(t *testing.T) {
@@ -177,10 +178,10 @@ func TestCollectFailures(t *testing.T) {
 func TestShellQuote(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "''", shellQuote(""))
-	assert.Equal(t, "'simple'", shellQuote("simple"))
-	assert.Equal(t, `'`+`it'\''s`+`'`, shellQuote("it's"))
-	assert.Equal(t, "'$HOME *.go'", shellQuote("$HOME *.go"))
+	assert.Equal(t, "''", textutil.ShellQuote(""))
+	assert.Equal(t, "'simple'", textutil.ShellQuote("simple"))
+	assert.Equal(t, `'`+`it'\''s`+`'`, textutil.ShellQuote("it's"))
+	assert.Equal(t, "'$HOME *.go'", textutil.ShellQuote("$HOME *.go"))
 }
 
 func TestRunChecksFileContains(t *testing.T) {

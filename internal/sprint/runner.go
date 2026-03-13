@@ -289,6 +289,7 @@ func runAgentWithDualLogs(ctx context.Context, cfg RunConfig, prompt, iterPath, 
 		opts.Stderr = writer
 		output, _, runErr := cfg.Engine.Run(ctx, prompt, opts)
 		if runErr != nil && ctx.Err() == nil {
+			frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
 			return output, nil
 		}
 		return output, runErr
@@ -306,6 +307,7 @@ func runAgentWithDualLogs(ctx context.Context, cfg RunConfig, prompt, iterPath, 
 		return output, fmt.Errorf("append iteration log to sprint log: %w", err)
 	}
 	if runErr != nil && ctx.Err() == nil {
+		frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
 		return output, nil
 	}
 	return output, runErr

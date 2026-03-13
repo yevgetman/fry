@@ -77,9 +77,12 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 
 	// Scan media directory for available assets (optional).
-	mediaAssets, mediaErr := media.Scan(projectDir)
+	mediaAssets, mediaTruncated, mediaErr := media.Scan(projectDir)
 	if mediaErr != nil {
 		frylog.Log("WARNING: could not scan media directory: %v", mediaErr)
+	}
+	if mediaTruncated {
+		frylog.Log("WARNING: media directory has more than %d files — scan truncated", media.MaxAssets)
 	}
 	mediaManifest := media.BuildManifest(mediaAssets)
 

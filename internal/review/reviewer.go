@@ -15,6 +15,7 @@ import (
 	frylog "github.com/yevgetman/fry/internal/log"
 )
 
+
 type ReviewPromptOpts struct {
 	ProjectDir             string
 	SprintNum              int
@@ -131,6 +132,7 @@ func ParseVerdict(output string) ReviewVerdict {
 	case strings.Contains(output, "<verdict>CONTINUE</verdict>"):
 		return VerdictContinue
 	default:
+		frylog.Log("WARNING: no <verdict> tag found in review output — defaulting to CONTINUE")
 		return VerdictContinue
 	}
 }

@@ -34,6 +34,12 @@ func FileModTime(path string) time.Time {
 	return info.ModTime()
 }
 
+// ShellQuote returns a single-quoted shell string, escaping any embedded
+// single quotes. Suitable for embedding user strings in bash -c commands.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // ResolveArtifact checks whether the engine wrote the target file during its
 // run (by comparing modification times). If the file was written by the
 // engine, its on-disk content is authoritative and we leave it in place.

@@ -71,6 +71,9 @@ func appendFile(path string, content string) error {
 func readFile(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
 		return "", fmt.Errorf("read file: %w", err)
 	}
 	return string(content), nil

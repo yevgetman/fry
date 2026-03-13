@@ -27,6 +27,7 @@ import (
 	"github.com/yevgetman/fry/internal/prepare"
 	"github.com/yevgetman/fry/internal/review"
 	"github.com/yevgetman/fry/internal/sprint"
+	"github.com/yevgetman/fry/internal/summary"
 	"github.com/yevgetman/fry/internal/verify"
 )
 
@@ -410,6 +411,23 @@ var runCmd = &cobra.Command{
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Reviews: %d, deviations: %d\n", reviewSummary.ReviewsConducted, reviewSummary.DeviationsApplied)
+		}
+
+		// Generate build summary document
+		summaryEngine, err := engine.NewEngine(engineName)
+		if err != nil {
+			frlog.Log("WARNING: could not create engine for build summary: %v", err)
+		} else {
+			if summaryErr := summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
+				ProjectDir: projectPath,
+				EpicName:   ep.Name,
+				Engine:     summaryEngine,
+				Results:    summaryCopy,
+				Verbose:    frlog.Verbose,
+				Model:      ep.AgentModel,
+			}); summaryErr != nil {
+				frlog.Log("WARNING: build summary generation failed: %v", summaryErr)
+			}
 		}
 
 		releaseLock()

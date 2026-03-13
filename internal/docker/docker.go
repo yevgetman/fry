@@ -89,9 +89,8 @@ func EnsureDockerUp(ctx context.Context, projectDir string, readyCmd string, tim
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+		case <-time.After(1 * time.Second):
 		}
-		sleep(1 * time.Second)
 	}
 }
 

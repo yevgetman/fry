@@ -308,6 +308,8 @@ func parseAuditSeverity(content string) string {
 	// to avoid false positives from words appearing in diffs or prose.
 	// Uses word-boundary matching to prevent substring false positives
 	// (e.g., "HIGHLY" should not match "HIGH").
+	// Only the FIRST severity keyword after the "Severity" label on each line
+	// is considered — additional keywords in trailing prose are ignored.
 	maxSev := ""
 	for _, line := range strings.Split(content, "\n") {
 		// Match lines containing "severity" as a label
@@ -315,14 +317,16 @@ func parseAuditSeverity(content string) string {
 			continue
 		}
 		upper := strings.ToUpper(line)
-		matches := severityWordRe.FindAllString(upper, -1)
-		for _, m := range matches {
-			if severityRank(m) > severityRank(maxSev) {
-				maxSev = m
-			}
-			if maxSev == "CRITICAL" {
-				return "CRITICAL" // highest possible, return immediately
-			}
+		// Extract only the first severity keyword on this line
+		m := severityWordRe.FindString(upper)
+		if m == "" {
+			continue
+		}
+		if severityRank(m) > severityRank(maxSev) {
+			maxSev = m
+		}
+		if maxSev == "CRITICAL" {
+			return "CRITICAL" // highest possible, return immediately
 		}
 	}
 	return maxSev
@@ -386,6 +390,7 @@ func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath string
 		runOpts.Stderr = writer
 		output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
 		if runErr != nil && ctx.Err() == nil {
+			frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
 			return output, nil
 		}
 		return output, runErr
@@ -395,6 +400,7 @@ func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath string
 	runOpts.Stderr = logFile
 	output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
 	if runErr != nil && ctx.Err() == nil {
+		frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
 		return output, nil
 	}
 	return output, runErr

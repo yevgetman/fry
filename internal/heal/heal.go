@@ -169,6 +169,7 @@ func runAgentWithDualLogs(ctx context.Context, opts HealOpts, prompt, iterPath s
 		runOpts.Stderr = writer
 		output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
 		if runErr != nil && ctx.Err() == nil {
+			frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
 			return output, nil
 		}
 		return output, runErr
@@ -186,6 +187,7 @@ func runAgentWithDualLogs(ctx context.Context, opts HealOpts, prompt, iterPath s
 		return output, fmt.Errorf("run heal loop: append iteration log: %w", err)
 	}
 	if runErr != nil && ctx.Err() == nil {
+		frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
 		return output, nil
 	}
 	return output, runErr

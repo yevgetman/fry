@@ -13,7 +13,7 @@ import (
 
 func TestScan_NoMediaDir(t *testing.T) {
 	t.Parallel()
-	assets, err := Scan(t.TempDir())
+	assets, _, err := Scan(t.TempDir())
 	assert.NoError(t, err)
 	assert.Nil(t, assets)
 }
@@ -22,7 +22,7 @@ func TestScan_EmptyMediaDir(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "media"), 0o755))
-	assets, err := Scan(dir)
+	assets, _, err := Scan(dir)
 	assert.NoError(t, err)
 	assert.Empty(t, assets)
 }
@@ -38,7 +38,7 @@ func TestScan_WithFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(mediaDir, "config.yaml"), []byte("key: val"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(mediaDir, "readme.txt"), []byte("text"), 0o644))
 
-	assets, err := Scan(dir)
+	assets, _, err := Scan(dir)
 	require.NoError(t, err)
 	assert.Len(t, assets, 4)
 
@@ -60,7 +60,7 @@ func TestScan_Subdirectories(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filepath.Join(subDir, "arrow.svg"), []byte("<svg/>"), 0o644))
 
-	assets, err := Scan(dir)
+	assets, _, err := Scan(dir)
 	require.NoError(t, err)
 	require.Len(t, assets, 1)
 	assert.Equal(t, filepath.Join("media", "icons", "arrow.svg"), assets[0].RelPath)
@@ -77,7 +77,7 @@ func TestScan_SkipsDotfiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(mediaDir, ".gitkeep"), []byte(""), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(mediaDir, "logo.png"), []byte("img"), 0o644))
 
-	assets, err := Scan(dir)
+	assets, _, err := Scan(dir)
 	require.NoError(t, err)
 	require.Len(t, assets, 1)
 	assert.Equal(t, filepath.Join("media", "logo.png"), assets[0].RelPath)
@@ -91,7 +91,7 @@ func TestScan_SkipsHiddenDirectories(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(hiddenDir, "secret.txt"), []byte("x"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "media", "visible.png"), []byte("y"), 0o644))
 
-	assets, err := Scan(dir)
+	assets, _, err := Scan(dir)
 	require.NoError(t, err)
 	require.Len(t, assets, 1)
 	assert.Equal(t, filepath.Join("media", "visible.png"), assets[0].RelPath)
@@ -112,7 +112,7 @@ func TestScan_SkipsSymlinks(t *testing.T) {
 	require.NoError(t, os.WriteFile(secretFile, []byte("password"), 0o644))
 	require.NoError(t, os.Symlink(secretFile, filepath.Join(mediaDir, "evil-link")))
 
-	assets, err := Scan(dir)
+	assets, _, err := Scan(dir)
 	require.NoError(t, err)
 	require.Len(t, assets, 1)
 	assert.Equal(t, filepath.Join("media", "real.png"), assets[0].RelPath)
@@ -130,9 +130,10 @@ func TestScan_MaxAssetsGuard(t *testing.T) {
 		require.NoError(t, os.WriteFile(name, []byte("x"), 0o644))
 	}
 
-	assets, err := Scan(dir)
+	assets, truncated, err := Scan(dir)
 	require.NoError(t, err)
 	assert.Len(t, assets, MaxAssets)
+	assert.True(t, truncated)
 }
 
 func TestScan_MediaIsFile(t *testing.T) {
@@ -141,7 +142,7 @@ func TestScan_MediaIsFile(t *testing.T) {
 	// "media" exists but is a regular file, not a directory.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "media"), []byte("x"), 0o644))
 
-	assets, err := Scan(dir)
+	assets, _, err := Scan(dir)
 	assert.NoError(t, err)
 	assert.Nil(t, assets)
 }
