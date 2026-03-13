@@ -142,6 +142,11 @@ func TestParseAuditSeverity(t *testing.T) {
 		// Multiple severity lines: highest wins
 		{"- **Severity:** LOW\n- **Severity:** HIGH\n- **Severity:** MODERATE\n", "HIGH"},
 		{"Severity: CRITICAL\nSeverity: LOW\n", "CRITICAL"},
+		// Substrings of severity keywords should NOT match (word-boundary check)
+		{"**Severity:** LOW — HIGHLY unusual but cosmetic\n", "LOW"},
+		{"**Severity:** LOW — HIGHLIGHTED concern\n", "LOW"},
+		{"**Severity:** LOW — CRITICALLY important style\n", "LOW"},
+		{"**Severity:** MODERATE — ALLOW this pattern\n", "MODERATE"},
 	}
 	for _, tt := range tests {
 		assert.Equal(t, tt.expected, parseAuditSeverity(tt.content), "content: %q", tt.content)

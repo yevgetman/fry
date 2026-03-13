@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -294,28 +295,34 @@ func buildAuditFixPrompt(opts AuditOpts, auditFindings string) string {
 	return b.String()
 }
 
+// severityLabelRe matches lines containing a severity label (e.g., "**Severity:**" or "Severity:").
+var severityLabelRe = regexp.MustCompile(`(?i)\bseverity\b`)
+
+// severityWordRe matches whole-word severity keywords to avoid false positives
+// from substrings like "HIGHLY", "HIGHLIGHTED", "CRITICALLY", "ALLOW", etc.
+var severityWordRe = regexp.MustCompile(`\b(CRITICAL|HIGH|MODERATE|LOW)\b`)
+
 func parseAuditSeverity(content string) string {
 	// Look for severity markers in structured finding lines only.
 	// Matches patterns like "**Severity:** CRITICAL" or "Severity: HIGH"
 	// to avoid false positives from words appearing in diffs or prose.
+	// Uses word-boundary matching to prevent substring false positives
+	// (e.g., "HIGHLY" should not match "HIGH").
 	maxSev := ""
 	for _, line := range strings.Split(content, "\n") {
-		upper := strings.ToUpper(line)
 		// Match lines containing "severity" as a label
-		if !strings.Contains(upper, "SEVERITY") {
+		if !severityLabelRe.MatchString(line) {
 			continue
 		}
-		if strings.Contains(upper, "CRITICAL") {
-			return "CRITICAL" // highest possible, return immediately
-		}
-		if strings.Contains(upper, "HIGH") && severityRank("HIGH") > severityRank(maxSev) {
-			maxSev = "HIGH"
-		}
-		if strings.Contains(upper, "MODERATE") && severityRank("MODERATE") > severityRank(maxSev) {
-			maxSev = "MODERATE"
-		}
-		if strings.Contains(upper, "LOW") && severityRank("LOW") > severityRank(maxSev) {
-			maxSev = "LOW"
+		upper := strings.ToUpper(line)
+		matches := severityWordRe.FindAllString(upper, -1)
+		for _, m := range matches {
+			if severityRank(m) > severityRank(maxSev) {
+				maxSev = m
+			}
+			if maxSev == "CRITICAL" {
+				return "CRITICAL" // highest possible, return immediately
+			}
 		}
 	}
 	return maxSev

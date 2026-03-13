@@ -1,40 +1,43 @@
-# Codebase Audit — Iteration 2
+# Codebase Audit — Final (Iteration 2)
+
+## Scope
+Audit of the sprint audit system and its integration, focusing on the recent changes:
+- `internal/audit/audit.go` and `audit_test.go`
+- `internal/cli/run.go`
+- `internal/sprint/runner.go`
+- `internal/epic/parser.go` and `parser_test.go`
+- Documentation files
 
 ## Summary
-Re-audited after remediating 3 MODERATE and 2 LOW issues from Iteration 1. All MODERATE issues have been fixed. A few LOW issues remain.
 
-## Remediated (from Iteration 1)
+One MODERATE issue was found in Iteration 1 and remediated. Re-audit confirms all issues are resolved. The codebase is clean with only LOW-severity observations remaining.
 
-| # | Issue | Was | Fix |
-|---|-------|-----|-----|
-| 1 | `parseAuditSeverity` too greedy | MODERATE | Now only matches severity keywords on lines that also contain "severity" as a label |
-| 2 | Sprint progress unbounded in audit prompt | MODERATE | Capped at 50KB with truncation indicator |
-| 3 | Git diff stale across audit fix iterations | MODERATE | Added `DiffFn` option; caller passes `git.GitDiffForAudit` closure; diff refreshed before each audit pass |
-| 4 | `audit.Cleanup` error ignored | LOW | Now logs warning on failure |
-| 5 | `GitDiffForAudit` reset failure silent | LOW | Now prints warning to stderr |
+## Remediated (Iteration 1 -> 2)
+
+| # | Issue | Severity | Fix Applied |
+|---|-------|----------|-------------|
+| 1 | `parseAuditSeverity` substring matching could produce false positives (e.g., "HIGHLY" matching "HIGH") | MODERATE | Replaced `strings.Contains` with compiled word-boundary regex (`\b(CRITICAL|HIGH|MODERATE|LOW)\b`). Added 4 new test cases covering substring false-positive scenarios. |
 
 ## Remaining Findings
 
-### 1. `parseAuditSeverity` could false-positive on negation phrases
-- **Location:** `internal/audit/audit.go:291-316`
-- **Severity:** LOW
-- **Description:** A line like "No high-severity issues found" would match because it contains both "SEVERITY" and "HIGH" on the same line. In practice, audit agents following the structured output format would not produce such lines in the findings section — the Verdict section uses PASS/FAIL, not severity words. Risk is minimal.
-- **Fix:** Could require a stricter pattern (e.g., `Severity:\s+(CRITICAL|HIGH|MODERATE|LOW)`), but the current approach is robust enough for the structured output format the audit agent is instructed to use.
+### 1. `@audit_after_sprint` directive is redundant
 
-### 2. `maxCheckOutput` is a package-scoped constant
-- **Location:** `internal/verify/runner.go:87`
+- **Location:** `internal/epic/parser.go:97-98`
 - **Severity:** LOW
-- **Description:** `10 * 1024 * 1024` is a constant in the verify package rather than in `config`. This is a valid Go pattern for single-use constants and consistent with how `maxProgressBytes` is defined in audit.go.
-- **Fix:** None needed.
+- **Description:** The parser initializes `AuditAfterSprint = true` (line 31), so `@audit_after_sprint` is a no-op. It exists for explicitness and is documented as "default: enabled". The counterpart `@no_audit` is the functional directive.
 
-### 3. `equalGlobalDirectives` grows linearly with Epic struct
-- **Location:** `internal/review/replanner.go:338-364`
-- **Severity:** LOW
-- **Description:** Every new field added to `Epic` must be manually added to this comparison function. The function correctly includes all 4 new audit fields. This coupling is documented by the function's proximity to the struct usage.
-- **Fix:** None needed — follows existing pattern.
+### 2. Regex compilation style inconsistency between severity matchers
 
-### 4. `GitDiffForAudit` uses stderr instead of `frylog`
-- **Location:** `internal/git/git.go:146`
+- **Location:** `internal/audit/audit.go:299-303`
 - **Severity:** LOW
-- **Description:** The reset warning uses `fmt.Fprintf(os.Stderr, ...)` while most of the codebase uses `frylog.Log("WARNING: ...")`. The git package intentionally avoids importing frylog to stay decoupled from application-level logging. This is a reasonable design choice.
-- **Fix:** None needed.
+- **Description:** `severityLabelRe` uses the `(?i)` inline flag for case-insensitive matching, while `severityWordRe` achieves case-insensitivity by uppercasing the input before matching. Both approaches are correct. The mixed style is a minor aesthetic inconsistency.
+
+### 3. `parseAuditSeverity` could false-positive on negation prose
+
+- **Location:** `internal/audit/audit.go:305-329`
+- **Severity:** LOW
+- **Description:** A line like `**Severity:** not HIGH — this is just LOW` would match both HIGH and LOW, returning HIGH. In practice, audit agents following the structured output format would not produce such lines — each finding has exactly one severity keyword after the label. The risk is minimal given the structured format the audit prompt instructs.
+
+## Verdict
+
+PASS — all remaining issues are LOW severity.
