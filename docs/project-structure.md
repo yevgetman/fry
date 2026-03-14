@@ -11,9 +11,12 @@ your-project/
     output/                              #   Planning mode deliverables (--planning only)
       1--research--market-landscape.md   #     Ordered, categorized output documents
       2--analysis--positioning.md        #     {sequence}--{category}--{name}.md
-  media/                                 # OPTIONAL ASSETS (committed to your repo)
+  media/                                 # OPTIONAL BINARY ASSETS (committed to your repo)
     logo.png                             #   Images, PDFs, fonts, data files, etc.
     wireframe.pdf                        #   Referenced in plans, copied into builds
+  assets/                                # OPTIONAL TEXT ASSETS (committed to your repo)
+    api-spec.yaml                        #   Specs, schemas, requirements docs, etc.
+    requirements.md                      #   Read in full during plan/epic generation
   .fry/                                  # Generated artifacts (gitignored)
     AGENTS.md                            #   Operational rules for the AI agent
     epic.md                              #   Sprint definitions
@@ -45,7 +48,8 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 | `plans/plan.md` | Detailed build plan with technical decisions | At least one of plan.md, executive.md, or `--user-prompt` |
 | `plans/executive.md` | Executive context: vision, goals, scope | At least one of plan.md, executive.md, or `--user-prompt` |
 | `plans/output/` | Planning mode deliverables (ordered, categorized `.md` files) | Created automatically in `--planning` mode |
-| `media/` | Images, PDFs, fonts, data files, and other assets referenced in plans | No — entirely optional |
+| `media/` | Images, PDFs, fonts, data files, and other assets referenced in plans | No -- entirely optional |
+| `assets/` | Text reference documents (specs, schemas, requirements) read during plan generation | No -- entirely optional |
 
 ### Generated Artifacts
 

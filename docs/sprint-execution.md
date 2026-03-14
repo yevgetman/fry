@@ -49,6 +49,8 @@ Each sprint prompt is assembled in layers, giving the AI agent structured contex
 
 The assembled prompt is written to `.fry/prompt.md` before each agent invocation.
 
+**Note:** Supplementary assets (`assets/` directory) are **not** included in sprint prompts. Their contents are injected only during `fry prepare` and baked into `plans/plan.md` and `.fry/epic.md`. See [Supplementary Assets](supplementary-assets.md).
+
 ## Promise Tokens
 
 Each sprint defines a completion signal via `@promise TOKEN`. The agent loop ends when the AI outputs the string `===PROMISE: TOKEN===` in its response.

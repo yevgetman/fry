@@ -50,14 +50,14 @@ func TestPrepareValidation(t *testing.T) {
 func TestSoftwareStep2ReferencesGenerateEpic(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", "")
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", "", "")
 	assert.Contains(t, prompt, "/tmp/GENERATE_EPIC.md")
 }
 
 func TestPlanningStep2NoGenerateEpic(t *testing.T) {
 	t.Parallel()
 
-	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "")
+	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "", "")
 	assert.NotContains(t, prompt, "GENERATE_EPIC.md")
 }
 
@@ -88,7 +88,7 @@ func TestEffortSizingGuidance_Auto(t *testing.T) {
 func TestSoftwareStep2Prompt_IncludesEffort(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "low", "")
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "low", "", "")
 	assert.Contains(t, prompt, "EFFORT LEVEL: LOW")
 	assert.Contains(t, prompt, "AT MOST 2 sprints")
 }
@@ -142,13 +142,75 @@ func TestBootstrapExecutive_UserApproves(t *testing.T) {
 		UserPrompt: "build a todo app",
 		Stdin:      stdin,
 		Stdout:     &stdout,
-	}, executivePath, "")
+	}, executivePath, "", "")
 
 	require.NoError(t, err)
 	data, readErr := os.ReadFile(executivePath)
 	require.NoError(t, readErr)
 	assert.Contains(t, string(data), "Generated executive content")
 	assert.Contains(t, stdout.String(), "Generated executive context")
+}
+
+func TestSoftwareStep0Prompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/spec.yaml (100 B)\n```yaml\nopenapi: 3.0.0\n```\n"
+	prompt := SoftwareStep0Prompt("executive content", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "openapi: 3.0.0")
+	assert.Contains(t, prompt, "supplementary asset documents")
+}
+
+func TestSoftwareStep0Prompt_WithoutAssets(t *testing.T) {
+	t.Parallel()
+
+	prompt := SoftwareStep0Prompt("executive content", "", "")
+	assert.NotContains(t, prompt, "SUPPLEMENTARY ASSETS")
+}
+
+func TestSoftwareStep2Prompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/api.json (50 B)\n```json\n{}\n```\n"
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "supplementary asset documents")
+}
+
+func TestExecutiveFromUserPromptPrompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/brief.md (30 B)\n```markdown\n# Brief\n```\n"
+	prompt := ExecutiveFromUserPromptPrompt("build a todo app", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "supplementary asset documents")
+}
+
+func TestPlanningStep0Prompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/research.md (200 B)\n```markdown\n# Research\n```\n"
+	prompt := PlanningStep0Prompt("executive content", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "supplementary asset documents")
+}
+
+func TestPlanningStep2Prompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/framework.yaml (80 B)\n```yaml\nname: test\n```\n"
+	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "supplementary asset documents")
+}
+
+func TestPlanningExecutiveFromUserPromptPrompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/context.txt (40 B)\n```\nsome context\n```\n"
+	prompt := PlanningExecutiveFromUserPromptPrompt("analyze market trends", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "supplementary asset documents")
 }
 
 func TestBootstrapExecutive_UserDeclines(t *testing.T) {
@@ -172,7 +234,7 @@ func TestBootstrapExecutive_UserDeclines(t *testing.T) {
 		UserPrompt: "build a todo app",
 		Stdin:      stdin,
 		Stdout:     &stdout,
-	}, executivePath, "")
+	}, executivePath, "", "")
 
 	require.ErrorIs(t, err, ErrUserDeclined)
 	_, statErr := os.Stat(executivePath)

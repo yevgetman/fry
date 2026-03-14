@@ -148,3 +148,17 @@ cp ~/docs/wireframe.pdf media/
 ```
 
 The agent can then copy or reference these files as instructed in the plan. See [Media Assets](media-assets.md) for details.
+
+## Supplementary Assets (Optional)
+
+Place text-based reference documents -- API specs, requirements, schemas, design notes -- in an `assets/` directory at the project root. Unlike `media/` files (which the AI sees as a path manifest), `assets/` files are **read in full** and their contents are injected into the prompts that generate `plans/plan.md` and `.fry/epic.md`.
+
+```bash
+mkdir -p assets
+cp ~/docs/api-spec.yaml assets/
+cp ~/docs/requirements.md assets/
+```
+
+Reference them in your plan (e.g., "follow the OpenAPI spec in `assets/api-spec.yaml`") and the AI will incorporate their content when generating the build plan and sprint decomposition. Once `epic.md` is generated, the asset contents are baked in and no longer used during sprint execution.
+
+See [Supplementary Assets](supplementary-assets.md) for details on supported file types and size limits.

@@ -7,6 +7,7 @@ Fry is a single static Go binary organized into focused internal packages. This 
 ```
 cmd/fry/                 Entry point — calls cli.Execute()
 internal/
+  assets/                Supplementary assets scanner and content builder (prepare-only)
   audit/                 Post-sprint and post-build semantic audit (sprint audit loop + build audit)
   cli/                   Cobra command definitions (root, run, prepare, replan, version)
   config/                Constants: file paths, defaults, version string
@@ -47,13 +48,13 @@ type Engine interface {
 ## Data Flow
 
 ```
-User Input (plans/, media/, or --user-prompt)
+User Input (plans/, media/, assets/, or --user-prompt)
        │
        ▼
    fry prepare ──► Bootstrap: --user-prompt → plans/executive.md (interactive review)
                ──► Step 0: plans/executive.md → plans/plan.md
                ──► Steps 1-3: .fry/AGENTS.md, epic.md, verification.md
-                   (scans media/ for asset manifest)
+                   (scans media/ for asset manifest, reads assets/ for supplementary context)
        │
        ▼
    fry run

@@ -6,7 +6,7 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 )
 
-func PlanningExecutiveFromUserPromptPrompt(userPrompt, mediaManifest string) string {
+func PlanningExecutiveFromUserPromptPrompt(userPrompt, mediaManifest, assetsSection string) string {
 	return fmt.Sprintf(`You are a senior strategic planner. The user has described a project or initiative in a brief prompt. Your job is to produce a well-structured executive context document that captures the initiative's vision, goals, and constraints.
 
 User's project description:
@@ -26,12 +26,13 @@ CRITICAL:
 - Infer reasonable defaults from the user's description — do not ask questions.
 - Be SPECIFIC and DECISIVE. Fill in concrete details based on what the user described.
 - If the user's description is vague on a point, make a reasonable assumption and state it clearly.
+- If supplementary asset documents are provided below, incorporate their context into your executive summary — they contain reference material that informs the initiative's scope, constraints, and goals.
 - Do NOT write the file to disk — output ONLY the markdown content as your response.
 - The output format should be markdown.
-%s`, userPrompt, mediaSection(mediaManifest))
+%s%s`, userPrompt, mediaSection(mediaManifest), assetsPromptBlock(assetsSection))
 }
 
-func PlanningStep0Prompt(executiveContent, mediaManifest string) string {
+func PlanningStep0Prompt(executiveContent, mediaManifest, assetsSection string) string {
 	return fmt.Sprintf(`You are a senior strategic planner. Your job is to produce a detailed, actionable planning document.
 
 Read plans/executive.md carefully — it contains the executive context for this project: vision, goals, target audience, scope, and constraints.
@@ -66,12 +67,13 @@ CRITICAL:
   The plans/ directory is reserved for input files (executive.md, plan.md).
 - Align every decision with the goals, constraints, and scope defined in plans/executive.md.
 - If a media/ directory exists, reference the available assets by their paths in the relevant sections of the plan. Describe where and how each asset should be used in the deliverables.
+- If supplementary asset documents are provided below, use them as reference material for planning methodology and analytical framework decisions. Incorporate relevant specifications, requirements, and constraints from those documents into the plan.
 - Write the file directly to plans/plan.md. No other output.
 - The output format should be markdown.
 
 Executive context:
 %s
-%s`, executiveContent, mediaSection(mediaManifest))
+%s%s`, executiveContent, mediaSection(mediaManifest), assetsPromptBlock(assetsSection))
 }
 
 func PlanningStep1Prompt(planContent, executiveContent, mediaManifest string) string {
@@ -107,7 +109,7 @@ Executive context:
 %s`, contextLine, planContent, executiveContent, mediaSection(mediaManifest))
 }
 
-func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string, effort epic.EffortLevel, mediaManifest string) string {
+func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
 	userPromptLine := ""
 	if userPrompt != "" {
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive for the build: %q. Ensure sprint prompts align with this directive.\n", userPrompt)
@@ -148,6 +150,7 @@ CRITICAL RULES:
 - All deliverables are DOCUMENTS, not code.
 - Sprint 1 is always research/discovery. The final sprint is always synthesis/review.
 - If media assets exist, sprint prompts that need those assets must instruct the agent to reference them from the media/ directory.
+- If supplementary asset documents are provided below, ensure sprint prompts reference relevant specifications or requirements from those documents where applicable.
 - Do NOT include any output other than writing the file. No explanations, no summaries.%s
 
 Plan:
@@ -155,7 +158,7 @@ Plan:
 
 AGENTS.md:
 %s
-%s`, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent, mediaSection(mediaManifest))
+%s%s`, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent, mediaSection(mediaManifest), assetsPromptBlock(assetsSection))
 }
 
 func effortSizingGuidancePlanning(effort epic.EffortLevel) string {

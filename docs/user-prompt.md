@@ -41,6 +41,8 @@ When `--user-prompt` is provided and neither `plans/plan.md` nor `plans/executiv
 
 This lets you go from a one-line idea to a fully orchestrated build with a single command.
 
+If an `assets/` directory exists, supplementary asset contents are also included when generating the executive context and plan. See [Supplementary Assets](supplementary-assets.md).
+
 ## How It Works
 
 The user prompt is:

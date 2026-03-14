@@ -23,7 +23,8 @@ plans/executive.md     You write this -- why to build it       required)
 --user-prompt "..."    You describe it -- Fry generates the rest
   OR
 --user-prompt-file f   Same, but reads the prompt from a local file
-media/                 Optional assets (images, PDFs, fonts, etc.) referenced in plans
+media/                 Optional binary assets (images, PDFs, fonts) referenced in plans
+assets/                Optional text documents (specs, schemas) read during plan generation
         |
         v
   fry prepare           Step 0 (if needed): AI generates plans/plan.md from executive.md
@@ -47,6 +48,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 
 - **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
+- **Supplementary assets** -- optional `assets/` directory for text reference documents (specs, schemas, requirements) whose full contents are read during plan and epic generation
 - **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, plan references, sprint tasks, iteration memory, and completion signals
 - **Two-file progress tracking** -- per-sprint iteration log + cross-sprint compacted summary for bounded context
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
@@ -126,6 +128,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Preflight Checks](docs/preflight.md) | Pre-build validation, required tools, custom commands |
 | [Planning Mode](docs/planning-mode.md) | Non-code project support: documents, analyses, strategies |
 | [Media Assets](docs/media-assets.md) | Optional `media/` directory for images, PDFs, fonts, and other build assets |
+| [Supplementary Assets](docs/supplementary-assets.md) | Optional `assets/` directory for text reference documents read during plan generation |
 | [User Prompt](docs/user-prompt.md) | Injecting directives, prompt hierarchy, persistence |
 | [Project Structure](docs/project-structure.md) | Directory layout, generated artifacts, file reference |
 | [Terminal Output](docs/terminal-output.md) | Status banners, verbose mode, log format |

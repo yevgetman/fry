@@ -97,6 +97,13 @@ The media manifest flows through Fry at two levels:
 
 Media assets work identically in `--planning` mode. Place charts, reference documents, or data files in `media/` and reference them in your plan. The AI planning agent will incorporate them into the deliverable documents written to `plans/output/`.
 
+## Media vs. Supplementary Assets
+
+Fry has two optional asset directories with different purposes:
+
+- **`media/`** -- for binary files (images, fonts, PDFs) that the AI agent needs to **copy or reference by path**. The AI sees a manifest of file paths and sizes, included in both prepare and sprint execution prompts.
+- **`assets/`** -- for text reference documents (specs, schemas, requirements) that the AI should **read and understand** during planning. The AI sees the full file contents, included only during prepare. See [Supplementary Assets](supplementary-assets.md).
+
 ## Optional
 
 The `media/` directory is entirely optional. If it doesn't exist, Fry behaves exactly as before -- no manifest is generated and no prompt layer is added.

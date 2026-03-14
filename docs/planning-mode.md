@@ -105,6 +105,19 @@ media/
 
 In your plan: "Use the data in `media/market-data.csv` to inform the market sizing section." See [Media Assets](media-assets.md) for details.
 
+## Using Supplementary Assets in Planning Mode
+
+Place text-based reference documents in the `assets/` directory. Unlike `media/` files (which provide a path manifest), `assets/` files are **read in full** and their contents are injected into the prompts that generate `plans/plan.md` and `.fry/epic.md`.
+
+```
+assets/
+  prior-analysis.md
+  industry-report.txt
+  competitor-data.csv
+```
+
+In your plan: "Reference the findings in `assets/prior-analysis.md` when developing the competitive positioning section." See [Supplementary Assets](supplementary-assets.md) for details.
+
 ## When to Use Planning Mode
 
 - Business plans and strategies
