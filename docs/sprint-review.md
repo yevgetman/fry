@@ -1,8 +1,8 @@
 # Dynamic Sprint Review
 
-When `@review_between_sprints` is enabled in the epic, fry inserts a review gate between sprints. After each passing sprint, a **separate LLM session** evaluates whether downstream sprints need adjustment based on what was actually built. If the reviewer recommends a deviation, a **replanner agent** makes targeted edits to the affected `@prompt` blocks in the epic.
+When `@review_between_sprints` is enabled in the epic, Fry inserts a review gate between sprints. After each passing sprint, a **separate LLM session** evaluates whether downstream sprints need adjustment based on what was actually built. If the reviewer recommends a deviation, a **replanner agent** makes targeted edits to the affected `@prompt` blocks in the epic.
 
-This is fully opt-in. When disabled (the default), fry proceeds directly from one sprint to the next.
+This is fully opt-in. When disabled (the default), Fry proceeds directly from one sprint to the next.
 
 ## How It Works
 
@@ -10,7 +10,7 @@ This is fully opt-in. When disabled (the default), fry proceeds directly from on
 2. A **reviewer** LLM session receives: what was built (progress logs), what's planned (remaining sprint prompts), the original plan, and prior deviation history
 3. The reviewer outputs a verdict: `CONTINUE` (proceed as-is) or `DEVIATE` (adjust downstream sprints)
 4. If `DEVIATE`: a **replanner** LLM session makes surgical edits to affected `@prompt` blocks in `epic.md`, within the scope cap
-5. fry re-parses the modified sprints and continues the build
+5. Fry re-parses the modified sprints and continues the build
 
 The reviewer has an explicit **bias toward CONTINUE** — it only recommends deviation when a downstream sprint prompt references something that was built differently than assumed.
 

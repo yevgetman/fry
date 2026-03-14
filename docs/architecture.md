@@ -1,6 +1,6 @@
 # Architecture
 
-fry is a single static Go binary organized into focused internal packages. This document describes the internal structure for contributors and anyone wanting to understand the codebase.
+Fry is a single static Go binary organized into focused internal packages. This document describes the internal structure for contributors and anyone wanting to understand the codebase.
 
 ## Package Overview
 

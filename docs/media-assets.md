@@ -1,6 +1,6 @@
 # Media Assets
 
-fry supports an optional `media/` directory at the project root for images, PDFs, fonts, data files, and other assets that your plan references. When present, fry scans the directory and includes a categorized manifest in every prompt so the AI agent knows what assets are available.
+Fry supports an optional `media/` directory at the project root for images, PDFs, fonts, data files, and other assets that your plan references. When present, Fry scans the directory and includes a categorized manifest in every prompt so the AI agent knows what assets are available.
 
 ## Usage
 
@@ -87,7 +87,7 @@ The scanner automatically skips:
 
 ## How It Integrates
 
-The media manifest flows through fry at two levels:
+The media manifest flows through Fry at two levels:
 
 1. **During `fry prepare`** -- the manifest is included in all four generation steps (plan, AGENTS.md, epic, verification). This means the AI can reference media assets when designing sprint prompts and verification checks.
 
@@ -99,4 +99,4 @@ Media assets work identically in `--planning` mode. Place charts, reference docu
 
 ## Optional
 
-The `media/` directory is entirely optional. If it doesn't exist, fry behaves exactly as before -- no manifest is generated and no prompt layer is added.
+The `media/` directory is entirely optional. If it doesn't exist, Fry behaves exactly as before -- no manifest is generated and no prompt layer is added.

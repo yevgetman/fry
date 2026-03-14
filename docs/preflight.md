@@ -1,6 +1,6 @@
 # Preflight Checks
 
-Before executing any sprints, fry runs a preflight validation phase. All checks must pass or the build is aborted.
+Before executing any sprints, Fry runs a preflight validation phase. All checks must pass or the build is aborted.
 
 ## Checks Performed
 
@@ -49,4 +49,4 @@ Each command is executed via `bash -c` in the project directory. If any command 
 [2026-03-10 11:54:16] Preflight checks passed.
 ```
 
-If a check fails, fry prints the specific failure and exits.
+If a check fails, Fry prints the specific failure and exits.

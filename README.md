@@ -8,7 +8,7 @@ Equally at home orchestrating a months-long full-stack build as it is shipping a
 
 Supports **OpenAI Codex** (default) and **Claude Code** as interchangeable AI engines.
 
-> This is the Go rewrite of [fry](https://github.com/yevgetman/fry). Same capabilities, single static binary, no bash 4.0+ dependency.
+> This is the Go rewrite of [Fry](https://github.com/yevgetman/fry). Same capabilities, single static binary, no bash 4.0+ dependency.
 
 ## How It Works
 
@@ -34,7 +34,7 @@ media/                 Optional assets (images, PDFs, fonts, etc.) referenced in
                            2--analysis--positioning-options.md
 ```
 
-fry adopts the "Ralph Wiggum Loop" pattern: each sprint runs as an iterative loop where the AI agent gets a prompt, does work, and logs progress. The next iteration reads what the previous one accomplished and continues. When the agent signals completion (via a promise token), the sprint ends and the next one begins.
+Each sprint runs as an iterative loop where the AI agent gets a prompt, does work, and logs progress. The next iteration reads what the previous one accomplished and continues. When the agent signals completion (via a promise token), the sprint ends and the next one begins.
 
 **Key mechanisms:**
 

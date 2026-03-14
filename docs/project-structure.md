@@ -1,6 +1,6 @@
 # Project Structure
 
-## Your Project with fry
+## Your Project with Fry
 
 ```
 your-project/
@@ -32,7 +32,7 @@ your-project/
     .fry.lock                            #   Concurrency lock
 ```
 
-Unlike the bash version, fry is installed as a standalone binary — it does not live inside your project's `.fry/` directory. The `.fry/` directory contains only generated artifacts.
+Unlike the bash version, Fry is installed as a standalone binary — it does not live inside your project's `.fry/` directory. The `.fry/` directory contains only generated artifacts.
 
 ## File Reference
 
@@ -71,11 +71,11 @@ Unlike the bash version, fry is installed as a standalone binary — it does not
 - **`fry run`** calls `fry prepare` only when the epic file does not exist on disk
 - **`fry prepare`** always **overwrites** all `.fry/` artifacts when run
 - If `plan.md` was auto-generated (Step 0), it persists in `plans/` and is treated as user-authored on subsequent runs — delete it manually to force re-generation
-- To re-run fry with a new plan, update your input files and delete `.fry/epic.md` (or run `fry prepare` directly)
+- To re-run Fry with a new plan, update your input files and delete `.fry/epic.md` (or run `fry prepare` directly)
 
 ## Git Integration
 
-fry automatically:
+Fry automatically:
 - Initializes a git repository if one doesn't exist
 - Adds `.fry/`, `.env`, and `.DS_Store` to `.gitignore`
 - Sets a local git identity (`fry` / `fry@automated`) if none is configured
@@ -83,4 +83,4 @@ fry automatically:
 
 ## Concurrency Control
 
-The `.fry/.fry.lock` file prevents concurrent fry instances from running in the same project. The lock file contains the PID of the running process. Stale locks from dead processes are automatically cleaned up.
+The `.fry/.fry.lock` file prevents concurrent Fry instances from running in the same project. The lock file contains the PID of the running process. Stale locks from dead processes are automatically cleaned up.

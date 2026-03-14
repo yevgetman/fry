@@ -1,6 +1,6 @@
 # Self-Healing
 
-When verification checks fail after a sprint completes, fry enters a **heal loop** that automatically re-runs the AI agent with a targeted fix prompt, then re-verifies. This allows fry to recover from partial failures without human intervention.
+When verification checks fail after a sprint completes, Fry enters a **heal loop** that automatically re-runs the AI agent with a targeted fix prompt, then re-verifies. This allows Fry to recover from partial failures without human intervention.
 
 ## How It Works
 

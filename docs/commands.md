@@ -14,7 +14,7 @@ Execute sprints from an epic file.
 fry run [epic.md] [start] [end] [flags]
 ```
 
-All arguments are optional. With no arguments, fry uses `.fry/epic.md` and runs all sprints.
+All arguments are optional. With no arguments, Fry uses `.fry/epic.md` and runs all sprints.
 
 ### Positional Arguments
 
@@ -141,7 +141,7 @@ fry replan <deviation_spec> [flags]
 
 ## `fry version`
 
-Print the fry version string.
+Print the Fry version string.
 
 ```bash
 fry version

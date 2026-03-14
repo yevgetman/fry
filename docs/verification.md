@@ -1,6 +1,6 @@
 # Verification
 
-fry supports independent verification of each sprint's deliverables. When a `.fry/verification.md` file is present, fry runs machine-executable checks after the agent signals completion.
+Fry supports independent verification of each sprint's deliverables. When a `.fry/verification.md` file is present, Fry runs machine-executable checks after the agent signals completion.
 
 ## Check Primitives
 
@@ -56,7 +56,7 @@ The same four check primitives work for non-code deliverables in [planning mode]
 
 ## Graceful Degradation
 
-- If `.fry/verification.md` does not exist, fry falls back to promise-only behavior
+- If `.fry/verification.md` does not exist, Fry falls back to promise-only behavior
 - If `fry prepare` fails to generate `.fry/verification.md`, it logs a warning and continues
 - If a sprint has no checks defined, it behaves as if no verification file exists for that sprint
 

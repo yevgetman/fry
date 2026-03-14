@@ -1,6 +1,6 @@
 # Terminal Output
 
-fry provides status output at every phase so you always know what it's doing, even without `--verbose`. The `--verbose` flag adds the full agent transcript to the terminal; without it, you see progress banners and status lines only.
+Fry provides status output at every phase so you always know what it's doing, even without `--verbose`. The `--verbose` flag adds the full agent transcript to the terminal; without it, you see progress banners and status lines only.
 
 ## Output Modes
 
@@ -119,7 +119,7 @@ When `@compact_with_agent` is enabled:
 
 ## Build Summary
 
-After all sprints complete, fry prints a summary table with the status of each sprint.
+After all sprints complete, Fry prints a summary table with the status of each sprint.
 
 ## Log Format
 

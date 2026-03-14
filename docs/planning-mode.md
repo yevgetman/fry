@@ -1,6 +1,6 @@
 # Planning Mode
 
-fry's execution engine is project-agnostic — the sprint loop, verification runner, and heal loop work identically regardless of whether the output is code or documents.
+Fry's execution engine is project-agnostic — the sprint loop, verification runner, and heal loop work identically regardless of whether the output is code or documents.
 
 Pass `--planning` to use planning-domain prompts that generate sprints for producing structured documents instead of code. Use it for business plans, trip planning, research reports, strategic analyses, or any endeavor that requires rigorous, phased document creation.
 

@@ -193,7 +193,7 @@ sprint1_audit_final_20060102_150405.log  # Final audit-only pass
 
 ## Cleanup
 
-After the audit completes (pass or fail), fry removes `.fry/sprint-audit.txt` and `.fry/audit-prompt.md` before the git checkpoint. These are transient files that should not be committed.
+After the audit completes (pass or fail), Fry removes `.fry/sprint-audit.txt` and `.fry/audit-prompt.md` before the git checkpoint. These are transient files that should not be committed.
 
 ## Examples
 

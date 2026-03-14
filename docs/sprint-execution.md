@@ -1,6 +1,6 @@
 # Sprint Execution
 
-Sprints are the core execution unit of fry. Each sprint runs as an iterative agent loop where the AI gets a prompt, does work, and logs progress. The next iteration reads what the previous one accomplished and continues.
+Sprints are the core execution unit of Fry. Each sprint runs as an iterative agent loop where the AI gets a prompt, does work, and logs progress. The next iteration reads what the previous one accomplished and continues.
 
 ## Execution Flow
 
@@ -65,7 +65,7 @@ The agent loop exits when any of these occur:
 
 ## Progress Tracking
 
-fry uses a two-file progress system that provides bounded context without unbounded growth:
+Fry uses a two-file progress system that provides bounded context without unbounded growth:
 
 ### `.fry/sprint-progress.txt`
 - **Per-sprint iteration log** — overwritten at the start of each new sprint
@@ -124,7 +124,7 @@ Hooks execute via `bash -c` in the project directory.
 
 ## Resuming Failed Builds
 
-When a sprint fails (after exhausting heal attempts), fry commits partial work and prints a resume command:
+When a sprint fails (after exhausting heal attempts), Fry commits partial work and prints a resume command:
 
 ```
 Resume: fry run .fry/epic.md 4
@@ -134,4 +134,4 @@ Progress is preserved in `.fry/sprint-progress.txt`, `.fry/epic-progress.txt`, a
 
 ## Signal Handling
 
-fry catches `SIGINT` and `SIGTERM` signals. On interrupt, it commits partial work to git before exiting, ensuring no progress is lost.
+Fry catches `SIGINT` and `SIGTERM` signals. On interrupt, it commits partial work to git before exiting, ensuring no progress is lost.

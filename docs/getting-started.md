@@ -37,7 +37,7 @@ mkdir -p plans
 
 **`plans/plan.md`** — the technical build plan. Write it in any format (prose, bullets, tables) as long as it has enough detail for an AI to decompose into implementation sprints.
 
-**`plans/executive.md`** — a higher-level document describing the project's purpose, business goals, target users, and scope. When both files are present, fry feeds `executive.md` into every generation step so the AI understands *why* the project exists.
+**`plans/executive.md`** — a higher-level document describing the project's purpose, business goals, target users, and scope. When both files are present, Fry feeds `executive.md` into every generation step so the AI understands *why* the project exists.
 
 ```bash
 cat > plans/plan.md << 'EOF'
@@ -74,7 +74,7 @@ fry --effort low --engine claude
 fry --effort max --engine claude
 ```
 
-fry will automatically:
+Fry will automatically:
 1. Detect that `.fry/epic.md` doesn't exist and run `fry prepare`
 2. Generate `.fry/AGENTS.md` (operational rules for the AI)
 3. Generate `.fry/epic.md` (sprint definitions)
@@ -92,7 +92,7 @@ fry --dry-run
 
 This parses the epic, checks prerequisites, and shows the sprint plan without executing anything.
 
-## Adding fry to an Existing Project
+## Adding Fry to an Existing Project
 
 ```bash
 cd my-existing-project
@@ -101,21 +101,21 @@ mkdir -p plans
 fry --engine claude
 ```
 
-fry automatically creates the `.fry/` directory, initializes git (if needed), and sets up `.gitignore` entries on first run.
+Fry automatically creates the `.fry/` directory, initializes git (if needed), and sets up `.gitignore` entries on first run.
 
 ## Input File Options
 
 | Setup | Behavior |
 |---|---|
-| Only `plans/plan.md` | fry uses your plan directly for all generation |
-| Only `plans/executive.md` | fry auto-generates `plan.md` from your executive context (Step 0), then proceeds normally |
-| Both files | fry uses `executive.md` as alignment context alongside your detailed `plan.md` for better-aligned artifacts |
+| Only `plans/plan.md` | Fry uses your plan directly for all generation |
+| Only `plans/executive.md` | Fry auto-generates `plan.md` from your executive context (Step 0), then proceeds normally |
+| Both files | Fry uses `executive.md` as alignment context alongside your detailed `plan.md` for better-aligned artifacts |
 
 When `plan.md` is auto-generated from `executive.md`, the LLM makes all design, architecture, and implementation decisions. The generated file is written to `plans/` so you can review it before building.
 
 ## Media Assets (Optional)
 
-Place images, PDFs, fonts, data files, or other assets in a `media/` directory at the project root. Reference them in your plan (e.g., "use `media/logo.png` for the header") and fry will include a categorized manifest in every prompt so the AI agent knows what assets are available and where to find them.
+Place images, PDFs, fonts, data files, or other assets in a `media/` directory at the project root. Reference them in your plan (e.g., "use `media/logo.png` for the header") and Fry will include a categorized manifest in every prompt so the AI agent knows what assets are available and where to find them.
 
 ```bash
 mkdir -p media

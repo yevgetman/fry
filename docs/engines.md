@@ -1,6 +1,6 @@
 # AI Engines
 
-fry supports two interchangeable AI engines: **OpenAI Codex** and **Claude Code**. The engine determines which CLI tool is invoked to execute prompts.
+Fry supports two interchangeable AI engines: **OpenAI Codex** and **Claude Code**. The engine determines which CLI tool is invoked to execute prompts.
 
 ## Supported Engines
 
@@ -91,4 +91,4 @@ type Engine interface {
 }
 ```
 
-This means all fry features (sprints, verification, healing, review) work identically regardless of which engine is selected.
+This means all Fry features (sprints, verification, healing, review) work identically regardless of which engine is selected.

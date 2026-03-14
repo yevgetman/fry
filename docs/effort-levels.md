@@ -1,6 +1,6 @@
 # Effort Levels
 
-Effort levels control how many sprints fry generates, how dense each sprint is, and how much verification rigor is applied. This prevents over-engineering simple tasks (e.g., 7 sprints for a basic HTML page) and lets you dial up thoroughness for mission-critical builds.
+Effort levels control how many sprints Fry generates, how dense each sprint is, and how much verification rigor is applied. This prevents over-engineering simple tasks (e.g., 7 sprints for a basic HTML page) and lets you dial up thoroughness for mission-critical builds.
 
 ## The Four Levels
 
@@ -74,7 +74,7 @@ fry --effort max --engine claude
 
 ## Auto-Detection
 
-When no `--effort` flag is specified, fry instructs the AI to analyze the plan document and select the appropriate level automatically:
+When no `--effort` flag is specified, Fry instructs the AI to analyze the plan document and select the appropriate level automatically:
 
 - **1-3 files** described in the plan → `low`
 - **4-15 files** → `medium`
