@@ -10,19 +10,38 @@ import (
 func TestResolveEngine(t *testing.T) {
 	t.Parallel()
 
-	name, err := ResolveEngine("claude", "codex", "codex")
+	name, err := ResolveEngine("claude", "codex", "codex", "")
 	require.NoError(t, err)
 	assert.Equal(t, "claude", name)
 
-	name, err = ResolveEngine("", "claude", "codex")
+	name, err = ResolveEngine("", "claude", "codex", "")
 	require.NoError(t, err)
 	assert.Equal(t, "claude", name)
 
-	name, err = ResolveEngine("", "", "claude")
+	name, err = ResolveEngine("", "", "claude", "")
 	require.NoError(t, err)
 	assert.Equal(t, "claude", name)
 
-	name, err = ResolveEngine("", "", "")
+	name, err = ResolveEngine("", "", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, "codex", name)
+}
+
+func TestResolveEngineCustomDefault(t *testing.T) {
+	t.Parallel()
+
+	// Custom default is used when nothing else is specified.
+	name, err := ResolveEngine("", "", "", "claude")
+	require.NoError(t, err)
+	assert.Equal(t, "claude", name)
+
+	// CLI flag overrides the custom default.
+	name, err = ResolveEngine("codex", "", "", "claude")
+	require.NoError(t, err)
+	assert.Equal(t, "codex", name)
+
+	// Epic directive overrides the custom default.
+	name, err = ResolveEngine("", "codex", "", "claude")
 	require.NoError(t, err)
 	assert.Equal(t, "codex", name)
 }
@@ -30,7 +49,7 @@ func TestResolveEngine(t *testing.T) {
 func TestResolveEngineInvalid(t *testing.T) {
 	t.Parallel()
 
-	_, err := ResolveEngine("", "", "gpt")
+	_, err := ResolveEngine("", "", "gpt", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported engine")
 }

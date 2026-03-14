@@ -41,7 +41,7 @@ var replanCmd = &cobra.Command{
 
 		var replanner engine.Engine
 		if !replanDryRun {
-			engineName, err := engine.ResolveEngine(replanEngine, "", "")
+			engineName, err := engine.ResolveEngine(replanEngine, "", "", config.DefaultEngine)
 			if err != nil {
 				return err
 			}

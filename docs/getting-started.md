@@ -83,14 +83,14 @@ When both `executive.md` and `plan.md` are present, Fry feeds `executive.md` int
 ### What happens when you run
 
 ```bash
-# Uses Codex (default) — auto-detects effort level from plan complexity
+# Uses Claude for prepare, Codex for build (defaults) — auto-detects effort level
 fry
 
-# Or use Claude Code
+# Or use Claude Code for both prepare and build
 fry --engine claude
 
 # For a simple task, use low effort (1-2 sprints)
-fry --effort low --engine claude
+fry --effort low
 
 # For a critical build, use max effort (extended prompts, thorough reviews)
 fry --effort max --engine claude

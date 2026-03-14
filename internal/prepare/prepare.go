@@ -52,7 +52,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		return nil
 	}
 
-	engName, err := engine.ResolveEngine(opts.Engine, "", "")
+	engName, err := engine.ResolveEngine(opts.Engine, "", "", config.DefaultPrepareEngine)
 	if err != nil {
 		return fmt.Errorf("run prepare: %w", err)
 	}

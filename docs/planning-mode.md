@@ -8,19 +8,23 @@ Pass `--planning` to use planning-domain prompts that generate sprints for produ
 
 ```bash
 # Start from just a prompt (no files needed)
-fry --planning --user-prompt "competitive analysis for entering the EV market" --engine claude
+fry --planning --user-prompt "competitive analysis for entering the EV market"
 
 # Generate and run with existing plan files
-fry --planning --engine claude
+fry --planning
 
 # Generate artifacts only
-fry prepare --planning --engine claude
+fry prepare --planning
 ```
+
+In planning mode, Claude is the default engine for both the prepare and build stages, so `--engine claude` is not required.
 
 ## How It Differs from Software Mode
 
 | Aspect | Default (software) | `--planning` |
 |---|---|---|
+| Default engine (prepare) | Claude | Claude |
+| Default engine (build) | Codex | Claude |
 | `.fry/AGENTS.md` | Technology constraints, architecture rules, testing patterns | Domain boundaries, analytical frameworks, document quality standards |
 | Sprint phasing | Scaffolding → Schema → Logic → Integration → E2E | Research → Analysis → Strategy → Detailed Planning → Synthesis |
 | Sprint deliverables | Source files, configs, tests | Markdown documents, analyses, strategies |
@@ -30,7 +34,7 @@ fry prepare --planning --engine claude
 
 ```bash
 # Option A: Start from a prompt
-fry --planning --user-prompt "launch plan for a specialty coffee shop in Portland" --engine claude
+fry --planning --user-prompt "launch plan for a specialty coffee shop in Portland"
 
 # Option B: Start from a plan file
 mkdir -p plans
@@ -47,7 +51,7 @@ Open a specialty coffee shop in downtown Portland targeting remote workers.
 - Marketing and pre-launch buzz
 EOF
 
-fry --planning --engine claude
+fry --planning
 ```
 
 ## Output Directory and Naming Convention

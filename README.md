@@ -95,12 +95,12 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry version` | Print fry version |
 
 ```bash
-fry                                    # Run all sprints
-fry --engine claude                    # Use Claude Code
+fry                                    # Run all sprints (prepare: claude, build: codex)
+fry --engine claude                    # Use Claude Code for build stage
 fry --effort low                       # Simple task: 1-2 sprints, minimal overhead
 fry --effort max --engine claude       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
-fry --planning --engine claude         # Planning mode (documents, not code)
+fry --planning                         # Planning mode (documents, not code) — claude for both stages
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive
 fry --user-prompt "build a todo app"  # Start from just a prompt (no plan files needed)
 fry --user-prompt-file ./prompt.txt   # Load a longer prompt from a file

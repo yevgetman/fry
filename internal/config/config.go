@@ -5,6 +5,8 @@ const (
 	PlansDir                  = "plans"
 	BuildLogsDir              = ".fry/build-logs"
 	DefaultEngine             = "codex"
+	DefaultPrepareEngine      = "claude"
+	DefaultPlanningEngine     = "claude"
 	DefaultMaxHealAttempts    = 3
 	DefaultDockerReadyTimeout = 30
 	DefaultMaxDeviationScope  = 3

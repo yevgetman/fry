@@ -44,7 +44,7 @@ Implement the CLI.
 	require.NoError(t, err)
 	require.NoError(t, epic.ValidateEpic(parsed))
 
-	engineName, err := engine.ResolveEngine("", parsed.Engine, "")
+	engineName, err := engine.ResolveEngine("", parsed.Engine, "", "")
 	require.NoError(t, err)
 
 	var out bytes.Buffer
@@ -73,20 +73,20 @@ func TestEpicPathResolution(t *testing.T) {
 func TestEngineResolution(t *testing.T) {
 	t.Setenv("FRY_ENGINE", "claude")
 
-	name, err := engine.ResolveEngine("codex", "claude", "")
+	name, err := engine.ResolveEngine("codex", "claude", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "codex", name)
 
-	name, err = engine.ResolveEngine("", "codex", "")
+	name, err = engine.ResolveEngine("", "codex", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "codex", name)
 
-	name, err = engine.ResolveEngine("", "", "")
+	name, err = engine.ResolveEngine("", "", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "claude", name)
 
 	t.Setenv("FRY_ENGINE", "")
-	name, err = engine.ResolveEngine("", "", "")
+	name, err = engine.ResolveEngine("", "", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "codex", name)
 }

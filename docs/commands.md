@@ -38,9 +38,9 @@ fry run 3 5               # Wrong: treats "3" as the epic filename
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
-| `--engine <codex\|claude>` | AI engine to use (default: codex) |
+| `--engine <codex\|claude>` | AI engine to use (default: codex for software mode, claude for planning mode) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
-| `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic (defaults to `--engine` or `FRY_ENGINE`) |
+| `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic (defaults to `--engine`, `FRY_ENGINE`, or claude) |
 | `--planning` | Use planning-domain prompts for auto-generation |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
@@ -65,8 +65,8 @@ fry run epic.md 4                                 # Resume from sprint 4
 fry run epic.md 4 4                               # Run only sprint 4
 fry run epic.md 3 5                               # Run sprints 3 through 5
 fry --verbose                                     # Print agent output to terminal
-fry --prepare-engine claude                       # Use Claude for generation, Codex for build
-fry --planning --engine claude                    # Planning project (documents, not code)
+fry --prepare-engine codex                        # Override: use Codex for generation, Codex for build
+fry --planning                                    # Planning project (documents, not code) — uses Claude for both stages
 fry --user-prompt "focus on backend API, skip frontend"
 fry --user-prompt "build a todo app" --engine claude  # Start from just a prompt
 fry --user-prompt-file ./prompt.txt --engine claude   # Load prompt from a file
@@ -89,7 +89,7 @@ fry prepare [epic_filename] [flags]
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
-| `--engine <codex\|claude>` | AI engine for generation (default: codex, or `FRY_ENGINE`) |
+| `--engine <codex\|claude>` | AI engine for generation (default: claude, or `FRY_ENGINE`) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--user-prompt <text>` | Top-level directive to guide artifact generation. Can bootstrap the entire project when no plan files exist (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
@@ -111,8 +111,8 @@ All artifacts are **always regenerated** (overwritten) on each run.
 ### Examples
 
 ```bash
-fry prepare                                        # Generate all with Codex (default)
-fry prepare --engine claude                        # Generate all with Claude Code
+fry prepare                                        # Generate all with Claude (default)
+fry prepare --engine codex                         # Generate all with Codex
 fry prepare --effort low                           # Generate a compact 1-2 sprint epic
 fry prepare --effort max --engine claude           # Generate with maximum detail
 fry prepare epic-phase1.md                         # Custom epic filename

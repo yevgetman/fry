@@ -6,7 +6,7 @@ Fry supports two interchangeable AI engines: **OpenAI Codex** and **Claude Code*
 
 ### Codex (OpenAI)
 
-The default engine. Requires the Codex CLI:
+The default build engine for software (coding) mode. Requires the Codex CLI:
 
 ```bash
 npm i -g @openai/codex
@@ -37,14 +37,25 @@ The AI engine is resolved with this precedence (highest wins):
 1. `--engine` CLI flag
 2. `@engine` directive in the epic file
 3. `FRY_ENGINE` environment variable
-4. Default: `codex`
+4. Stage-specific default (see below)
+
+### Default Engines by Mode and Stage
+
+| Mode | Prepare Stage | Build Stage |
+|---|---|---|
+| **Software (default)** | Claude | Codex |
+| **Planning** (`--planning`) | Claude | Claude |
+
+In software (coding) mode, Claude is used for artifact generation (prepare) and Codex is used for sprint execution (build). In planning mode, Claude is used for both stages.
+
+These defaults apply only when no explicit engine is specified via CLI flag, epic directive, or environment variable.
 
 ## Mixing Engines
 
-You can use different engines for different phases. For example, generate the epic with Claude and run the build with Codex:
+You can override the defaults for any stage. For example, use Codex for both preparation and build:
 
 ```bash
-fry --prepare-engine claude --engine codex
+fry --prepare-engine codex --engine codex
 ```
 
 The `--prepare-engine` flag controls which engine is used during `fry prepare` (artifact generation), while `--engine` controls which engine executes the sprints.

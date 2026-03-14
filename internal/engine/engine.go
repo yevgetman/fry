@@ -23,7 +23,7 @@ type RunOpts struct {
 	LogFiles   []string
 }
 
-func ResolveEngine(cliFlag, epicDirective, envVar string) (string, error) {
+func ResolveEngine(cliFlag, epicDirective, envVar, defaultEngine string) (string, error) {
 	name := cliFlag
 	if name == "" {
 		name = epicDirective
@@ -36,7 +36,11 @@ func ResolveEngine(cliFlag, epicDirective, envVar string) (string, error) {
 		}
 	}
 	if name == "" {
-		name = config.DefaultEngine
+		if defaultEngine != "" {
+			name = defaultEngine
+		} else {
+			name = config.DefaultEngine
+		}
 	}
 
 	switch name {

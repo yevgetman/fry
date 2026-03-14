@@ -108,7 +108,11 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		engineName, err := engine.ResolveEngine(runEngine, ep.Engine, "")
+		buildDefault := config.DefaultEngine
+		if runPlanning {
+			buildDefault = config.DefaultPlanningEngine
+		}
+		engineName, err := engine.ResolveEngine(runEngine, ep.Engine, "", buildDefault)
 		if err != nil {
 			return err
 		}
