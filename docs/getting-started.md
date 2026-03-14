@@ -27,19 +27,24 @@ go install github.com/yevgetman/fry/cmd/fry@latest
 
 ## Your First Build
 
-### 1. Write your plan
+You can start a Fry build in three ways: with just a prompt, with a plan file, or with an executive document. Pick whichever fits your workflow.
 
-Create a `plans/` directory with at least one of `plan.md` or `executive.md`:
+### Option A: Start from a prompt (fastest)
+
+No files needed. Describe what you want and Fry generates everything:
+
+```bash
+fry --user-prompt "build a REST API for a todo app with PostgreSQL and JWT auth" --engine claude
+```
+
+Fry will generate an executive context document from your prompt and present it for review. Type `y` to approve and Fry proceeds to generate `plans/executive.md`, `plans/plan.md`, and all build artifacts automatically.
+
+### Option B: Write a plan file
+
+Create a `plans/` directory with a detailed build plan:
 
 ```bash
 mkdir -p plans
-```
-
-**`plans/plan.md`** — the technical build plan. Write it in any format (prose, bullets, tables) as long as it has enough detail for an AI to decompose into implementation sprints.
-
-**`plans/executive.md`** — a higher-level document describing the project's purpose, business goals, target users, and scope. When both files are present, Fry feeds `executive.md` into every generation step so the AI understands *why* the project exists.
-
-```bash
 cat > plans/plan.md << 'EOF'
 # My Project — Build Plan
 
@@ -56,9 +61,23 @@ cat > plans/plan.md << 'EOF'
 
 **Tests:** Jest for unit tests, supertest for integration tests.
 EOF
+
+fry --engine claude
 ```
 
-### 2. Run
+### Option C: Write an executive document
+
+Write a higher-level document describing the project's purpose, business goals, target users, and scope. Fry generates the detailed plan from it:
+
+```bash
+mkdir -p plans
+# Write plans/executive.md with your vision and goals
+fry --engine claude
+```
+
+When both `executive.md` and `plan.md` are present, Fry feeds `executive.md` into every generation step so the AI understands *why* the project exists.
+
+### What happens when you run
 
 ```bash
 # Uses Codex (default) — auto-detects effort level from plan complexity
@@ -107,11 +126,13 @@ Fry automatically creates the `.fry/` directory, initializes git (if needed), an
 
 | Setup | Behavior |
 |---|---|
+| Only `--user-prompt` | Fry generates `executive.md` (with interactive review), then `plan.md`, then all build artifacts |
 | Only `plans/plan.md` | Fry uses your plan directly for all generation |
 | Only `plans/executive.md` | Fry auto-generates `plan.md` from your executive context (Step 0), then proceeds normally |
 | Both files | Fry uses `executive.md` as alignment context alongside your detailed `plan.md` for better-aligned artifacts |
+| `--user-prompt` + existing files | The user prompt is injected as a directive; existing files are used as-is |
 
-When `plan.md` is auto-generated from `executive.md`, the LLM makes all design, architecture, and implementation decisions. The generated file is written to `plans/` so you can review it before building.
+When `plan.md` is auto-generated (from `executive.md` or from a user prompt), the LLM makes all design, architecture, and implementation decisions. The generated files are written to `plans/` so you can review them before building.
 
 ## Media Assets (Optional)
 

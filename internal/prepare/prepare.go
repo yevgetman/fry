@@ -1,8 +1,10 @@
 package prepare
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -26,10 +28,15 @@ type PrepareOpts struct {
 	ValidateOnly bool
 	Planning     bool
 	EffortLevel  epic.EffortLevel
+	Stdin        io.Reader // for interactive confirmation (defaults to os.Stdin)
+	Stdout       io.Writer // for displaying generated content (defaults to os.Stdout)
 }
 
 var newEngine = engine.NewEngine
 var numberedRulePattern = regexp.MustCompile(`(?m)^[0-9]+\.`)
+
+// ErrUserDeclined is returned when the user declines the generated executive context.
+var ErrUserDeclined = fmt.Errorf("user declined generated executive context")
 
 func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	projectDir := opts.ProjectDir
@@ -37,7 +44,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		projectDir = "."
 	}
 
-	if err := validatePreparePrerequisites(projectDir); err != nil {
+	if err := validatePreparePrerequisites(projectDir, opts.UserPrompt); err != nil {
 		return err
 	}
 	if opts.ValidateOnly {
@@ -88,6 +95,15 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	planPath := filepath.Join(projectDir, config.PlanFile)
 	executivePath := filepath.Join(projectDir, config.ExecutiveFile)
+
+	// Bootstrap: generate executive.md from user prompt if neither plan nor executive exists.
+	if _, planErr := os.Stat(planPath); os.IsNotExist(planErr) {
+		if _, execErr := os.Stat(executivePath); os.IsNotExist(execErr) {
+			if err := bootstrapExecutive(ctx, eng, engName, opts, executivePath, mediaManifest); err != nil {
+				return err
+			}
+		}
+	}
 
 	if _, err := os.Stat(planPath); os.IsNotExist(err) {
 		frylog.Log("Step 0: Generating %s from %s (engine: %s)...", config.PlanFile, config.ExecutiveFile, engName)
@@ -191,7 +207,10 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	return nil
 }
 
-func validatePreparePrerequisites(projectDir string) error {
+func validatePreparePrerequisites(projectDir, userPrompt string) error {
+	if strings.TrimSpace(userPrompt) != "" {
+		return nil
+	}
 	planPath := filepath.Join(projectDir, config.PlanFile)
 	executivePath := filepath.Join(projectDir, config.ExecutiveFile)
 	if _, err := os.Stat(planPath); err == nil {
@@ -200,7 +219,60 @@ func validatePreparePrerequisites(projectDir string) error {
 	if _, err := os.Stat(executivePath); err == nil {
 		return nil
 	}
-	return fmt.Errorf("prepare requires %s or %s", config.PlanFile, config.ExecutiveFile)
+	return fmt.Errorf("prepare requires %s, %s, or --user-prompt", config.PlanFile, config.ExecutiveFile)
+}
+
+func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, opts PrepareOpts, executivePath, mediaManifest string) error {
+	// UserPrompt is guaranteed non-empty by the caller (validatePreparePrerequisites passed).
+	frylog.Log("Generating executive context from user prompt (engine: %s)...", engName)
+
+	prompt := executiveFromUserPromptPrompt(opts.Planning, opts.UserPrompt, mediaManifest)
+	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir})
+	if err != nil && strings.TrimSpace(output) == "" {
+		return fmt.Errorf("run prepare: generate executive: %w", err)
+	}
+
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stdin := opts.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+
+	fmt.Fprintln(stdout, "")
+	fmt.Fprintln(stdout, "── Generated executive context ──────────────────────────────────")
+	fmt.Fprintln(stdout, "")
+	fmt.Fprintln(stdout, output)
+	fmt.Fprintln(stdout, "")
+	fmt.Fprintln(stdout, "─────────────────────────────────────────────────────────────────")
+	fmt.Fprint(stdout, "Proceed with this executive context? [y/N] ")
+
+	scanner := bufio.NewScanner(stdin)
+	if !scanner.Scan() {
+		return ErrUserDeclined
+	}
+	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+	if answer != "y" && answer != "yes" {
+		return ErrUserDeclined
+	}
+
+	if err := os.MkdirAll(filepath.Dir(executivePath), 0o755); err != nil {
+		return fmt.Errorf("run prepare: create plans dir: %w", err)
+	}
+	if err := os.WriteFile(executivePath, []byte(output), 0o644); err != nil {
+		return fmt.Errorf("run prepare: write executive: %w", err)
+	}
+	frylog.Log("Saved %s.", config.ExecutiveFile)
+	return nil
+}
+
+func executiveFromUserPromptPrompt(planning bool, userPrompt, mediaManifest string) string {
+	if planning {
+		return PlanningExecutiveFromUserPromptPrompt(userPrompt, mediaManifest)
+	}
+	return ExecutiveFromUserPromptPrompt(userPrompt, mediaManifest)
 }
 
 func validateStep0(planPath string) error {

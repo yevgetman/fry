@@ -16,6 +16,31 @@ A media/ directory exists with the following assets. Reference these in the plan
 %s`, mediaManifest)
 }
 
+func ExecutiveFromUserPromptPrompt(userPrompt, mediaManifest string) string {
+	return fmt.Sprintf(`You are a senior software architect. The user has described a project in a brief prompt. Your job is to produce a well-structured executive context document that captures the project's vision, goals, and constraints.
+
+User's project description:
+%s
+
+Generate a markdown document suitable for use as plans/executive.md. Include these sections:
+
+1. **Project Name** — A clear, descriptive name for the project.
+2. **Vision** — What is the project and why does it exist? (2-3 sentences)
+3. **Goals** — Specific, measurable outcomes the project should achieve. (bulleted list)
+4. **Target Users** — Who will use this? What are their needs?
+5. **Scope** — What is in scope and what is explicitly out of scope.
+6. **Constraints** — Technical, business, or timeline constraints.
+7. **Success Criteria** — How will we know the project succeeded?
+
+CRITICAL:
+- Infer reasonable defaults from the user's description — do not ask questions.
+- Be SPECIFIC and DECISIVE. Fill in concrete details based on what the user described.
+- If the user's description is vague on a point, make a reasonable assumption and state it clearly.
+- Do NOT write the file to disk — output ONLY the markdown content as your response.
+- The output format should be markdown.
+%s`, userPrompt, mediaSection(mediaManifest))
+}
+
 func SoftwareStep0Prompt(executiveContent, mediaManifest string) string {
 	return fmt.Sprintf(`You are a senior software architect. Your job is to produce a detailed, actionable build plan.
 

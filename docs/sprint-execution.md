@@ -15,14 +15,21 @@ FOR each sprint in range:
   │   ├─ Invoke engine with prompt
   │   ├─ Log output to iteration log
   │   ├─ Check for promise token
-  │   ├─ Check for no-op (2 consecutive = done)
-  │   └─ Continue until: promise found OR no-op OR max iterations
+  │   ├─ No-op detection (2 consecutive iterations with no changes
+  │   │   AND all verification checks pass = early exit; 3 at max effort)
+  │   └─ Continue until: promise found OR no-op+verified OR max iterations
   ├─ Run verification checks
   ├─ If checks fail: enter heal loop
   ├─ Sprint audit: audit→fix loop (CRITICAL/HIGH block; MODERATE advisory)
   ├─ Git checkpoint
   ├─ Compact progress
   └─ Sprint review (if enabled)
+
+AFTER all sprints:
+  ├─ Print build summary table
+  ├─ Append review summary (if reviews enabled)
+  ├─ Generate build-summary.md (agent session)
+  └─ Build audit (if enabled and full epic completed)
 ```
 
 ## Prompt Assembly
@@ -96,19 +103,24 @@ After each sprint completes, progress is compacted:
 | `PASS (healed, no promise)` | Healed without promise token |
 | `FAIL (verification failed, heal exhausted)` | All heal attempts exhausted |
 | `FAIL (no promise, verification failed, heal exhausted)` | No promise + healing failed |
+| `FAIL (no promise after N iters)` | No promise token found and no verification checks exist |
 | `FAIL (no prompt)` | Sprint had no prompt text |
 | `SKIPPED` | Sprint was not in the run range |
 
 ## Build Logs
 
-Per-iteration logs are written to `.fry/build-logs/`:
+Build logs are written to `.fry/build-logs/`:
 ```
 .fry/build-logs/
-  sprint1_20060102_150405.log           # Iteration log
-  sprint1_heal1_20060102_150405.log     # Heal attempt log
-  sprint1_audit1_20060102_150405.log    # Audit pass log
-  sprint1_auditfix_1_20060102_150405.log # Audit fix agent log
-  sprint1_audit_final_20060102_150405.log # Final audit pass log
+  sprint1_20060102_150405.log              # Per-sprint aggregate log
+  sprint1_iter1_20060102_150405.log        # Per-iteration log
+  sprint1_iter2_20060102_150405.log        # Per-iteration log
+  sprint1_heal1_20060102_150405.log        # Heal attempt log
+  sprint1_audit1_20060102_150405.log       # Audit pass log
+  sprint1_auditfix_1_20060102_150405.log   # Audit fix agent log
+  sprint1_audit_final_20060102_150405.log  # Final audit pass log
+  summary_20060102_150405.log              # Build summary agent log
+  build_audit_20060102_150405.log          # Build audit agent log
 ```
 
 ## Shell Hooks

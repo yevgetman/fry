@@ -126,7 +126,7 @@ The effort level is stored in the epic file as a global directive:
 @docker_from_sprint 2
 ```
 
-When both `--effort` flag and `@effort` directive are present, the CLI flag takes precedence.
+When both `--effort` flag and `@effort` directive are present, the **epic directive takes precedence** and the CLI flag is ignored with a warning. To change the effort level, re-run `fry prepare` with the new `--effort` value so it is baked into the epic.
 
 ### Dry Run
 
@@ -163,6 +163,8 @@ error: effort level "low" allows at most 2 sprints, but epic has 5
 ```
 
 This validation only applies when `@effort` is explicitly set. Epics without an `@effort` directive have no sprint count limit.
+
+When no effort level is set (auto-detect or unset), the default max iterations per sprint is 25 (same as `high`).
 
 ## Effort Level Effects Summary
 

@@ -108,6 +108,9 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 	if runErr != nil && strings.TrimSpace(output) == "" {
 		return fmt.Errorf("run replan: replanner agent failed: %w", runErr)
 	}
+	if runErr != nil {
+		frylog.Log("WARNING: replanner agent exited with error (non-fatal): %v", runErr)
+	}
 
 	// If the engine wrote the epic file directly, read its clean content.
 	// Otherwise fall back to the captured output (stripped of markdown fences).
@@ -338,6 +341,7 @@ func findSprint(ep *epic.Epic, sprintNum int) *epic.Sprint {
 func equalGlobalDirectives(a, b *epic.Epic) bool {
 	return a.Name == b.Name &&
 		a.Engine == b.Engine &&
+		a.EffortLevel == b.EffortLevel &&
 		a.DockerFromSprint == b.DockerFromSprint &&
 		a.DockerReadyCmd == b.DockerReadyCmd &&
 		a.DockerReadyTimeout == b.DockerReadyTimeout &&

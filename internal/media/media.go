@@ -68,10 +68,9 @@ func Scan(projectDir string) (assets []Asset, truncated bool, err error) {
 	if !info.IsDir() {
 		return nil, false, nil
 	}
-	// If the media dir itself is a symlink, skip it.
-	if info.Mode()&os.ModeSymlink != 0 {
-		return nil, false, nil
-	}
+	// Note: os.Lstat returns ModeSymlink for symlinks, and IsDir() returns
+	// false for symlinks (even those pointing to directories), so a symlinked
+	// media/ directory is already handled by the IsDir() check above.
 
 	err = filepath.WalkDir(mediaPath, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {

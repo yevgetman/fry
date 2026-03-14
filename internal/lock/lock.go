@@ -70,9 +70,8 @@ func AcquireIfNotDryRun(projectDir string, dryRun bool) error {
 }
 
 func processAlive(pid int) bool {
-	if _, err := os.FindProcess(pid); err != nil {
-		return false
-	}
+	// On Unix, os.FindProcess always succeeds, so we skip it and go
+	// straight to the signal-0 liveness check.
 	err := syscall.Kill(pid, syscall.Signal(0))
 	if err != nil {
 		return !errors.Is(err, syscall.ESRCH)

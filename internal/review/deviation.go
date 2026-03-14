@@ -127,7 +127,7 @@ func ensureDeviationLog(projectDir, path string) error {
 		return err
 	}
 
-	title := "Ralph Build"
+	title := "Fry Build"
 	epicPath := filepath.Join(projectDir, config.FryDir, "epic.md")
 	if ep, err := epic.ParseEpic(epicPath); err == nil && strings.TrimSpace(ep.Name) != "" {
 		title = ep.Name

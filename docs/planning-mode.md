@@ -7,7 +7,10 @@ Pass `--planning` to use planning-domain prompts that generate sprints for produ
 ## Usage
 
 ```bash
-# Generate and run in planning mode
+# Start from just a prompt (no files needed)
+fry --planning --user-prompt "competitive analysis for entering the EV market" --engine claude
+
+# Generate and run with existing plan files
 fry --planning --engine claude
 
 # Generate artifacts only
@@ -26,6 +29,10 @@ fry prepare --planning --engine claude
 ## Quick Start
 
 ```bash
+# Option A: Start from a prompt
+fry --planning --user-prompt "launch plan for a specialty coffee shop in Portland" --engine claude
+
+# Option B: Start from a plan file
 mkdir -p plans
 cat > plans/plan.md << 'EOF'
 # Coffee Shop Launch Plan
@@ -40,7 +47,6 @@ Open a specialty coffee shop in downtown Portland targeting remote workers.
 - Marketing and pre-launch buzz
 EOF
 
-# Generate and run
 fry --planning --engine claude
 ```
 

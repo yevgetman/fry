@@ -36,12 +36,14 @@ The `@verification` directive in the epic file can override the default path:
 
 ## Outcome Matrix
 
-| Promise Token | Checks Pass | Result |
-|---|---|---|
-| Found | All pass | **PASS** |
-| Found | Some fail | Enters **heal loop** |
-| Not found | All pass | **PASS** (verification passed, no promise) |
-| Not found | Some fail | Enters **heal loop** |
+| Promise Token | Checks Exist | Checks Pass | Result |
+|---|---|---|---|
+| Found | Yes | All pass | **PASS** |
+| Found | Yes | Some fail | Enters **heal loop** |
+| Found | No | N/A | **PASS** |
+| Not found | Yes | All pass | **PASS** (verification passed, no promise) |
+| Not found | Yes | Some fail | Enters **heal loop** |
+| Not found | No | N/A | **FAIL** (no promise after N iters) |
 
 ## Verification for Documents
 
@@ -62,4 +64,6 @@ The same four check primitives work for non-code deliverables in [planning mode]
 
 ## Safety Limits
 
-Output from verification checks is capped at 10 MB to prevent unbounded memory growth. Per-check diagnostic output is truncated to 20 lines when reported in heal prompts.
+- **Output cap**: Output from verification checks is capped at 10 MB to prevent unbounded memory growth.
+- **Per-check timeout**: Command-based checks (`@check_cmd` and `@check_cmd_output`) are killed after 120 seconds to prevent hanging builds.
+- **Diagnostic truncation**: Per-check diagnostic output in heal prompts is truncated to 20 lines for `@check_cmd` failures and 10 lines for `@check_cmd_output` failures.

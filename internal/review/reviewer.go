@@ -243,6 +243,9 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 	if runErr != nil && strings.TrimSpace(output) == "" {
 		return nil, fmt.Errorf("run sprint review: reviewer agent failed: %w", runErr)
 	}
+	if runErr != nil {
+		frylog.Log("WARNING: reviewer agent exited with error (non-fatal): %v", runErr)
+	}
 
 	result := &ReviewResult{
 		Verdict:   ParseVerdict(output),

@@ -23,6 +23,7 @@ internal/
   review/                Dynamic sprint review, replanning, deviation tracking
   shellhook/             Shell command execution for hooks
   sprint/                Sprint execution loop, prompt assembly, progress tracking
+  summary/               Build summary generation (post-epic agent session)
   textutil/              Text utilities (markdown stripping, file timestamps, artifact resolution)
   verify/                Verification check parsing, execution, and diagnostic collection
 templates/               Embedded templates (AGENTS.md, epic-example, verification-example, etc.)
@@ -46,10 +47,12 @@ type Engine interface {
 ## Data Flow
 
 ```
-User Input (plans/, media/)
+User Input (plans/, media/, or --user-prompt)
        │
        ▼
-   fry prepare ──► .fry/AGENTS.md, epic.md, verification.md
+   fry prepare ──► Bootstrap: --user-prompt → plans/executive.md (interactive review)
+               ──► Step 0: plans/executive.md → plans/plan.md
+               ──► Steps 1-3: .fry/AGENTS.md, epic.md, verification.md
                    (scans media/ for asset manifest)
        │
        ▼

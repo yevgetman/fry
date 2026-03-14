@@ -1,13 +1,27 @@
 package prepare
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yevgetman/fry/internal/engine"
 )
+
+type fakeEngine struct {
+	output string
+}
+
+func (f *fakeEngine) Run(_ context.Context, _ string, _ engine.RunOpts) (string, int, error) {
+	return f.output, 0, nil
+}
+
+func (f *fakeEngine) Name() string {
+	return "fake"
+}
 
 func TestPrepareValidation(t *testing.T) {
 	t.Parallel()
@@ -82,7 +96,85 @@ func TestSoftwareStep2Prompt_IncludesEffort(t *testing.T) {
 func TestPreparePrerequisites(t *testing.T) {
 	t.Parallel()
 
-	err := validatePreparePrerequisites(t.TempDir())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "plans/plan.md or plans/executive.md")
+	t.Run("fails when no files and no user prompt", func(t *testing.T) {
+		t.Parallel()
+		err := validatePreparePrerequisites(t.TempDir(), "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "plans/plan.md")
+		assert.Contains(t, err.Error(), "plans/executive.md")
+		assert.Contains(t, err.Error(), "--user-prompt")
+	})
+
+	t.Run("passes with user prompt and no files", func(t *testing.T) {
+		t.Parallel()
+		err := validatePreparePrerequisites(t.TempDir(), "build me an app")
+		require.NoError(t, err)
+	})
+
+	t.Run("passes with executive file and no user prompt", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+		require.NoError(t, os.WriteFile(dir+"/plans/executive.md", []byte("exec"), 0o644))
+		err := validatePreparePrerequisites(dir, "")
+		require.NoError(t, err)
+	})
+}
+
+func TestBootstrapExecutive_UserApproves(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	executivePath := dir + "/plans/executive.md"
+
+	stdin := strings.NewReader("y\n")
+	var stdout strings.Builder
+
+	oldNewEngine := newEngine
+	newEngine = func(name string) (engine.Engine, error) {
+		return &fakeEngine{output: "# My Project\n\nGenerated executive content."}, nil
+	}
+	defer func() { newEngine = oldNewEngine }()
+
+	eng, _ := newEngine("fake")
+	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+		ProjectDir: dir,
+		UserPrompt: "build a todo app",
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, executivePath, "")
+
+	require.NoError(t, err)
+	data, readErr := os.ReadFile(executivePath)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(data), "Generated executive content")
+	assert.Contains(t, stdout.String(), "Generated executive context")
+}
+
+func TestBootstrapExecutive_UserDeclines(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	executivePath := dir + "/plans/executive.md"
+
+	stdin := strings.NewReader("n\n")
+	var stdout strings.Builder
+
+	oldNewEngine := newEngine
+	newEngine = func(name string) (engine.Engine, error) {
+		return &fakeEngine{output: "# My Project\n\nGenerated content."}, nil
+	}
+	defer func() { newEngine = oldNewEngine }()
+
+	eng, _ := newEngine("fake")
+	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+		ProjectDir: dir,
+		UserPrompt: "build a todo app",
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, executivePath, "")
+
+	require.ErrorIs(t, err, ErrUserDeclined)
+	_, statErr := os.Stat(executivePath)
+	assert.True(t, os.IsNotExist(statErr), "executive.md should not be created when user declines")
 }

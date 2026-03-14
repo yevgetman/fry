@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/yevgetman/fry/internal/epic"
@@ -65,6 +66,8 @@ var prepareCmd = &cobra.Command{
 			ValidateOnly: false,
 			Planning:     preparePlanning,
 			EffortLevel:  effortLevel,
+			Stdin:        os.Stdin,
+			Stdout:       cmd.OutOrStdout(),
 		})
 	},
 }

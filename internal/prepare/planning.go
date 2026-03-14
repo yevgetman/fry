@@ -6,6 +6,31 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 )
 
+func PlanningExecutiveFromUserPromptPrompt(userPrompt, mediaManifest string) string {
+	return fmt.Sprintf(`You are a senior strategic planner. The user has described a project or initiative in a brief prompt. Your job is to produce a well-structured executive context document that captures the initiative's vision, goals, and constraints.
+
+User's project description:
+%s
+
+Generate a markdown document suitable for use as plans/executive.md. Include these sections:
+
+1. **Project Name** — A clear, descriptive name for the initiative.
+2. **Vision** — What is this initiative and why does it exist? (2-3 sentences)
+3. **Goals** — Specific, measurable outcomes the initiative should achieve. (bulleted list)
+4. **Target Audience** — Who will benefit from or consume the planning deliverables?
+5. **Scope** — What is in scope and what is explicitly out of scope.
+6. **Constraints** — Analytical, methodological, timeline, or resource constraints.
+7. **Success Criteria** — How will we know the planning effort succeeded?
+
+CRITICAL:
+- Infer reasonable defaults from the user's description — do not ask questions.
+- Be SPECIFIC and DECISIVE. Fill in concrete details based on what the user described.
+- If the user's description is vague on a point, make a reasonable assumption and state it clearly.
+- Do NOT write the file to disk — output ONLY the markdown content as your response.
+- The output format should be markdown.
+%s`, userPrompt, mediaSection(mediaManifest))
+}
+
 func PlanningStep0Prompt(executiveContent, mediaManifest string) string {
 	return fmt.Sprintf(`You are a senior strategic planner. Your job is to produce a detailed, actionable planning document.
 

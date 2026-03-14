@@ -41,9 +41,9 @@ Each failed attempt's report is appended to `.fry/sprint-progress.txt`, giving s
 @max_heal_attempts 8       # This sprint gets more attempts
 ```
 
-### Disabling Healing
+### Minimum Value
 
-Set `@max_heal_attempts 0` globally or per-sprint to disable healing entirely. When disabled, verification failure immediately marks the sprint as `FAIL`.
+Setting `@max_heal_attempts` to 0 or a negative value causes it to fall back to the default (3). The minimum effective value is 1.
 
 ## Terminal Output
 

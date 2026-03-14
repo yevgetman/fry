@@ -10,7 +10,7 @@ Before executing any sprints, Fry runs a preflight validation phase. All checks 
 | `git` | Not installed |
 | `bash` | Not installed |
 | `plans/` directory | Missing |
-| Input files | Both `plans/plan.md` and `plans/executive.md` are missing |
+| Input files | Both `plans/plan.md` and `plans/executive.md` are missing (note: `--user-prompt` generates these during prepare, before preflight runs) |
 | `.fry/AGENTS.md` existence | Missing |
 | `.fry/AGENTS.md` placeholder | First line matches the standard placeholder marker |
 | `.fry/AGENTS.md` content | Fewer than 5 lines |

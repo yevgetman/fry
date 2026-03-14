@@ -86,6 +86,8 @@ var runCmd = &cobra.Command{
 				UserPrompt:   userPrompt,
 				Planning:     runPlanning,
 				EffortLevel:  effortLevel,
+				Stdin:        os.Stdin,
+				Stdout:       cmd.OutOrStdout(),
 			}); err != nil {
 				return err
 			}

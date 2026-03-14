@@ -28,8 +28,10 @@ your-project/
     audit-prompt.md                      #   Assembled sprint audit prompt (transient, cleaned up after audit)
     sprint-audit.txt                     #   Sprint audit findings (transient, cleaned up after audit)
     build-audit-prompt.md                #   Assembled build audit prompt (transient, cleaned up after audit)
+    summary-prompt.md                    #   Assembled build summary prompt (transient, cleaned up after summary)
     build-logs/                          #   Per-iteration logs
     .fry.lock                            #   Concurrency lock
+  build-summary.md                       # Build summary report (persisted in project root)
 ```
 
 Unlike the bash version, Fry is installed as a standalone binary — it does not live inside your project's `.fry/` directory. The `.fry/` directory contains only generated artifacts.
@@ -40,8 +42,8 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 
 | File | Purpose | Required |
 |---|---|---|
-| `plans/plan.md` | Detailed build plan with technical decisions | At least one of plan.md or executive.md |
-| `plans/executive.md` | Executive context: vision, goals, scope | At least one of plan.md or executive.md |
+| `plans/plan.md` | Detailed build plan with technical decisions | At least one of plan.md, executive.md, or `--user-prompt` |
+| `plans/executive.md` | Executive context: vision, goals, scope | At least one of plan.md, executive.md, or `--user-prompt` |
 | `plans/output/` | Planning mode deliverables (ordered, categorized `.md` files) | Created automatically in `--planning` mode |
 | `media/` | Images, PDFs, fonts, data files, and other assets referenced in plans | No — entirely optional |
 
@@ -62,6 +64,8 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 | `.fry/audit-prompt.md` | Assembled sprint audit/fix prompt (transient) | `fry run` at runtime |
 | `.fry/sprint-audit.txt` | Sprint audit findings (transient) | `fry run` at runtime |
 | `.fry/build-audit-prompt.md` | Assembled build audit prompt (transient) | `fry run` at runtime |
+| `.fry/summary-prompt.md` | Assembled build summary prompt (transient) | `fry run` at runtime |
+| `build-summary.md` | Build summary report (persisted in project root) | `fry run` at runtime |
 | `audit.md` | Build audit report (persisted in project root) | `fry run` at runtime |
 | `.fry/build-logs/` | Per-iteration and per-sprint logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
@@ -70,7 +74,8 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 
 - **`fry run`** calls `fry prepare` only when the epic file does not exist on disk
 - **`fry prepare`** always **overwrites** all `.fry/` artifacts when run
-- If `plan.md` was auto-generated (Step 0), it persists in `plans/` and is treated as user-authored on subsequent runs — delete it manually to force re-generation
+- When `--user-prompt` is provided with no plan files, `fry prepare` generates `plans/executive.md` (with interactive review) and then `plans/plan.md` before proceeding to Steps 1-3
+- If `executive.md` or `plan.md` was auto-generated, it persists in `plans/` and is treated as user-authored on subsequent runs — delete it manually to force re-generation
 - To re-run Fry with a new plan, update your input files and delete `.fry/epic.md` (or run `fry prepare` directly)
 
 ## Git Integration

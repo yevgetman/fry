@@ -16,9 +16,11 @@ It breaks your plan into sprints, runs each one through an AI agent loop, then v
 ## How It Works
 
 ```
-plans/plan.md          You write this -- what to build        (at least one
-  OR                                                           of these two
-plans/executive.md     You write this -- why to build it       is required)
+plans/plan.md          You write this -- what to build        (at least one of
+  OR                                                           these three is
+plans/executive.md     You write this -- why to build it       required)
+  OR
+--user-prompt "..."    You describe it -- Fry generates the rest
 media/                 Optional assets (images, PDFs, fonts, etc.) referenced in plans
         |
         v
@@ -50,6 +52,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Self-healing** -- automatic re-runs with targeted fix prompts on verification failure
 - **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop (CRITICAL/HIGH block the build; MODERATE is advisory)
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation (up to 10 passes)
+- **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
 
@@ -60,15 +63,16 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 git clone https://github.com/yevgetman/fry.git && cd fry
 make install
 
-# Create a plan
+# Option A: Start from just a prompt (no files needed)
+fry --user-prompt "build a REST API for a todo app with PostgreSQL" --engine claude
+
+# Option B: Create a plan file first
 mkdir -p plans
 cat > plans/plan.md << 'EOF'
 # My Project -- Build Plan
 **Stack:** Node 20, Express, PostgreSQL 16, TypeScript strict mode.
 ...
 EOF
-
-# Run
 fry --engine claude
 
 # Validate without running
@@ -94,6 +98,7 @@ fry --effort max --engine claude       # Maximum rigor: extended prompts, thorou
 fry run epic.md 3 5                    # Run sprints 3-5
 fry --planning --engine claude         # Planning mode (documents, not code)
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive
+fry --user-prompt "build a todo app"  # Start from just a prompt (no plan files needed)
 fry prepare --effort medium            # Generate artifacts with medium effort sizing
 ```
 
