@@ -1,8 +1,8 @@
 # fry
 
-An automated build orchestration engine that uses AI agents to execute complex plans autonomously. Write a plan, and fry decomposes it into sprints and executes them -- one iteration at a time, fresh context each pass -- until the project is done.
+**A general-purpose autonomous build engine.** Give it a plan — in any human language — and it produces a corpus of artifacts: application code in any programming language, research documents, strategic analyses, or entire books. Fry decomposes your plan into sprints, executes them through iterative AI agent loops with fresh context each pass, verifies the output, self-heals on failure, and audits its own work — all without human intervention.
 
-Works for **software projects** (code, tests, infrastructure) and **planning projects** (business plans, research reports, strategic analyses, trip planning -- any endeavor requiring rigorous phased document creation). See [Planning Mode](docs/planning-mode.md).
+Equally at home orchestrating a months-long full-stack build as it is shipping a two-file bug fix. The effort system automatically scales rigor to match scope: a one-liner gets one focused sprint; an ambitious project gets phased execution with mid-build review, dynamic replanning, and multi-pass semantic audits.
 
 Supports **OpenAI Codex** (default) and **Claude Code** as interchangeable AI engines.
 
