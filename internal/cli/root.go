@@ -23,6 +23,7 @@ func init() {
 	rootCmd.Flags().StringVar(&runEngine, "engine", "", "Execution engine")
 	rootCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "Preview actions without executing")
 	rootCmd.Flags().StringVar(&runUserPrompt, "user-prompt", "", "Additional user prompt")
+	rootCmd.Flags().StringVar(&runUserPromptFile, "user-prompt-file", "", "Path to file containing user prompt")
 	rootCmd.Flags().BoolVar(&runNoReview, "no-review", false, "Disable sprint review")
 	rootCmd.Flags().StringVar(&runSimulateReview, "simulate-review", "", "Simulate review verdict")
 	rootCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")

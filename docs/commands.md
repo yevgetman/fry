@@ -43,6 +43,7 @@ fry run 3 5               # Wrong: treats "3" as the epic filename
 | `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic (defaults to `--engine` or `FRY_ENGINE`) |
 | `--planning` | Use planning-domain prompts for auto-generation |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
+| `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
 | `--no-audit` | Disable sprint and build audits for this run |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
@@ -68,6 +69,7 @@ fry --prepare-engine claude                       # Use Claude for generation, C
 fry --planning --engine claude                    # Planning project (documents, not code)
 fry --user-prompt "focus on backend API, skip frontend"
 fry --user-prompt "build a todo app" --engine claude  # Start from just a prompt
+fry --user-prompt-file ./prompt.txt --engine claude   # Load prompt from a file
 fry --project-dir /path/to/project                # Operate on a different project
 FRY_ENGINE=claude fry                             # Set engine via environment variable
 ```
@@ -76,7 +78,7 @@ FRY_ENGINE=claude fry                             # Set engine via environment v
 
 ## `fry prepare`
 
-Generates `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan. Requires at least one of `plans/plan.md`, `plans/executive.md`, or `--user-prompt`.
+Generates `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan. Requires at least one of `plans/plan.md`, `plans/executive.md`, `--user-prompt`, or `--user-prompt-file`.
 
 ```
 fry prepare [epic_filename] [flags]
@@ -90,6 +92,7 @@ fry prepare [epic_filename] [flags]
 | `--engine <codex\|claude>` | AI engine for generation (default: codex, or `FRY_ENGINE`) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--user-prompt <text>` | Top-level directive to guide artifact generation. Can bootstrap the entire project when no plan files exist (interactive review). |
+| `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--validate-only` | Check that the epic is valid, then exit |
 | `--planning` | Use planning-domain prompts |
 
@@ -116,6 +119,7 @@ fry prepare epic-phase1.md                         # Custom epic filename
 fry prepare --project-dir /path                    # Operate on a different project
 fry prepare --user-prompt "no ORMs, use raw SQL only"
 fry prepare --user-prompt "build a blog engine" --engine claude  # Bootstrap from prompt
+fry prepare --user-prompt-file ./requirements.txt --engine claude # Prompt from file
 fry prepare --validate-only                        # Validate existing epic only
 ```
 

@@ -10,11 +10,12 @@ import (
 )
 
 var (
-	prepareEngine       string
-	prepareUserPrompt   string
-	prepareValidateOnly bool
-	preparePlanning     bool
-	prepareEffort       string
+	prepareEngine         string
+	prepareUserPrompt     string
+	prepareUserPromptFile string
+	prepareValidateOnly   bool
+	preparePlanning       bool
+	prepareEffort         string
 )
 
 var prepareCmd = &cobra.Command{
@@ -27,7 +28,7 @@ var prepareCmd = &cobra.Command{
 			return err
 		}
 
-		userPrompt, err := resolveUserPrompt(projectPath, prepareUserPrompt, true)
+		userPrompt, err := resolveUserPrompt(projectPath, prepareUserPrompt, prepareUserPromptFile, true)
 		if err != nil {
 			return err
 		}
@@ -75,6 +76,7 @@ var prepareCmd = &cobra.Command{
 func init() {
 	prepareCmd.Flags().StringVar(&prepareEngine, "engine", "", "Preparation engine")
 	prepareCmd.Flags().StringVar(&prepareUserPrompt, "user-prompt", "", "Additional user prompt")
+	prepareCmd.Flags().StringVar(&prepareUserPromptFile, "user-prompt-file", "", "Path to file containing user prompt")
 	prepareCmd.Flags().BoolVar(&prepareValidateOnly, "validate-only", false, "Validate without generating files")
 	prepareCmd.Flags().BoolVar(&preparePlanning, "planning", false, "Use planning prepare mode")
 	prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")

@@ -35,6 +35,9 @@ No files needed. Describe what you want and Fry generates everything:
 
 ```bash
 fry --user-prompt "build a REST API for a todo app with PostgreSQL and JWT auth" --engine claude
+
+# Or load a longer prompt from a file
+fry --user-prompt-file ./requirements.txt --engine claude
 ```
 
 Fry will generate an executive context document from your prompt and present it for review. Type `y` to approve and Fry proceeds to generate `plans/executive.md`, `plans/plan.md`, and all build artifacts automatically.
@@ -126,7 +129,7 @@ Fry automatically creates the `.fry/` directory, initializes git (if needed), an
 
 | Setup | Behavior |
 |---|---|
-| Only `--user-prompt` | Fry generates `executive.md` (with interactive review), then `plan.md`, then all build artifacts |
+| Only `--user-prompt` or `--user-prompt-file` | Fry generates `executive.md` (with interactive review), then `plan.md`, then all build artifacts |
 | Only `plans/plan.md` | Fry uses your plan directly for all generation |
 | Only `plans/executive.md` | Fry auto-generates `plan.md` from your executive context (Step 0), then proceeds normally |
 | Both files | Fry uses `executive.md` as alignment context alongside your detailed `plan.md` for better-aligned artifacts |

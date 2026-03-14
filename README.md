@@ -21,6 +21,8 @@ plans/plan.md          You write this -- what to build        (at least one of
 plans/executive.md     You write this -- why to build it       required)
   OR
 --user-prompt "..."    You describe it -- Fry generates the rest
+  OR
+--user-prompt-file f   Same, but reads the prompt from a local file
 media/                 Optional assets (images, PDFs, fonts, etc.) referenced in plans
         |
         v
@@ -99,6 +101,7 @@ fry run epic.md 3 5                    # Run sprints 3-5
 fry --planning --engine claude         # Planning mode (documents, not code)
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive
 fry --user-prompt "build a todo app"  # Start from just a prompt (no plan files needed)
+fry --user-prompt-file ./prompt.txt   # Load a longer prompt from a file
 fry prepare --effort medium            # Generate artifacts with medium effort sizing
 ```
 

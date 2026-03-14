@@ -35,6 +35,7 @@ var (
 	runEngine         string
 	runDryRun         bool
 	runUserPrompt     string
+	runUserPromptFile string
 	runNoReview       bool
 	runSimulateReview string
 	runPrepareEngine  string
@@ -65,7 +66,7 @@ var runCmd = &cobra.Command{
 			epicArg = args[0]
 		}
 
-		userPrompt, err := resolveUserPrompt(projectPath, runUserPrompt, !runDryRun)
+		userPrompt, err := resolveUserPrompt(projectPath, runUserPrompt, runUserPromptFile, !runDryRun)
 		if err != nil {
 			return err
 		}
@@ -464,6 +465,7 @@ func init() {
 	runCmd.Flags().StringVar(&runEngine, "engine", "", "Execution engine")
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "Preview actions without executing")
 	runCmd.Flags().StringVar(&runUserPrompt, "user-prompt", "", "Additional user prompt")
+	runCmd.Flags().StringVar(&runUserPromptFile, "user-prompt-file", "", "Path to file containing user prompt")
 	runCmd.Flags().BoolVar(&runNoReview, "no-review", false, "Disable sprint review")
 	runCmd.Flags().StringVar(&runSimulateReview, "simulate-review", "", "Simulate review verdict")
 	runCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")
@@ -479,7 +481,19 @@ func resolveProjectDir(dir string) (string, error) {
 	return filepath.Abs(dir)
 }
 
-func resolveUserPrompt(projectDir, provided string, persist bool) (string, error) {
+func resolveUserPrompt(projectDir, provided, promptFile string, persist bool) (string, error) {
+	if strings.TrimSpace(provided) != "" && strings.TrimSpace(promptFile) != "" {
+		return "", fmt.Errorf("cannot use both --user-prompt and --user-prompt-file")
+	}
+
+	if strings.TrimSpace(promptFile) != "" {
+		data, err := os.ReadFile(promptFile)
+		if err != nil {
+			return "", fmt.Errorf("reading user prompt file: %w", err)
+		}
+		provided = string(data)
+	}
+
 	if strings.TrimSpace(provided) != "" {
 		if persist {
 			path := filepath.Join(projectDir, config.UserPromptFile)
