@@ -87,7 +87,7 @@ To disable audits for a specific epic, add `@no_audit`:
 
 | Flag | Description |
 |---|---|
-| `--no-audit` | Disable sprint audit for this run |
+| `--no-audit` | Disable sprint and build audits for this run |
 
 ## Severity Classification
 
@@ -231,3 +231,7 @@ Uses Codex for building but Claude for auditing, with up to 5 audit→fix cycles
 ```bash
 fry --no-audit --engine claude
 ```
+
+## See Also
+
+- [Build Audit](build-audit.md) -- final holistic codebase audit that runs after the entire epic completes successfully

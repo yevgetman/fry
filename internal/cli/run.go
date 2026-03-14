@@ -430,6 +430,29 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Run final build audit once the entire epic has completed successfully
+		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && ep.EffortLevel != epic.EffortLow {
+			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
+			if err != nil {
+				frlog.Log("WARNING: could not create engine for build audit: %v", err)
+			} else {
+				if auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
+					ProjectDir: projectPath,
+					Epic:       ep,
+					Engine:     auditEngine,
+					Results:    summaryCopy,
+					Verbose:    frlog.Verbose,
+					Model:      ep.AuditModel,
+				}); auditErr != nil {
+					frlog.Log("WARNING: build audit failed: %v", auditErr)
+				} else {
+					if gitErr := git.GitCheckpoint(projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
+						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
+					}
+				}
+			}
+		}
+
 		releaseLock()
 		return exitErr
 	},
@@ -444,7 +467,7 @@ func init() {
 	runCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")
 	runCmd.Flags().BoolVar(&runPlanning, "planning", false, "Use planning mode")
 	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
-	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint audit")
+	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
 }
 
 func resolveProjectDir(dir string) (string, error) {

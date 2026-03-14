@@ -78,6 +78,21 @@ When issues persist after all passes (advisory, non-blocking):
 [2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 passes (advisory)
 ```
 
+## Build Audit
+
+After all sprints complete successfully, a final holistic audit runs on the entire codebase:
+
+```
+[2026-03-10 13:00:00] > BUILD AUDIT  running final holistic audit for "My Project"
+[2026-03-10 13:15:00]   BUILD AUDIT: report written to audit.md
+```
+
+If the agent does not produce a report:
+
+```
+[2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce audit.md
+```
+
 ## Sprint Review and Replan
 
 ```

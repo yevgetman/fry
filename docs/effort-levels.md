@@ -19,7 +19,7 @@ For simple, well-bounded work: a single page, a config change, a small utility, 
 - Skips scaffolding as a separate sprint — folds it into Sprint 1
 - Sprint prompts omit REFERENCES and STUCK HINT sections for brevity
 - Sprint reviews are skipped entirely, even if `@review_between_sprints` is enabled
-- Sprint audits are skipped entirely (regardless of audit settings)
+- Sprint and build audits are skipped entirely (regardless of audit settings)
 - Focus is on core deliverables only; exhaustive edge cases are omitted
 
 ```bash
@@ -173,7 +173,8 @@ This validation only applies when `@effort` is explicitly set. Epics without an 
 | Prompt structure | Concise | Moderate 7-part | Full 7-part | Extended 9-part |
 | Scaffolding sprint | Merged into Sprint 1 | Normal | Normal | Normal |
 | Review behavior | Skipped | Normal | Normal | Thorough (lower DEVIATE threshold) |
-| Audit behavior | Skipped | Normal (if enabled) | Normal (if enabled) | Normal (if enabled) |
+| Sprint audit | Skipped | Normal (if enabled) | Normal (if enabled) | Normal (if enabled) |
+| Build audit | Skipped | Runs on full epic completion | Runs on full epic completion | Runs on full epic completion |
 | No-op threshold | 2 iterations | 2 iterations | 2 iterations | 3 iterations |
 | Quality directive | No | No | No | Yes (injected into every prompt) |
 | Heal attempts | Default (3) | Default (3) | Default (3) | 5 |
