@@ -2,11 +2,14 @@
 
 ![fry](bestfry-1.jpg)
 
-Fry is an autonomous build engine. You give it a plan written in plain language, and it handles execution end-to-end using OpenAI Codex or Claude Code as the underlying AI engine.
+< The following is written by a human: >
 
-It breaks your plan into sprints, runs each one through an AI agent loop, then verifies the output with machine-executable checks. If a check fails, it re-runs the sprint with a targeted fix prompt. After each sprint, a separate AI agent audits the work and blocks the build on critical issues. Once all sprints finish, a final holistic audit reviews the full output. Every sprint is git-checkpointed automatically.
+Fry is an autonomous document engine, built for long-run coding task, but capable of so much more. Fry is designed for generating a large corpus of documents -- large complex codebases, yes, but also research documents, strategic analyses, business plans, it'll even write you an complete book. And this think is, it actaully doesnt suck. 
 
-Fry can produce application code in any language, but also research documents, strategic analyses, and long-form writing via a planning mode. An effort system sizes the run to match the task — a small fix gets one sprint, a large project gets phased execution with mid-build review and dynamic replanning.
+</ end of stuff written by human >
+
+It breaks your plan into sprints, runs each one through an AI agent loop, then verifies the output with machine-executable checks. If a check fails, it re-runs the sprint with a targeted fix prompt. An effort system sizes the run to match the task — a small fix gets one sprint, a large project gets phased execution with mid-build review and dynamic replanning. After each sprint, a separate AI agent audits the work and blocks the build on critical issues. Once all sprints finish, a final holistic audit reviews the full output. Every sprint is git-checkpointed automatically.
+
 
 > This is the Go rewrite of [Fry](https://github.com/yevgetman/fry). Same capabilities, single static binary, no bash 4.0+ dependency.
 
