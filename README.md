@@ -1,4 +1,4 @@
-# fry
+# fry 🍳
 
 ![fry](bestfry-1.jpg)
 
