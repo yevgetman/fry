@@ -4,7 +4,7 @@
 
 < The following is written by a human >
 
-    Fry is an autonomous document engine, built for long-run coding task, but capable of so much more. Fry is designed for generating a large corpus of documents -- large complex codebases, yes, but also research documents, strategic analyses, business plans, it'll even write you an complete book. And this think is, it actaully doesnt suck. 
+Fry is an autonomous document engine, built for long-run coding task, but capable of so much more. Fry is designed for generating a large corpus of documents -- large complex codebases, yes, but also research documents, strategic analyses, business plans, it'll even write you an complete book. And this think is, it actaully doesnt suck. 
 
 </ end of stuff written by human >
 
