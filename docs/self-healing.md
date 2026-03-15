@@ -77,7 +77,7 @@ After the retried sprint passes, subsequent sprints in the range run normally wi
 
 ### Resume (full re-run)
 
-`fry run .fry/epic.md 4` re-runs the sprint from scratch — fresh iterations, fresh progress file. Use this when the sprint's approach was fundamentally wrong and needs a clean start.
+`fry run --sprint 4` re-runs the sprint from scratch — fresh iterations, fresh progress file. Use this when the sprint's approach was fundamentally wrong and needs a clean start.
 
 ### Retry heal budget
 

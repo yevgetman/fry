@@ -26,11 +26,17 @@ Positional arguments are order-dependent: the epic file must come first, followe
 | 2 | `start_sprint` | First sprint to run (default: 1) |
 | 3 | `end_sprint` | Last sprint to run (default: last sprint in epic) |
 
-To specify a sprint range, you must also specify the epic file:
+To specify a sprint range with positional arguments, you must also specify the epic file:
 
 ```bash
 fry run epic.md 3 5       # Correct: run sprints 3-5
 fry run 3 5               # Wrong: treats "3" as the epic filename
+```
+
+Alternatively, use `--sprint` to avoid specifying the epic file:
+
+```bash
+fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 ```
 
 ### Flags

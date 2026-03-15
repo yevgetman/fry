@@ -114,6 +114,17 @@ fry --dry-run
 
 This parses the epic, checks prerequisites, and shows the sprint plan without executing anything.
 
+### 4. If a build fails
+
+When a sprint fails, Fry prints recovery commands:
+
+```bash
+Retry:  fry run --retry --sprint 4
+Resume: fry run --sprint 4
+```
+
+Use `--retry` to skip iterations and go straight to verification + healing with more attempts — the code is already written, it just needs to pass the checks. Use resume (without `--retry`) to re-run the sprint from scratch if the approach was wrong. See [Self-Healing](self-healing.md) for details.
+
 ## Adding Fry to an Existing Project
 
 ```bash
