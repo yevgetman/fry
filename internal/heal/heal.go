@@ -22,7 +22,8 @@ type HealOpts struct {
 	Sprint              *epic.Sprint
 	Epic                *epic.Epic
 	Engine              engine.Engine
-	Checks              []verify.Check
+	Checks              []verify.Check     // Initial checks (used if VerificationFile is empty)
+	VerificationFile    string             // When set, re-parsed each heal attempt so on-disk edits take effect
 	UserPrompt          string
 	Verbose             bool
 	SprintLogFile       string
@@ -60,7 +61,12 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 		default:
 		}
 
-		results, passCount, totalCount := verify.RunChecks(ctx, opts.Checks, opts.Sprint.Number, opts.ProjectDir)
+		checks, reloadErr := reloadChecks(opts)
+		if reloadErr != nil {
+			return false, fmt.Errorf("run heal loop: reload checks: %w", reloadErr)
+		}
+
+		results, passCount, totalCount := verify.RunChecks(ctx, checks, opts.Sprint.Number, opts.ProjectDir)
 		if totalCount == passCount {
 			return true, nil
 		}
@@ -96,7 +102,12 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 		}
 
 		frylog.Log("  Re-running verification after heal attempt %d...", attempt)
-		results, passCount, totalCount = verify.RunChecks(ctx, opts.Checks, opts.Sprint.Number, opts.ProjectDir)
+		// Re-read verification file so on-disk fixes by the agent take effect.
+		checks, reloadErr = reloadChecks(opts)
+		if reloadErr != nil {
+			return false, fmt.Errorf("run heal loop: reload checks after attempt %d: %w", attempt, reloadErr)
+		}
+		results, passCount, totalCount = verify.RunChecks(ctx, checks, opts.Sprint.Number, opts.ProjectDir)
 		if totalCount == passCount {
 			frylog.Log("  Heal attempt %d SUCCEEDED — all checks now pass.", attempt)
 			return true, nil
@@ -112,6 +123,24 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 
 	frylog.Log("  All %d heal attempts exhausted.", maxAttempts)
 	return false, nil
+}
+
+// reloadChecks re-parses the verification file from disk when VerificationFile
+// is set, so that on-disk edits by the healing agent take effect between
+// attempts. Falls back to the pre-loaded Checks slice otherwise.
+func reloadChecks(opts HealOpts) ([]verify.Check, error) {
+	if opts.VerificationFile == "" {
+		return opts.Checks, nil
+	}
+	path := opts.VerificationFile
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(opts.ProjectDir, path)
+	}
+	checks, err := verify.ParseVerification(path)
+	if err != nil {
+		return nil, err
+	}
+	return checks, nil
 }
 
 func buildHealPrompt(opts HealOpts, failureReport string) string {

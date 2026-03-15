@@ -200,14 +200,15 @@ func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check,
 		return StatusPass, nil
 	case promiseFound && hasChecks && !checksPass:
 		healed, err := heal.RunHealLoop(ctx, heal.HealOpts{
-			ProjectDir:    cfg.ProjectDir,
-			Sprint:        cfg.Sprint,
-			Epic:          cfg.Epic,
-			Engine:        cfg.Engine,
-			Checks:        checks,
-			UserPrompt:    cfg.UserPrompt,
-			Verbose:       cfg.Verbose,
-			SprintLogFile: sprintLogPath,
+			ProjectDir:       cfg.ProjectDir,
+			Sprint:           cfg.Sprint,
+			Epic:             cfg.Epic,
+			Engine:           cfg.Engine,
+			Checks:           checks,
+			VerificationFile: cfg.Epic.VerificationFile,
+			UserPrompt:       cfg.UserPrompt,
+			Verbose:          cfg.Verbose,
+			SprintLogFile:    sprintLogPath,
 		})
 		if err != nil {
 			return "", err
@@ -222,14 +223,15 @@ func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check,
 		return StatusPassVerificationPassedNoPromise, nil
 	default:
 		healed, err := heal.RunHealLoop(ctx, heal.HealOpts{
-			ProjectDir:    cfg.ProjectDir,
-			Sprint:        cfg.Sprint,
-			Epic:          cfg.Epic,
-			Engine:        cfg.Engine,
-			Checks:        checks,
-			UserPrompt:    cfg.UserPrompt,
-			Verbose:       cfg.Verbose,
-			SprintLogFile: sprintLogPath,
+			ProjectDir:       cfg.ProjectDir,
+			Sprint:           cfg.Sprint,
+			Epic:             cfg.Epic,
+			Engine:           cfg.Engine,
+			Checks:           checks,
+			VerificationFile: cfg.Epic.VerificationFile,
+			UserPrompt:       cfg.UserPrompt,
+			Verbose:          cfg.Verbose,
+			SprintLogFile:    sprintLogPath,
 		})
 		if err != nil {
 			return "", err
@@ -333,6 +335,7 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		Epic:                cfg.Epic,
 		Engine:              cfg.Engine,
 		Checks:              checks,
+		VerificationFile:    cfg.Epic.VerificationFile,
 		UserPrompt:          cfg.UserPrompt,
 		Verbose:             cfg.Verbose,
 		SprintLogFile:       sprintLogPath,

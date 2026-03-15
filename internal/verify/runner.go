@@ -81,12 +81,27 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 			return result
 		}
 
+		// Trim leading/trailing whitespace from each line before matching.
+		// This prevents platform-specific formatting (e.g., macOS wc -w
+		// producing "  42" instead of "42") from causing false negatives.
+		trimmed := trimOutputLines(stdout.String())
 		grep := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s", textutil.ShellQuote(check.Pattern)))
-		grep.Stdin = strings.NewReader(stdout.String())
+		grep.Stdin = strings.NewReader(trimmed)
 		result.Passed = grep.Run() == nil
 	}
 
 	return result
+}
+
+// trimOutputLines trims leading and trailing whitespace from each line of
+// output. This normalizes platform differences (e.g., macOS wc produces
+// leading spaces) so that anchored patterns like ^[0-9]+$ match reliably.
+func trimOutputLines(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // maxCheckOutput caps the amount of output captured from verification commands

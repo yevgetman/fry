@@ -9,7 +9,7 @@ When verification checks fail after a sprint completes, Fry enters a **heal loop
 3. **Heal prompt assembled** — `.fry/prompt.md` is overwritten with a targeted heal prompt containing the specific failures, instructions for minimum changes, and pointers to context files
 4. **Agent re-runs** — a fresh agent session executes with the heal prompt
 5. **Pre-sprint hook re-runs** — if configured (e.g., `npm install`), runs again to pick up changes
-6. **Re-verification** — all checks for the sprint run again
+6. **Re-verification** — the verification file is re-read from disk (so agent edits to checks take effect), then all checks for the sprint run again
 7. **Repeat or exit** — if checks still fail, the failure report is appended to `.fry/sprint-progress.txt` and steps 2-6 repeat. Exits when all checks pass (**PASS (healed)**) or max attempts exhausted (**FAIL**)
 
 ## Heal Prompt Structure

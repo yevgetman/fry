@@ -58,6 +58,16 @@ The same four check primitives work for non-code deliverables in [planning mode]
 @check_cmd_output grep -c '^## ' plans/market-analysis.md | ^[5-9]
 ```
 
+## Output Normalization
+
+`@check_cmd_output` trims leading and trailing whitespace from each line of command output before pattern matching. This prevents platform-specific formatting differences from causing false negatives. For example, macOS `wc -w` outputs `     42` (with leading spaces) while Linux outputs `42`. After trimming, the pattern `^[0-9]+$` matches on both platforms.
+
+If you need to match exact whitespace in command output, use a pattern that accounts for optional whitespace (e.g., `\s*42\s*` instead of `^42$`).
+
+## Verification Reload During Healing
+
+When a heal pass modifies `.fry/verification.md` (e.g., fixing a broken check), Fry re-reads the file before the next verification run. This ensures on-disk edits by the healing agent take effect between attempts, rather than being ignored due to in-memory caching.
+
 ## Graceful Degradation
 
 - If `.fry/verification.md` does not exist, Fry falls back to promise-only behavior

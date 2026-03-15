@@ -193,6 +193,69 @@ func TestHealLoopSucceeds(t *testing.T) {
 	assert.Empty(t, mockEngine.prompts, "engine should not run when checks already pass")
 }
 
+func TestHealLoopReloadsVerificationFile(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	// Write a verification file that checks for a missing file
+	verificationPath := filepath.Join(projectDir, ".fry", "verification.md")
+	writeFile(t, verificationPath, "@sprint 1\n@check_file missing.txt\n")
+
+	// Engine that "fixes" the issue on first attempt by creating the file
+	// AND rewrites verification to check a file that already exists
+	fixEngine := &fixingEngine{
+		projectDir:       projectDir,
+		verificationPath: verificationPath,
+	}
+
+	healed, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir: projectDir,
+		Sprint: &epic.Sprint{
+			Number: 1,
+			Name:   "Reload test",
+		},
+		Epic: &epic.Epic{
+			TotalSprints:    1,
+			MaxHealAttempts: 3,
+		},
+		Engine:           fixEngine,
+		SprintLogFile:    sprintLog,
+		VerificationFile: verificationPath,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, healed, "should pass after engine rewrites verification file")
+	assert.Equal(t, 1, fixEngine.calls, "should only need one heal attempt")
+}
+
+// fixingEngine rewrites the verification file on each call to point to a file
+// that exists, simulating an agent that fixes a bad verification check.
+type fixingEngine struct {
+	projectDir       string
+	verificationPath string
+	calls            int
+}
+
+func (f *fixingEngine) Run(_ context.Context, prompt string, opts engine.RunOpts) (string, int, error) {
+	f.calls++
+	// Create a file and rewrite verification to check for it
+	existing := filepath.Join(f.projectDir, "exists.txt")
+	_ = os.WriteFile(existing, []byte("ok"), 0o644)
+	_ = os.WriteFile(f.verificationPath, []byte("@sprint 1\n@check_file exists.txt\n"), 0o644)
+	if opts.Stdout != nil {
+		_, _ = opts.Stdout.Write([]byte("fixed verification\n"))
+	}
+	return "fixed verification\n", 0, nil
+}
+
+func (f *fixingEngine) Name() string { return "stub" }
+
 type stubEngine struct {
 	name    string
 	prompts []string

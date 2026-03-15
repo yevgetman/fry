@@ -223,6 +223,33 @@ func TestRunChecksCmdOutput(t *testing.T) {
 	assert.False(t, results[2].Passed)
 }
 
+func TestRunChecksCmdOutputTrimsWhitespace(t *testing.T) {
+	t.Parallel()
+
+	// Simulate macOS wc -w which outputs leading whitespace (e.g., "     42")
+	checks := []Check{
+		{Sprint: 1, Type: CheckCmdOutput, Command: "printf '   42\\n'", Pattern: "^42$"},
+		{Sprint: 1, Type: CheckCmdOutput, Command: "printf '  hello  \\n  world  \\n'", Pattern: "^world$"},
+	}
+
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, t.TempDir())
+	require.Len(t, results, 2)
+	assert.Equal(t, 2, passCount)
+	assert.Equal(t, 2, totalCount)
+	assert.True(t, results[0].Passed, "leading whitespace should be trimmed before matching")
+	assert.True(t, results[1].Passed, "per-line trimming should work across multiple lines")
+}
+
+func TestTrimOutputLines(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "42", trimOutputLines("   42"))
+	assert.Equal(t, "42\n", trimOutputLines("   42\n"))
+	assert.Equal(t, "hello\nworld", trimOutputLines("  hello  \n  world  "))
+	assert.Equal(t, "", trimOutputLines(""))
+	assert.Equal(t, "ok", trimOutputLines("ok"))
+}
+
 func writeVerificationFile(t *testing.T, contents string) string {
 	t.Helper()
 
