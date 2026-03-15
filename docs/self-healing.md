@@ -60,8 +60,8 @@ Self-healing progress is always visible in the terminal:
 When all heal attempts are exhausted and the sprint fails, Fry prints two recovery commands:
 
 ```
-Retry:  fry run --retry .fry/epic.md 4
-Resume: fry run .fry/epic.md 4
+Retry:  fry run --retry --sprint 4
+Resume: fry run --sprint 4
 ```
 
 ### `--retry` (recommended)

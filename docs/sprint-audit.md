@@ -173,7 +173,8 @@ The git diff is refreshed before each audit pass (via a callback) so that fixes 
 ### CRITICAL/HIGH issues persist (blocking):
 ```
 [2026-03-10 12:20:00]   AUDIT: FAILED — HIGH issues remain after 3 passes
-Resume: fry run my-epic.md 3
+Retry:  fry run --retry --sprint 3
+Resume: fry run --sprint 3
 ```
 
 ### MODERATE issues persist (advisory):

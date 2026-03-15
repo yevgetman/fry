@@ -141,8 +141,8 @@ Hooks execute via `bash -c` in the project directory.
 When a sprint fails (after exhausting heal attempts), Fry commits partial work and prints two recovery commands:
 
 ```
-Retry:  fry run --retry .fry/epic.md 4
-Resume: fry run .fry/epic.md 4
+Retry:  fry run --retry --sprint 4
+Resume: fry run --sprint 4
 ```
 
 ### `--retry` (recommended for verification failures)

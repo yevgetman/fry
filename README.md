@@ -100,7 +100,7 @@ fry --engine claude                    # Use Claude Code for build stage
 fry --effort low                       # Simple task: 1-2 sprints, minimal overhead
 fry --effort max --engine claude       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
-fry run --retry epic.md 4              # Retry failed sprint 4 (skip iterations, heal only)
+fry run --retry --sprint 4             # Retry failed sprint 4 (skip iterations, heal only)
 fry --planning                         # Planning mode (documents, not code) — claude for both stages
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive
 fry --user-prompt "build a todo app"  # Start from just a prompt (no plan files needed)

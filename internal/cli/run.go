@@ -43,6 +43,7 @@ var (
 	runEffort         string
 	runNoAudit        bool
 	runRetry          bool
+	runSprint         int
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -129,6 +130,12 @@ var runCmd = &cobra.Command{
 		if len(args) > 1 {
 			rangeArgs = args[1:]
 		}
+		if runSprint > 0 {
+			if len(rangeArgs) > 0 {
+				return fmt.Errorf("cannot use --sprint with positional sprint arguments")
+			}
+			rangeArgs = []string{strconv.Itoa(runSprint)}
+		}
 		startSprint, endSprint, err := resolveSprintRange(rangeArgs, ep.TotalSprints)
 		if err != nil {
 			return err
@@ -154,10 +161,6 @@ var runCmd = &cobra.Command{
 		var mu sync.Mutex
 		currentSprint := 0
 		epicName := ep.Name // guarded by mu; updated after replan
-		resumeEpicArg := epicArg
-		if strings.TrimSpace(resumeEpicArg) == "" {
-			resumeEpicArg = filepath.Join(config.FryDir, "epic.md")
-		}
 
 		signalCh := make(chan os.Signal, 1)
 		signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
@@ -300,8 +303,8 @@ var runCmd = &cobra.Command{
 							mu.Lock()
 							results[sprintNum-startSprint].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
 							mu.Unlock()
-							fmt.Fprintf(cmd.OutOrStdout(), "Retry:  fry run --retry %s %d\n", resumeEpicArg, spr.Number)
-							fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run %s %d\n", resumeEpicArg, spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Retry:  fry run --retry --sprint %d\n", spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run --sprint %d\n", spr.Number)
 							exitErr = errBuildFailed
 							break
 						}
@@ -420,8 +423,8 @@ var runCmd = &cobra.Command{
 				continue
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Retry:  fry run --retry %s %d\n", resumeEpicArg, spr.Number)
-			fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run %s %d\n", resumeEpicArg, spr.Number)
+			fmt.Fprintf(cmd.OutOrStdout(), "Retry:  fry run --retry --sprint %d\n", spr.Number)
+			fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run --sprint %d\n", spr.Number)
 			exitErr = errBuildFailed
 			break
 		}
@@ -501,6 +504,7 @@ func init() {
 	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
 	runCmd.Flags().BoolVar(&runRetry, "retry", false, "Retry failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
+	runCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
 }
 
 func resolveProjectDir(dir string) (string, error) {
