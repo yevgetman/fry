@@ -452,6 +452,131 @@ func (s *stubEngine) Name() string {
 	return s.name
 }
 
+func TestRetrySprintPassesWhenChecksAlreadyPass(t *testing.T) {
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1: Test — Progress\n\nprevious context\n")
+	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file result.txt\n")
+	writeFile(t, filepath.Join(projectDir, "result.txt"), "ok\n")
+
+	mockEngine := &stubEngine{name: "codex"}
+
+	result, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:     2,
+			VerificationFile: config.DefaultVerificationFile,
+			MaxHealAttempts:  3,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Test",
+			MaxIterations: 5,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, result.Status)
+	// Engine should NOT have been invoked — no iterations, no heal needed
+	assert.Empty(t, mockEngine.prompts)
+
+	// Sprint progress should be preserved (not overwritten)
+	progress, err := os.ReadFile(filepath.Join(projectDir, config.SprintProgressFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(progress), "previous context")
+	assert.Contains(t, string(progress), "RETRY MODE")
+}
+
+func TestRetrySprintFailsWhenHealExhausted(t *testing.T) {
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1: Test — Progress\n\n")
+	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file missing.txt\n")
+
+	mockEngine := &stubEngine{name: "codex"}
+
+	result, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:     1,
+			VerificationFile: config.DefaultVerificationFile,
+			MaxHealAttempts:  2,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Test",
+			MaxIterations: 2,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusFailVerificationFailedHealExhausted, result.Status)
+	// Retry mode should use boosted attempts: max(2*2, 6) = 6
+	assert.Len(t, mockEngine.prompts, config.RetryMinHealAttempts)
+}
+
+func TestRetrySprintNoChecks(t *testing.T) {
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1 — Progress\n\n")
+
+	mockEngine := &stubEngine{name: "codex"}
+
+	result, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints: 1,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Test",
+			MaxIterations: 2,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, result.Status)
+	assert.Empty(t, mockEngine.prompts)
+}
+
+func TestRetrySprintPreservesProgress(t *testing.T) {
+	projectDir := t.TempDir()
+	originalProgress := "# Sprint 3: Auth — Progress\n\n## Iteration 1\nDid auth work\n\n--- Heal attempt 1 failed ---\nSome failure\n"
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), originalProgress)
+	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 3\n@check_file auth.go\n")
+	writeFile(t, filepath.Join(projectDir, "auth.go"), "package auth\n")
+
+	mockEngine := &stubEngine{name: "codex"}
+
+	result, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:     5,
+			VerificationFile: config.DefaultVerificationFile,
+			MaxHealAttempts:  3,
+		},
+		Sprint: &epic.Sprint{
+			Number:        3,
+			Name:          "Auth",
+			MaxIterations: 5,
+			Promise:       "AUTH_DONE",
+			Prompt:        "Build auth.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, result.Status)
+
+	// Verify original progress was preserved and retry marker appended
+	progress, err := os.ReadFile(filepath.Join(projectDir, config.SprintProgressFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(progress), "Heal attempt 1 failed")
+	assert.Contains(t, string(progress), "RETRY MODE")
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))

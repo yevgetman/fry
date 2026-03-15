@@ -134,6 +134,36 @@ func TestHealPerSprintOverride(t *testing.T) {
 	assert.Len(t, mockEngine.prompts, 1)
 }
 
+func TestHealLoopMaxAttemptsOverride(t *testing.T) {
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	healed, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir: projectDir,
+		Sprint: &epic.Sprint{
+			Number: 1,
+			Name:   "Heal",
+		},
+		Epic: &epic.Epic{
+			TotalSprints:    2,
+			MaxHealAttempts: 2, // Would normally limit to 2
+		},
+		Engine:              mockEngine,
+		SprintLogFile:       sprintLog,
+		MaxAttemptsOverride: 5, // Override to 5
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, healed)
+	// Should use the override (5) instead of epic default (2)
+	assert.Len(t, mockEngine.prompts, 5)
+}
+
 func TestHealLoopSucceeds(t *testing.T) {
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")

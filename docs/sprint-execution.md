@@ -138,11 +138,27 @@ Hooks execute via `bash -c` in the project directory.
 
 ## Resuming Failed Builds
 
-When a sprint fails (after exhausting heal attempts), Fry commits partial work and prints a resume command:
+When a sprint fails (after exhausting heal attempts), Fry commits partial work and prints two recovery commands:
 
 ```
+Retry:  fry run --retry .fry/epic.md 4
 Resume: fry run .fry/epic.md 4
 ```
+
+### `--retry` (recommended for verification failures)
+
+The `--retry` flag skips the iteration loop entirely and goes straight to verification + healing with a boosted heal budget (2x normal attempts, minimum 6). It preserves the existing `.fry/sprint-progress.txt` so the agent retains full context from the previous failed attempt — including prior iteration logs and heal failure reports.
+
+Use `--retry` when:
+- The sprint's code was largely written correctly but verification checks are failing
+- The heal loop was exhausted but more attempts might fix remaining issues
+- You don't want to re-run iterations that would overwrite existing work
+
+After the retried sprint passes, subsequent sprints in the range run normally.
+
+### Resume (full re-run)
+
+`fry run .fry/epic.md 4` re-runs the sprint from scratch — fresh iterations, fresh progress file. Use this when the sprint's approach was fundamentally wrong and needs a clean start.
 
 Progress is preserved in `.fry/sprint-progress.txt`, `.fry/epic-progress.txt`, and git history. The agent picks up where it left off.
 

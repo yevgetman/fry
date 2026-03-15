@@ -55,6 +55,48 @@ Self-healing progress is always visible in the terminal:
 [2026-03-10 12:12:05] Heal attempt 1 SUCCEEDED — all checks now pass.
 ```
 
+## Retrying After Heal Exhaustion
+
+When all heal attempts are exhausted and the sprint fails, Fry prints two recovery commands:
+
+```
+Retry:  fry run --retry .fry/epic.md 4
+Resume: fry run .fry/epic.md 4
+```
+
+### `--retry` (recommended)
+
+The `--retry` flag skips the iteration loop entirely and goes straight to verification + healing with a **boosted heal budget** (2x the normal max, minimum 6 attempts). It preserves the existing `.fry/sprint-progress.txt`, giving the heal agent full context from the previous run — including all prior iteration logs and failed heal attempt reports.
+
+Use `--retry` when:
+- The sprint's code was largely correct but verification checks are failing
+- The heal loop ran out of attempts but more effort could fix the remaining issues
+- You don't want to re-run iterations that would overwrite existing work
+
+After the retried sprint passes, subsequent sprints in the range run normally with full iterations.
+
+### Resume (full re-run)
+
+`fry run .fry/epic.md 4` re-runs the sprint from scratch — fresh iterations, fresh progress file. Use this when the sprint's approach was fundamentally wrong and needs a clean start.
+
+### Retry heal budget
+
+The retry heal budget is calculated as:
+
+```
+boosted = max(normal_max * 2, 6)
+```
+
+| Normal max | Retry budget |
+|---|---|
+| 1 | 6 |
+| 2 | 6 |
+| 3 | 6 |
+| 4 | 8 |
+| 5 | 10 |
+
+The normal max is determined by `@max_heal_attempts` (global or per-sprint), defaulting to 3.
+
 ## Build Log Files
 
 Heal attempt logs are stored alongside regular iteration logs:
@@ -62,4 +104,5 @@ Heal attempt logs are stored alongside regular iteration logs:
 .fry/build-logs/
   sprint3_heal1_20060102_150405.log
   sprint3_heal2_20060102_150405.log
+  sprint3_retry_20060102_150405.log      # Retry mode aggregate log
 ```

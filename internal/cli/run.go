@@ -42,6 +42,7 @@ var (
 	runPlanning       bool
 	runEffort         string
 	runNoAudit        bool
+	runRetry          bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -79,6 +80,9 @@ var runCmd = &cobra.Command{
 		printMigrationHintIfNeeded(cmd.OutOrStdout(), projectPath, epicArg)
 
 		if !epicExists {
+			if runRetry {
+				return fmt.Errorf("--retry requires existing build artifacts; epic file not found at %s", epicArg)
+			}
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
 			if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
 				ProjectDir:   projectPath,
@@ -219,23 +223,41 @@ var runCmd = &cobra.Command{
 				return err
 			}
 
-			if sprint.ShouldResetEpicProgress(startSprint, sprintNum, endSprint, ep.TotalSprints) {
+			// Skip epic progress reset in retry mode to preserve prior context
+			if !runRetry && sprint.ShouldResetEpicProgress(startSprint, sprintNum, endSprint, ep.TotalSprints) {
 				if err := sprint.InitEpicProgress(projectPath, ep.Name); err != nil {
 					return err
 				}
 			}
 
-			result, err := sprint.RunSprint(ctx, sprint.RunConfig{
-				ProjectDir:  projectPath,
-				Epic:        ep,
-				Sprint:      spr,
-				Engine:      buildEngine,
-				Verbose:     frlog.Verbose,
-				DryRun:      false,
-				UserPrompt:  userPrompt,
-				StartSprint: startSprint,
-				EndSprint:   endSprint,
-			})
+			// In retry mode, the first sprint skips iterations and goes straight
+			// to verification + healing with a boosted attempt budget.
+			var result *sprint.SprintResult
+			if runRetry && sprintNum == startSprint {
+				result, err = sprint.RetrySprint(ctx, sprint.RunConfig{
+					ProjectDir:  projectPath,
+					Epic:        ep,
+					Sprint:      spr,
+					Engine:      buildEngine,
+					Verbose:     frlog.Verbose,
+					DryRun:      false,
+					UserPrompt:  userPrompt,
+					StartSprint: startSprint,
+					EndSprint:   endSprint,
+				})
+			} else {
+				result, err = sprint.RunSprint(ctx, sprint.RunConfig{
+					ProjectDir:  projectPath,
+					Epic:        ep,
+					Sprint:      spr,
+					Engine:      buildEngine,
+					Verbose:     frlog.Verbose,
+					DryRun:      false,
+					UserPrompt:  userPrompt,
+					StartSprint: startSprint,
+					EndSprint:   endSprint,
+				})
+			}
 			if err != nil {
 				return err
 			}
@@ -278,6 +300,7 @@ var runCmd = &cobra.Command{
 							mu.Lock()
 							results[sprintNum-startSprint].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
 							mu.Unlock()
+							fmt.Fprintf(cmd.OutOrStdout(), "Retry:  fry run --retry %s %d\n", resumeEpicArg, spr.Number)
 							fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run %s %d\n", resumeEpicArg, spr.Number)
 							exitErr = errBuildFailed
 							break
@@ -397,6 +420,7 @@ var runCmd = &cobra.Command{
 				continue
 			}
 
+			fmt.Fprintf(cmd.OutOrStdout(), "Retry:  fry run --retry %s %d\n", resumeEpicArg, spr.Number)
 			fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run %s %d\n", resumeEpicArg, spr.Number)
 			exitErr = errBuildFailed
 			break
@@ -476,6 +500,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runPlanning, "planning", false, "Use planning mode")
 	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
+	runCmd.Flags().BoolVar(&runRetry, "retry", false, "Retry failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -597,6 +622,9 @@ func printDryRunReport(w io.Writer, projectDir, epicPath string, ep *epic.Epic, 
 	fmt.Fprintf(w, "Epic file: %s\n", epicPath)
 	fmt.Fprintf(w, "Engine: %s\n", engineName)
 	fmt.Fprintf(w, "Effort: %s\n", ep.EffortLevel)
+	if runRetry {
+		fmt.Fprintln(w, "Mode: retry (skip iterations, verify + heal only)")
+	}
 	fmt.Fprintf(w, "Sprints: %d-%d of %d\n", startSprint, endSprint, ep.TotalSprints)
 	fmt.Fprintln(w, "Verification checks:")
 	verificationPath := ep.VerificationFile

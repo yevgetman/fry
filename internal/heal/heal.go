@@ -18,14 +18,15 @@ import (
 )
 
 type HealOpts struct {
-	ProjectDir    string
-	Sprint        *epic.Sprint
-	Epic          *epic.Epic
-	Engine        engine.Engine
-	Checks        []verify.Check
-	UserPrompt    string
-	Verbose       bool
-	SprintLogFile string
+	ProjectDir          string
+	Sprint              *epic.Sprint
+	Epic                *epic.Epic
+	Engine              engine.Engine
+	Checks              []verify.Check
+	UserPrompt          string
+	Verbose             bool
+	SprintLogFile       string
+	MaxAttemptsOverride int // When > 0, overrides epic/sprint max heal attempts
 }
 
 func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
@@ -42,6 +43,9 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 	}
 	if maxAttempts <= 0 {
 		maxAttempts = config.DefaultMaxHealAttempts
+	}
+	if opts.MaxAttemptsOverride > 0 {
+		maxAttempts = opts.MaxAttemptsOverride
 	}
 
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)

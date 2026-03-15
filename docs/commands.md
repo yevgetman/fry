@@ -48,6 +48,7 @@ fry run 3 5               # Wrong: treats "3" as the epic filename
 | `--no-audit` | Disable sprint and build audits for this run |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
+| `--retry` | Retry a failed sprint: skip iterations, go straight to verification + healing with boosted attempts (2x normal, minimum 6). Preserves existing progress for full context. Only applies to the first sprint in the range; subsequent sprints run normally. |
 | `--dry-run` | Parse epic and show plan without running anything |
 
 ### Examples
@@ -64,6 +65,8 @@ fry run epic-phase2.md                            # Use a custom epic filename
 fry run epic.md 4                                 # Resume from sprint 4
 fry run epic.md 4 4                               # Run only sprint 4
 fry run epic.md 3 5                               # Run sprints 3 through 5
+fry run --retry epic.md 4                         # Retry failed sprint 4 (verify + heal only)
+fry run --retry epic.md 4 6                       # Retry sprint 4, then run 5-6 normally
 fry --verbose                                     # Print agent output to terminal
 fry --prepare-engine codex                        # Override: use Codex for generation, Codex for build
 fry --planning                                    # Planning project (documents, not code) — uses Claude for both stages

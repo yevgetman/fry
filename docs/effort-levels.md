@@ -180,6 +180,7 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | No-op threshold | 2 iterations | 2 iterations | 2 iterations | 3 iterations |
 | Quality directive | No | No | No | Yes (injected into every prompt) |
 | Heal attempts | Default (3) | Default (3) | Default (3) | 5 |
+| Retry heal attempts | 6 | 6 | 6 | 10 |
 | Compact with agent | Default | Default | Default | Enabled |
 
 ## Backward Compatibility
