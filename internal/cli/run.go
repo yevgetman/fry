@@ -48,6 +48,12 @@ var (
 
 var errBuildFailed = fmt.Errorf("build failed")
 
+type deferredEntry struct {
+	SprintNumber int
+	SprintName   string
+	Failures     []verify.CheckResult
+}
+
 var runCmd = &cobra.Command{
 	Use:   "run [epic.md] [start] [end]",
 	Short: "Run fry against an epic",
@@ -205,6 +211,8 @@ var runCmd = &cobra.Command{
 			AllLowRisk:   true,
 		}
 
+		var allDeferredFailures []deferredEntry
+
 		exitErr := error(nil)
 		for sprintNum := startSprint; sprintNum <= endSprint; sprintNum++ {
 			if sprintNum < 1 || sprintNum > len(ep.Sprints) {
@@ -268,6 +276,17 @@ var runCmd = &cobra.Command{
 			mu.Lock()
 			results[sprintNum-startSprint] = *result
 			mu.Unlock()
+
+			if len(result.DeferredFailures) > 0 {
+				allDeferredFailures = append(allDeferredFailures, deferredEntry{
+					SprintNumber: spr.Number,
+					SprintName:   spr.Name,
+					Failures:     result.DeferredFailures,
+				})
+				writeDeferredFailuresArtifact(projectPath, allDeferredFailures)
+				frlog.Log("  WARNING: %d deferred verification failures (within %d%% threshold)",
+					len(result.DeferredFailures), ep.MaxFailPercent)
+			}
 
 			if isPassStatus(result.Status) {
 				// Sprint audit
@@ -466,22 +485,41 @@ var runCmd = &cobra.Command{
 
 		// Run final build audit once the entire epic has completed successfully
 		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && ep.EffortLevel != epic.EffortLow {
+			deferredContent := readDeferredFailuresArtifact(projectPath)
 			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
 			if err != nil {
 				frlog.Log("WARNING: could not create engine for build audit: %v", err)
 			} else {
 				if auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
-					ProjectDir: projectPath,
-					Epic:       ep,
-					Engine:     auditEngine,
-					Results:    summaryCopy,
-					Verbose:    frlog.Verbose,
-					Model:      ep.AuditModel,
+					ProjectDir:       projectPath,
+					Epic:             ep,
+					Engine:           auditEngine,
+					Results:          summaryCopy,
+					Verbose:          frlog.Verbose,
+					Model:            ep.AuditModel,
+					DeferredFailures: deferredContent,
 				}); auditErr != nil {
 					frlog.Log("WARNING: build audit failed: %v", auditErr)
 				} else {
 					if gitErr := git.GitCheckpoint(projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
+					}
+				}
+			}
+
+			// Re-run deferred verification checks to see if the build audit fixed them
+			if len(allDeferredFailures) > 0 {
+				frlog.Log("  Re-running deferred verification checks after build audit...")
+				for _, entry := range allDeferredFailures {
+					var deferredChecks []verify.Check
+					for _, f := range entry.Failures {
+						deferredChecks = append(deferredChecks, f.Check)
+					}
+					_, passCount, totalCount := verify.RunChecks(ctx, deferredChecks, entry.SprintNumber, projectPath)
+					if passCount == totalCount {
+						frlog.Log("  Sprint %d deferred failures: ALL FIXED by build audit", entry.SprintNumber)
+					} else {
+						frlog.Log("  Sprint %d deferred failures: %d/%d still failing", entry.SprintNumber, totalCount-passCount, totalCount)
 					}
 				}
 			}
@@ -683,10 +721,13 @@ func printBuildSummary(w io.Writer, results []sprint.SprintResult) {
 	}
 	_ = tw.Flush()
 
-	// Print audit warnings after the table
+	// Print warnings after the table
 	for _, result := range results {
 		if result.AuditWarning != "" {
 			fmt.Fprintf(w, "  ⚠ Sprint %d: %s\n", result.Number, result.AuditWarning)
+		}
+		if len(result.DeferredFailures) > 0 {
+			fmt.Fprintf(w, "  ⚠ Sprint %d: %d deferred verification failures\n", result.Number, len(result.DeferredFailures))
 		}
 	}
 }
@@ -713,4 +754,31 @@ func resolveReviewEngine(buildEngineName, reviewEngineName string) (engine.Engin
 
 func startSprintCount(startSprint, endSprint int) int {
 	return endSprint - startSprint + 1
+}
+
+func writeDeferredFailuresArtifact(projectDir string, entries []deferredEntry) {
+	path := filepath.Join(projectDir, config.DeferredFailuresFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		frlog.Log("WARNING: could not create deferred failures dir: %v", err)
+		return
+	}
+	var b strings.Builder
+	b.WriteString("# Deferred Verification Failures\n\n")
+	for _, entry := range entries {
+		b.WriteString(fmt.Sprintf("## Sprint %d: %s\n\n", entry.SprintNumber, entry.SprintName))
+		b.WriteString(verify.CollectDeferredSummary(entry.Failures))
+		b.WriteString("\n")
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		frlog.Log("WARNING: could not write deferred failures artifact: %v", err)
+	}
+}
+
+func readDeferredFailuresArtifact(projectDir string) string {
+	path := filepath.Join(projectDir, config.DeferredFailuresFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }

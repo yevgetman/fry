@@ -28,14 +28,23 @@ type HealOpts struct {
 	Verbose             bool
 	SprintLogFile       string
 	MaxAttemptsOverride int // When > 0, overrides epic/sprint max heal attempts
+	MaxFailPercent      int // Percentage of checks allowed to fail while still passing
 }
 
-func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
+type HealResult struct {
+	Healed           bool                 // all checks passed
+	WithinThreshold  bool                 // fail percent within allowed threshold
+	DeferredFailures []verify.CheckResult // checks that failed but within threshold
+	PassCount        int
+	TotalCount       int
+}
+
+func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 	if opts.Epic == nil || opts.Sprint == nil {
-		return false, fmt.Errorf("run heal loop: epic and sprint are required")
+		return nil, fmt.Errorf("run heal loop: epic and sprint are required")
 	}
 	if opts.Engine == nil {
-		return false, fmt.Errorf("run heal loop: engine is required")
+		return nil, fmt.Errorf("run heal loop: engine is required")
 	}
 
 	maxAttempts := opts.Epic.MaxHealAttempts
@@ -51,31 +60,43 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
-		return false, fmt.Errorf("run heal loop: create build logs dir: %w", err)
+		return nil, fmt.Errorf("run heal loop: create build logs dir: %w", err)
+	}
+
+	// Run an initial check to populate baseline results. This ensures
+	// lastResults/lastPass/lastTotal are always initialized even when
+	// maxAttempts is 0 (defensive) or when the loop exits early.
+	initialChecks, initialErr := reloadChecks(opts)
+	if initialErr != nil {
+		return nil, fmt.Errorf("run heal loop: initial check reload: %w", initialErr)
+	}
+	lastResults, lastPass, lastTotal := verify.RunChecks(ctx, initialChecks, opts.Sprint.Number, opts.ProjectDir)
+	if lastTotal == lastPass {
+		return &HealResult{Healed: true, PassCount: lastPass, TotalCount: lastTotal}, nil
 	}
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		select {
 		case <-ctx.Done():
-			return false, ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 
 		checks, reloadErr := reloadChecks(opts)
 		if reloadErr != nil {
-			return false, fmt.Errorf("run heal loop: reload checks: %w", reloadErr)
+			return nil, fmt.Errorf("run heal loop: reload checks: %w", reloadErr)
 		}
 
 		results, passCount, totalCount := verify.RunChecks(ctx, checks, opts.Sprint.Number, opts.ProjectDir)
 		if totalCount == passCount {
-			return true, nil
+			return &HealResult{Healed: true, PassCount: passCount, TotalCount: totalCount}, nil
 		}
 
 		failureReport := verify.CollectFailures(results, passCount, totalCount)
 		prompt := buildHealPrompt(opts, failureReport)
 		promptPath := filepath.Join(opts.ProjectDir, config.PromptFile)
 		if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
-			return false, fmt.Errorf("run heal loop: write heal prompt: %w", err)
+			return nil, fmt.Errorf("run heal loop: write heal prompt: %w", err)
 		}
 
 		frylog.Log(
@@ -94,35 +115,53 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (bool, error) {
 			fmt.Sprintf("sprint%d_heal%d_%s.log", opts.Sprint.Number, attempt, time.Now().Format("20060102_150405")),
 		)
 		if _, err := runAgentWithDualLogs(ctx, opts, config.HealInvocationPrompt, healLogPath); err != nil {
-			return false, err
+			return nil, err
 		}
 
 		if err := shellhook.Run(ctx, opts.ProjectDir, opts.Epic.PreSprintCmd); err != nil {
-			return false, fmt.Errorf("run heal loop: pre-sprint hook: %w", err)
+			return nil, fmt.Errorf("run heal loop: pre-sprint hook: %w", err)
 		}
 
 		frylog.Log("  Re-running verification after heal attempt %d...", attempt)
 		// Re-read verification file so on-disk fixes by the agent take effect.
 		checks, reloadErr = reloadChecks(opts)
 		if reloadErr != nil {
-			return false, fmt.Errorf("run heal loop: reload checks after attempt %d: %w", attempt, reloadErr)
+			return nil, fmt.Errorf("run heal loop: reload checks after attempt %d: %w", attempt, reloadErr)
 		}
 		results, passCount, totalCount = verify.RunChecks(ctx, checks, opts.Sprint.Number, opts.ProjectDir)
+		lastResults = results
+		lastPass = passCount
+		lastTotal = totalCount
+
 		if totalCount == passCount {
 			frylog.Log("  Heal attempt %d SUCCEEDED — all checks now pass.", attempt)
-			return true, nil
+			return &HealResult{Healed: true, PassCount: passCount, TotalCount: totalCount}, nil
 		}
 
 		frylog.Log("  Heal attempt %d — %d/%d checks still failing.", attempt, totalCount-passCount, totalCount)
 		failureReport = verify.CollectFailures(results, passCount, totalCount)
 		entry := fmt.Sprintf("--- Heal attempt %d failed ---\n\n%s\n\n", attempt, failureReport)
 		if err := appendToSprintProgress(opts.ProjectDir, entry); err != nil {
-			return false, fmt.Errorf("run heal loop: append failure report: %w", err)
+			return nil, fmt.Errorf("run heal loop: append failure report: %w", err)
 		}
 	}
 
 	frylog.Log("  All %d heal attempts exhausted.", maxAttempts)
-	return false, nil
+
+	// Evaluate threshold: allow partial pass if failures are within tolerance
+	outcome := verify.EvaluateThreshold(lastResults, lastPass, lastTotal, opts.MaxFailPercent)
+	if outcome.WithinThreshold {
+		frylog.Log("  Failure rate %.0f%% is within %d%% threshold — deferring %d failures.",
+			outcome.FailPercent, opts.MaxFailPercent, len(outcome.DeferredFailures))
+		return &HealResult{
+			WithinThreshold:  true,
+			DeferredFailures: outcome.DeferredFailures,
+			PassCount:        lastPass,
+			TotalCount:       lastTotal,
+		}, nil
+	}
+
+	return &HealResult{PassCount: lastPass, TotalCount: lastTotal}, nil
 }
 
 // reloadChecks re-parses the verification file from disk when VerificationFile

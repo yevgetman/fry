@@ -29,6 +29,7 @@ Ship the first slice.
 	assert.Equal(t, "Basic Epic", ep.Name)
 	assert.Equal(t, config.DefaultVerificationFile, ep.VerificationFile)
 	assert.Equal(t, config.DefaultMaxHealAttempts, ep.MaxHealAttempts)
+	assert.Equal(t, config.DefaultMaxFailPercent, ep.MaxFailPercent)
 	assert.Equal(t, config.DefaultDockerReadyTimeout, ep.DockerReadyTimeout)
 	assert.Equal(t, config.DefaultMaxDeviationScope, ep.MaxDeviationScope)
 	require.Len(t, ep.Sprints, 1)
@@ -505,6 +506,87 @@ func TestValidateEpic_EffortUnset_AnySprints(t *testing.T) {
 		Sprints:     sprints,
 	}
 	assert.NoError(t, ValidateEpic(ep))
+}
+
+func TestParseEpic_MaxFailPercent(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic Fail Percent
+@max_fail_percent 30
+@sprint 1
+@name One
+@max_iterations 2
+@promise ONE
+@prompt
+Do it.
+`)
+
+	assert.Equal(t, 30, ep.MaxFailPercent)
+}
+
+func TestParseEpic_MaxFailPercentDefault(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic No Percent
+@sprint 1
+@name One
+@max_iterations 2
+@promise ONE
+@prompt
+Do it.
+`)
+
+	assert.Equal(t, config.DefaultMaxFailPercent, ep.MaxFailPercent)
+}
+
+func TestParseEpic_MaxFailPercentZero(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic Strict
+@max_fail_percent 0
+@sprint 1
+@name One
+@max_iterations 2
+@promise ONE
+@prompt
+Do it.
+`)
+
+	assert.Equal(t, 0, ep.MaxFailPercent)
+}
+
+func TestParseEpic_MaxFailPercentHundred(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic Lenient
+@max_fail_percent 100
+@sprint 1
+@name One
+@max_iterations 2
+@promise ONE
+@prompt
+Do it.
+`)
+
+	assert.Equal(t, 100, ep.MaxFailPercent)
+}
+
+func TestValidateEpic_MaxFailPercentOutOfRange(t *testing.T) {
+	t.Parallel()
+
+	ep := &Epic{
+		MaxFailPercent: 101,
+		Sprints: []Sprint{
+			{Number: 1, Name: "One", MaxIterations: 1, Promise: "ONE", Prompt: "Prompt."},
+		},
+	}
+	err := ValidateEpic(ep)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "@max_fail_percent must be between 0 and 100")
 }
 
 func parseTempEpic(t *testing.T, contents string) *Epic {

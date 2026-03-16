@@ -25,6 +25,8 @@ const (
 	StatusPassHealed                           = "PASS (healed)"
 	StatusPassVerificationPassedNoPromise      = "PASS (verification passed, no promise)"
 	StatusPassHealedNoPromise                  = "PASS (healed, no promise)"
+	StatusPassWithDeferredFailures             = "PASS (deferred failures)"
+	StatusPassHealedWithDeferredFailures       = "PASS (healed, deferred failures)"
 	StatusFailVerificationFailedHealExhausted  = "FAIL (verification failed, heal exhausted)"
 	StatusFailNoPromiseVerificationHealExhaust = "FAIL (no promise, verification failed, heal exhausted)"
 	StatusFailNoPrompt                         = "FAIL (no prompt)"
@@ -32,11 +34,12 @@ const (
 )
 
 type SprintResult struct {
-	Number       int
-	Name         string
-	Status       string
-	Duration     time.Duration
-	AuditWarning string // non-empty when MODERATE audit issues remain (advisory)
+	Number           int
+	Name             string
+	Status           string
+	Duration         time.Duration
+	AuditWarning     string               // non-empty when MODERATE audit issues remain (advisory)
+	DeferredFailures []verify.CheckResult  // verification failures below threshold
 }
 
 type RunConfig struct {
@@ -173,73 +176,81 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		frylog.Log("  Verification: %d/%d checks passed.", passCount, totalCount)
 	}
 
-	status, err := determineOutcome(ctx, cfg, checks, promiseFound, results, passCount, totalCount, sprintLogPath)
+	status, deferred, err := determineOutcome(ctx, cfg, checks, promiseFound, results, passCount, totalCount, sprintLogPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(deferred) > 0 {
+		summary := verify.CollectDeferredSummary(deferred)
+		if appendErr := AppendToSprintProgress(cfg.ProjectDir,
+			fmt.Sprintf("\nDeferred verification failures (%d):\n%s\n", len(deferred), summary)); appendErr != nil {
+			frylog.Log("WARNING: could not write deferred failures to sprint progress: %v", appendErr)
+		}
 	}
 
 	elapsed := time.Since(started)
 	frylog.Log("SPRINT %d %s (%s)", cfg.Sprint.Number, status, elapsed.Round(time.Second))
 
 	return &SprintResult{
-		Number:   cfg.Sprint.Number,
-		Name:     cfg.Sprint.Name,
-		Status:   status,
-		Duration: elapsed,
+		Number:           cfg.Sprint.Number,
+		Name:             cfg.Sprint.Name,
+		Status:           status,
+		Duration:         elapsed,
+		DeferredFailures: deferred,
 	}, nil
 }
 
-func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check, promiseFound bool, results []verify.CheckResult, passCount, totalCount int, sprintLogPath string) (string, error) {
+func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check, promiseFound bool, results []verify.CheckResult, passCount, totalCount int, sprintLogPath string) (string, []verify.CheckResult, error) {
 	hasChecks := totalCount > 0
 	checksPass := totalCount == passCount
 
+	healOpts := heal.HealOpts{
+		ProjectDir:       cfg.ProjectDir,
+		Sprint:           cfg.Sprint,
+		Epic:             cfg.Epic,
+		Engine:           cfg.Engine,
+		Checks:           checks,
+		VerificationFile: cfg.Epic.VerificationFile,
+		UserPrompt:       cfg.UserPrompt,
+		Verbose:          cfg.Verbose,
+		SprintLogFile:    sprintLogPath,
+		MaxFailPercent:   cfg.Epic.MaxFailPercent,
+	}
+
 	switch {
 	case promiseFound && !hasChecks:
-		return StatusPass, nil
+		return StatusPass, nil, nil
 	case promiseFound && checksPass:
-		return StatusPass, nil
+		return StatusPass, nil, nil
 	case promiseFound && hasChecks && !checksPass:
-		healed, err := heal.RunHealLoop(ctx, heal.HealOpts{
-			ProjectDir:       cfg.ProjectDir,
-			Sprint:           cfg.Sprint,
-			Epic:             cfg.Epic,
-			Engine:           cfg.Engine,
-			Checks:           checks,
-			VerificationFile: cfg.Epic.VerificationFile,
-			UserPrompt:       cfg.UserPrompt,
-			Verbose:          cfg.Verbose,
-			SprintLogFile:    sprintLogPath,
-		})
+		hr, err := heal.RunHealLoop(ctx, healOpts)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
-		if healed {
-			return StatusPassHealed, nil
+		if hr.Healed {
+			return StatusPassHealed, nil, nil
 		}
-		return StatusFailVerificationFailedHealExhausted, nil
+		if hr.WithinThreshold {
+			return StatusPassWithDeferredFailures, hr.DeferredFailures, nil
+		}
+		return StatusFailVerificationFailedHealExhausted, nil, nil
 	case !promiseFound && !hasChecks:
-		return fmt.Sprintf("FAIL (no promise after %d iters)", cfg.Sprint.MaxIterations), nil
+		return fmt.Sprintf("FAIL (no promise after %d iters)", cfg.Sprint.MaxIterations), nil, nil
 	case !promiseFound && checksPass:
-		return StatusPassVerificationPassedNoPromise, nil
+		return StatusPassVerificationPassedNoPromise, nil, nil
 	default:
-		healed, err := heal.RunHealLoop(ctx, heal.HealOpts{
-			ProjectDir:       cfg.ProjectDir,
-			Sprint:           cfg.Sprint,
-			Epic:             cfg.Epic,
-			Engine:           cfg.Engine,
-			Checks:           checks,
-			VerificationFile: cfg.Epic.VerificationFile,
-			UserPrompt:       cfg.UserPrompt,
-			Verbose:          cfg.Verbose,
-			SprintLogFile:    sprintLogPath,
-		})
+		hr, err := heal.RunHealLoop(ctx, healOpts)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
-		if healed {
-			return StatusPassHealedNoPromise, nil
+		if hr.Healed {
+			return StatusPassHealedNoPromise, nil, nil
 		}
-		return StatusFailNoPromiseVerificationHealExhaust, nil
+		if hr.WithinThreshold {
+			return StatusPassHealedWithDeferredFailures, hr.DeferredFailures, nil
+		}
+		return StatusFailNoPromiseVerificationHealExhaust, nil, nil
 	}
 }
 
@@ -329,7 +340,7 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		frylog.Log("WARNING: could not write failure report to sprint progress: %v", err)
 	}
 
-	healed, err := heal.RunHealLoop(ctx, heal.HealOpts{
+	hr, err := heal.RunHealLoop(ctx, heal.HealOpts{
 		ProjectDir:          cfg.ProjectDir,
 		Sprint:              cfg.Sprint,
 		Epic:                cfg.Epic,
@@ -340,24 +351,38 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		Verbose:             cfg.Verbose,
 		SprintLogFile:       sprintLogPath,
 		MaxAttemptsOverride: boostedAttempts,
+		MaxFailPercent:      cfg.Epic.MaxFailPercent,
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	var deferred []verify.CheckResult
 	status := StatusFailVerificationFailedHealExhausted
-	if healed {
+	if hr.Healed {
 		status = StatusPassHealed
+	} else if hr.WithinThreshold {
+		status = StatusPassWithDeferredFailures
+		deferred = hr.DeferredFailures
+	}
+
+	if len(deferred) > 0 {
+		summary := verify.CollectDeferredSummary(deferred)
+		if appendErr := AppendToSprintProgress(cfg.ProjectDir,
+			fmt.Sprintf("\nDeferred verification failures (%d):\n%s\n", len(deferred), summary)); appendErr != nil {
+			frylog.Log("WARNING: could not write deferred failures to sprint progress: %v", appendErr)
+		}
 	}
 
 	elapsed := time.Since(started)
 	frylog.Log("SPRINT %d RETRY %s (%s)", cfg.Sprint.Number, status, elapsed.Round(time.Second))
 
 	return &SprintResult{
-		Number:   cfg.Sprint.Number,
-		Name:     cfg.Sprint.Name,
-		Status:   status,
-		Duration: elapsed,
+		Number:           cfg.Sprint.Number,
+		Name:             cfg.Sprint.Name,
+		Status:           status,
+		Duration:         elapsed,
+		DeferredFailures: deferred,
 	}, nil
 }
 

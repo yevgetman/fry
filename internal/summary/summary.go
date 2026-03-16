@@ -151,6 +151,14 @@ func buildSummaryPrompt(opts SummaryOpts) string {
 		b.WriteString("\n\n")
 	}
 
+	// Deferred verification failures
+	deferredPath := filepath.Join(opts.ProjectDir, config.DeferredFailuresFile)
+	if data, err := os.ReadFile(deferredPath); err == nil && len(data) > 0 {
+		b.WriteString("## Deferred Verification Failures\n")
+		b.WriteString(string(data))
+		b.WriteString("\n\n")
+	}
+
 	// Deviation log
 	deviationPath := filepath.Join(opts.ProjectDir, config.DeviationLogFile)
 	if data, err := os.ReadFile(deviationPath); err == nil && len(data) > 0 {

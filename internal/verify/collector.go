@@ -29,6 +29,51 @@ func CollectFailures(results []CheckResult, passCount, totalCount int) string {
 	return b.String()
 }
 
+func EvaluateThreshold(results []CheckResult, passCount, totalCount, maxFailPercent int) VerificationOutcome {
+	outcome := VerificationOutcome{
+		Results:    results,
+		PassCount:  passCount,
+		TotalCount: totalCount,
+	}
+
+	if totalCount == 0 {
+		outcome.WithinThreshold = true
+		return outcome
+	}
+
+	failCount := totalCount - passCount
+	outcome.FailPercent = float64(failCount) / float64(totalCount) * 100
+
+	outcome.WithinThreshold = outcome.FailPercent <= float64(maxFailPercent)
+
+	if outcome.WithinThreshold && failCount > 0 {
+		for _, r := range results {
+			if !r.Passed {
+				outcome.DeferredFailures = append(outcome.DeferredFailures, r)
+			}
+		}
+	}
+
+	return outcome
+}
+
+func CollectDeferredSummary(deferred []CheckResult) string {
+	var b strings.Builder
+	for _, result := range deferred {
+		switch result.Check.Type {
+		case CheckFile:
+			b.WriteString(fmt.Sprintf("- DEFERRED: File missing or empty: %s\n", result.Check.Path))
+		case CheckFileContains:
+			b.WriteString(fmt.Sprintf("- DEFERRED: File '%s' does not contain pattern: %s\n", result.Check.Path, result.Check.Pattern))
+		case CheckCmd:
+			b.WriteString(fmt.Sprintf("- DEFERRED: Command failed: %s\n", result.Check.Command))
+		case CheckCmdOutput:
+			b.WriteString(fmt.Sprintf("- DEFERRED: Command output mismatch: %s (expected pattern: %s)\n", result.Check.Command, result.Check.Pattern))
+		}
+	}
+	return b.String()
+}
+
 func truncateLines(s string, maxLines int) string {
 	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
 	if len(lines) == 1 && lines[0] == "" {

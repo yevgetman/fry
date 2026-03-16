@@ -52,7 +52,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, plan references, sprint tasks, iteration memory, and completion signals
 - **Two-file progress tracking** -- per-sprint iteration log + cross-sprint compacted summary for bounded context
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
-- **Independent verification** -- machine-executable checks run after each sprint
+- **Independent verification** -- machine-executable checks run after each sprint with a configurable failure threshold (`@max_fail_percent`, default 20%) — minor failures are deferred rather than blocking the build
 - **Self-healing** -- automatic re-runs with targeted fix prompts on verification failure; `--retry` picks up where a failed build left off with boosted heal attempts
 - **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop (CRITICAL/HIGH block the build; MODERATE is advisory)
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation (up to 10 passes)

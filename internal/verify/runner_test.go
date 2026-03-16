@@ -250,6 +250,102 @@ func TestTrimOutputLines(t *testing.T) {
 	assert.Equal(t, "ok", trimOutputLines("ok"))
 }
 
+func TestEvaluateThresholdNoChecks(t *testing.T) {
+	t.Parallel()
+
+	outcome := EvaluateThreshold(nil, 0, 0, 20)
+	assert.True(t, outcome.WithinThreshold)
+	assert.Equal(t, float64(0), outcome.FailPercent)
+	assert.Empty(t, outcome.DeferredFailures)
+}
+
+func TestEvaluateThresholdAllPass(t *testing.T) {
+	t.Parallel()
+
+	results := []CheckResult{
+		{Check: Check{Type: CheckFile, Path: "a.txt"}, Passed: true},
+		{Check: Check{Type: CheckFile, Path: "b.txt"}, Passed: true},
+	}
+	outcome := EvaluateThreshold(results, 2, 2, 20)
+	assert.True(t, outcome.WithinThreshold)
+	assert.Equal(t, float64(0), outcome.FailPercent)
+	assert.Empty(t, outcome.DeferredFailures)
+}
+
+func TestEvaluateThresholdWithinThreshold(t *testing.T) {
+	t.Parallel()
+
+	results := []CheckResult{
+		{Check: Check{Type: CheckFile, Path: "a.txt"}, Passed: true},
+		{Check: Check{Type: CheckFile, Path: "b.txt"}, Passed: true},
+		{Check: Check{Type: CheckFile, Path: "c.txt"}, Passed: true},
+		{Check: Check{Type: CheckFile, Path: "d.txt"}, Passed: true},
+		{Check: Check{Type: CheckFile, Path: "e.txt"}, Passed: false},
+	}
+	// 1 of 5 = 20%, threshold is 20% → within
+	outcome := EvaluateThreshold(results, 4, 5, 20)
+	assert.True(t, outcome.WithinThreshold)
+	assert.InDelta(t, 20.0, outcome.FailPercent, 0.01)
+	require.Len(t, outcome.DeferredFailures, 1)
+	assert.Equal(t, "e.txt", outcome.DeferredFailures[0].Check.Path)
+}
+
+func TestEvaluateThresholdExceedsThreshold(t *testing.T) {
+	t.Parallel()
+
+	results := []CheckResult{
+		{Check: Check{Type: CheckFile, Path: "a.txt"}, Passed: true},
+		{Check: Check{Type: CheckFile, Path: "b.txt"}, Passed: false},
+		{Check: Check{Type: CheckFile, Path: "c.txt"}, Passed: false},
+	}
+	// 2 of 3 = 66.7%, threshold 20% → exceeds
+	outcome := EvaluateThreshold(results, 1, 3, 20)
+	assert.False(t, outcome.WithinThreshold)
+	assert.InDelta(t, 66.67, outcome.FailPercent, 0.01)
+	assert.Empty(t, outcome.DeferredFailures)
+}
+
+func TestEvaluateThresholdZeroPercent(t *testing.T) {
+	t.Parallel()
+
+	results := []CheckResult{
+		{Check: Check{Type: CheckFile, Path: "a.txt"}, Passed: true},
+		{Check: Check{Type: CheckFile, Path: "b.txt"}, Passed: false},
+	}
+	// strict mode: 0% threshold, any failure exceeds
+	outcome := EvaluateThreshold(results, 1, 2, 0)
+	assert.False(t, outcome.WithinThreshold)
+}
+
+func TestEvaluateThresholdHundredPercent(t *testing.T) {
+	t.Parallel()
+
+	results := []CheckResult{
+		{Check: Check{Type: CheckFile, Path: "a.txt"}, Passed: false},
+		{Check: Check{Type: CheckFile, Path: "b.txt"}, Passed: false},
+	}
+	// 100% threshold → always within
+	outcome := EvaluateThreshold(results, 0, 2, 100)
+	assert.True(t, outcome.WithinThreshold)
+	require.Len(t, outcome.DeferredFailures, 2)
+}
+
+func TestCollectDeferredSummary(t *testing.T) {
+	t.Parallel()
+
+	deferred := []CheckResult{
+		{Check: Check{Type: CheckFile, Path: "missing.txt"}},
+		{Check: Check{Type: CheckFileContains, Path: "go.mod", Pattern: "module x"}},
+		{Check: Check{Type: CheckCmd, Command: "go test ./..."}},
+		{Check: Check{Type: CheckCmdOutput, Command: "echo nope", Pattern: "^ok$"}},
+	}
+	summary := CollectDeferredSummary(deferred)
+	assert.Contains(t, summary, "DEFERRED: File missing or empty: missing.txt")
+	assert.Contains(t, summary, "DEFERRED: File 'go.mod' does not contain pattern: module x")
+	assert.Contains(t, summary, "DEFERRED: Command failed: go test ./...")
+	assert.Contains(t, summary, "DEFERRED: Command output mismatch: echo nope (expected pattern: ^ok$)")
+}
+
 func writeVerificationFile(t *testing.T, contents string) string {
 	t.Helper()
 

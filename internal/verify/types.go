@@ -37,3 +37,12 @@ type CheckResult struct {
 	Passed bool
 	Output string
 }
+
+type VerificationOutcome struct {
+	Results          []CheckResult
+	PassCount        int
+	TotalCount       int
+	FailPercent      float64
+	WithinThreshold  bool
+	DeferredFailures []CheckResult
+}

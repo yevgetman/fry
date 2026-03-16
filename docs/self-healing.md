@@ -10,7 +10,8 @@ When verification checks fail after a sprint completes, Fry enters a **heal loop
 4. **Agent re-runs** — a fresh agent session executes with the heal prompt
 5. **Pre-sprint hook re-runs** — if configured (e.g., `npm install`), runs again to pick up changes
 6. **Re-verification** — the verification file is re-read from disk (so agent edits to checks take effect), then all checks for the sprint run again
-7. **Repeat or exit** — if checks still fail, the failure report is appended to `.fry/sprint-progress.txt` and steps 2-6 repeat. Exits when all checks pass (**PASS (healed)**) or max attempts exhausted (**FAIL**)
+7. **Repeat or exit** — if checks still fail, the failure report is appended to `.fry/sprint-progress.txt` and steps 2-6 repeat. Exits when all checks pass (**PASS (healed)**), or max attempts exhausted and remaining failures are evaluated against the `@max_fail_percent` threshold (default: 20%)
+8. **Threshold evaluation** — after all heal attempts are exhausted, if the failure percentage is within the threshold, the sprint passes with status **PASS (deferred failures)**. Deferred failures are documented in `.fry/deferred-failures.md` and passed to the final [Build Audit](build-audit.md) for remediation. If failures exceed the threshold, the sprint **FAIL**s
 
 ## Heal Prompt Structure
 

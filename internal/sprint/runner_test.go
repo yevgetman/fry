@@ -169,6 +169,8 @@ func TestSprintResultStatusStrings(t *testing.T) {
 	assert.Equal(t, "PASS (healed)", StatusPassHealed)
 	assert.Equal(t, "PASS (verification passed, no promise)", StatusPassVerificationPassedNoPromise)
 	assert.Equal(t, "PASS (healed, no promise)", StatusPassHealedNoPromise)
+	assert.Equal(t, "PASS (deferred failures)", StatusPassWithDeferredFailures)
+	assert.Equal(t, "PASS (healed, deferred failures)", StatusPassHealedWithDeferredFailures)
 	assert.Equal(t, "FAIL (verification failed, heal exhausted)", StatusFailVerificationFailedHealExhausted)
 	assert.Equal(t, "FAIL (no promise, verification failed, heal exhausted)", StatusFailNoPromiseVerificationHealExhaust)
 	assert.Equal(t, "FAIL (no prompt)", StatusFailNoPrompt)
@@ -416,7 +418,7 @@ func TestDetermineOutcome(t *testing.T) {
 				Engine: &stubEngine{name: "codex"},
 			}
 
-			status, err := determineOutcome(
+			status, _, err := determineOutcome(
 				context.Background(), cfg, tt.checks, tt.promiseFound,
 				nil, tt.passCount, tt.totalCount, sprintLog,
 			)
@@ -450,6 +452,88 @@ func (s *stubEngine) Run(_ context.Context, prompt string, opts engine.RunOpts) 
 
 func (s *stubEngine) Name() string {
 	return s.name
+}
+
+func TestDetermineOutcomeDeferredFailures(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	writeFile(t, filepath.Join(projectDir, "a.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "b.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "c.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "d.txt"), "ok\n")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	// 1 of 5 checks fails = 20%, threshold at 20% → within threshold
+	checks := []verify.Check{
+		{Sprint: 1, Type: verify.CheckFile, Path: "a.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "b.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "c.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "d.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+	}
+
+	cfg := RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:    1,
+			MaxHealAttempts: 1,
+			MaxFailPercent:  20,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Threshold",
+			MaxIterations: 2,
+		},
+		Engine: &stubEngine{name: "codex"},
+	}
+
+	status, deferred, err := determineOutcome(
+		context.Background(), cfg, checks, true,
+		nil, 4, 5, sprintLog,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPassWithDeferredFailures, status)
+	assert.Len(t, deferred, 1)
+}
+
+func TestRunSprintDeferredFailuresInResult(t *testing.T) {
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile),
+		"@sprint 1\n@check_file present.txt\n@check_file present2.txt\n@check_file present3.txt\n@check_file present4.txt\n@check_file missing.txt\n")
+	writeFile(t, filepath.Join(projectDir, "present.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "present2.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "present3.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "present4.txt"), "ok\n")
+
+	mockEngine := &stubEngine{
+		name:    "codex",
+		outputs: []string{"===PROMISE: DONE===\n"},
+	}
+
+	result, err := RunSprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:     1,
+			VerificationFile: config.DefaultVerificationFile,
+			MaxHealAttempts:  1,
+			MaxFailPercent:   20,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Deferred",
+			MaxIterations: 1,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusPassWithDeferredFailures, result.Status)
+	assert.Len(t, result.DeferredFailures, 1)
+	assert.Equal(t, "missing.txt", result.DeferredFailures[0].Check.Path)
 }
 
 func TestRetrySprintPassesWhenChecksAlreadyPass(t *testing.T) {

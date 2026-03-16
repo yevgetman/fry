@@ -26,6 +26,10 @@ func ValidateEpic(e *Epic) error {
 		}
 	}
 
+	if e.MaxFailPercent < 0 || e.MaxFailPercent > 100 {
+		return fmt.Errorf("@max_fail_percent must be between 0 and 100, got %d", e.MaxFailPercent)
+	}
+
 	// Validate sprint count against effort level (if set)
 	if e.EffortLevel != "" {
 		maxSprints := e.EffortLevel.MaxSprintCount()

@@ -38,6 +38,18 @@ Unlike the sprint audit (which uses separate audit and fix agents), the build au
 
 The agent repeats this cycle up to 10 iterations. This design gives the agent full context across audit and fix passes, enabling more coherent remediation of cross-cutting issues.
 
+## Deferred Failure Resolution
+
+When sprints pass with deferred verification failures (checks that failed below the `@max_fail_percent` threshold), those failures are accumulated in `.fry/deferred-failures.md` and included in the build audit prompt. The build audit agent is instructed to fix these deferred failures as part of its remediation pass.
+
+After the build audit completes, Fry automatically re-runs the deferred verification checks to determine which ones the audit agent fixed. Results are logged:
+
+```
+[2026-03-10 13:15:00]   Re-running deferred verification checks after build audit...
+[2026-03-10 13:15:01]   Sprint 3 deferred failures: ALL FIXED by build audit
+[2026-03-10 13:15:01]   Sprint 5 deferred failures: 1/2 still failing
+```
+
 ## When It Runs
 
 The build audit runs only when **all** of these conditions are met:

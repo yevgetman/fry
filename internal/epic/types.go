@@ -90,6 +90,7 @@ type Epic struct {
 	AgentFlags           string
 	VerificationFile     string
 	MaxHealAttempts      int
+	MaxFailPercent       int
 	CompactWithAgent     bool
 	ReviewBetweenSprints bool
 	ReviewEngine         string

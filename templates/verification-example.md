@@ -64,6 +64,13 @@
 #   - Rely on network access to external services
 #   - Write checks that take more than 30 seconds to run
 #
+# ─── FAILURE THRESHOLD ───
+#
+# By default, a sprint passes if 80% or more of checks succeed (after healing).
+# Configure via @max_fail_percent in the epic file (default: 20).
+# Failures below the threshold are deferred to the final build audit.
+# Set @max_fail_percent 0 for strict mode (all checks must pass).
+#
 # ─── NOTES ───
 #
 # - Comments (lines starting with #) and blank lines are ignored

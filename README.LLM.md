@@ -96,6 +96,7 @@ fry/
 | `epic-progress.txt` | Compacted summaries of completed sprints |
 | `user-prompt.txt` | Persisted user directive |
 | `deviation-log.md` | Deviations detected during sprint reviews |
+| `deferred-failures.md` | Verification failures below threshold, deferred to build audit |
 | `sprint-audit.txt` | Current sprint's audit findings |
 | `audit-prompt.md` | Assembled audit prompt |
 | `review-prompt.md` | Assembled review prompt |
@@ -123,6 +124,7 @@ type Epic struct {
     AgentModel, AgentFlags   string
     VerificationFile         string
     MaxHealAttempts          int
+    MaxFailPercent           int            // 0-100; default 20
     CompactWithAgent         bool
     ReviewBetweenSprints     bool
     ReviewEngine, ReviewModel string
@@ -251,6 +253,7 @@ Key flags:
 | `DefaultPrepareEngine` | `claude` | Default prepare engine |
 | `DefaultPlanningEngine` | `claude` | Default planning-mode engine |
 | `DefaultMaxHealAttempts` | `3` | Heal loop retries |
+| `DefaultMaxFailPercent` | `20` | Max % of checks that can fail and still pass |
 | `DefaultMaxAuditIterations` | `3` | Audit fix loop retries |
 | `DefaultDockerReadyTimeout` | `30` | Seconds for Docker health check |
 | `DefaultMaxDeviationScope` | `3` | Max sprints affected by replan |
