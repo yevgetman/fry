@@ -14,6 +14,7 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 // AnalyzeOpts configures the LLM analysis agent.
@@ -193,8 +194,5 @@ func buildAnalysisPrompt(state *BuildState, report string) string {
 
 func truncate(s string, max int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > max {
-		return s[:max] + "..."
-	}
-	return s
+	return textutil.TruncateUTF8(s, max)
 }

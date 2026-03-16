@@ -10,13 +10,12 @@ func TestParseDecision(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		output        string
-		totalSprints  int
-		wantVerdict   ContinueVerdict
-		wantSprint    int
-		wantReasonNot string
-		wantReason    string
+		name         string
+		output       string
+		totalSprints int
+		wantVerdict  ContinueVerdict
+		wantSprint   int
+		wantReason   string
 	}{
 		{
 			name: "resume retry",

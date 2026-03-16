@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"sort"
 	"strings"
 
@@ -58,7 +59,7 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*
 	state.DockerAvailable = checkDockerAvailable(ctx)
 	state.DockerRequired = ep.DockerFromSprint > 0 && nextSprint >= ep.DockerFromSprint
 	state.RequiredTools = checkRequiredTools(ep.RequiredTools)
-	state.GitClean, state.GitBranch, state.LastAutoCommit = collectGitState(projectDir)
+	state.GitClean, state.GitBranch, state.LastAutoCommit = collectGitState(ctx, projectDir)
 
 	// Deviation history
 	state.DeviationCount = countDeviations(projectDir)
@@ -80,15 +81,15 @@ func parseCompletedSprints(projectDir string) []CompletedSprint {
 	matches := completedSprintRe.FindAllStringSubmatch(string(data), -1)
 	var completed []CompletedSprint
 	for _, m := range matches {
-		num := 0
-		fmt.Sscanf(m[1], "%d", &num)
-		if num > 0 {
-			completed = append(completed, CompletedSprint{
-				Number: num,
-				Name:   strings.TrimSpace(m[2]),
-				Status: strings.TrimSpace(m[3]),
-			})
+		num, err := strconv.Atoi(m[1])
+		if err != nil || num < 1 {
+			continue
 		}
+		completed = append(completed, CompletedSprint{
+			Number: num,
+			Name:   strings.TrimSpace(m[2]),
+			Status: strings.TrimSpace(m[3]),
+		})
 	}
 	return completed
 }
@@ -193,49 +194,49 @@ func checkRequiredTools(tools []string) []ToolStatus {
 }
 
 // collectGitState returns (clean, branch, lastAutoCommit).
-func collectGitState(projectDir string) (bool, string, string) {
+func collectGitState(ctx context.Context, projectDir string) (bool, string, string) {
 	clean := true
 	branch := ""
 	lastCommit := ""
 
 	// Check if working tree is clean
-	cmd := exec.Command("bash", "-c", "git status --porcelain")
-	cmd.Dir = projectDir
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if cmd.Run() == nil {
-		clean = strings.TrimSpace(out.String()) == ""
+	var statusOut bytes.Buffer
+	statusCmd := exec.CommandContext(ctx, "bash", "-c", "git status --porcelain")
+	statusCmd.Dir = projectDir
+	statusCmd.Stdout = &statusOut
+	if statusCmd.Run() == nil {
+		clean = strings.TrimSpace(statusOut.String()) == ""
 	}
 
 	// Get current branch
-	out.Reset()
-	cmd = exec.Command("bash", "-c", "git branch --show-current")
-	cmd.Dir = projectDir
-	cmd.Stdout = &out
-	if cmd.Run() == nil {
-		branch = strings.TrimSpace(out.String())
+	var branchOut bytes.Buffer
+	branchCmd := exec.CommandContext(ctx, "bash", "-c", "git branch --show-current")
+	branchCmd.Dir = projectDir
+	branchCmd.Stdout = &branchOut
+	if branchCmd.Run() == nil {
+		branch = strings.TrimSpace(branchOut.String())
 	}
 
 	// Get last automated commit
-	out.Reset()
-	cmd = exec.Command("bash", "-c", `git log --oneline --grep="\[automated\]" -1 --format="%s"`)
-	cmd.Dir = projectDir
-	cmd.Stdout = &out
-	if cmd.Run() == nil {
-		lastCommit = strings.TrimSpace(out.String())
+	var logOut bytes.Buffer
+	logCmd := exec.CommandContext(ctx, "bash", "-c", `git log --oneline --grep="\[automated\]" -1 --format="%s"`)
+	logCmd.Dir = projectDir
+	logCmd.Stdout = &logOut
+	if logCmd.Run() == nil {
+		lastCommit = strings.TrimSpace(logOut.String())
 	}
 
 	return clean, branch, lastCommit
 }
 
-// countDeviations counts the number of DEVIATE entries in the deviation log.
+// countDeviations counts the number of DEVIATE verdict entries in the deviation log.
 func countDeviations(projectDir string) int {
 	path := filepath.Join(projectDir, config.DeviationLogFile)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
-	return strings.Count(string(data), "DEVIATE")
+	return strings.Count(string(data), "**Decision**: DEVIATE")
 }
 
 // collectDeferredFailures reads summary lines from deferred-failures.md.
@@ -278,17 +279,32 @@ func readSprintProgressExcerpt(projectDir string, n int) string {
 	return readTail(path, n)
 }
 
-var severityRe = regexp.MustCompile(`\b(CRITICAL|HIGH|MODERATE|LOW)\b`)
+var (
+	severityLabelRe = regexp.MustCompile(`(?i)\bseverity\b`)
+	severityWordRe  = regexp.MustCompile(`\b(CRITICAL|HIGH|MODERATE|LOW)\b`)
+)
 
 // extractMaxSeverity returns the highest severity found in audit content.
+// Only matches severity keywords on lines containing a "Severity" label
+// to avoid false positives from prose.
 func extractMaxSeverity(content string) string {
 	maxRank := 0
 	maxSev := ""
-	for _, m := range severityRe.FindAllString(strings.ToUpper(content), -1) {
-		r := sevRank(m)
-		if r > maxRank {
-			maxRank = r
+	for _, line := range strings.Split(content, "\n") {
+		if !severityLabelRe.MatchString(line) {
+			continue
+		}
+		upper := strings.ToUpper(line)
+		m := severityWordRe.FindString(upper)
+		if m == "" {
+			continue
+		}
+		if sevRank(m) > maxRank {
+			maxRank = sevRank(m)
 			maxSev = m
+		}
+		if maxSev == "CRITICAL" {
+			return "CRITICAL"
 		}
 	}
 	return maxSev

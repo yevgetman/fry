@@ -98,6 +98,9 @@ var runCmd = &cobra.Command{
 			if runRetry {
 				return fmt.Errorf("--retry requires existing build artifacts; epic file not found at %s", epicArg)
 			}
+			if runContinue {
+				return fmt.Errorf("--continue requires existing build artifacts; epic file not found at %s", epicArg)
+			}
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
 			if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
 				ProjectDir:   projectPath,
@@ -168,10 +171,6 @@ var runCmd = &cobra.Command{
 			fmt.Fprint(cmd.OutOrStdout(), report)
 			fmt.Fprintln(cmd.OutOrStdout())
 
-			continueEngine, contEngErr := engine.NewEngine(engineName)
-			if contEngErr != nil {
-				return contEngErr
-			}
 			continueModel := ""
 			if ep.AuditModel != "" {
 				continueModel = ep.AuditModel
@@ -181,7 +180,7 @@ var runCmd = &cobra.Command{
 			decision, analyzeErr := continuerun.Analyze(cmd.Context(), continuerun.AnalyzeOpts{
 				ProjectDir: projectPath,
 				State:      state,
-				Engine:     continueEngine,
+				Engine:     buildEngine,
 				Model:      continueModel,
 				Verbose:    frlog.Verbose,
 			})

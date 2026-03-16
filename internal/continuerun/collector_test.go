@@ -308,9 +308,11 @@ func TestExtractMaxSeverity(t *testing.T) {
 		expected string
 	}{
 		{"empty", "", ""},
-		{"low only", "Severity: LOW", "LOW"},
-		{"mixed", "Severity: LOW\nSeverity: HIGH\nSeverity: MODERATE", "HIGH"},
+		{"low only", "**Severity:** LOW", "LOW"},
+		{"mixed", "**Severity:** LOW\n**Severity:** HIGH\n**Severity:** MODERATE", "HIGH"},
 		{"critical", "Severity: CRITICAL", "CRITICAL"},
+		{"no label no match", "This is HIGH priority work", ""},
+		{"label required", "Severity: MODERATE\nHIGH effort task", "MODERATE"},
 	}
 
 	for _, tt := range tests {
