@@ -71,7 +71,7 @@ func TestNewEngine(t *testing.T) {
 func TestCodexCommandConstruction(t *testing.T) {
 	t.Parallel()
 
-	args := codexArgs("build it", RunOpts{
+	args := codexArgs(RunOpts{
 		Model:      "gpt-5",
 		ExtraFlags: []string{"--json", "--foo=bar"},
 	})
@@ -81,14 +81,13 @@ func TestCodexCommandConstruction(t *testing.T) {
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--model", "gpt-5",
 		"--json", "--foo=bar",
-		"build it",
 	}, args)
 }
 
 func TestClaudeCommandConstruction(t *testing.T) {
 	t.Parallel()
 
-	args := claudeArgs("build it", RunOpts{
+	args := claudeArgs(RunOpts{
 		Model:      "sonnet",
 		ExtraFlags: []string{"--output-format", "json"},
 	})
@@ -98,6 +97,5 @@ func TestClaudeCommandConstruction(t *testing.T) {
 		"--dangerously-skip-permissions",
 		"--model", "sonnet",
 		"--output-format", "json",
-		"build it",
 	}, args)
 }

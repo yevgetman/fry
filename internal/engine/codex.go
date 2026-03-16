@@ -5,14 +5,16 @@ import (
 	"context"
 	"io"
 	"os/exec"
+	"strings"
 )
 
 type CodexEngine struct{}
 
 func (e *CodexEngine) Run(ctx context.Context, prompt string, opts RunOpts) (string, int, error) {
-	args := codexArgs(prompt, opts)
+	args := codexArgs(opts)
 	cmd := exec.CommandContext(ctx, "codex", args...)
 	cmd.Dir = opts.WorkDir
+	cmd.Stdin = strings.NewReader(prompt)
 
 	var buffer bytes.Buffer
 	cmd.Stdout = combinedWriter(&buffer, opts.Stdout)
@@ -27,13 +29,12 @@ func (e *CodexEngine) Name() string {
 	return "codex"
 }
 
-func codexArgs(prompt string, opts RunOpts) []string {
+func codexArgs(opts RunOpts) []string {
 	args := []string{"exec", "--dangerously-bypass-approvals-and-sandbox"}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
 	}
 	args = append(args, opts.ExtraFlags...)
-	args = append(args, prompt)
 	return args
 }
 

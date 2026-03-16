@@ -5,14 +5,16 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"strings"
 )
 
 type ClaudeEngine struct{}
 
 func (e *ClaudeEngine) Run(ctx context.Context, prompt string, opts RunOpts) (string, int, error) {
-	args := claudeArgs(prompt, opts)
+	args := claudeArgs(opts)
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = opts.WorkDir
+	cmd.Stdin = strings.NewReader(prompt)
 
 	var buffer bytes.Buffer
 	cmd.Stdout = combinedWriter(&buffer, opts.Stdout)
@@ -27,13 +29,12 @@ func (e *ClaudeEngine) Name() string {
 	return "claude"
 }
 
-func claudeArgs(prompt string, opts RunOpts) []string {
+func claudeArgs(opts RunOpts) []string {
 	args := []string{"-p", "--dangerously-skip-permissions"}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
 	}
 	args = append(args, opts.ExtraFlags...)
-	args = append(args, prompt)
 	return args
 }
 
