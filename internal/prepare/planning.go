@@ -45,14 +45,14 @@ Include:
 1. **Planning Scope & Objectives**
 2. **Analytical Frameworks**
 3. **Research Requirements**
-4. **Document Deliverables** — List every output document with its FULL path under plans/output/.
+4. **Document Deliverables** — List every output document with its FULL path under output/.
    Use ordered, categorized filenames following this convention:
      {sequence}--{category}--{name}.md
    Where:
    - {sequence} is a number (1, 2, 3...) indicating production order
    - {category} is a short lowercase grouping label (e.g., research, analysis, strategy, synthesis)
    - {name} is a descriptive lowercase kebab-case name
-   Example: plans/output/1--research--market-landscape.md
+   Example: output/1--research--market-landscape.md
    Group related documents under the same category. The sequence should reflect
    the logical dependency order (documents that inform later ones come first).
 5. **Analytical Depth Requirements**
@@ -63,7 +63,7 @@ Include:
 CRITICAL:
 - Make DECISIVE choices.
 - Be SPECIFIC. Include exact document names, required section headings, quantitative requirements.
-- ALL output documents MUST use paths under plans/output/ — never write deliverables directly to plans/.
+- ALL output documents MUST use paths under output/ — never write deliverables directly to plans/.
   The plans/ directory is reserved for input files (executive.md, plan.md).
 - Align every decision with the goals, constraints, and scope defined in plans/executive.md.
 - If a media/ directory exists, reference the available assets by their paths in the relevant sections of the plan. Describe where and how each asset should be used in the deliverables.
@@ -93,7 +93,7 @@ Rules should cover scope and domain boundaries, analytical frameworks and method
 Rules should be numbered, specific, and actionable. Each rule should be one line.
 Write 15-40 rules total. Do NOT include vague rules.
 
-One rule MUST state: "All document deliverables must be written to plans/output/ using the naming convention {sequence}--{category}--{name}.md. Never write output documents directly to plans/."
+One rule MUST state: "All document deliverables must be written to output/ using the naming convention {sequence}--{category}--{name}.md. Never write output documents directly to plans/."
 
 CRITICAL:
 - Derive ALL rules from the plan document — do not invent rules not supported by the plan.
@@ -133,7 +133,7 @@ CRITICAL RULES:
 - Every @sprint block must have @name, @max_iterations, @promise, and @prompt.
 - Sprint prompts must tell the agent to read .fry/AGENTS.md for operational rules.
 - Sprint prompts must reference .fry/sprint-progress.txt and .fry/epic-progress.txt for progress tracking.
-- ALL document deliverables MUST be written to the plans/output/ directory, NOT to plans/ directly.
+- ALL document deliverables MUST be written to the output/ directory, NOT to plans/ directly.
   The plans/ directory is reserved for input files (executive.md, plan.md).
 - Sprint prompts must specify exact output filenames using the ordered category convention:
     {sequence}--{category}--{name}.md
@@ -142,7 +142,7 @@ CRITICAL RULES:
     produces documents 1-3 and Sprint 2 produces documents 4-5, the numbering is continuous.
   - {category} is a short lowercase grouping label (research, analysis, strategy, synthesis, etc.)
   - {name} is a descriptive lowercase kebab-case name
-  Example paths: plans/output/1--research--market-landscape.md, plans/output/4--analysis--pricing-model.md
+  Example paths: output/1--research--market-landscape.md, output/4--analysis--pricing-model.md
 - Sprint prompts must include the required sections and concrete analytical requirements
   from plans/plan.md for each deliverable — never vague instructions.
 - If plans/plan.md lists deliverables with paths that don't follow this convention, translate
@@ -243,7 +243,7 @@ CRITICAL RULES:
 - Every check must be a concrete, executable assertion. No prose. No subjective criteria.
 - Verify documents exist, contain required section headings, include key terminology and frameworks specified in the sprint prompt, and meet minimum depth requirements.
 - All document deliverable paths in @check_file and @check_file_contains directives must reference
-  the plans/output/ directory (e.g., plans/output/1--research--market-landscape.md).
+  the output/ directory (e.g., output/1--research--market-landscape.md).
   Do NOT reference plans/ directly for output documents.
 - Do NOT write checks for deliverables from earlier sprints — only check the current sprint's new documents.
 - Do NOT include any output other than writing the file. No explanations, no summaries.%s
