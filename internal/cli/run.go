@@ -77,6 +77,19 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		// When --continue is used and no explicit --mode was given,
+		// auto-detect mode from the persisted build-mode.txt file.
+		userSetMode := strings.TrimSpace(runMode) != "" || runPlanning
+		if runContinue && !userSetMode {
+			if detected := continuerun.ReadBuildMode(projectPath); detected != "" {
+				parsedMode, parseErr := prepare.ParseMode(detected)
+				if parseErr == nil && parsedMode != mode {
+					mode = parsedMode
+					frlog.Log("▶ CONTINUE  auto-detected mode: %s", mode)
+				}
+			}
+		}
+
 		epicArg := filepath.Join(config.FryDir, "epic.md")
 		if len(args) > 0 {
 			epicArg = args[0]
@@ -303,6 +316,14 @@ var runCmd = &cobra.Command{
 
 		var allDeferredFailures []deferredEntry
 		modeStr := string(mode)
+
+		// Persist mode for --continue auto-detection on subsequent runs
+		modePath := filepath.Join(projectPath, config.BuildModeFile)
+		if mkErr := os.MkdirAll(filepath.Dir(modePath), 0o755); mkErr != nil {
+			frlog.Log("WARNING: could not create dir for build mode: %v", mkErr)
+		} else if writeErr := os.WriteFile(modePath, []byte(modeStr+"\n"), 0o644); writeErr != nil {
+			frlog.Log("WARNING: could not persist build mode: %v", writeErr)
+		}
 
 		exitErr := error(nil)
 		for sprintNum := startSprint; sprintNum <= endSprint; sprintNum++ {

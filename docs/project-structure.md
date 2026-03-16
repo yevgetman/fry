@@ -24,6 +24,7 @@ your-project/
     verification.md                      #   Independent verification checks
     prompt.md                            #   Assembled per sprint
     user-prompt.txt                      #   Persisted user directive (optional)
+    build-mode.txt                       #   Persisted build mode for --continue
     sprint-progress.txt                  #   Per-sprint iteration memory
     epic-progress.txt                    #   Cross-sprint compacted summary
     deviation-log.md                     #   Review decision audit trail
@@ -61,6 +62,7 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 | `.fry/verification.md` | Independent verification checks | `fry prepare` (Step 3) |
 | `.fry/prompt.md` | Assembled per-sprint prompt | `fry run` at runtime |
 | `.fry/user-prompt.txt` | Persisted user directive | `fry run` or `fry prepare` |
+| `.fry/build-mode.txt` | Persisted build mode (software/planning/writing) for `--continue` | `fry run` at runtime |
 | `.fry/sprint-progress.txt` | Per-sprint iteration memory | `fry run` at runtime |
 | `.fry/epic-progress.txt` | Cross-sprint compacted summary | `fry run` at runtime |
 | `.fry/deviation-log.md` | Audit trail of review decisions | `fry run` at runtime |

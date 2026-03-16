@@ -151,13 +151,15 @@ Continue: fry run --continue
 The `--continue` flag uses an LLM agent to analyze the build state and automatically determine where and how to resume. It:
 
 1. Programmatically collects build state from `.fry/` artifacts (completed sprints, build logs, environment checks)
-2. Formats a structured report and passes it to an LLM analysis agent
-3. The agent decides: which sprint to resume, whether to retry or start fresh, and whether any pre-conditions must be met
+2. Automatically restores the build mode (`software`, `planning`, or `writing`) from `.fry/build-mode.txt` — no need to pass `--mode` again
+3. Formats a structured report and passes it to an LLM analysis agent
+4. The agent decides: which sprint to resume, whether to retry or start fresh, and whether any pre-conditions must be met
 
 ```bash
-fry run --continue                # Auto-detect and resume
+fry run --continue                # Auto-detect and resume (mode preserved)
 fry run --continue --dry-run      # Preview what would happen
 fry run --continue --engine claude # Resume with a different engine
+fry run --continue --mode software # Explicit mode override
 ```
 
 Cannot be combined with `--sprint`, `--retry`, or positional sprint arguments — `--continue` auto-detects all of these.

@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/prepare"
@@ -191,6 +193,36 @@ func TestResolveMode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReadBuildMode(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns empty when no file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		assert.Equal(t, "", continuerun.ReadBuildMode(dir))
+	})
+
+	t.Run("reads writing mode", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildModeFile), []byte("writing\n"), 0o644))
+
+		assert.Equal(t, "writing", continuerun.ReadBuildMode(dir))
+	})
+
+	t.Run("trims whitespace", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildModeFile), []byte("  planning \n"), 0o644))
+
+		assert.Equal(t, "planning", continuerun.ReadBuildMode(dir))
+	})
 }
 
 func runRepoCommand(t *testing.T, name string, args ...string) {

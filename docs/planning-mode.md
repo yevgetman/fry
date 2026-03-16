@@ -137,6 +137,17 @@ In your plan: "Reference the findings in `assets/prior-analysis.md` when develop
 - Project proposals and feasibility studies
 - Any multi-phase document creation that benefits from structured decomposition
 
+## Resuming a Planning Build
+
+When a planning build is interrupted or fails, `fry run --continue` automatically restores the `planning` mode from the previous run. There is no need to pass `--mode planning` again:
+
+```bash
+fry run --continue                    # auto-detects planning mode
+fry run --continue --mode software    # explicit override if needed
+```
+
+The mode is persisted to `.fry/build-mode.txt` at the start of every build and read back by `--continue`.
+
 ## See Also
 
 - [Writing Mode](writing-mode.md) -- human-language content (books, guides, reports, documentation)

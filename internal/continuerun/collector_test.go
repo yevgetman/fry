@@ -299,6 +299,90 @@ func TestCollectDeferredFailures(t *testing.T) {
 	})
 }
 
+func TestReadBuildMode(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		assert.Equal(t, "", ReadBuildMode(dir))
+	})
+
+	t.Run("writing mode", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildModeFile), []byte("writing\n"), 0o644))
+
+		assert.Equal(t, "writing", ReadBuildMode(dir))
+	})
+
+	t.Run("planning mode no trailing newline", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildModeFile), []byte("planning"), 0o644))
+
+		assert.Equal(t, "planning", ReadBuildMode(dir))
+	})
+
+	t.Run("software mode", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildModeFile), []byte("software\n"), 0o644))
+
+		assert.Equal(t, "software", ReadBuildMode(dir))
+	})
+}
+
+func TestCollectBuildState_Mode(t *testing.T) {
+	t.Parallel()
+
+	t.Run("collects mode from file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildModeFile), []byte("writing\n"), 0o644))
+
+		ep := &epic.Epic{
+			Name:         "TestEpic",
+			TotalSprints: 2,
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "Chapter 1"},
+				{Number: 2, Name: "Chapter 2"},
+			},
+		}
+
+		state, err := CollectBuildState(context.Background(), dir, ep)
+		require.NoError(t, err)
+		assert.Equal(t, "writing", state.Mode)
+	})
+
+	t.Run("empty when no mode file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+		ep := &epic.Epic{
+			Name:         "TestEpic",
+			TotalSprints: 1,
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "Setup"},
+			},
+		}
+
+		state, err := CollectBuildState(context.Background(), dir, ep)
+		require.NoError(t, err)
+		assert.Equal(t, "", state.Mode)
+	})
+}
+
 func TestExtractMaxSeverity(t *testing.T) {
 	t.Parallel()
 

@@ -61,6 +61,9 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*
 	state.RequiredTools = checkRequiredTools(ep.RequiredTools)
 	state.GitClean, state.GitBranch, state.LastAutoCommit = collectGitState(ctx, projectDir)
 
+	// Build mode
+	state.Mode = ReadBuildMode(projectDir)
+
 	// Deviation history
 	state.DeviationCount = countDeviations(projectDir)
 
@@ -308,6 +311,17 @@ func extractMaxSeverity(content string) string {
 		}
 	}
 	return maxSev
+}
+
+// ReadBuildMode reads the persisted build mode from .fry/build-mode.txt.
+// Returns an empty string if the file does not exist or cannot be read.
+func ReadBuildMode(projectDir string) string {
+	path := filepath.Join(projectDir, config.BuildModeFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 func sevRank(sev string) int {

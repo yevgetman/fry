@@ -20,6 +20,7 @@ func TestFormatReport_FreshBuild(t *testing.T) {
 	report := FormatReport(state)
 	assert.Contains(t, report, "TestEpic")
 	assert.Contains(t, report, "3 sprints")
+	assert.Contains(t, report, "mode: software")
 	assert.Contains(t, report, "Completed Sprints")
 	assert.Contains(t, report, "None")
 	assert.Contains(t, report, "Next Sprint: 1")
@@ -79,6 +80,22 @@ func TestFormatReport_AllComplete(t *testing.T) {
 
 	report := FormatReport(state)
 	assert.Contains(t, report, "All sprints complete")
+}
+
+func TestFormatReport_WritingMode(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		EpicName:     "WritingEpic",
+		TotalSprints: 2,
+		Engine:       "claude",
+		EffortLevel:  "high",
+		Mode:         "writing",
+		SprintNames:  []string{"Chapter 1", "Chapter 2"},
+	}
+
+	report := FormatReport(state)
+	assert.Contains(t, report, "mode: writing")
 }
 
 func TestFormatReport_Environment(t *testing.T) {

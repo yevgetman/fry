@@ -11,8 +11,12 @@ func FormatReport(state *BuildState) string {
 	var b strings.Builder
 
 	b.WriteString("# Build State Report\n\n")
-	b.WriteString(fmt.Sprintf("## Epic: %s (%d sprints, engine: %s, effort: %s)\n\n",
-		state.EpicName, state.TotalSprints, state.Engine, state.EffortLevel))
+	modeDisplay := state.Mode
+	if modeDisplay == "" {
+		modeDisplay = "software"
+	}
+	b.WriteString(fmt.Sprintf("## Epic: %s (%d sprints, engine: %s, effort: %s, mode: %s)\n\n",
+		state.EpicName, state.TotalSprints, state.Engine, state.EffortLevel, modeDisplay))
 
 	// Completed sprints
 	b.WriteString("## Completed Sprints\n")

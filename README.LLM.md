@@ -102,6 +102,7 @@ fry/
 | `sprint-progress.txt` | Append-only iteration log within current sprint |
 | `epic-progress.txt` | Compacted summaries of completed sprints |
 | `user-prompt.txt` | Persisted user directive |
+| `build-mode.txt` | Persisted build mode (software/planning/writing) for `--continue` auto-detection |
 | `deviation-log.md` | Deviations detected during sprint reviews |
 | `deferred-failures.md` | Verification failures below threshold, deferred to build audit |
 | `sprint-audit.txt` | Current sprint's audit findings |
@@ -278,6 +279,7 @@ Key flags:
 | `MaxAuditDiffBytes` | `100000` | Max diff size for audit context |
 | `RetryHealMultiplier` | `2` | Heal iteration multiplier on retry |
 | `RetryMinHealAttempts` | `6` | Minimum heal attempts on retry |
+| `BuildModeFile` | `.fry/build-mode.txt` | Persisted build mode for `--continue` |
 
 ---
 

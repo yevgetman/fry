@@ -31,6 +31,9 @@ type BuildState struct {
 	Engine       string
 	EffortLevel  string
 
+	// Build mode (software, planning, writing) from .fry/build-mode.txt
+	Mode string
+
 	// Per-sprint completion from epic-progress.txt
 	CompletedSprints []CompletedSprint
 	HighestCompleted int // 0 if none

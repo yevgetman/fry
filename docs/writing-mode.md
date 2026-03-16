@@ -113,6 +113,17 @@ The [self-healing](self-healing.md) loop works identically in writing mode. When
 
 [Effort levels](effort-levels.md) work the same in writing mode. A `low` effort run produces 1-2 sprints for a short document; `max` produces extended sprints with thorough review and higher word-count expectations.
 
+## Resuming a Writing Build
+
+When a writing build is interrupted or fails (e.g., due to a critical audit), `fry run --continue` automatically restores the `writing` mode from the previous run. There is no need to pass `--mode writing` again:
+
+```bash
+fry run --continue                    # auto-detects writing mode
+fry run --continue --mode software    # explicit override if needed
+```
+
+The mode is persisted to `.fry/build-mode.txt` at the start of every build and read back by `--continue`.
+
 ## Backwards Compatibility
 
 The `--planning` flag is kept as an alias for `--mode planning`. Existing scripts and workflows that use `--planning` continue to work without changes.
