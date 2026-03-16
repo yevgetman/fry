@@ -56,6 +56,16 @@ Self-healing progress is always visible in the terminal:
 [2026-03-10 12:12:05] Heal attempt 1 SUCCEEDED — all checks now pass.
 ```
 
+When heal attempts are exhausted but failures are within the `@max_fail_percent` threshold:
+
+```
+[2026-03-10 12:10:30] ▶ AGENT  sprint 3/8 "Auth & Permissions"  heal 3/3  engine=claude  model=default
+[2026-03-10 12:14:00] Re-running verification after heal attempt 3...
+[2026-03-10 12:14:05] Heal attempt 3 — 1/10 checks still failing.
+[2026-03-10 12:14:05] All 3 heal attempts exhausted.
+[2026-03-10 12:14:05] Failure rate 10% is within 20% threshold — deferring 1 failures.
+```
+
 ## Retrying After Heal Exhaustion
 
 When all heal attempts are exhausted and the sprint fails, Fry prints two recovery commands:

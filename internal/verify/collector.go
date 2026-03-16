@@ -44,7 +44,9 @@ func EvaluateThreshold(results []CheckResult, passCount, totalCount, maxFailPerc
 	failCount := totalCount - passCount
 	outcome.FailPercent = float64(failCount) / float64(totalCount) * 100
 
-	outcome.WithinThreshold = outcome.FailPercent <= float64(maxFailPercent)
+	// Use integer arithmetic to avoid floating point precision issues.
+	// e.g., 1/5 = 20.000...004 in float64, which would exceed integer 20.
+	outcome.WithinThreshold = failCount*100 <= maxFailPercent*totalCount
 
 	if outcome.WithinThreshold && failCount > 0 {
 		for _, r := range results {

@@ -45,7 +45,7 @@ The four primitives are designed for **basic programmatic checks**, not semantic
 
 ## Failure Threshold
 
-By default, a sprint passes if **80% or more** of its verification checks succeed (after self-healing). This prevents a single minor check failure from blocking an otherwise complete sprint.
+By default, up to **20%** of verification checks can fail (after self-healing) without blocking the sprint. This prevents a single minor check failure from blocking an otherwise complete sprint.
 
 Configure with the `@max_fail_percent` directive in the epic file:
 

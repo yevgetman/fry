@@ -14,6 +14,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/sprint"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 const (
@@ -135,7 +136,7 @@ func buildSummaryPrompt(opts SummaryOpts) string {
 	if data, err := os.ReadFile(epicPath); err == nil {
 		content := string(data)
 		if len(content) > maxEpicFileBytes {
-			content = content[:maxEpicFileBytes] + "\n...(truncated)"
+			content = textutil.TruncateUTF8(content, maxEpicFileBytes) + "\n...(truncated)"
 		}
 		b.WriteString("## Epic Definition\n")
 		b.WriteString("```\n")
@@ -179,11 +180,11 @@ func buildSummaryPrompt(opts SummaryOpts) string {
 		}
 		content := entry.content
 		if len(content) > maxLogBytes {
-			content = content[:maxLogBytes] + "\n...(truncated)"
+			content = textutil.TruncateUTF8(content, maxLogBytes) + "\n...(truncated)"
 		}
 		remaining := maxTotalLogCap - totalLogBytes
 		if len(content) > remaining {
-			content = content[:remaining] + "\n...(truncated at total cap)"
+			content = textutil.TruncateUTF8(content, remaining) + "\n...(truncated at total cap)"
 		}
 		totalLogBytes += len(content)
 

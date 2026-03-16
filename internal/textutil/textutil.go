@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // StripMarkdownFences removes leading/trailing markdown code fence markers
@@ -38,6 +39,19 @@ func FileModTime(path string) time.Time {
 // single quotes. Suitable for embedding user strings in bash -c commands.
 func ShellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// TruncateUTF8 truncates s to at most maxBytes bytes without splitting
+// multi-byte UTF-8 characters. Returns s unchanged if it fits.
+func TruncateUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// Walk backward from maxBytes to find a valid UTF-8 boundary.
+	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
+		maxBytes--
+	}
+	return s[:maxBytes]
 }
 
 // ResolveArtifact checks whether the engine wrote the target file during its

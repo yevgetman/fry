@@ -14,6 +14,7 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/sprint"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 const (
@@ -120,7 +121,7 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	if data, err := os.ReadFile(executivePath); err == nil {
 		content := string(data)
 		if len(content) > maxBuildAuditExecutiveBytes {
-			content = content[:maxBuildAuditExecutiveBytes] + "\n...(truncated)"
+			content = textutil.TruncateUTF8(content, maxBuildAuditExecutiveBytes) + "\n...(truncated)"
 		}
 		b.WriteString("## Project Context (executive.md)\n")
 		b.WriteString(content)
@@ -132,7 +133,7 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	if data, err := os.ReadFile(planPath); err == nil {
 		content := string(data)
 		if len(content) > maxBuildAuditPlanBytes {
-			content = content[:maxBuildAuditPlanBytes] + "\n...(truncated)"
+			content = textutil.TruncateUTF8(content, maxBuildAuditPlanBytes) + "\n...(truncated)"
 		}
 		b.WriteString("## Implementation Plan (plan.md)\n")
 		b.WriteString(content)
@@ -144,7 +145,7 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	if data, err := os.ReadFile(epicPath); err == nil {
 		content := string(data)
 		if len(content) > maxBuildAuditEpicBytes {
-			content = content[:maxBuildAuditEpicBytes] + "\n...(truncated)"
+			content = textutil.TruncateUTF8(content, maxBuildAuditEpicBytes) + "\n...(truncated)"
 		}
 		b.WriteString("## Epic Definition (epic.md)\n")
 		b.WriteString("```\n")
@@ -157,7 +158,7 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	if data, err := os.ReadFile(userPromptPath); err == nil && len(data) > 0 {
 		content := string(data)
 		if len(content) > maxBuildAuditUserPromptBytes {
-			content = content[:maxBuildAuditUserPromptBytes] + "\n...(truncated)"
+			content = textutil.TruncateUTF8(content, maxBuildAuditUserPromptBytes) + "\n...(truncated)"
 		}
 		b.WriteString("## Original User Prompt\n")
 		b.WriteString(content)

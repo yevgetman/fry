@@ -16,6 +16,7 @@ import (
 )
 
 func TestPromptAssembly(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	executive := "Executive context line.\n"
 
@@ -65,6 +66,7 @@ func TestPromptAssembly(t *testing.T) {
 }
 
 func TestPromptAssemblyPartialLayers(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 
 	prompt, err := AssemblePrompt(PromptOpts{
@@ -82,6 +84,7 @@ func TestPromptAssemblyPartialLayers(t *testing.T) {
 }
 
 func TestPromptAssemblyNoPromise(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 
 	prompt, err := AssemblePrompt(PromptOpts{
@@ -96,6 +99,7 @@ func TestPromptAssemblyNoPromise(t *testing.T) {
 }
 
 func TestPromptAssemblyExactHeaders(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	prompt, err := AssemblePrompt(PromptOpts{
 		ProjectDir:       projectDir,
@@ -131,6 +135,7 @@ func TestPromptAssemblyExactHeaders(t *testing.T) {
 }
 
 func TestInitSprintProgress(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	err := InitSprintProgress(projectDir, 4, "Sprint Execution")
 	require.NoError(t, err)
@@ -141,12 +146,14 @@ func TestInitSprintProgress(t *testing.T) {
 }
 
 func TestEpicProgressReset(t *testing.T) {
+	t.Parallel()
 	assert.True(t, ShouldResetEpicProgress(1, 1, 6, 6))
 	assert.False(t, ShouldResetEpicProgress(1, 1, 5, 6))
 	assert.False(t, ShouldResetEpicProgress(2, 2, 6, 6))
 }
 
 func TestMechanicalCompaction(t *testing.T) {
+	t.Parallel()
 	progress := strings.Join([]string{
 		"# Sprint 4: Sprint Execution — Progress",
 		"",
@@ -165,6 +172,7 @@ func TestMechanicalCompaction(t *testing.T) {
 }
 
 func TestSprintResultStatusStrings(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "PASS", StatusPass)
 	assert.Equal(t, "PASS (healed)", StatusPassHealed)
 	assert.Equal(t, "PASS (verification passed, no promise)", StatusPassVerificationPassedNoPromise)
@@ -178,11 +186,13 @@ func TestSprintResultStatusStrings(t *testing.T) {
 }
 
 func TestPromiseDetection(t *testing.T) {
+	t.Parallel()
 	output := "agent output\n===PROMISE: TOKEN===\nmore output"
 	assert.True(t, strings.Contains(output, "===PROMISE: TOKEN==="))
 }
 
 func TestRunSprintPassesWithPromiseAndChecks(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.ExecutiveFile), "Executive\n")
 	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file result.txt\n")
@@ -220,6 +230,7 @@ func TestRunSprintPassesWithPromiseAndChecks(t *testing.T) {
 }
 
 func TestRunSprintFailsWithoutPrompt(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	mockEngine := &stubEngine{name: "codex"}
 
@@ -242,6 +253,7 @@ func TestRunSprintFailsWithoutPrompt(t *testing.T) {
 }
 
 func TestRunSprintPassesWithPromiseNoChecks(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	mockEngine := &stubEngine{
 		name:    "codex",
@@ -268,6 +280,7 @@ func TestRunSprintPassesWithPromiseNoChecks(t *testing.T) {
 }
 
 func TestRunSprintNoPromiseNoChecks(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	mockEngine := &stubEngine{
 		name:    "codex",
@@ -293,6 +306,7 @@ func TestRunSprintNoPromiseNoChecks(t *testing.T) {
 }
 
 func TestRunSprintNoPromiseChecksPass(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file result.txt\n")
 	writeFile(t, filepath.Join(projectDir, "result.txt"), "ok\n")
@@ -500,6 +514,7 @@ func TestDetermineOutcomeDeferredFailures(t *testing.T) {
 }
 
 func TestRunSprintDeferredFailuresInResult(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile),
 		"@sprint 1\n@check_file present.txt\n@check_file present2.txt\n@check_file present3.txt\n@check_file present4.txt\n@check_file missing.txt\n")
@@ -537,6 +552,7 @@ func TestRunSprintDeferredFailuresInResult(t *testing.T) {
 }
 
 func TestRetrySprintPassesWhenChecksAlreadyPass(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1: Test — Progress\n\nprevious context\n")
 	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file result.txt\n")
@@ -573,6 +589,7 @@ func TestRetrySprintPassesWhenChecksAlreadyPass(t *testing.T) {
 }
 
 func TestRetrySprintFailsWhenHealExhausted(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1: Test — Progress\n\n")
 	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file missing.txt\n")
@@ -602,6 +619,7 @@ func TestRetrySprintFailsWhenHealExhausted(t *testing.T) {
 }
 
 func TestRetrySprintNoChecks(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1 — Progress\n\n")
 
@@ -627,6 +645,7 @@ func TestRetrySprintNoChecks(t *testing.T) {
 }
 
 func TestRetrySprintPreservesProgress(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	originalProgress := "# Sprint 3: Auth — Progress\n\n## Iteration 1\nDid auth work\n\n--- Heal attempt 1 failed ---\nSome failure\n"
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), originalProgress)

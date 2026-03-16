@@ -15,6 +15,7 @@ import (
 )
 
 func TestHealPromptStructure(t *testing.T) {
+	t.Parallel()
 	// Use a temp dir with no executive.md → reference should be absent
 	projectDir := t.TempDir()
 	opts := HealOpts{
@@ -51,6 +52,7 @@ func TestHealPromptStructure(t *testing.T) {
 }
 
 func TestHealPromptWithExecutiveAndUserDirective(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	// Create executive.md so the conditional reference appears
 	writeFile(t, filepath.Join(projectDir, config.ExecutiveFile), "Executive context\n")
@@ -74,6 +76,7 @@ func TestHealPromptWithExecutiveAndUserDirective(t *testing.T) {
 }
 
 func TestHealLoopMaxAttempts(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
 	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
@@ -105,6 +108,7 @@ func TestHealLoopMaxAttempts(t *testing.T) {
 }
 
 func TestHealPerSprintOverride(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
 	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
@@ -135,6 +139,7 @@ func TestHealPerSprintOverride(t *testing.T) {
 }
 
 func TestHealLoopMaxAttemptsOverride(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
 	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
@@ -165,6 +170,7 @@ func TestHealLoopMaxAttemptsOverride(t *testing.T) {
 }
 
 func TestHealLoopSucceeds(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
 	writeFile(t, filepath.Join(projectDir, "target.txt"), "content\n")

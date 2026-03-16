@@ -14,6 +14,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 type AuditOpts struct {
@@ -217,7 +218,7 @@ func buildAuditPrompt(opts AuditOpts) string {
 		progress := string(data)
 		const maxProgressBytes = 50_000
 		if len(progress) > maxProgressBytes {
-			progress = progress[:maxProgressBytes] + "\n...(sprint progress truncated at 50KB)"
+			progress = textutil.TruncateUTF8(progress, maxProgressBytes) + "\n...(sprint progress truncated at 50KB)"
 		}
 		b.WriteString("## What Was Done\n")
 		b.WriteString(progress)
