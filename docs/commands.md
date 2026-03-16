@@ -57,6 +57,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 | `--sprint <N>` | Start from sprint N. Alternative to the positional start sprint argument — no need to specify the epic file path. Cannot be combined with positional sprint arguments. |
 | `--retry` | Retry a failed sprint: skip iterations, go straight to verification + healing with boosted attempts (2x normal, minimum 6). Preserves existing progress for full context. Only applies to the first sprint in the range; subsequent sprints run normally. |
+| `--continue` | Auto-detect where a previous build left off and resume. Uses an LLM agent to analyze `.fry/` build artifacts, determine the next sprint, and decide whether to retry or start fresh. Cannot be combined with `--sprint`, `--retry`, or positional sprint arguments. |
 | `--dry-run` | Parse epic and show plan without running anything |
 
 ### Examples
@@ -76,6 +77,9 @@ fry run epic.md 4 4                               # Run only sprint 4
 fry run epic.md 3 5                               # Run sprints 3 through 5
 fry run --retry --sprint 4                        # Retry failed sprint 4 (verify + heal only)
 fry run --retry --sprint 4 --planning             # Retry with planning mode
+fry run --continue                                # Auto-detect and resume from where you left off
+fry run --continue --dry-run                      # Preview what --continue would do
+fry run --continue --engine claude                # Resume with a different engine
 fry --verbose                                     # Print agent output to terminal
 fry --prepare-engine codex                        # Override: use Codex for generation, Codex for build
 fry --planning                                    # Planning project (documents, not code) — uses Claude for both stages

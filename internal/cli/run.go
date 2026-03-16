@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/docker"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
@@ -45,6 +46,7 @@ var (
 	runNoAudit        bool
 	runRetry          bool
 	runSprint         int
+	runContinue       bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -141,19 +143,99 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		rangeArgs := []string{}
-		if len(args) > 1 {
-			rangeArgs = args[1:]
-		}
-		if runSprint > 0 {
-			if len(rangeArgs) > 0 {
-				return fmt.Errorf("cannot use --sprint with positional sprint arguments")
+		// Validate --continue flag conflicts
+		if runContinue {
+			if runSprint > 0 {
+				return fmt.Errorf("cannot use --continue with --sprint; --continue auto-detects the resume point")
 			}
-			rangeArgs = []string{strconv.Itoa(runSprint)}
+			if len(args) > 1 {
+				return fmt.Errorf("cannot use --continue with positional sprint arguments")
+			}
+			if runRetry {
+				return fmt.Errorf("cannot use --continue with --retry; --continue auto-detects whether to retry")
+			}
 		}
-		startSprint, endSprint, err := resolveSprintRange(rangeArgs, ep.TotalSprints)
-		if err != nil {
-			return err
+
+		var startSprint, endSprint int
+		if runContinue {
+			frlog.Log("▶ CONTINUE  collecting build state...")
+			state, collectErr := continuerun.CollectBuildState(cmd.Context(), projectPath, ep)
+			if collectErr != nil {
+				return fmt.Errorf("continue: %w", collectErr)
+			}
+
+			report := continuerun.FormatReport(state)
+			fmt.Fprint(cmd.OutOrStdout(), report)
+			fmt.Fprintln(cmd.OutOrStdout())
+
+			continueEngine, contEngErr := engine.NewEngine(engineName)
+			if contEngErr != nil {
+				return contEngErr
+			}
+			continueModel := ""
+			if ep.AuditModel != "" {
+				continueModel = ep.AuditModel
+			} else {
+				continueModel = ep.AgentModel
+			}
+			decision, analyzeErr := continuerun.Analyze(cmd.Context(), continuerun.AnalyzeOpts{
+				ProjectDir: projectPath,
+				State:      state,
+				Engine:     continueEngine,
+				Model:      continueModel,
+				Verbose:    frlog.Verbose,
+			})
+			if analyzeErr != nil {
+				return fmt.Errorf("continue: %w", analyzeErr)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Decision: %s (sprint %d)\n", decision.Verdict, decision.StartSprint)
+			fmt.Fprintf(cmd.OutOrStdout(), "Reason: %s\n", decision.Reason)
+			if len(decision.Preconditions) > 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "Pre-conditions:")
+				for _, pc := range decision.Preconditions {
+					fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", pc)
+				}
+			}
+
+			switch decision.Verdict {
+			case continuerun.VerdictAllComplete:
+				fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints already complete. Nothing to do.\n", ep.TotalSprints)
+				return nil
+			case continuerun.VerdictBlocked:
+				return fmt.Errorf("continue: blocked — %s", decision.Reason)
+			case continuerun.VerdictResumeRetry:
+				startSprint = decision.StartSprint
+				endSprint = ep.TotalSprints
+				runRetry = true
+			case continuerun.VerdictResumeFresh:
+				startSprint = decision.StartSprint
+				endSprint = ep.TotalSprints
+			case continuerun.VerdictContinueNext:
+				startSprint = decision.StartSprint
+				endSprint = ep.TotalSprints
+			default:
+				return fmt.Errorf("continue: unexpected verdict %q", decision.Verdict)
+			}
+
+			if startSprint < 1 || startSprint > ep.TotalSprints {
+				return fmt.Errorf("continue: agent returned invalid sprint %d (total: %d)", startSprint, ep.TotalSprints)
+			}
+		} else {
+			rangeArgs := []string{}
+			if len(args) > 1 {
+				rangeArgs = args[1:]
+			}
+			if runSprint > 0 {
+				if len(rangeArgs) > 0 {
+					return fmt.Errorf("cannot use --sprint with positional sprint arguments")
+				}
+				rangeArgs = []string{strconv.Itoa(runSprint)}
+			}
+			startSprint, endSprint, err = resolveSprintRange(rangeArgs, ep.TotalSprints)
+			if err != nil {
+				return err
+			}
 		}
 
 		if runDryRun {
@@ -335,8 +417,9 @@ var runCmd = &cobra.Command{
 							mu.Lock()
 							results[sprintNum-startSprint].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
 							mu.Unlock()
-							fmt.Fprintf(cmd.OutOrStdout(), "Retry:  fry run --retry --sprint %d\n", spr.Number)
-							fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run --sprint %d\n", spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Retry:    fry run --retry --sprint %d\n", spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --sprint %d\n", spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
 							exitErr = errBuildFailed
 							break
 						}
@@ -456,8 +539,9 @@ var runCmd = &cobra.Command{
 				continue
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Retry:  fry run --retry --sprint %d\n", spr.Number)
-			fmt.Fprintf(cmd.OutOrStdout(), "Resume: fry run --sprint %d\n", spr.Number)
+			fmt.Fprintf(cmd.OutOrStdout(), "Retry:    fry run --retry --sprint %d\n", spr.Number)
+			fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --sprint %d\n", spr.Number)
+			fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
 			exitErr = errBuildFailed
 			break
 		}
@@ -559,6 +643,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
 	runCmd.Flags().BoolVar(&runRetry, "retry", false, "Retry failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
 	runCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
+	runCmd.Flags().BoolVar(&runContinue, "continue", false, "Use an LLM agent to analyze build state and resume from where it left off")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -680,7 +765,9 @@ func printDryRunReport(w io.Writer, projectDir, epicPath string, ep *epic.Epic, 
 	fmt.Fprintf(w, "Epic file: %s\n", epicPath)
 	fmt.Fprintf(w, "Engine: %s\n", engineName)
 	fmt.Fprintf(w, "Effort: %s\n", ep.EffortLevel)
-	if runRetry {
+	if runContinue {
+		fmt.Fprintln(w, "Mode: continue (auto-detected resume point)")
+	} else if runRetry {
 		fmt.Fprintln(w, "Mode: retry (skip iterations, verify + heal only)")
 	}
 	fmt.Fprintf(w, "Sprints: %d-%d of %d\n", startSprint, endSprint, ep.TotalSprints)

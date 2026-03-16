@@ -138,14 +138,31 @@ Hooks execute via `bash -c` in the project directory.
 
 ## Resuming Failed Builds
 
-When a sprint fails (after exhausting heal attempts), Fry commits partial work and prints two recovery commands:
+When a sprint fails (after exhausting heal attempts), Fry commits partial work and prints three recovery commands:
 
 ```
-Retry:  fry run --retry --sprint 4
-Resume: fry run --sprint 4
+Retry:    fry run --retry --sprint 4
+Resume:   fry run --sprint 4
+Continue: fry run --continue
 ```
 
-### `--retry` (recommended for verification failures)
+### `--continue` (recommended)
+
+The `--continue` flag uses an LLM agent to analyze the build state and automatically determine where and how to resume. It:
+
+1. Programmatically collects build state from `.fry/` artifacts (completed sprints, build logs, environment checks)
+2. Formats a structured report and passes it to an LLM analysis agent
+3. The agent decides: which sprint to resume, whether to retry or start fresh, and whether any pre-conditions must be met
+
+```bash
+fry run --continue                # Auto-detect and resume
+fry run --continue --dry-run      # Preview what would happen
+fry run --continue --engine claude # Resume with a different engine
+```
+
+Cannot be combined with `--sprint`, `--retry`, or positional sprint arguments — `--continue` auto-detects all of these.
+
+### `--retry` (manual retry for verification failures)
 
 The `--retry` flag skips the iteration loop entirely and goes straight to verification + healing with a boosted heal budget (2x normal attempts, minimum 6). It preserves the existing `.fry/sprint-progress.txt` so the agent retains full context from the previous failed attempt — including prior iteration logs and heal failure reports.
 

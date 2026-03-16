@@ -52,4 +52,10 @@ const (
 	BuildAuditFile             = "audit.md"
 	BuildAuditPromptFile       = ".fry/build-audit-prompt.md"
 	BuildAuditInvocationPrompt = "Read and execute ALL instructions in .fry/build-audit-prompt.md. You are performing a final holistic audit of the entire codebase. Audit, classify, report, remediate, and re-audit as instructed in the prompt."
+
+	// Continue constants
+	ContinuePromptFile        = ".fry/continue-prompt.md"
+	ContinueDecisionFile      = ".fry/continue-decision.txt"
+	ContinueReportFile        = ".fry/continue-report.md"
+	ContinueInvocationPrompt  = "Read and execute ALL instructions in .fry/continue-prompt.md. You are a build analyst. Review the build state report and output your decision to .fry/continue-decision.txt. Do NOT modify any source code."
 )

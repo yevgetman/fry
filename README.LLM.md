@@ -66,6 +66,11 @@ fry/
 │   ├── log/log.go               # Verbose logging, agent banners
 │   ├── media/media.go           # Binary asset scanning (images, PDFs, fonts)
 │   ├── assets/assets.go         # Text asset scanning + prompt injection
+│   ├── continuerun/
+│   │   ├── types.go             # BuildState, ContinueDecision, verdict types
+│   │   ├── collector.go         # Programmatic build state collection from .fry/ artifacts
+│   │   ├── report.go            # BuildState → human-readable markdown report
+│   │   └── analyzer.go          # LLM analysis agent for resume decisions
 │   ├── summary/summary.go       # AI-generated build summary
 │   ├── shellhook/shellhook.go   # Pre-sprint/iteration shell commands
 │   └── textutil/textutil.go     # Shell quoting, file timestamps, artifact resolution
@@ -103,7 +108,10 @@ fry/
 | `audit-prompt.md` | Assembled audit prompt |
 | `review-prompt.md` | Assembled review prompt |
 | `summary-prompt.md` | Assembled summary prompt |
-| `build-logs/` | Timestamped per-iteration/heal/audit logs |
+| `build-logs/` | Timestamped per-iteration/heal/audit/continue logs |
+| `continue-prompt.md` | Assembled prompt for --continue analysis agent |
+| `continue-decision.txt` | LLM agent's resume decision (verdict, sprint, reason) |
+| `continue-report.md` | Programmatic build state report (input to analysis) |
 | `.fry.lock` | Concurrency lock |
 
 ---
@@ -242,6 +250,9 @@ Key flags:
   --user-prompt "..."                # Inject directive into prompts
   --user-prompt-file path            # Load directive from file
   --dry-run                          # Validate without executing
+  --sprint N                         # Start from sprint N
+  --retry                            # Skip iterations, verify + heal with boosted attempts
+  --continue                         # LLM-assisted auto-resume from where build left off
   --no-review                        # Skip mid-build sprint review
   --no-audit                         # Skip audits
   --verbose                          # Verbose logging
