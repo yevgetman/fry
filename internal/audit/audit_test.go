@@ -86,6 +86,30 @@ func TestAuditPromptContainsDiff(t *testing.T) {
 	assert.Contains(t, prompt, "-old line")
 }
 
+func TestAuditPromptWritingMode(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	opts.Mode = "writing"
+	prompt := buildAuditPrompt(opts)
+	assert.Contains(t, prompt, "content auditor")
+	assert.Contains(t, prompt, "Coherence")
+	assert.Contains(t, prompt, "Tone & Voice")
+	assert.Contains(t, prompt, "Depth")
+	assert.NotContains(t, prompt, "code auditor")
+	assert.NotContains(t, prompt, "Security")
+}
+
+func TestAuditFixPromptWritingMode(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	opts.Mode = "writing"
+	prompt := buildAuditFixPrompt(opts, "## Findings\n- weak transition\n")
+	assert.Contains(t, prompt, "content audit found issues")
+	assert.Contains(t, prompt, "minimal editorial changes")
+}
+
 func TestAuditPromptCondensesExecutive(t *testing.T) {
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	// Write a long executive file

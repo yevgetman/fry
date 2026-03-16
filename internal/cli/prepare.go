@@ -15,6 +15,7 @@ var (
 	prepareUserPromptFile string
 	prepareValidateOnly   bool
 	preparePlanning       bool
+	prepareMode           string
 	prepareEffort         string
 )
 
@@ -43,6 +44,11 @@ var prepareCmd = &cobra.Command{
 			return err
 		}
 
+		mode, err := resolveMode(prepareMode, preparePlanning)
+		if err != nil {
+			return err
+		}
+
 		if prepareValidateOnly {
 			epicPath, _, err := resolveEpicPath(projectPath, epicArg)
 			if err != nil {
@@ -65,7 +71,7 @@ var prepareCmd = &cobra.Command{
 			Engine:       prepareEngine,
 			UserPrompt:   userPrompt,
 			ValidateOnly: false,
-			Planning:     preparePlanning,
+			Mode:         mode,
 			EffortLevel:  effortLevel,
 			Stdin:        os.Stdin,
 			Stdout:       cmd.OutOrStdout(),
@@ -78,6 +84,7 @@ func init() {
 	prepareCmd.Flags().StringVar(&prepareUserPrompt, "user-prompt", "", "Additional user prompt")
 	prepareCmd.Flags().StringVar(&prepareUserPromptFile, "user-prompt-file", "", "Path to file containing user prompt")
 	prepareCmd.Flags().BoolVar(&prepareValidateOnly, "validate-only", false, "Validate without generating files")
-	prepareCmd.Flags().BoolVar(&preparePlanning, "planning", false, "Use planning prepare mode")
+	prepareCmd.Flags().BoolVar(&preparePlanning, "planning", false, "Use planning prepare mode (alias for --mode planning)")
+	prepareCmd.Flags().StringVar(&prepareMode, "mode", "", "Execution mode: software, planning, writing")
 	prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 }

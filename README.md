@@ -29,7 +29,7 @@ assets/                Optional text documents (specs, schemas) read during plan
         v
   fry prepare           Step 0 (if needed): AI generates plans/plan.md from executive.md
                          Steps 1-3: AI generates .fry/AGENTS.md + .fry/epic.md + .fry/verification.md
-  (pass --planning for non-code projects)
+  (pass --mode planning for documents, --mode writing for books/guides)
         |
         v
      fry run             Executes sprints via AI agent loop
@@ -37,9 +37,8 @@ assets/                Optional text documents (specs, schemas) read during plan
         |                + auto-heals on verification failure
         v
   Working software       Git-checkpointed after each sprint
-  (or output/)           Planning docs use ordered filenames:
-                           1--research--market-landscape.md
-                           2--analysis--positioning-options.md
+  (or output/)           Planning: 1--research--market-landscape.md
+                         Writing:  01--introduction.md → manuscript.md
 ```
 
 Each sprint runs as an iterative loop where the AI agent gets a prompt, does work, and logs progress. The next iteration reads what the previous one accomplished and continues. When the agent signals completion (via a promise token), the sprint ends and the next one begins.
@@ -59,6 +58,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
+- **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
 
 ## Quick Start
 
@@ -78,6 +78,9 @@ cat > plans/plan.md << 'EOF'
 ...
 EOF
 fry --engine claude
+
+# Option C: Write a book or guide
+fry --mode writing --user-prompt "Write a comprehensive guide to Go concurrency"
 
 # Validate without running
 fry --dry-run
@@ -101,7 +104,8 @@ fry --effort low                       # Simple task: 1-2 sprints, minimal overh
 fry --effort max --engine claude       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
 fry run --retry --sprint 4             # Retry failed sprint 4 (skip iterations, heal only)
-fry --planning                         # Planning mode (documents, not code) — claude for both stages
+fry --mode planning                    # Planning mode (documents, not code) — claude for both stages
+fry --mode writing --user-prompt "..."  # Writing mode (books, guides) — claude for both stages
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive
 fry --user-prompt "build a todo app"  # Start from just a prompt (no plan files needed)
 fry --user-prompt-file ./prompt.txt   # Load a longer prompt from a file
@@ -128,6 +132,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Docker Support](docs/docker.md) | Docker Compose lifecycle, health checks, sprint scoping |
 | [Preflight Checks](docs/preflight.md) | Pre-build validation, required tools, custom commands |
 | [Planning Mode](docs/planning-mode.md) | Non-code project support: documents, analyses, strategies |
+| [Writing Mode](docs/writing-mode.md) | Human-language content: books, guides, reports, documentation |
 | [Media Assets](docs/media-assets.md) | Optional `media/` directory for images, PDFs, fonts, and other build assets |
 | [Supplementary Assets](docs/supplementary-assets.md) | Optional `assets/` directory for text reference documents read during plan generation |
 | [User Prompt](docs/user-prompt.md) | Injecting directives, prompt hierarchy, persistence |

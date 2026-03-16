@@ -32,6 +32,7 @@ type BuildAuditOpts struct {
 	Verbose          bool
 	Model            string
 	DeferredFailures string // content of .fry/deferred-failures.md
+	Mode             string
 }
 
 // RunBuildAudit performs a final holistic audit of the entire codebase after
@@ -191,22 +192,41 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	b.WriteString("Repeat the following cycle until the EXIT CONDITION is met (max 10 iterations).\n\n")
 
 	b.WriteString("### Step 1 — Audit\n\n")
-	b.WriteString("Meticulously audit the entire codebase against these criteria:\n\n")
-	b.WriteString("- **Correctness** — Code is coherent with the aim and function of the application; no bugs.\n")
-	b.WriteString("- **Usability** — No UX friction, confusing flows, or accessibility gaps.\n")
-	b.WriteString("- **Edge cases** — Boundary conditions, empty states, invalid input, and race conditions are handled.\n")
-	b.WriteString("- **Security** — No vulnerabilities (injection, auth flaws, data exposure, etc.).\n")
-	b.WriteString("- **Performance** — No bottlenecks, memory leaks, or unnecessary complexity.\n")
-	b.WriteString("- **Code quality** — Clean style, consistent patterns, clear naming, appropriate abstractions.\n\n")
+	if opts.Mode == "writing" {
+		b.WriteString("Meticulously audit all written content against these criteria:\n\n")
+		b.WriteString("- **Coherence** — Content flows logically and tells a consistent story throughout.\n")
+		b.WriteString("- **Accuracy** — Factual claims are correct and properly supported.\n")
+		b.WriteString("- **Completeness** — All required topics are covered at sufficient depth.\n")
+		b.WriteString("- **Tone & Voice** — Writing voice is consistent and appropriate for the audience.\n")
+		b.WriteString("- **Structure** — Sections are well-organized with clear headings and transitions.\n")
+		b.WriteString("- **Depth** — Content is substantive rather than superficial or padded.\n\n")
 
-	b.WriteString("### Step 2 — Classify\n\n")
-	b.WriteString("Assign every finding a severity:\n\n")
-	b.WriteString("| Severity | Definition |\n")
-	b.WriteString("|----------|------------|\n")
-	b.WriteString("| CRITICAL | Data loss, security breach, or crash under normal use |\n")
-	b.WriteString("| HIGH | Significant bug or vulnerability; affects core functionality |\n")
-	b.WriteString("| MODERATE | Noticeable issue; degraded experience or maintainability risk |\n")
-	b.WriteString("| LOW | Minor style, naming, or cosmetic concern |\n\n")
+		b.WriteString("### Step 2 — Classify\n\n")
+		b.WriteString("Assign every finding a severity:\n\n")
+		b.WriteString("| Severity | Definition |\n")
+		b.WriteString("|----------|------------|\n")
+		b.WriteString("| CRITICAL | Factual errors, contradictions, or missing core content |\n")
+		b.WriteString("| HIGH | Major structural problems or significant gaps in coverage |\n")
+		b.WriteString("| MODERATE | Weak transitions, inconsistent voice, or shallow treatment |\n")
+		b.WriteString("| LOW | Minor style, formatting, or word choice issues |\n\n")
+	} else {
+		b.WriteString("Meticulously audit the entire codebase against these criteria:\n\n")
+		b.WriteString("- **Correctness** — Code is coherent with the aim and function of the application; no bugs.\n")
+		b.WriteString("- **Usability** — No UX friction, confusing flows, or accessibility gaps.\n")
+		b.WriteString("- **Edge cases** — Boundary conditions, empty states, invalid input, and race conditions are handled.\n")
+		b.WriteString("- **Security** — No vulnerabilities (injection, auth flaws, data exposure, etc.).\n")
+		b.WriteString("- **Performance** — No bottlenecks, memory leaks, or unnecessary complexity.\n")
+		b.WriteString("- **Code quality** — Clean style, consistent patterns, clear naming, appropriate abstractions.\n\n")
+
+		b.WriteString("### Step 2 — Classify\n\n")
+		b.WriteString("Assign every finding a severity:\n\n")
+		b.WriteString("| Severity | Definition |\n")
+		b.WriteString("|----------|------------|\n")
+		b.WriteString("| CRITICAL | Data loss, security breach, or crash under normal use |\n")
+		b.WriteString("| HIGH | Significant bug or vulnerability; affects core functionality |\n")
+		b.WriteString("| MODERATE | Noticeable issue; degraded experience or maintainability risk |\n")
+		b.WriteString("| LOW | Minor style, naming, or cosmetic concern |\n\n")
+	}
 
 	b.WriteString("### Step 3 — Report\n\n")
 	b.WriteString(fmt.Sprintf("Save a comprehensive report to `%s` in the project root. For each finding include: location, description, severity, and recommended fix.\n\n", config.BuildAuditFile))

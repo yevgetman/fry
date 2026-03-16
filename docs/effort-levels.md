@@ -183,6 +183,15 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | Retry heal attempts | 6 | 6 | 6 | 10 |
 | Compact with agent | Default | Default | Default | Enabled |
 
+## Writing Mode
+
+Effort levels apply identically in [writing mode](writing-mode.md). A `low` effort run produces 1-2 sprints for a short document or essay; `max` produces extended sprints with thorough review and higher word-count expectations. The sprint count caps, iteration ranges, review behavior, and audit settings from the table above all apply regardless of mode.
+
+```bash
+fry --mode writing --effort low --user-prompt "Write a short essay on testing"
+fry --mode writing --effort max --user-prompt "Write a comprehensive guide to distributed systems"
+```
+
 ## Backward Compatibility
 
 - Existing epics without `@effort` work exactly as before — no behavior changes

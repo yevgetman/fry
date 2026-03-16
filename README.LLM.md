@@ -57,7 +57,8 @@ fry/
 │   ├── prepare/
 │   │   ├── prepare.go           # Steps 0-3 artifact generation
 │   │   ├── software.go          # Software project handling
-│   │   └── planning.go          # Planning-mode (non-code) handling
+│   │   ├── planning.go          # Planning-mode (non-code) handling
+│   │   └── writing.go           # Writing-mode (books, guides) handling
 │   ├── git/git.go               # Git init, checkpoints, diff capture
 │   ├── docker/docker.go         # Docker Compose lifecycle, health checks
 │   ├── preflight/preflight.go   # Pre-build tool/command validation
@@ -74,11 +75,11 @@ fry/
 │   ├── GENERATE_EPIC.md         # LLM prompt template for epic generation
 │   ├── epic-example.md          # Fully-commented epic file example
 │   └── verification-example.md  # Verification check examples
-├── docs/                        # 20 user-facing documentation files (see below)
+├── docs/                        # 21 user-facing documentation files (see below)
 ├── plans/                       # User-authored inputs
 │   ├── plan.md                  # Build strategy (what to build)
 │   └── executive.md             # Project context (why to build it)
-├── output/                      # Planning mode deliverables (--planning only)
+├── output/                      # Planning/writing mode deliverables (--mode planning|writing)
 ├── Makefile                     # build, test, lint, clean, install
 ├── go.mod / go.sum
 ├── .env.example                 # FRY_ENGINE=codex|claude
@@ -236,7 +237,8 @@ Key flags:
   --engine codex|claude              # AI engine for build
   --prepare-engine codex|claude      # AI engine for prepare phase
   --effort low|medium|high|max       # Effort level (auto-detect if omitted)
-  --planning                         # Planning mode (documents, not code)
+  --mode software|planning|writing   # Execution mode (default: software)
+  --planning                         # Alias for --mode planning (backwards compat)
   --user-prompt "..."                # Inject directive into prompts
   --user-prompt-file path            # Load directive from file
   --dry-run                          # Validate without executing
@@ -255,6 +257,8 @@ Key flags:
 | `DefaultEngine` | `codex` | Default build engine |
 | `DefaultPrepareEngine` | `claude` | Default prepare engine |
 | `DefaultPlanningEngine` | `claude` | Default planning-mode engine |
+| `DefaultWritingEngine` | `claude` | Default writing-mode engine |
+| `WritingOutputDir` | `output` | Output directory for writing-mode deliverables |
 | `DefaultMaxHealAttempts` | `3` | Heal loop retries |
 | `DefaultMaxFailPercent` | `20` | Max % of checks that can fail and still pass |
 | `DefaultMaxAuditIterations` | `3` | Audit fix loop retries |
@@ -314,6 +318,7 @@ make clean     # rm -rf bin/
 | `docker.md` | Docker Compose lifecycle |
 | `preflight.md` | Pre-build validation |
 | `planning-mode.md` | Non-code document generation |
+| `writing-mode.md` | Human-language content (books, guides, reports) |
 | `media-assets.md` | Binary asset handling |
 | `supplementary-assets.md` | Text asset injection |
 | `user-prompt.md` | Prompt injection, hierarchy, persistence |

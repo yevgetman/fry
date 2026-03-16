@@ -104,7 +104,9 @@ Severity is parsed from structured `**Severity:**` lines in the audit output, pr
 
 ## Audit Criteria
 
-The audit agent evaluates the sprint's work against six criteria:
+The audit agent evaluates the sprint's work against six criteria. The criteria vary by mode.
+
+### Software mode (default)
 
 1. **Correctness** -- Does the code do what the sprint goals require?
 2. **Usability** -- Are APIs, CLIs, and interfaces intuitive and consistent?
@@ -112,6 +114,17 @@ The audit agent evaluates the sprint's work against six criteria:
 4. **Security** -- Are there injection, auth, or data-exposure risks?
 5. **Performance** -- Are there obvious bottlenecks or resource leaks?
 6. **Code Quality** -- Is the code readable, well-structured, and idiomatic?
+
+### Writing mode (`--mode writing`)
+
+1. **Coherence** -- Logical flow between sections; consistent narrative thread
+2. **Accuracy** -- Factual correctness of claims, examples, and references
+3. **Completeness** -- All topics from the sprint prompt are covered at appropriate depth
+4. **Tone & Voice** -- Consistent register, audience-appropriate language, no jarring shifts
+5. **Structure** -- Clear headings, logical section ordering, effective use of lists and examples
+6. **Depth** -- Sufficient detail and analysis; not superficial or padded
+
+See [Writing Mode](writing-mode.md) for the full writing-mode reference.
 
 ## Audit Output Format
 

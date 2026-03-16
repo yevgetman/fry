@@ -21,6 +21,7 @@ type PromptOpts struct {
 	EpicProgressFile   string
 	Promise            string
 	EffortLevel        epic.EffortLevel
+	Mode               string
 }
 
 func AssemblePrompt(opts PromptOpts) (string, error) {
@@ -58,17 +59,34 @@ func AssemblePrompt(opts PromptOpts) (string, error) {
 	if opts.EffortLevel == epic.EffortMax {
 		b.WriteString("# ===== QUALITY DIRECTIVE =====\n")
 		b.WriteString("# This build is running at MAX effort. Apply heightened rigor:\n")
-		b.WriteString("# - Consider and handle ALL edge cases, not just common ones\n")
-		b.WriteString("# - Add comprehensive error handling with descriptive messages\n")
-		b.WriteString("# - Write defensive code — validate assumptions, check invariants\n")
-		b.WriteString("# - Consider performance implications of every data structure choice\n")
-		b.WriteString("# - Review your own output each iteration for correctness before proceeding\n\n")
+		if opts.Mode == "writing" {
+			b.WriteString("# - Apply heightened editorial rigor to every paragraph\n")
+			b.WriteString("# - Consider audience engagement and narrative flow at every level\n")
+			b.WriteString("# - Verify factual claims and ensure internal consistency\n")
+			b.WriteString("# - Vary sentence structure and maintain voice consistency throughout\n")
+			b.WriteString("# - Review your own output each iteration for quality before proceeding\n\n")
+		} else {
+			b.WriteString("# - Consider and handle ALL edge cases, not just common ones\n")
+			b.WriteString("# - Add comprehensive error handling with descriptive messages\n")
+			b.WriteString("# - Write defensive code — validate assumptions, check invariants\n")
+			b.WriteString("# - Consider performance implications of every data structure choice\n")
+			b.WriteString("# - Review your own output each iteration for correctness before proceeding\n\n")
+		}
 	}
 
 	// Layer 2: Strategic plan reference
 	b.WriteString("# ===== STRATEGIC PLAN =====\n")
 	if opts.PlanPointer != "" {
 		b.WriteString(ensureTrailingNewline(opts.PlanPointer))
+	} else if opts.Mode == "writing" {
+		b.WriteString(fmt.Sprintf("# Read `%s` for the holistic content plan. It describes the full\n", config.PlanFile))
+		b.WriteString("# writing project structure, all chapters/sections, and how they connect.\n")
+		b.WriteString("# This sprint delivers one part of that plan. Use it as your \"true north\" for:\n")
+		b.WriteString("#   - How this sprint's content fits into the larger work\n")
+		b.WriteString("#   - What later sections will build on what you write here\n")
+		b.WriteString("#   - Voice, tone, and structural decisions that span the entire project\n")
+		b.WriteString("#\n")
+		b.WriteString("# Do NOT write content from other sprints — only use the plan for context.\n")
 	} else {
 		b.WriteString(fmt.Sprintf("# Read `%s` for the holistic build plan. It describes the full\n", config.PlanFile))
 		b.WriteString("# project architecture, all phases, and how they connect. This sprint implements\n")

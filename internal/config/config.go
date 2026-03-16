@@ -7,6 +7,7 @@ const (
 	DefaultEngine             = "codex"
 	DefaultPrepareEngine      = "claude"
 	DefaultPlanningEngine     = "claude"
+	DefaultWritingEngine      = "claude"
 	DefaultMaxHealAttempts    = 3
 	DefaultMaxFailPercent     = 20
 	DefaultDockerReadyTimeout = 30
@@ -22,6 +23,7 @@ const (
 	PlanFile                  = "plans/plan.md"
 	ExecutiveFile             = "plans/executive.md"
 	PlanningOutputDir         = "output"
+	WritingOutputDir          = "output"
 	MediaDir                  = "media"
 	AssetsDir                 = "assets"
 	AgentsFile                = ".fry/AGENTS.md"

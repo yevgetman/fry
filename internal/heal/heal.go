@@ -29,6 +29,7 @@ type HealOpts struct {
 	SprintLogFile       string
 	MaxAttemptsOverride int // When > 0, overrides epic/sprint max heal attempts
 	MaxFailPercent      int // Percentage of checks allowed to fail while still passing
+	Mode                string
 }
 
 type HealResult struct {
@@ -196,7 +197,11 @@ func buildHealPrompt(opts HealOpts, failureReport string) string {
 	b.WriteString(fmt.Sprintf("1. Read %s for context on what was built this sprint\n", config.SprintProgressFile))
 	b.WriteString(fmt.Sprintf("2. Read %s for context on what was built in prior sprints\n", config.EpicProgressFile))
 	b.WriteString("3. Read the failed checks above carefully\n")
-	b.WriteString("4. Fix each failure — create missing files, fix build errors, correct config\n")
+	if opts.Mode == "writing" {
+		b.WriteString("4. Fix each failure — create missing content files, add missing sections, expand insufficient content\n")
+	} else {
+		b.WriteString("4. Fix each failure — create missing files, fix build errors, correct config\n")
+	}
 	b.WriteString("5. After fixing, do a final sanity check (e.g., run the build command if applicable)\n")
 	b.WriteString(fmt.Sprintf("6. Append a brief note to %s about what you fixed in this heal pass\n\n", config.SprintProgressFile))
 	b.WriteString("## Context files\n")

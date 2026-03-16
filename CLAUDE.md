@@ -61,6 +61,7 @@ This is not optional. When you add, modify, or remove a feature:
    - Docker → `docs/docker.md`
    - Preflight → `docs/preflight.md`
    - Planning mode → `docs/planning-mode.md`
+   - Writing mode → `docs/writing-mode.md`
    - Media assets → `docs/media-assets.md`
    - Text assets → `docs/supplementary-assets.md`
    - User prompts → `docs/user-prompt.md`
@@ -431,7 +432,7 @@ if ep.MyDirective == "" {
 | `README.md` | User-facing project documentation |
 | `README.LLM.md` | AI agent codebase map (architecture, types, flow) |
 | `AGENTS.md` | This file — LLM coding instructions |
-| `docs/*.md` | Feature-specific documentation (20 files) |
+| `docs/*.md` | Feature-specific documentation (21 files) |
 | `internal/config/config.go` | All constants and defaults |
 | `templates/*.md` | Embedded prompt/example templates |
 | `.gitignore` | Tracks what should not be committed |

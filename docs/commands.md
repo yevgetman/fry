@@ -44,10 +44,11 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
-| `--engine <codex\|claude>` | AI engine to use (default: codex for software mode, claude for planning mode) |
+| `--engine <codex\|claude>` | AI engine to use (default: codex for software mode, claude for planning/writing mode) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
+| `--mode <software\|planning\|writing>` | Execution mode (default: `software`). `planning` generates structured documents; `writing` generates human-language content (books, guides, reports). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic (defaults to `--engine`, `FRY_ENGINE`, or claude) |
-| `--planning` | Use planning-domain prompts for auto-generation |
+| `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
@@ -78,6 +79,7 @@ fry run --retry --sprint 4 --planning             # Retry with planning mode
 fry --verbose                                     # Print agent output to terminal
 fry --prepare-engine codex                        # Override: use Codex for generation, Codex for build
 fry --planning                                    # Planning project (documents, not code) — uses Claude for both stages
+fry --mode writing --user-prompt "Write a guide"  # Writing project (books, guides) — uses Claude for both stages
 fry --user-prompt "focus on backend API, skip frontend"
 fry --user-prompt "build a todo app" --engine claude  # Start from just a prompt
 fry --user-prompt-file ./prompt.txt --engine claude   # Load prompt from a file
@@ -104,8 +106,9 @@ fry prepare [epic_filename] [flags]
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--user-prompt <text>` | Top-level directive to guide artifact generation. Can bootstrap the entire project when no plan files exist (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
+| `--mode <software\|planning\|writing>` | Execution mode (default: `software`). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--validate-only` | Check that the epic is valid, then exit |
-| `--planning` | Use planning-domain prompts |
+| `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 
 All artifacts are **always regenerated** (overwritten) on each run.
@@ -132,6 +135,7 @@ fry prepare --project-dir /path                    # Operate on a different proj
 fry prepare --user-prompt "no ORMs, use raw SQL only"
 fry prepare --user-prompt "build a blog engine" --engine claude  # Bootstrap from prompt
 fry prepare --user-prompt-file ./requirements.txt --engine claude # Prompt from file
+fry prepare --mode writing --user-prompt "Write a guide to Go concurrency"  # Writing mode
 fry prepare --validate-only                        # Validate existing epic only
 ```
 

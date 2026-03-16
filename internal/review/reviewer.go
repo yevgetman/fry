@@ -26,6 +26,7 @@ type ReviewPromptOpts struct {
 	SprintProgressContent  string
 	DeviationLogContent    string
 	EffortLevel            epic.EffortLevel
+	Mode                   string
 }
 
 type RunReviewOpts struct {
@@ -43,7 +44,11 @@ func AssembleReviewPrompt(opts ReviewPromptOpts) (string, error) {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("# Sprint Review — After Sprint %d: %s\n\n", opts.SprintNum, opts.SprintName))
 	b.WriteString("## Your Role\n")
-	b.WriteString(fmt.Sprintf("You are a build plan reviewer. You have just observed the completion of Sprint %d.\n", opts.SprintNum))
+	if opts.Mode == "writing" {
+		b.WriteString(fmt.Sprintf("You are a content plan reviewer. You have just observed the completion of Sprint %d.\n", opts.SprintNum))
+	} else {
+		b.WriteString(fmt.Sprintf("You are a build plan reviewer. You have just observed the completion of Sprint %d.\n", opts.SprintNum))
+	}
 	b.WriteString(fmt.Sprintf("Your job is to decide whether the remaining sprints (Sprint %d through %d)\n", opts.SprintNum+1, opts.TotalSprints))
 	b.WriteString("need adjustment based on what actually happened.\n\n")
 	if opts.EffortLevel == epic.EffortMax {

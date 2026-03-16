@@ -122,8 +122,7 @@ func TestPreparePrerequisites(t *testing.T) {
 }
 
 func TestBootstrapExecutive_UserApproves(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel: mutates package-level newEngine variable
 	dir := t.TempDir()
 	executivePath := dir + "/plans/executive.md"
 
@@ -213,9 +212,67 @@ func TestPlanningExecutiveFromUserPromptPrompt_WithAssets(t *testing.T) {
 	assert.Contains(t, prompt, "supplementary asset documents")
 }
 
-func TestBootstrapExecutive_UserDeclines(t *testing.T) {
+func TestWritingStep2NoGenerateEpic(t *testing.T) {
 	t.Parallel()
 
+	prompt := WritingStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "", "")
+	assert.NotContains(t, prompt, "GENERATE_EPIC.md")
+}
+
+func TestWritingStep0Prompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/research.md (200 B)\n```markdown\n# Research\n```\n"
+	prompt := WritingStep0Prompt("executive content", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "supplementary asset documents")
+}
+
+func TestWritingStep2Prompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/source.md (80 B)\n```markdown\ndata\n```\n"
+	prompt := WritingStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "supplementary asset documents")
+}
+
+func TestWritingExecutiveFromUserPromptPrompt_WithAssets(t *testing.T) {
+	t.Parallel()
+
+	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/outline.md (40 B)\n```markdown\n# Outline\n```\n"
+	prompt := WritingExecutiveFromUserPromptPrompt("write a book about Go", "", assetsSection)
+	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
+	assert.Contains(t, prompt, "supplementary asset documents")
+	assert.Contains(t, prompt, "Voice & Tone")
+}
+
+func TestEffortSizingGuidanceWriting_Low(t *testing.T) {
+	t.Parallel()
+
+	guidance := effortSizingGuidanceWriting("low")
+	assert.Contains(t, guidance, "AT MOST 2 sprints")
+	assert.Contains(t, guidance, "EFFORT LEVEL: LOW")
+}
+
+func TestEffortSizingGuidanceWriting_Max(t *testing.T) {
+	t.Parallel()
+
+	guidance := effortSizingGuidanceWriting("max")
+	assert.Contains(t, guidance, "30-50")
+	assert.Contains(t, guidance, "EFFORT LEVEL: MAX")
+}
+
+func TestEffortSizingGuidanceWriting_Auto(t *testing.T) {
+	t.Parallel()
+
+	guidance := effortSizingGuidanceWriting("")
+	assert.Contains(t, guidance, "AUTO-DETECT")
+	assert.Contains(t, guidance, "content plan")
+}
+
+func TestBootstrapExecutive_UserDeclines(t *testing.T) {
+	// Not parallel: mutates package-level newEngine variable
 	dir := t.TempDir()
 	executivePath := dir + "/plans/executive.md"
 

@@ -52,6 +52,7 @@ type RunConfig struct {
 	UserPrompt  string
 	StartSprint int
 	EndSprint   int
+	Mode        string
 }
 
 func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
@@ -89,6 +90,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		EpicProgressFile:   config.EpicProgressFile,
 		Promise:            cfg.Sprint.Promise,
 		EffortLevel:        cfg.Epic.EffortLevel,
+		Mode:               cfg.Mode,
 	}); err != nil {
 		return nil, fmt.Errorf("run sprint: %w", err)
 	}
@@ -216,6 +218,7 @@ func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check,
 		Verbose:          cfg.Verbose,
 		SprintLogFile:    sprintLogPath,
 		MaxFailPercent:   cfg.Epic.MaxFailPercent,
+		Mode:             cfg.Mode,
 	}
 
 	switch {
@@ -352,6 +355,7 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		SprintLogFile:       sprintLogPath,
 		MaxAttemptsOverride: boostedAttempts,
 		MaxFailPercent:      cfg.Epic.MaxFailPercent,
+		Mode:                cfg.Mode,
 	})
 	if err != nil {
 		return nil, err

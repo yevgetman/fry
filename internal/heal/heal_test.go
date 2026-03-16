@@ -75,6 +75,24 @@ func TestHealPromptWithExecutiveAndUserDirective(t *testing.T) {
 	assert.NotContains(t, result, "## User Directive")
 }
 
+func TestHealPromptWritingMode(t *testing.T) {
+	t.Parallel()
+	projectDir := t.TempDir()
+	opts := HealOpts{
+		ProjectDir: projectDir,
+		Mode:       "writing",
+		Sprint: &epic.Sprint{
+			Number: 1,
+			Name:   "Introduction",
+		},
+	}
+
+	report := "Verification: 0/2 checks passed."
+	result := buildHealPrompt(opts, report)
+	assert.Contains(t, result, "create missing content files")
+	assert.NotContains(t, result, "fix build errors")
+}
+
 func TestHealLoopMaxAttempts(t *testing.T) {
 	t.Parallel()
 	projectDir := t.TempDir()

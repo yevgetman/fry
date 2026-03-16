@@ -82,14 +82,28 @@ When the heal loop is exhausted and failures exceed the threshold, Fry prints re
 
 ## Verification for Documents
 
-The same four check primitives work for non-code deliverables in [planning mode](planning-mode.md):
+The same four check primitives work for non-code deliverables in [planning mode](planning-mode.md) and [writing mode](writing-mode.md).
+
+### Planning mode
 
 ```
-@check_file plans/market-analysis.md
-@check_file_contains plans/market-analysis.md "## Market Size"
-@check_cmd test $(wc -w < plans/market-analysis.md) -ge 500
-@check_cmd_output grep -c '^## ' plans/market-analysis.md | ^[5-9]
+@check_file output/1--research--market-landscape.md
+@check_file_contains output/1--research--market-landscape.md "## Market Size"
+@check_cmd test $(wc -w < output/1--research--market-landscape.md) -ge 500
+@check_cmd_output grep -c '^## ' output/1--research--market-landscape.md | ^[5-9]
 ```
+
+### Writing mode
+
+```
+@check_file output/01--introduction.md
+@check_file_contains output/01--introduction.md "^# "
+@check_cmd test $(wc -w < output/01--introduction.md) -ge 800
+@check_file output/manuscript.md
+@check_cmd test $(wc -w < output/manuscript.md) -ge 5000
+```
+
+These checks ensure documents exist, contain required headings, meet minimum word counts, and that the final manuscript is assembled.
 
 ## Output Normalization
 

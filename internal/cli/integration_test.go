@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/prepare"
 	"github.com/yevgetman/fry/internal/sprint"
 )
 
@@ -153,6 +154,40 @@ func TestResolveSprintRange(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantStart, start)
 				assert.Equal(t, tt.wantEnd, end)
+			}
+		})
+	}
+}
+
+func TestResolveMode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		modeFlag    string
+		planningFlg bool
+		wantMode    prepare.Mode
+		wantErr     string
+	}{
+		{"defaults to software", "", false, prepare.ModeSoftware, ""},
+		{"planning flag", "", true, prepare.ModePlanning, ""},
+		{"mode writing", "writing", false, prepare.ModeWriting, ""},
+		{"mode planning", "planning", false, prepare.ModePlanning, ""},
+		{"mode software explicit", "software", false, prepare.ModeSoftware, ""},
+		{"conflict errors", "writing", true, "", "cannot use both"},
+		{"invalid mode", "bogus", false, "", "unknown mode"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := resolveMode(tt.modeFlag, tt.planningFlg)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantMode, got)
 			}
 		})
 	}

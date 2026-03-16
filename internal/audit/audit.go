@@ -25,6 +25,7 @@ type AuditOpts struct {
 	GitDiff    string                // initial diff; used if DiffFn is nil
 	DiffFn     func() (string, error) // if set, called before each audit pass to refresh the diff
 	Verbose    bool
+	Mode       string
 }
 
 type AuditResult struct {
@@ -192,8 +193,13 @@ func buildAuditPrompt(opts AuditOpts) string {
 	b.WriteString(fmt.Sprintf("# SPRINT AUDIT — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
 
 	b.WriteString("## Your Role\n")
-	b.WriteString("You are a code auditor. Review the work completed in this sprint.\n")
-	b.WriteString("Do NOT modify any source code. Only write your findings.\n\n")
+	if opts.Mode == "writing" {
+		b.WriteString("You are a content auditor. Review the written content completed in this sprint.\n")
+		b.WriteString("Do NOT modify any content files. Only write your findings.\n\n")
+	} else {
+		b.WriteString("You are a code auditor. Review the work completed in this sprint.\n")
+		b.WriteString("Do NOT modify any source code. Only write your findings.\n\n")
+	}
 
 	// Executive context (condensed)
 	executivePath := filepath.Join(opts.ProjectDir, config.ExecutiveFile)
@@ -240,22 +246,39 @@ func buildAuditPrompt(opts AuditOpts) string {
 
 	// Audit criteria
 	b.WriteString("## Audit Criteria\n")
-	b.WriteString("Review the sprint's work against these criteria:\n")
-	b.WriteString("1. **Correctness** — Does the code do what the sprint goals require?\n")
-	b.WriteString("2. **Usability** — Are APIs, CLIs, and interfaces intuitive and consistent?\n")
-	b.WriteString("3. **Edge Cases** — Are boundary conditions and error paths handled?\n")
-	b.WriteString("4. **Security** — Are there injection, auth, or data-exposure risks?\n")
-	b.WriteString("5. **Performance** — Are there obvious bottlenecks or resource leaks?\n")
-	b.WriteString("6. **Code Quality** — Is the code readable, well-structured, and idiomatic?\n\n")
+	if opts.Mode == "writing" {
+		b.WriteString("Review the sprint's written content against these criteria:\n")
+		b.WriteString("1. **Coherence** — Does the content flow logically and tell a consistent story?\n")
+		b.WriteString("2. **Accuracy** — Are factual claims correct and properly supported?\n")
+		b.WriteString("3. **Completeness** — Does the content cover all required topics at sufficient depth?\n")
+		b.WriteString("4. **Tone & Voice** — Is the writing voice consistent and appropriate for the audience?\n")
+		b.WriteString("5. **Structure** — Are sections well-organized with clear headings and transitions?\n")
+		b.WriteString("6. **Depth** — Is the content substantive rather than superficial or padded?\n\n")
 
-	// Severity levels
-	b.WriteString("## Severity Levels\n")
-	b.WriteString("| Level | Description |\n")
-	b.WriteString("|---|---|\n")
-	b.WriteString("| CRITICAL | Data loss, security breach, or crash under normal use |\n")
-	b.WriteString("| HIGH | Significant bug; affects core functionality |\n")
-	b.WriteString("| MODERATE | Edge case gaps, poor error handling, quality concerns |\n")
-	b.WriteString("| LOW | Style, naming, cosmetic |\n\n")
+		b.WriteString("## Severity Levels\n")
+		b.WriteString("| Level | Description |\n")
+		b.WriteString("|---|---|\n")
+		b.WriteString("| CRITICAL | Factual errors, contradictions, or missing core content |\n")
+		b.WriteString("| HIGH | Major structural problems or significant gaps in coverage |\n")
+		b.WriteString("| MODERATE | Weak transitions, inconsistent voice, or shallow treatment |\n")
+		b.WriteString("| LOW | Minor style, formatting, or word choice issues |\n\n")
+	} else {
+		b.WriteString("Review the sprint's work against these criteria:\n")
+		b.WriteString("1. **Correctness** — Does the code do what the sprint goals require?\n")
+		b.WriteString("2. **Usability** — Are APIs, CLIs, and interfaces intuitive and consistent?\n")
+		b.WriteString("3. **Edge Cases** — Are boundary conditions and error paths handled?\n")
+		b.WriteString("4. **Security** — Are there injection, auth, or data-exposure risks?\n")
+		b.WriteString("5. **Performance** — Are there obvious bottlenecks or resource leaks?\n")
+		b.WriteString("6. **Code Quality** — Is the code readable, well-structured, and idiomatic?\n\n")
+
+		b.WriteString("## Severity Levels\n")
+		b.WriteString("| Level | Description |\n")
+		b.WriteString("|---|---|\n")
+		b.WriteString("| CRITICAL | Data loss, security breach, or crash under normal use |\n")
+		b.WriteString("| HIGH | Significant bug; affects core functionality |\n")
+		b.WriteString("| MODERATE | Edge case gaps, poor error handling, quality concerns |\n")
+		b.WriteString("| LOW | Style, naming, cosmetic |\n\n")
+	}
 
 	// Output instructions
 	b.WriteString("## Output\n")
@@ -280,8 +303,13 @@ func buildAuditFixPrompt(opts AuditOpts, auditFindings string) string {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# AUDIT FIX — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
-	b.WriteString("The sprint audit found issues. Fix ONLY the CRITICAL, HIGH, and MODERATE\n")
-	b.WriteString("issues listed below. Do NOT fix LOW issues. Make minimal changes.\n\n")
+	if opts.Mode == "writing" {
+		b.WriteString("The content audit found issues. Fix ONLY the CRITICAL, HIGH, and MODERATE\n")
+		b.WriteString("issues listed below. Do NOT fix LOW issues. Make minimal editorial changes.\n\n")
+	} else {
+		b.WriteString("The sprint audit found issues. Fix ONLY the CRITICAL, HIGH, and MODERATE\n")
+		b.WriteString("issues listed below. Do NOT fix LOW issues. Make minimal changes.\n\n")
+	}
 
 	b.WriteString("## Audit Findings\n")
 	b.WriteString(auditFindings)

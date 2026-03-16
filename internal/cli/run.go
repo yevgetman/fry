@@ -40,6 +40,7 @@ var (
 	runSimulateReview string
 	runPrepareEngine  string
 	runPlanning       bool
+	runMode           string
 	runEffort         string
 	runNoAudit        bool
 	runRetry          bool
@@ -65,6 +66,11 @@ var runCmd = &cobra.Command{
 		}
 
 		effortLevel, err := epic.ParseEffortLevel(runEffort)
+		if err != nil {
+			return err
+		}
+
+		mode, err := resolveMode(runMode, runPlanning)
 		if err != nil {
 			return err
 		}
@@ -96,7 +102,7 @@ var runCmd = &cobra.Command{
 				EpicFilename: filepath.Base(epicPath),
 				Engine:       prepareEngineName,
 				UserPrompt:   userPrompt,
-				Planning:     runPlanning,
+				Mode:         mode,
 				EffortLevel:  effortLevel,
 				Stdin:        os.Stdin,
 				Stdout:       cmd.OutOrStdout(),
@@ -120,8 +126,11 @@ var runCmd = &cobra.Command{
 		}
 
 		buildDefault := config.DefaultEngine
-		if runPlanning {
+		switch mode {
+		case prepare.ModePlanning:
 			buildDefault = config.DefaultPlanningEngine
+		case prepare.ModeWriting:
+			buildDefault = config.DefaultWritingEngine
 		}
 		engineName, err := engine.ResolveEngine(runEngine, ep.Engine, "", buildDefault)
 		if err != nil {
@@ -212,6 +221,7 @@ var runCmd = &cobra.Command{
 		}
 
 		var allDeferredFailures []deferredEntry
+		modeStr := string(mode)
 
 		exitErr := error(nil)
 		for sprintNum := startSprint; sprintNum <= endSprint; sprintNum++ {
@@ -255,6 +265,7 @@ var runCmd = &cobra.Command{
 					UserPrompt:  userPrompt,
 					StartSprint: startSprint,
 					EndSprint:   endSprint,
+					Mode:        modeStr,
 				})
 			} else {
 				result, err = sprint.RunSprint(ctx, sprint.RunConfig{
@@ -267,6 +278,7 @@ var runCmd = &cobra.Command{
 					UserPrompt:  userPrompt,
 					StartSprint: startSprint,
 					EndSprint:   endSprint,
+					Mode:        modeStr,
 				})
 			}
 			if err != nil {
@@ -308,6 +320,7 @@ var runCmd = &cobra.Command{
 						GitDiff:    gitDiff,
 						DiffFn:     func() (string, error) { return git.GitDiffForAudit(projectPath) },
 						Verbose:    frlog.Verbose,
+						Mode:       modeStr,
 					})
 					if err != nil {
 						return err
@@ -498,6 +511,7 @@ var runCmd = &cobra.Command{
 					Verbose:          frlog.Verbose,
 					Model:            ep.AuditModel,
 					DeferredFailures: deferredContent,
+					Mode:             string(mode),
 				}); auditErr != nil {
 					frlog.Log("WARNING: build audit failed: %v", auditErr)
 				} else {
@@ -538,7 +552,8 @@ func init() {
 	runCmd.Flags().BoolVar(&runNoReview, "no-review", false, "Disable sprint review")
 	runCmd.Flags().StringVar(&runSimulateReview, "simulate-review", "", "Simulate review verdict")
 	runCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")
-	runCmd.Flags().BoolVar(&runPlanning, "planning", false, "Use planning mode")
+	runCmd.Flags().BoolVar(&runPlanning, "planning", false, "Use planning mode (alias for --mode planning)")
+	runCmd.Flags().StringVar(&runMode, "mode", "", "Execution mode: software, planning, writing")
 	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
 	runCmd.Flags().BoolVar(&runRetry, "retry", false, "Retry failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
@@ -781,4 +796,16 @@ func readDeferredFailuresArtifact(projectDir string) string {
 		return ""
 	}
 	return string(data)
+}
+
+// resolveMode reconciles the --mode flag with the legacy --planning bool flag.
+// Returns an error if both --mode and --planning are set to conflicting values.
+func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
+	if strings.TrimSpace(modeFlag) != "" && planningFlag {
+		return "", fmt.Errorf("cannot use both --mode and --planning; use --mode planning instead")
+	}
+	if planningFlag {
+		return prepare.ModePlanning, nil
+	}
+	return prepare.ParseMode(modeFlag)
 }

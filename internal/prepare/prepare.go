@@ -27,7 +27,7 @@ type PrepareOpts struct {
 	Engine       string
 	UserPrompt   string
 	ValidateOnly bool
-	Planning     bool
+	Mode         Mode
 	EffortLevel  epic.EffortLevel
 	Stdin        io.Reader // for interactive confirmation (defaults to os.Stdin)
 	Stdout       io.Writer // for displaying generated content (defaults to os.Stdout)
@@ -77,10 +77,16 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		return fmt.Errorf("run prepare: write embedded templates: %w", err)
 	}
 
-	if opts.Planning {
+	switch opts.Mode {
+	case ModePlanning:
 		outputDir := filepath.Join(projectDir, config.PlanningOutputDir)
 		if err := os.MkdirAll(outputDir, 0o755); err != nil {
 			return fmt.Errorf("run prepare: create planning output dir: %w", err)
+		}
+	case ModeWriting:
+		outputDir := filepath.Join(projectDir, config.WritingOutputDir)
+		if err := os.MkdirAll(outputDir, 0o755); err != nil {
+			return fmt.Errorf("run prepare: create writing output dir: %w", err)
 		}
 	}
 
@@ -128,7 +134,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if err := os.MkdirAll(filepath.Dir(planPath), 0o755); err != nil {
 			return err
 		}
-		prompt := step0Prompt(opts.Planning, string(executiveContent), mediaManifest, assetsSection)
+		prompt := step0Prompt(opts.Mode, string(executiveContent), mediaManifest, assetsSection)
 		beforeMod := textutil.FileModTime(planPath)
 		output, err := runPrepareStep(ctx, eng, projectDir, prompt)
 		if err != nil {
@@ -152,7 +158,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	agentsPath := filepath.Join(projectDir, config.AgentsFile)
 	frylog.Log("Step 1: Generating %s (engine: %s)...", config.AgentsFile, engName)
-	prompt := step1Prompt(opts.Planning, planContent, executiveContent, mediaManifest)
+	prompt := step1Prompt(opts.Mode, planContent, executiveContent, mediaManifest)
 	beforeMod := textutil.FileModTime(agentsPath)
 	output, err := runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
@@ -182,7 +188,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	epicPath := filepath.Join(projectDir, epicFilename)
 
 	frylog.Log("Step 2: Generating %s (engine: %s)...", epicFilename, engName)
-	prompt = step2Prompt(opts.Planning, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
+	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
 	beforeMod = textutil.FileModTime(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
 	if err != nil {
@@ -202,7 +208,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 
 	frylog.Log("Step 3: Generating %s (engine: %s)...", config.DefaultVerificationFile, engName)
-	prompt = step3Prompt(opts.Planning, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest)
+	prompt = step3Prompt(opts.Mode, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest)
 	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	beforeMod = textutil.FileModTime(verificationPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
@@ -240,7 +246,7 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 	// UserPrompt is guaranteed non-empty by the caller (validatePreparePrerequisites passed).
 	frylog.Log("Generating executive context from user prompt (engine: %s)...", engName)
 
-	prompt := executiveFromUserPromptPrompt(opts.Planning, opts.UserPrompt, mediaManifest, assetsSection)
+	prompt := executiveFromUserPromptPrompt(opts.Mode, opts.UserPrompt, mediaManifest, assetsSection)
 	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir})
 	if err != nil && strings.TrimSpace(output) == "" {
 		return fmt.Errorf("run prepare: generate executive: %w", err)
@@ -282,11 +288,15 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 	return nil
 }
 
-func executiveFromUserPromptPrompt(planning bool, userPrompt, mediaManifest, assetsSection string) string {
-	if planning {
+func executiveFromUserPromptPrompt(mode Mode, userPrompt, mediaManifest, assetsSection string) string {
+	switch mode {
+	case ModePlanning:
 		return PlanningExecutiveFromUserPromptPrompt(userPrompt, mediaManifest, assetsSection)
+	case ModeWriting:
+		return WritingExecutiveFromUserPromptPrompt(userPrompt, mediaManifest, assetsSection)
+	default:
+		return ExecutiveFromUserPromptPrompt(userPrompt, mediaManifest, assetsSection)
 	}
-	return ExecutiveFromUserPromptPrompt(userPrompt, mediaManifest, assetsSection)
 }
 
 func validateStep0(planPath string) error {
@@ -366,32 +376,48 @@ func writeEmbeddedTemplates(dir string) (epicExamplePath, verificationExamplePat
 	return epicExamplePath, verificationExamplePath, generateEpicPath, nil
 }
 
-func step0Prompt(planning bool, executiveContent, mediaManifest, assetsSection string) string {
-	if planning {
+func step0Prompt(mode Mode, executiveContent, mediaManifest, assetsSection string) string {
+	switch mode {
+	case ModePlanning:
 		return PlanningStep0Prompt(executiveContent, mediaManifest, assetsSection)
+	case ModeWriting:
+		return WritingStep0Prompt(executiveContent, mediaManifest, assetsSection)
+	default:
+		return SoftwareStep0Prompt(executiveContent, mediaManifest, assetsSection)
 	}
-	return SoftwareStep0Prompt(executiveContent, mediaManifest, assetsSection)
 }
 
-func step1Prompt(planning bool, planContent, executiveContent, mediaManifest string) string {
-	if planning {
+func step1Prompt(mode Mode, planContent, executiveContent, mediaManifest string) string {
+	switch mode {
+	case ModePlanning:
 		return PlanningStep1Prompt(planContent, executiveContent, mediaManifest)
+	case ModeWriting:
+		return WritingStep1Prompt(planContent, executiveContent, mediaManifest)
+	default:
+		return SoftwareStep1Prompt(planContent, executiveContent, mediaManifest)
 	}
-	return SoftwareStep1Prompt(planContent, executiveContent, mediaManifest)
 }
 
-func step2Prompt(planning bool, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
-	if planning {
+func step2Prompt(mode Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+	switch mode {
+	case ModePlanning:
 		return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, mediaManifest, assetsSection)
+	case ModeWriting:
+		return WritingStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, mediaManifest, assetsSection)
+	default:
+		return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort, mediaManifest, assetsSection)
 	}
-	return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort, mediaManifest, assetsSection)
 }
 
-func step3Prompt(planning bool, planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
-	if planning {
+func step3Prompt(mode Mode, planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
+	switch mode {
+	case ModePlanning:
 		return PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
+	case ModeWriting:
+		return WritingStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
+	default:
+		return SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
 	}
-	return SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
 }
 
 func readPrepareOptional(path string) (string, error) {
