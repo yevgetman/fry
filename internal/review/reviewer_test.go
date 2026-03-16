@@ -324,6 +324,23 @@ func (s *stubReplanEngine) Name() string {
 	return "stub"
 }
 
+func TestAssembleReviewPromptWritingMode(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	prompt, err := AssembleReviewPrompt(ReviewPromptOpts{
+		ProjectDir:   projectDir,
+		SprintNum:    2,
+		TotalSprints: 4,
+		SprintName:   "Chapter One",
+		Mode:         "writing",
+	})
+	require.NoError(t, err)
+
+	assert.Contains(t, prompt, "content plan reviewer")
+	assert.NotContains(t, prompt, "build plan reviewer")
+}
+
 func TestAssembleReviewPromptDefaults(t *testing.T) {
 	t.Parallel()
 

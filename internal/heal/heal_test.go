@@ -91,6 +91,8 @@ func TestHealPromptWritingMode(t *testing.T) {
 	result := buildHealPrompt(opts, report)
 	assert.Contains(t, result, "create missing content files")
 	assert.NotContains(t, result, "fix build errors")
+	assert.Contains(t, result, "review the content for completeness")
+	assert.NotContains(t, result, "run the build command")
 }
 
 func TestHealLoopMaxAttempts(t *testing.T) {

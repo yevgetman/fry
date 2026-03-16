@@ -91,9 +91,9 @@ To disable audits for a specific epic, add `@no_audit`:
 
 ## Severity Classification
 
-The audit agent classifies each finding with a severity level:
+The audit agent classifies each finding with a severity level. Descriptions are mode-specific; the table below shows software-mode descriptions. In writing mode, CRITICAL maps to factual errors/contradictions, HIGH to structural gaps, MODERATE to voice/transition issues, and LOW to formatting/word choice. The blocking behavior is identical across modes.
 
-| Level | Description | Action | If unresolved |
+| Level | Description (software) | Action | If unresolved |
 |---|---|---|---|
 | CRITICAL | Data loss, security breach, or crash under normal use | Fix agent remediates | **Blocks** sprint |
 | HIGH | Significant bug; affects core functionality | Fix agent remediates | **Blocks** sprint |
@@ -106,7 +106,7 @@ Severity is parsed from structured `**Severity:**` lines in the audit output, pr
 
 The audit agent evaluates the sprint's work against six criteria. The criteria vary by mode.
 
-### Software mode (default)
+### Software and planning modes (default)
 
 1. **Correctness** -- Does the code do what the sprint goals require?
 2. **Usability** -- Are APIs, CLIs, and interfaces intuitive and consistent?

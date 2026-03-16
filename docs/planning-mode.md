@@ -2,19 +2,24 @@
 
 Fry's execution engine is project-agnostic — the sprint loop, verification runner, and heal loop work identically regardless of whether the output is code or documents.
 
-Pass `--planning` to use planning-domain prompts that generate sprints for producing structured documents instead of code. Use it for business plans, trip planning, research reports, strategic analyses, or any endeavor that requires rigorous, phased document creation.
+Pass `--mode planning` (or the backwards-compatible alias `--planning`) to use planning-domain prompts that generate sprints for producing structured documents instead of code. Use it for business plans, trip planning, research reports, strategic analyses, or any endeavor that requires rigorous, phased document creation.
+
+For human-language content like books, guides, and reports, see [Writing Mode](writing-mode.md) instead.
 
 ## Usage
 
 ```bash
 # Start from just a prompt (no files needed)
-fry --planning --user-prompt "competitive analysis for entering the EV market"
+fry --mode planning --user-prompt "competitive analysis for entering the EV market"
 
 # Generate and run with existing plan files
-fry --planning
+fry --mode planning
 
 # Generate artifacts only
-fry prepare --planning
+fry prepare --mode planning
+
+# Backwards-compatible alias (equivalent to --mode planning)
+fry --planning
 ```
 
 In planning mode, Claude is the default engine for both the prepare and build stages, so `--engine claude` is not required.
@@ -34,7 +39,7 @@ In planning mode, Claude is the default engine for both the prepare and build st
 
 ```bash
 # Option A: Start from a prompt
-fry --planning --user-prompt "launch plan for a specialty coffee shop in Portland"
+fry --mode planning --user-prompt "launch plan for a specialty coffee shop in Portland"
 
 # Option B: Start from a plan file
 mkdir -p plans
@@ -51,7 +56,7 @@ Open a specialty coffee shop in downtown Portland targeting remote workers.
 - Marketing and pre-launch buzz
 EOF
 
-fry --planning
+fry --mode planning
 ```
 
 ## Output Directory and Naming Convention
@@ -131,3 +136,10 @@ In your plan: "Reference the findings in `assets/prior-analysis.md` when develop
 - Strategic analyses and competitive assessments
 - Project proposals and feasibility studies
 - Any multi-phase document creation that benefits from structured decomposition
+
+## See Also
+
+- [Writing Mode](writing-mode.md) -- human-language content (books, guides, reports, documentation)
+- [Verification](verification.md) -- check primitives and document verification examples
+- [Effort Levels](effort-levels.md) -- sprint count and rigor control
+- [Commands](commands.md) -- full CLI reference for `--mode` flag

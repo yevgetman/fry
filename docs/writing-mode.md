@@ -33,7 +33,7 @@ Writing mode outputs all deliverables to `output/` at the project root. Filename
 - **sequence** -- a zero-padded number (01, 02, 03...) indicating production order across all sprints
 - **name** -- a descriptive kebab-case name
 
-After all sprints complete, Fry concatenates the individual files into a single `output/manuscript.md`.
+The final sprint instructs the AI agent to consolidate all individual files into a single `output/manuscript.md`.
 
 Example directory layout:
 

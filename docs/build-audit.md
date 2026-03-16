@@ -64,7 +64,9 @@ Partial sprint ranges (e.g., `fry run epic.md 3 5`) do **not** trigger the build
 
 ## Audit Criteria
 
-The build audit evaluates the entire codebase against six criteria:
+The build audit evaluates the entire output against six criteria. The criteria vary by mode.
+
+### Software and planning modes (default)
 
 1. **Correctness** -- Code is coherent with the aim and function of the application; no bugs.
 2. **Usability** -- No UX friction, confusing flows, or accessibility gaps.
@@ -73,7 +75,22 @@ The build audit evaluates the entire codebase against six criteria:
 5. **Performance** -- No bottlenecks, memory leaks, or unnecessary complexity.
 6. **Code Quality** -- Clean style, consistent patterns, clear naming, appropriate abstractions.
 
+### Writing mode (`--mode writing`)
+
+1. **Coherence** -- Content flows logically and tells a consistent story throughout.
+2. **Accuracy** -- Factual claims are correct and properly supported.
+3. **Completeness** -- All required topics are covered at sufficient depth.
+4. **Tone & Voice** -- Writing voice is consistent and appropriate for the audience.
+5. **Structure** -- Sections are well-organized with clear headings and transitions.
+6. **Depth** -- Content is substantive rather than superficial or padded.
+
+See [Writing Mode](writing-mode.md) for the full writing-mode reference.
+
 ## Severity Classification
+
+The severity levels vary by mode.
+
+### Software and planning modes (default)
 
 | Level | Definition |
 |---|---|
@@ -81,6 +98,15 @@ The build audit evaluates the entire codebase against six criteria:
 | HIGH | Significant bug or vulnerability; affects core functionality |
 | MODERATE | Noticeable issue; degraded experience or maintainability risk |
 | LOW | Minor style, naming, or cosmetic concern |
+
+### Writing mode (`--mode writing`)
+
+| Level | Definition |
+|---|---|
+| CRITICAL | Factual errors, contradictions, or missing core content |
+| HIGH | Major structural problems or significant gaps in coverage |
+| MODERATE | Weak transitions, inconsistent voice, or shallow treatment |
+| LOW | Minor style, formatting, or word choice issues |
 
 ## Context Provided to the Audit Agent
 
@@ -165,4 +191,4 @@ build_audit_20060102_150405.log
 | Output file | `.fry/sprint-audit.txt` (transient) | `audit.md` (persisted) |
 | Context | Sprint diff + sprint progress | Full codebase + plan artifacts |
 
-Both audits use the same six criteria and four severity levels. The sprint audit catches issues incrementally during the build; the build audit catches cross-cutting issues that only become visible when viewing the completed project as a whole.
+Both audits use the same six criteria (mode-dependent) and four severity levels. The sprint audit catches issues incrementally during the build; the build audit catches cross-cutting issues that only become visible when viewing the completed project as a whole.

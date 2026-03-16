@@ -38,6 +38,7 @@ type RunReviewOpts struct {
 	Engine          engine.Engine
 	SimulateVerdict string
 	Verbose         bool
+	Mode            string
 }
 
 func AssembleReviewPrompt(opts ReviewPromptOpts) (string, error) {
@@ -241,8 +242,12 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 		runOpts.Stdout = os.Stdout
 		runOpts.Stderr = os.Stdout
 	}
+	reviewRole := "build plan reviewer"
+	if opts.Mode == "writing" {
+		reviewRole = "content plan reviewer"
+	}
 	output, _, runErr := opts.Engine.Run(ctx,
-		"Read and execute ALL instructions in .fry/review-prompt.md. You are a build plan reviewer evaluating whether downstream sprints need adjustment.",
+		fmt.Sprintf("Read and execute ALL instructions in .fry/review-prompt.md. You are a %s evaluating whether downstream sprints need adjustment.", reviewRole),
 		runOpts,
 	)
 	if runErr != nil && strings.TrimSpace(output) == "" {
@@ -302,6 +307,7 @@ func buildReviewPromptOpts(opts RunReviewOpts) (ReviewPromptOpts, error) {
 		SprintProgressContent:  sprintProgress,
 		DeviationLogContent:    deviationLog,
 		EffortLevel:            effortLevel,
+		Mode:                   opts.Mode,
 	}, nil
 }
 

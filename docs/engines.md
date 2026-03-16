@@ -43,10 +43,11 @@ The AI engine is resolved with this precedence (highest wins):
 
 | Mode | Prepare Stage | Build Stage |
 |---|---|---|
-| **Software (default)** | Claude | Codex |
-| **Planning** (`--planning`) | Claude | Claude |
+| **Software** (default) | Claude | Codex |
+| **Planning** (`--mode planning`) | Claude | Claude |
+| **Writing** (`--mode writing`) | Claude | Claude |
 
-In software (coding) mode, Claude is used for artifact generation (prepare) and Codex is used for sprint execution (build). In planning mode, Claude is used for both stages.
+In software mode, Claude is used for artifact generation (prepare) and Codex is used for sprint execution (build). In planning and writing modes, Claude is used for both stages.
 
 These defaults apply only when no explicit engine is specified via CLI flag, epic directive, or environment variable.
 

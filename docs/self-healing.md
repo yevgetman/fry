@@ -22,6 +22,8 @@ The heal prompt is specifically designed for targeted fixes:
 - **Instructions**: Read progress files, fix minimum changes only, no refactoring
 - **Context references**: Pointers to `.fry/sprint-progress.txt` and other context files
 
+In [writing mode](writing-mode.md), the heal instructions use content-oriented language (e.g., "create missing content files, add missing sections, expand insufficient content") instead of code-oriented language (e.g., "fix build errors, correct config").
+
 Each failed attempt's report is appended to `.fry/sprint-progress.txt`, giving subsequent heal attempts cumulative knowledge of what was tried.
 
 ## Configuration

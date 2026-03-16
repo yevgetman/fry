@@ -154,7 +154,7 @@ type Engine interface {
 }
 ```
 
-Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → default (codex for build, claude for prepare/planning).
+Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → default (codex for software build, claude for prepare/planning/writing).
 
 ### Effort Levels (`internal/epic/types.go`)
 
@@ -296,7 +296,7 @@ make install   # build + cp bin/fry /usr/local/bin/fry
 make clean     # rm -rf bin/
 ```
 
-**19 test files** covering all packages. Tests use `t.Parallel()`, temp directories, env mocking, and mock engines. No CI/CD configured — local testing only.
+**20 test files** covering all packages. Tests use `t.Parallel()`, temp directories, env mocking, and mock engines. No CI/CD configured — local testing only.
 
 ---
 

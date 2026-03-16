@@ -387,6 +387,7 @@ var runCmd = &cobra.Command{
 						Engine:          reviewEngine,
 						SimulateVerdict: runSimulateReview,
 						Verbose:         frlog.Verbose,
+						Mode:            modeStr,
 					})
 					if err != nil {
 						return err

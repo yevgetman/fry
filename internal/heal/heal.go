@@ -202,7 +202,11 @@ func buildHealPrompt(opts HealOpts, failureReport string) string {
 	} else {
 		b.WriteString("4. Fix each failure — create missing files, fix build errors, correct config\n")
 	}
-	b.WriteString("5. After fixing, do a final sanity check (e.g., run the build command if applicable)\n")
+	if opts.Mode == "writing" {
+		b.WriteString("5. After fixing, review the content for completeness and consistency\n")
+	} else {
+		b.WriteString("5. After fixing, do a final sanity check (e.g., run the build command if applicable)\n")
+	}
 	b.WriteString(fmt.Sprintf("6. Append a brief note to %s about what you fixed in this heal pass\n\n", config.SprintProgressFile))
 	b.WriteString("## Context files\n")
 	b.WriteString(fmt.Sprintf("- Read %s for current sprint iteration history\n", config.SprintProgressFile))
