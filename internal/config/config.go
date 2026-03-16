@@ -20,7 +20,7 @@ const (
 	UserPromptFile            = ".fry/user-prompt.txt"
 	PlanFile                  = "plans/plan.md"
 	ExecutiveFile             = "plans/executive.md"
-	PlanningOutputDir         = "plans/output"
+	PlanningOutputDir         = "output"
 	MediaDir                  = "media"
 	AssetsDir                 = "assets"
 	AgentsFile                = ".fry/AGENTS.md"

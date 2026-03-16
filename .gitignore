@@ -4,6 +4,7 @@ bin/
 *.log
 .fry/
 plans/
+output/
 build-docs/
 fry
 audit.md

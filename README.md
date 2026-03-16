@@ -37,7 +37,7 @@ assets/                Optional text documents (specs, schemas) read during plan
         |                + auto-heals on verification failure
         v
   Working software       Git-checkpointed after each sprint
-  (or plans/output/)     Planning docs use ordered filenames:
+  (or output/)           Planning docs use ordered filenames:
                            1--research--market-landscape.md
                            2--analysis--positioning-options.md
 ```

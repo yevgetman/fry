@@ -56,7 +56,7 @@ fry --planning
 
 ## Output Directory and Naming Convention
 
-In planning mode, all document deliverables are written to `plans/output/`, keeping the `plans/` directory reserved for input files (`executive.md`, `plan.md`).
+In planning mode, all document deliverables are written to `output/` at the project root, keeping the `plans/` directory reserved for input files (`executive.md`, `plan.md`).
 
 Output filenames use an ordered, categorized naming convention:
 
@@ -71,10 +71,11 @@ Output filenames use an ordered, categorized naming convention:
 Example directory layout:
 
 ```
-plans/
-  executive.md                              # INPUT: your executive context
-  plan.md                                   # INPUT: generated or authored plan
-  output/                                   # OUTPUT: all deliverables
+your-project/
+  plans/
+    executive.md                              # INPUT: your executive context
+    plan.md                                   # INPUT: generated or authored plan
+  output/                                     # OUTPUT: all deliverables
     1--research--market-landscape.md
     2--research--competitor-profiles.md
     3--analysis--positioning-options.md
@@ -87,10 +88,10 @@ plans/
 The same four [verification check primitives](verification.md) work for document deliverables:
 
 ```
-@check_file plans/output/1--research--market-landscape.md
-@check_file_contains plans/output/1--research--market-landscape.md "## Market Size"
-@check_cmd test $(wc -w < plans/output/1--research--market-landscape.md) -ge 500
-@check_cmd_output grep -c '^## ' plans/output/1--research--market-landscape.md | ^[5-9]
+@check_file output/1--research--market-landscape.md
+@check_file_contains output/1--research--market-landscape.md "## Market Size"
+@check_cmd test $(wc -w < output/1--research--market-landscape.md) -ge 500
+@check_cmd_output grep -c '^## ' output/1--research--market-landscape.md | ^[5-9]
 ```
 
 These checks ensure documents exist, contain required sections, meet minimum word counts, and have sufficient heading structure.

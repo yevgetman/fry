@@ -95,7 +95,7 @@ The media manifest flows through Fry at two levels:
 
 ## Planning Mode
 
-Media assets work identically in `--planning` mode. Place charts, reference documents, or data files in `media/` and reference them in your plan. The AI planning agent will incorporate them into the deliverable documents written to `plans/output/`.
+Media assets work identically in `--planning` mode. Place charts, reference documents, or data files in `media/` and reference them in your plan. The AI planning agent will incorporate them into the deliverable documents written to `output/`.
 
 ## Media vs. Supplementary Assets
 

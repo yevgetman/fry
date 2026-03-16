@@ -78,6 +78,7 @@ fry/
 ├── plans/                       # User-authored inputs
 │   ├── plan.md                  # Build strategy (what to build)
 │   └── executive.md             # Project context (why to build it)
+├── output/                      # Planning mode deliverables (--planning only)
 ├── Makefile                     # build, test, lint, clean, install
 ├── go.mod / go.sum
 ├── .env.example                 # FRY_ENGINE=codex|claude
