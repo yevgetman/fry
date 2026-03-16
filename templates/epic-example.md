@@ -97,7 +97,7 @@
 # @model <model>                  Override the agent model (alias: @codex_model)
 # @engine_flags <flags>           Extra flags for agent exec (alias: @codex_flags)
 # @verification <file>            Verification checks file (default: .fry/verification.md)
-# @max_heal_attempts <N>          Auto-heal attempts after verification failure (default: 3; 0=disabled)
+# @max_heal_attempts <N>          Auto-heal attempts after verification failure (default: 3; 0 or negative falls back to default)
 # @max_fail_percent <N>           Max % of checks that can fail and still pass (default: 20; 0=strict)
 # @compact_with_agent             Use AI agent to summarize sprint progress (default: mechanical extraction)
 # @review_between_sprints         Enable mid-build sprint review (default: disabled)

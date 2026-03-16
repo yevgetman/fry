@@ -20,6 +20,11 @@ var (
 func init() {
 	rootCmd.PersistentFlags().StringVar(&projectDir, "project-dir", ".", "Project directory")
 	rootCmd.PersistentFlags().BoolVar(&frlog.Verbose, "verbose", false, "Enable verbose logging")
+
+	// These flags are intentionally registered on both rootCmd and runCmd.
+	// rootCmd delegates to runCmd when invoked without a subcommand (e.g.,
+	// "fry --engine claude"), so rootCmd needs its own flag definitions.
+	// Both bind to the same variables so they stay in sync.
 	rootCmd.Flags().StringVar(&runEngine, "engine", "", "Execution engine")
 	rootCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "Preview actions without executing")
 	rootCmd.Flags().StringVar(&runUserPrompt, "user-prompt", "", "Additional user prompt")

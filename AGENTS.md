@@ -272,6 +272,23 @@ func TestFunctionName(t *testing.T) {
 - Create feature branches for non-trivial changes
 - Keep commits clean and focused
 
+### Use git worktrees for large feature changes
+
+When a task involves adding a new feature, introducing a new package, implementing a multi-file change, or otherwise touching several parts of the codebase, **work in a git worktree** rather than directly on the current checkout. This keeps the user's working tree clean and makes it easy to review or discard the work.
+
+Use your judgement — a worktree is appropriate when:
+- Adding a new CLI command, engine, or epic directive (multiple files + tests + docs)
+- Refactoring that spans more than 2–3 files
+- Any change that could leave the tree in a broken state mid-implementation
+
+A worktree is **not** needed for:
+- Small bug fixes (one or two files)
+- Documentation-only changes
+- Adding test cases to an existing test file
+- Tweaking constants or config values
+
+When using a worktree, create a descriptive branch name (e.g., `feature/add-ollama-engine`) and ensure all mandatory checks (`make test && make build`) pass inside the worktree before presenting the work.
+
 ---
 
 ## 9. Architecture Invariants
@@ -292,7 +309,7 @@ These are design decisions that must be preserved:
 
 7. **Progress tracking uses two files.** `sprint-progress.txt` (per-sprint, unbounded append) and `epic-progress.txt` (cross-sprint, compacted summaries). This separation is intentional for bounded context management — don't merge them.
 
-8. **Prompt assembly is layered.** The 7-layer prompt structure in `sprint/prompt.go` has a specific order. New prompt content must fit into one of the existing layers or have a clear justification for a new layer.
+8. **Prompt assembly is layered.** The 8-layer prompt structure in `sprint/prompt.go` has a specific order (layers 1, 1.25, 1.5, 1.75, 2, 3, 4, 5). New prompt content must fit into one of the existing layers or have a clear justification for a new layer.
 
 9. **Verification is independent of the AI agent.** Checks run in a separate process, not inside the agent. This separation is by design.
 

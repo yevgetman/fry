@@ -37,7 +37,7 @@ fry/
 │   │   └── validator.go         # Epic structural validation
 │   ├── sprint/
 │   │   ├── runner.go            # Sprint execution loop (iterations, no-op detection)
-│   │   ├── prompt.go            # Layered prompt assembly (7 layers)
+│   │   ├── prompt.go            # Layered prompt assembly (8 layers)
 │   │   ├── progress.go          # Iteration memory management
 │   │   └── compactor.go         # Sprint progress → epic-progress summarization
 │   ├── verify/
@@ -208,16 +208,18 @@ For each sprint (startSprint → endSprint):
 Final: build audit → build-summary.md
 ```
 
-### Prompt Layering (7 layers, assembled in `sprint/prompt.go`)
+### Prompt Layering (8 layers, assembled in `sprint/prompt.go`)
 
-1. **Executive context** — `plans/executive.md` (optional)
-2. **Media manifest** — categorized list of `media/` files (optional)
-3. **User directive** — `--user-prompt` or `.fry/user-prompt.txt` (optional)
-4. **Quality directive** — injected only at `max` effort
-5. **Strategic plan** — reference to `plans/plan.md`
-6. **Sprint instructions** — `@prompt` block from epic
-7. **Iteration memory** — links to progress files
-8. **Completion signal** — promise token (optional)
+| Layer | Content | Notes |
+|-------|---------|-------|
+| 1 | Executive context | `plans/executive.md` (optional) |
+| 1.25 | Media manifest | categorized list of `media/` files (optional) |
+| 1.5 | User directive | `--user-prompt` or `.fry/user-prompt.txt` (optional) |
+| 1.75 | Quality directive | injected only at `max` effort |
+| 2 | Strategic plan | reference to `plans/plan.md` |
+| 3 | Sprint instructions | `@prompt` block from epic |
+| 4 | Iteration memory | links to progress files |
+| 5 | Completion signal | promise token (optional) |
 
 ---
 
@@ -328,17 +330,20 @@ Epics are markdown files parsed by `epic/parser.go`. Global directives appear be
 @epic My Project
 @engine codex
 @effort high
-@required_tools go,node,docker
+@require_tool go
+@require_tool node
+@require_tool docker
 @preflight_cmd go version
-@pre_sprint_cmd echo "starting sprint"
+@pre_sprint echo "starting sprint"
 @docker_from_sprint 2
 @max_heal_attempts 3
 @review_between_sprints
 @review_engine claude
 @audit_after_sprint
-@verification_file .fry/verification.md
+@verification .fry/verification.md
 
-## Sprint 1 — Foundation
+@sprint 1
+@name Foundation
 @max_iterations 20
 @promise FOUNDATION_DONE
 @prompt

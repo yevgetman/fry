@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -23,12 +22,8 @@ var (
 var replanCmd = &cobra.Command{
 	Use:   "replan <deviation_spec>",
 	Short: "Replan an epic after deviation",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("replan requires exactly 1 deviation spec file path")
-		}
-
 		projectPath, err := resolveProjectDir(projectDir)
 		if err != nil {
 			return err

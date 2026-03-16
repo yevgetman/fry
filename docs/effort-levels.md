@@ -4,12 +4,12 @@ Effort levels control how many sprints Fry generates, how dense each sprint is, 
 
 ## The Four Levels
 
-| Level | Sprint Count | Max Iterations | Prompt Detail | Review Behavior |
-|---|---|---|---|---|
-| `low` | 1-2 | 10-15 | Concise, essentials only | Reviews skipped |
-| `medium` | 2-4 | 15-25 | Moderate, all 7 parts but brief | Reviews optional |
-| `high` | 4-10 | 15-35 | Full 7-part prompts (current default) | Normal review bias |
-| `max` | 4-10 | 30-50 | Extended 9-part prompts | Thorough review, lower deviation threshold |
+| Level | Sprint Count | Iteration Range (per sprint) | Default Iterations | Prompt Detail | Review Behavior |
+|---|---|---|---|---|---|
+| `low` | 1-2 | 10-15 | 12 | Concise, essentials only | Reviews skipped |
+| `medium` | 2-4 | 15-25 | 20 | Moderate, all 7 parts but brief | Reviews optional |
+| `high` | 4-10 | 15-35 | 25 | Full 7-part prompts (current default) | Normal review bias |
+| `max` | 4-10 | 30-50 | 40 | Extended 9-part prompts | Thorough review, lower deviation threshold |
 
 ### `low` — Quick Tasks
 

@@ -42,7 +42,7 @@ Placed before any `@sprint` block:
 | `@model <model>` | Override the agent model (alias: `@codex_model`) |
 | `@engine_flags <flags>` | Extra CLI flags for the agent (alias: `@codex_flags`) |
 | `@verification <file>` | Verification checks file (default: `.fry/verification.md`) |
-| `@max_heal_attempts <N>` | Auto-heal attempts after verification failure (default: 3; 0 = disabled) |
+| `@max_heal_attempts <N>` | Auto-heal attempts after verification failure (default: 3; 0 or negative falls back to default) |
 | `@max_fail_percent <N>` | Maximum percentage of checks that can fail while still passing the sprint (default: 20; 0 = strict, 100 = always pass). See [Verification](verification.md). |
 | `@compact_with_agent` | Use AI agent to summarize sprint progress (default: mechanical extraction) |
 | `@review_between_sprints` | Enable mid-build sprint review (default: disabled) |

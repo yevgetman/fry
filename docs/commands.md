@@ -106,6 +106,7 @@ fry prepare [epic_filename] [flags]
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--validate-only` | Check that the epic is valid, then exit |
 | `--planning` | Use planning-domain prompts |
+| `--verbose` | Stream full agent output to terminal (default: status banners only) |
 
 All artifacts are **always regenerated** (overwritten) on each run.
 
@@ -154,6 +155,7 @@ fry replan <deviation_spec> [flags]
 | `--engine <codex\|claude>` | Replanning engine |
 | `--model <model>` | Model override |
 | `--dry-run` | Preview replanning prompt without executing |
+| `--verbose` | Stream full agent output to terminal (default: status banners only) |
 
 ---
 
