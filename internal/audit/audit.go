@@ -35,7 +35,7 @@ type AuditResult struct {
 	MaxSeverity string // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
 }
 
-const maxStaleIterations = 2
+const maxStaleIterations = 3
 
 func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	if opts.Epic == nil || opts.Sprint == nil {

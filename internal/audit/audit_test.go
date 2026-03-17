@@ -528,7 +528,7 @@ func TestRunAuditLoopProgressStopsOnStale(t *testing.T) {
 
 	// Stub engine always returns the same CRITICAL findings with same description.
 	// At high effort with progress-based mode, should stop after:
-	// pass 1: baseline (runs fix), pass 2: stale #1 (runs fix), pass 3: stale #2 (stops)
+	// pass 1: baseline (runs fix), pass 2: stale #1 (runs fix), pass 3: stale #2 (runs fix), pass 4: stale #3 (stops)
 	// Then final audit pass.
 	eng := &stubEngine{
 		name: "codex",
@@ -546,9 +546,9 @@ func TestRunAuditLoopProgressStopsOnStale(t *testing.T) {
 	assert.False(t, result.Passed)
 	assert.True(t, result.Blocking)
 	assert.Equal(t, "CRITICAL", result.MaxSeverity)
-	// pass 1: audit+fix, pass 2: audit+fix, pass 3: audit (stale#2, break), final audit
-	// = 3 audits + 2 fixes + 1 final = 6 agent calls
-	assert.Len(t, eng.prompts, 6)
+	// pass 1: audit+fix, pass 2: audit+fix, pass 3: audit+fix, pass 4: audit (stale#3, break), final audit
+	// = 4 audits + 3 fixes + 1 final = 8 agent calls
+	assert.Len(t, eng.prompts, 8)
 }
 
 func TestRunAuditLoopProgressContinues(t *testing.T) {
