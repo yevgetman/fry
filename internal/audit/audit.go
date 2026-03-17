@@ -530,8 +530,10 @@ func effectiveMaxIter(ep *epic.Epic) (maxIter int, progressBased bool) {
 		return ep.MaxAuditIterations, false
 	}
 	switch ep.EffortLevel {
-	case epic.EffortHigh, epic.EffortMax:
-		return config.MaxAuditIterationsSafetyCap, true
+	case epic.EffortMax:
+		return config.MaxAuditIterationsMaxCap, true
+	case epic.EffortHigh:
+		return config.MaxAuditIterationsHighCap, true
 	default:
 		maxIter = ep.MaxAuditIterations
 		if maxIter <= 0 {

@@ -18,7 +18,7 @@ All sprints complete successfully
        +-- Report to audit.md
        +-- If clean (no issues or all LOW) --> stop
        +-- If issues remain --> remediate, then re-audit
-       |       (loop up to 10 iterations)
+       |       (loop up to 150 iterations)
        |
        v
   Git checkpoint ("build-audit")
@@ -36,7 +36,7 @@ Unlike the sprint audit (which uses separate audit and fix agents), the build au
 4. **Evaluate** -- if all issues are LOW or none exist, stop
 5. **Remediate** -- fix all issues (including LOW), then re-audit
 
-The agent repeats this cycle up to 10 iterations. This design gives the agent full context across audit and fix passes, enabling more coherent remediation of cross-cutting issues.
+The agent repeats this cycle up to 150 iterations. This design gives the agent full context across audit and fix passes, enabling more coherent remediation of cross-cutting issues.
 
 ## Deferred Failure Resolution
 
@@ -151,7 +151,7 @@ The build audit agent writes its report to `audit.md` in the project root. This 
 The report includes:
 - Location, description, severity, and recommended fix for each finding
 - A verdict indicating whether the codebase passed or issues remain
-- If the agent exhausted 10 iterations, an explanation of why issues persist
+- If the agent exhausted all iterations, an explanation of why issues persist
 
 ## Terminal Output
 

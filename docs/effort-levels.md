@@ -47,7 +47,7 @@ This is the current default behavior. For complex systems with databases, APIs, 
 - Full 7-part prompt structure with comprehensive detail
 - All standard sizing guidelines apply
 - Normal review behavior when enabled
-- Sprint audits use progress-based iteration: continue as long as the fix agent resolves issues or uncovers new ones, up to a safety cap of 10. Stops early if 2 consecutive passes show no progress.
+- Sprint audits use progress-based iteration: continue as long as the fix agent resolves issues or uncovers new ones, up to a safety cap of 50. Stops early if 3 consecutive passes show no progress.
 
 ```bash
 fry --effort high --engine claude
@@ -60,7 +60,7 @@ fry --engine claude
 For high-stakes projects where correctness is paramount. Same sprint count as `high`, but with significantly more rigor per sprint.
 
 - Same sprint count as `high` (4-10), but with higher iteration budgets (30-50 per sprint)
-- Sprint audits use progress-based iteration (same as `high`): continue while the fix agent is making progress, up to a safety cap of 10
+- Sprint audits use progress-based iteration (same as `high`): continue while the fix agent is making progress, up to a safety cap of 150
 - Sprint prompts are extended beyond the standard 7-part structure:
   - **Part 8: Analysis & Edge Cases** — enumerates every edge case, race condition, error scenario, and boundary condition
   - **Part 9: Quality Gates** — explicit quality criteria beyond verification (performance targets, security considerations, code review checklist items)
@@ -177,7 +177,7 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | Prompt structure | Concise | Moderate 7-part | Full 7-part | Extended 9-part |
 | Scaffolding sprint | Merged into Sprint 1 | Normal | Normal | Normal |
 | Review behavior | Skipped | Normal | Normal | Thorough (lower DEVIATE threshold) |
-| Sprint audit | Skipped | 3 iterations (bounded) | Progress-based (cap 10) | Progress-based (cap 10) |
+| Sprint audit | Skipped | 3 iterations (bounded) | Progress-based (cap 50) | Progress-based (cap 150) |
 | Build audit | Skipped | Runs on full epic completion | Runs on full epic completion | Runs on full epic completion |
 | No-op threshold | 2 iterations | 2 iterations | 2 iterations | 3 iterations |
 | Quality directive | No | No | No | Yes (injected into every prompt) |

@@ -496,13 +496,13 @@ func TestEffectiveMaxIter(t *testing.T) {
 		{
 			name:         "high effort not explicitly set",
 			epic:         &epic.Epic{EffortLevel: epic.EffortHigh, MaxAuditIterations: 3},
-			wantMax:      config.MaxAuditIterationsSafetyCap,
+			wantMax:      config.MaxAuditIterationsHighCap,
 			wantProgress: true,
 		},
 		{
 			name:         "max effort not explicitly set",
 			epic:         &epic.Epic{EffortLevel: epic.EffortMax, MaxAuditIterations: 3},
-			wantMax:      config.MaxAuditIterationsSafetyCap,
+			wantMax:      config.MaxAuditIterationsMaxCap,
 			wantProgress: true,
 		},
 		{
@@ -593,9 +593,9 @@ func TestRunAuditLoopProgressContinues(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.Passed)
 	assert.True(t, result.Blocking)
-	// Should have run all 10 iterations (safety cap) + final audit
-	// = 10 audits + 10 fixes + 1 final = 21 agent calls
-	assert.Len(t, eng.prompts, 21)
+	// Should have run all 150 iterations (max effort cap) + final audit
+	// = 150 audits + 150 fixes + 1 final = 301 agent calls
+	assert.Len(t, eng.prompts, 301)
 }
 
 func TestRunAuditLoopExplicitCapAtHighEffort(t *testing.T) {
@@ -674,8 +674,8 @@ func TestRunAuditLoopProgressResetsStaleCount(t *testing.T) {
 	result, err := RunAuditLoop(context.Background(), opts)
 	require.NoError(t, err)
 	assert.False(t, result.Passed)
-	// Should run all 10 iterations (progress resets prevent early stop)
-	assert.Len(t, eng.prompts, 21) // 10 audit + 10 fix + 1 final
+	// Should run all 50 iterations (high effort cap, progress resets prevent early stop)
+	assert.Len(t, eng.prompts, 101) // 50 audit + 50 fix + 1 final
 }
 
 // --- countAuditSeverities tests ---

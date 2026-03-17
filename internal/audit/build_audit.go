@@ -189,7 +189,11 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 
 	b.WriteString("---\n\n")
 	b.WriteString("## Instructions\n\n")
-	b.WriteString("Repeat the following cycle until the EXIT CONDITION is met (max 10 iterations).\n\n")
+	iterCap := config.MaxAuditIterationsHighCap
+	if opts.Epic != nil && opts.Epic.EffortLevel == epic.EffortMax {
+		iterCap = config.MaxAuditIterationsMaxCap
+	}
+	b.WriteString(fmt.Sprintf("Repeat the following cycle until the EXIT CONDITION is met (max %d iterations).\n\n", iterCap))
 
 	b.WriteString("### Step 1 — Audit\n\n")
 	if opts.Mode == "writing" {
@@ -242,7 +246,7 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	b.WriteString("### Guardrails\n\n")
 	b.WriteString(fmt.Sprintf("- Each iteration must produce a fresh `%s` that reflects the *current* state of the code.\n", config.BuildAuditFile))
 	b.WriteString("- Do not skip issues to force an early exit; report honestly.\n")
-	b.WriteString("- If you reach 10 iterations without meeting the exit condition, stop and report the remaining issues with an explanation of why they persist.\n")
+	b.WriteString(fmt.Sprintf("- If you reach %d iterations without meeting the exit condition, stop and report the remaining issues with an explanation of why they persist.\n", iterCap))
 
 	return b.String()
 }

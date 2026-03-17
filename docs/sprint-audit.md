@@ -179,7 +179,8 @@ On the first iteration, only the current findings are included. On subsequent it
 
 - **`low`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at low effort.
 - **`medium`** -- Bounded audit: runs up to `@max_audit_iterations` (default: 3) audit→fix cycles. Stops when iterations are exhausted.
-- **`high`**, **`max`** -- Progress-based audit: continues as long as the fix agent is making progress (resolving findings or uncovering new ones). Safety cap at 10 iterations. Stops early if 3 consecutive audit passes show no progress (same findings repeating). This prevents wasting cycles when the fix agent cannot resolve an issue, while allowing thorough remediation when each cycle yields improvement.
+- **`high`** -- Progress-based audit: continues as long as the fix agent is making progress (resolving findings or uncovering new ones). Safety cap at 50 iterations. Stops early if 3 consecutive audit passes show no progress (same findings repeating).
+- **`max`** -- Same progress-based behavior as `high`, but with a safety cap of 150 iterations, allowing more thorough remediation for mission-critical builds.
 
 When `@max_audit_iterations` is explicitly set in the epic, it is always respected as a hard cap regardless of effort level, and progress detection is disabled. Progress-based behavior only activates when the iteration count is not explicitly configured.
 
@@ -210,23 +211,23 @@ At `high` and `max` effort, Fry tracks audit findings across iterations by extra
 
 ### Progress-based audit (high/max effort):
 ```
-[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1 (progress-based, cap 50)  engine=claude
 [2026-03-10 12:12:00]   AUDIT: 1 HIGH, 1 MODERATE — running fix agent...
-[2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2 (progress-based, cap 50)  engine=claude
 [2026-03-10 12:16:00]   AUDIT: 2 MODERATE — running fix agent...
-[2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 3 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 3 (progress-based, cap 50)  engine=claude
 [2026-03-10 12:20:00]   AUDIT: pass (1 LOW)
 ```
 
 ### Progress stall (high/max effort):
 ```
-[2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 4 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 4 (progress-based, cap 50)  engine=claude
 [2026-03-10 12:20:00]   AUDIT: no progress detected (1/3 stale iterations)
 [2026-03-10 12:20:00]   AUDIT: 1 HIGH — running fix agent...
-[2026-03-10 12:22:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 5 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:22:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 5 (progress-based, cap 50)  engine=claude
 [2026-03-10 12:24:00]   AUDIT: no progress detected (2/3 stale iterations)
 [2026-03-10 12:24:00]   AUDIT: 1 HIGH — running fix agent...
-[2026-03-10 12:26:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 6 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:26:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 6 (progress-based, cap 50)  engine=claude
 [2026-03-10 12:28:00]   AUDIT: no progress detected (3/3 stale iterations)
 [2026-03-10 12:28:00]   AUDIT: stopping — no progress after 6 iterations
 ```
