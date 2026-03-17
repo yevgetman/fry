@@ -33,7 +33,7 @@ The audit runs **after** verification passes but **before** the git checkpoint, 
 The audit uses two separate agent sessions:
 
 1. **Audit agent** -- reads the sprint's code changes and writes findings to `.fry/sprint-audit.txt`. This agent does not modify source code.
-2. **Fix agent** -- reads the audit findings and makes minimal code changes to address CRITICAL, HIGH, and MODERATE issues. LOW issues are left alone.
+2. **Fix agent** -- reads the audit findings and makes minimal code changes to address CRITICAL, HIGH, and MODERATE issues. LOW issues are left alone. The fix agent receives the sprint goals (`@prompt` block) for context, and on iteration 2+ it also receives the **previous iteration's audit findings** so it can avoid repeating failed approaches.
 
 This separation mirrors the existing verify→heal pattern and keeps the audit agent's context focused on review.
 
@@ -161,6 +161,19 @@ The audit prompt includes:
 | Code changes | `git diff` of sprint work | First 100KB |
 
 The git diff is refreshed before each audit pass (via a callback) so that fixes made by the fix agent are reflected in subsequent audits.
+
+## Context Provided to Fix Agent
+
+The fix prompt includes:
+
+| Context | Source | When |
+|---|---|---|
+| Sprint goals | `@prompt` block from the epic | Always |
+| Previous audit findings | Prior iteration's `.fry/sprint-audit.txt` | Iteration 2+ only |
+| Current audit findings | This iteration's `.fry/sprint-audit.txt` | Always |
+| Context pointers | References to `sprint-progress.txt` and `plans/plan.md` | Always |
+
+On the first iteration, only the current findings are included. On subsequent iterations, the fix agent sees both the previous and current findings, allowing it to recognize recurring issues and try different remediation strategies.
 
 ## Effort Level Interaction
 

@@ -106,9 +106,10 @@ func TestAuditFixPromptWritingMode(t *testing.T) {
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	opts.Mode = "writing"
-	prompt := buildAuditFixPrompt(opts, "## Findings\n- weak transition\n")
+	prompt := buildAuditFixPrompt(opts, "## Findings\n- weak transition\n", "")
 	assert.Contains(t, prompt, "content audit found issues")
 	assert.Contains(t, prompt, "minimal editorial changes")
+	assert.NotContains(t, prompt, "## Previous Audit Findings")
 }
 
 func TestAuditPromptCondensesExecutive(t *testing.T) {
@@ -143,11 +144,29 @@ func TestAuditPromptTruncatesSprintProgress(t *testing.T) {
 func TestAuditFixPromptReferencesFindings(t *testing.T) {
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	findings := "## Findings\n- **Severity:** CRITICAL\n- Missing null check\n"
-	prompt := buildAuditFixPrompt(opts, findings)
+	prompt := buildAuditFixPrompt(opts, findings, "")
 	assert.Contains(t, prompt, "CRITICAL")
 	assert.Contains(t, prompt, "Missing null check")
+	assert.Contains(t, prompt, "## Current Audit Findings")
 	assert.Contains(t, prompt, config.SprintProgressFile)
 	assert.Contains(t, prompt, config.PlanFile)
+	assert.Contains(t, prompt, "## Sprint Goals")
+	assert.Contains(t, prompt, "Build the setup sprint.")
+	assert.NotContains(t, prompt, "## Previous Audit Findings")
+}
+
+func TestAuditFixPromptIncludesPreviousFindings(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	prev := "## Findings\n- **Severity:** HIGH\n- **Description:** SQL injection in login\n"
+	current := "## Findings\n- **Severity:** MODERATE\n- **Description:** Missing input validation\n"
+	prompt := buildAuditFixPrompt(opts, current, prev)
+	assert.Contains(t, prompt, "## Previous Audit Findings")
+	assert.Contains(t, prompt, "SQL injection in login")
+	assert.Contains(t, prompt, "avoid repeating the same approach")
+	assert.Contains(t, prompt, "## Current Audit Findings")
+	assert.Contains(t, prompt, "Missing input validation")
 }
 
 func TestParseAuditSeverity(t *testing.T) {

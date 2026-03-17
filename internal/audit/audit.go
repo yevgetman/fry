@@ -53,6 +53,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	}
 
 	var prevFindings map[string]struct{}
+	var prevFindingsRaw string
 	staleCount := 0
 
 	for iter := 1; iter <= maxIter; iter++ {
@@ -147,7 +148,8 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		frylog.Log("  AUDIT: %s issues found — running fix agent...", maxSev)
 
 		// Build and write fix prompt
-		fixPrompt := buildAuditFixPrompt(opts, string(content))
+		fixPrompt := buildAuditFixPrompt(opts, string(content), prevFindingsRaw)
+		prevFindingsRaw = string(content)
 		promptPath = filepath.Join(opts.ProjectDir, config.AuditPromptFile)
 		if err := os.WriteFile(promptPath, []byte(fixPrompt), 0o644); err != nil {
 			return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
@@ -330,7 +332,7 @@ func buildAuditPrompt(opts AuditOpts) string {
 	return b.String()
 }
 
-func buildAuditFixPrompt(opts AuditOpts, auditFindings string) string {
+func buildAuditFixPrompt(opts AuditOpts, auditFindings string, previousFindings string) string {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# AUDIT FIX — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
@@ -342,7 +344,20 @@ func buildAuditFixPrompt(opts AuditOpts, auditFindings string) string {
 		b.WriteString("issues listed below. Do NOT fix LOW issues. Make minimal changes.\n\n")
 	}
 
-	b.WriteString("## Audit Findings\n")
+	b.WriteString("## Sprint Goals\n")
+	b.WriteString(opts.Sprint.Prompt)
+	b.WriteString("\n\n")
+
+	if previousFindings != "" {
+		b.WriteString("## Previous Audit Findings\n")
+		b.WriteString("The following issues were identified in the prior audit pass. A fix was already\n")
+		b.WriteString("attempted. Review what was tried before and avoid repeating the same approach\n")
+		b.WriteString("if the issues persist in the current findings below.\n\n")
+		b.WriteString(previousFindings)
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString("## Current Audit Findings\n")
 	b.WriteString(auditFindings)
 	b.WriteString("\n\n")
 
