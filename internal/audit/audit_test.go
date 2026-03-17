@@ -677,3 +677,141 @@ func TestRunAuditLoopProgressResetsStaleCount(t *testing.T) {
 	// Should run all 10 iterations (progress resets prevent early stop)
 	assert.Len(t, eng.prompts, 21) // 10 audit + 10 fix + 1 final
 }
+
+// --- countAuditSeverities tests ---
+
+func TestCountAuditSeverities(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		content  string
+		expected map[string]int
+	}{
+		{
+			name:     "single CRITICAL",
+			content:  "## Findings\n- **Severity:** CRITICAL\n",
+			expected: map[string]int{"CRITICAL": 1},
+		},
+		{
+			name: "mixed severities",
+			content: "- **Severity:** CRITICAL\n- **Severity:** HIGH\n- **Severity:** HIGH\n" +
+				"- **Severity:** MODERATE\n- **Severity:** MODERATE\n- **Severity:** MODERATE\n" +
+				"- **Severity:** LOW\n",
+			expected: map[string]int{"CRITICAL": 1, "HIGH": 2, "MODERATE": 3, "LOW": 1},
+		},
+		{
+			name:     "no severity lines",
+			content:  "## Summary\nAll good.\n## Verdict\nPASS\n",
+			expected: map[string]int{},
+		},
+		{
+			name:     "only LOW",
+			content:  "- **Severity:** LOW\n- **Severity:** LOW\n",
+			expected: map[string]int{"LOW": 2},
+		},
+		{
+			name:     "non-label lines with severity keywords ignored",
+			content:  "CRITICAL bug found here\nThis is HIGH priority\n",
+			expected: map[string]int{},
+		},
+		{
+			name:     "word boundary — HIGHLY should not match HIGH",
+			content:  "**Severity:** LOW — HIGHLY unusual\n",
+			expected: map[string]int{"LOW": 1},
+		},
+		{
+			name:     "empty content",
+			content:  "",
+			expected: map[string]int{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := countAuditSeverities(tt.content)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// --- formatSeverityCounts tests ---
+
+func TestFormatSeverityCounts(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		counts   map[string]int
+		expected string
+	}{
+		{
+			name:     "all levels",
+			counts:   map[string]int{"CRITICAL": 1, "HIGH": 2, "MODERATE": 4, "LOW": 1},
+			expected: "1 CRITICAL, 2 HIGH, 4 MODERATE, 1 LOW",
+		},
+		{
+			name:     "only high and moderate",
+			counts:   map[string]int{"HIGH": 3, "MODERATE": 1},
+			expected: "3 HIGH, 1 MODERATE",
+		},
+		{
+			name:     "single level",
+			counts:   map[string]int{"LOW": 5},
+			expected: "5 LOW",
+		},
+		{
+			name:     "empty map",
+			counts:   map[string]int{},
+			expected: "none",
+		},
+		{
+			name:     "nil map",
+			counts:   nil,
+			expected: "none",
+		},
+		{
+			name:     "zero counts omitted",
+			counts:   map[string]int{"CRITICAL": 0, "HIGH": 1},
+			expected: "1 HIGH",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, formatSeverityCounts(tt.counts))
+		})
+	}
+}
+
+// --- FormatCounts (exported wrapper) test ---
+
+func TestFormatCounts(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "1 CRITICAL, 2 HIGH", FormatCounts(map[string]int{"CRITICAL": 1, "HIGH": 2}))
+	assert.Equal(t, "none", FormatCounts(nil))
+}
+
+// --- AuditResult includes SeverityCounts ---
+
+func TestRunAuditLoopPopulatesSeverityCounts(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				"## Findings\n- **Severity:** HIGH\n- **Severity:** MODERATE\n- **Severity:** MODERATE\n\n## Verdict\nFAIL\n")
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.MaxAuditIterations = 1
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	assert.NotNil(t, result.SeverityCounts)
+	assert.Equal(t, 1, result.SeverityCounts["HIGH"])
+	assert.Equal(t, 2, result.SeverityCounts["MODERATE"])
+}

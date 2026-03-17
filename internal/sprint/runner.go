@@ -112,6 +112,8 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		return nil, checkErr
 	}
 
+	sprintCheckCount := countChecksForSprint(checks, cfg.Sprint.Number)
+
 	consecutiveNoop := 0
 
 	frylog.Log("=========================================")
@@ -119,6 +121,9 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	frylog.Log("Max iterations: %d", cfg.Sprint.MaxIterations)
 	if cfg.Epic.EffortLevel != "" {
 		frylog.Log("Effort level: %s", cfg.Epic.EffortLevel)
+	}
+	if sprintCheckCount > 0 {
+		frylog.Log("Verification checks: %d applicable to this sprint", sprintCheckCount)
 	}
 	frylog.Log("=========================================")
 
@@ -150,17 +155,18 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		}
 
 		// No-op detection: early exit when agent is stuck in audit loops
-		postIterDiff := gitDiffStat(ctx, cfg.ProjectDir)
-		if preIterDiff == postIterDiff {
-			consecutiveNoop++
-		} else {
-			consecutiveNoop = 0
-		}
-
 		noopThreshold := 2
 		if cfg.Epic.EffortLevel == epic.EffortMax {
 			noopThreshold = 3
 		}
+		postIterDiff := gitDiffStat(ctx, cfg.ProjectDir)
+		if preIterDiff == postIterDiff {
+			consecutiveNoop++
+			frylog.Log("  ITER %d: no file changes detected (%d consecutive no-op)", iter, consecutiveNoop)
+		} else {
+			consecutiveNoop = 0
+		}
+
 		if consecutiveNoop >= noopThreshold && cfg.Sprint.Promise != "" && len(checks) > 0 {
 			_, passCount, totalCount := verify.RunChecks(ctx, checks, cfg.Sprint.Number, cfg.ProjectDir)
 			if totalCount > 0 && passCount == totalCount {
@@ -479,3 +485,12 @@ func gitDiffStat(ctx context.Context, projectDir string) string {
 	return string(out)
 }
 
+func countChecksForSprint(checks []verify.Check, sprintNum int) int {
+	count := 0
+	for _, c := range checks {
+		if c.Sprint == sprintNum {
+			count++
+		}
+	}
+	return count
+}

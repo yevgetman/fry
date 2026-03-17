@@ -32,18 +32,26 @@ Each generation step prints a start and completion message:
 
 ## Sprint Execution
 
-Each sprint gets a start banner, per-iteration agent banners, verification results, and a completion line:
+Each sprint gets a start banner (including verification check count), per-iteration agent banners with no-op detection, verification results, and a completion line:
 
 ```
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:00] STARTING SPRINT 3: Auth & Permissions
 [2026-03-10 12:00:00] Max iterations: 25
+[2026-03-10 12:00:00] Verification checks: 4 applicable to this sprint
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:01] ▶ AGENT  sprint 3/8 "Auth & Permissions"  iter 1/25  engine=claude  model=default
 [2026-03-10 12:05:12] ▶ AGENT  sprint 3/8 "Auth & Permissions"  iter 2/25  engine=claude  model=default
 [2026-03-10 12:10:30] Running verification checks...
 [2026-03-10 12:10:35] Verification: 4/4 checks passed.
 [2026-03-10 12:10:35] SPRINT 3 PASS (2m35s)
+[2026-03-10 12:10:36]   GIT: checkpoint — sprint 3 complete
+```
+
+When the agent produces no file changes, a no-op line appears:
+
+```
+[2026-03-10 12:10:01]   ITER 3: no file changes detected (1 consecutive no-op)
 ```
 
 ## Self-Healing
@@ -85,26 +93,32 @@ When all checks already pass on retry:
 
 ## Sprint Audit
 
-Sprint audits run by default after each sprint passes verification:
+Sprint audits run by default after each sprint passes verification. The output now includes a severity breakdown showing the count of issues at each level:
 
 ```
 [2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
-[2026-03-10 12:12:00]   AUDIT: pass (max severity: none)
+[2026-03-10 12:12:00]   AUDIT: pass (none)
 ```
 
-When issues are found and remediated:
+When issues are found, the breakdown shows exact counts before running the fix agent:
 
 ```
 [2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
-[2026-03-10 12:12:00]   AUDIT: HIGH issues found — running fix agent...
+[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 2 MODERATE — running fix agent...
 [2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2/3  engine=claude
-[2026-03-10 12:16:00]   AUDIT: pass (max severity: LOW)
+[2026-03-10 12:16:00]   AUDIT: pass (1 LOW)
 ```
 
 When issues persist after all passes (advisory, non-blocking):
 
 ```
-[2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 passes (advisory)
+[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit passes (advisory)
+```
+
+When issues persist and block (CRITICAL/HIGH):
+
+```
+[2026-03-10 12:20:00]   AUDIT: FAILED — 1 CRITICAL, 1 HIGH remain after 3 passes
 ```
 
 ## Build Audit
@@ -112,8 +126,9 @@ When issues persist after all passes (advisory, non-blocking):
 After all sprints complete successfully, a final holistic audit runs on the entire codebase:
 
 ```
-[2026-03-10 13:00:00] > BUILD AUDIT  running final holistic audit for "My Project"
-[2026-03-10 13:15:00]   BUILD AUDIT: report written to audit.md
+[2026-03-10 13:00:00] ▶ BUILD AUDIT  running holistic audit across all 8 sprints...
+[2026-03-10 13:15:00]   BUILD AUDIT: complete — report written to audit.md
+[2026-03-10 13:15:01]   GIT: checkpoint — build-audit
 ```
 
 If the agent does not produce a report:
@@ -127,6 +142,7 @@ If the agent does not produce a report:
 ```
 [2026-03-10 12:15:00] --- SPRINT REVIEW: after Sprint 3 ---
 [2026-03-10 12:16:30] Review verdict: CONTINUE
+[2026-03-10 12:16:30]   REVIEW: verdict CONTINUE
 ```
 
 Or when a deviation is needed:
@@ -134,8 +150,10 @@ Or when a deviation is needed:
 ```
 [2026-03-10 12:15:00] --- SPRINT REVIEW: after Sprint 3 ---
 [2026-03-10 12:16:30] Review verdict: DEVIATE
+[2026-03-10 12:16:30]   REVIEW: verdict DEVIATE — replanning sprints 4, 5 (risk: medium)
 [2026-03-10 12:16:31] Running replanner agent...
 [2026-03-10 12:18:00] Epic updated successfully.
+[2026-03-10 12:18:01]   GIT: checkpoint — sprint 3 reviewed-deviate
 ```
 
 ## Compaction
@@ -148,7 +166,12 @@ When `@compact_with_agent` is enabled:
 
 ## Build Summary
 
-After all sprints complete, Fry prints a summary table with the status of each sprint.
+After all sprints complete, Fry prints a summary table with the status of each sprint, then generates a summary document:
+
+```
+[2026-03-10 13:00:00] ▶ BUILD SUMMARY  generating...
+[2026-03-10 13:02:00]   BUILD SUMMARY: complete
+```
 
 ## Log Format
 

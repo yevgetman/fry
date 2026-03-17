@@ -46,11 +46,11 @@ After the audit loop exhausts its iterations, the outcome depends on the highest
 - **LOW or none** -- The audit passes cleanly.
 
 ```
-# Blocking (CRITICAL/HIGH):
-[2026-03-10 12:20:00]   AUDIT: FAILED — HIGH issues remain after 3 passes
+# Blocking (CRITICAL/HIGH) — exact severity counts:
+[2026-03-10 12:20:00]   AUDIT: FAILED — 1 CRITICAL, 1 HIGH remain after 3 passes
 
-# Advisory (MODERATE):
-[2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 audit passes (advisory)
+# Advisory (MODERATE) — exact severity counts:
+[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit passes (advisory)
 ```
 
 ## Configuration
@@ -197,50 +197,50 @@ At `high` and `max` effort, Fry tracks audit findings across iterations by extra
 ### Clean audit (no issues):
 ```
 [2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
-[2026-03-10 12:12:00]   AUDIT: pass (max severity: none)
+[2026-03-10 12:12:00]   AUDIT: pass (none)
 ```
 
-### Issues found and fixed (bounded):
+### Issues found and fixed (bounded) — severity counts shown:
 ```
 [2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
-[2026-03-10 12:12:00]   AUDIT: HIGH issues found — running fix agent...
+[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 2 MODERATE — running fix agent...
 [2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2/3  engine=claude
-[2026-03-10 12:16:00]   AUDIT: pass (max severity: LOW)
+[2026-03-10 12:16:00]   AUDIT: pass (1 LOW)
 ```
 
 ### Progress-based audit (high/max effort):
 ```
 [2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1 (progress-based, cap 10)  engine=claude
-[2026-03-10 12:12:00]   AUDIT: HIGH issues found — running fix agent...
+[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 1 MODERATE — running fix agent...
 [2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2 (progress-based, cap 10)  engine=claude
-[2026-03-10 12:16:00]   AUDIT: MODERATE issues found — running fix agent...
+[2026-03-10 12:16:00]   AUDIT: 2 MODERATE — running fix agent...
 [2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 3 (progress-based, cap 10)  engine=claude
-[2026-03-10 12:20:00]   AUDIT: pass (max severity: LOW)
+[2026-03-10 12:20:00]   AUDIT: pass (1 LOW)
 ```
 
 ### Progress stall (high/max effort):
 ```
 [2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 4 (progress-based, cap 10)  engine=claude
 [2026-03-10 12:20:00]   AUDIT: no progress detected (1/3 stale iterations)
-[2026-03-10 12:20:00]   AUDIT: HIGH issues found — running fix agent...
+[2026-03-10 12:20:00]   AUDIT: 1 HIGH — running fix agent...
 [2026-03-10 12:22:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 5 (progress-based, cap 10)  engine=claude
 [2026-03-10 12:24:00]   AUDIT: no progress detected (2/3 stale iterations)
-[2026-03-10 12:24:00]   AUDIT: HIGH issues found — running fix agent...
+[2026-03-10 12:24:00]   AUDIT: 1 HIGH — running fix agent...
 [2026-03-10 12:26:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 6 (progress-based, cap 10)  engine=claude
 [2026-03-10 12:28:00]   AUDIT: no progress detected (3/3 stale iterations)
 [2026-03-10 12:28:00]   AUDIT: stopping — no progress after 6 iterations
 ```
 
-### CRITICAL/HIGH issues persist (blocking):
+### CRITICAL/HIGH issues persist (blocking) — shows exact counts:
 ```
-[2026-03-10 12:20:00]   AUDIT: FAILED — HIGH issues remain after 3 passes
+[2026-03-10 12:20:00]   AUDIT: FAILED — 1 HIGH remain after 3 passes
 Retry:  fry run --retry --sprint 3
 Resume: fry run --sprint 3
 ```
 
-### MODERATE issues persist (advisory):
+### MODERATE issues persist (advisory) — shows exact counts:
 ```
-[2026-03-10 12:20:00]   AUDIT: MODERATE issues remain after 3 audit passes (advisory)
+[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit passes (advisory)
 ```
 
 ## Build Logs

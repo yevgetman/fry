@@ -29,10 +29,11 @@ type AuditOpts struct {
 }
 
 type AuditResult struct {
-	Passed      bool
-	Blocking    bool   // true when CRITICAL or HIGH issues remain after all iterations
-	Iterations  int
-	MaxSeverity string // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
+	Passed         bool
+	Blocking       bool              // true when CRITICAL or HIGH issues remain after all iterations
+	Iterations     int
+	MaxSeverity    string            // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
+	SeverityCounts map[string]int    // count of findings per severity level
 }
 
 const maxStaleIterations = 3
@@ -124,9 +125,10 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		}
 
 		maxSev := parseAuditSeverity(string(content))
+		counts := countAuditSeverities(string(content))
 		if isAuditPass(maxSev) {
-			frylog.Log("  AUDIT: pass (max severity: %s)", displaySeverity(maxSev))
-			return &AuditResult{Passed: true, Iterations: iter, MaxSeverity: maxSev}, nil
+			frylog.Log("  AUDIT: pass (%s)", formatSeverityCounts(counts))
+			return &AuditResult{Passed: true, Iterations: iter, MaxSeverity: maxSev, SeverityCounts: counts}, nil
 		}
 
 		// Progress detection for progress-based mode
@@ -145,7 +147,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			prevFindings = currentFindings
 		}
 
-		frylog.Log("  AUDIT: %s issues found — running fix agent...", maxSev)
+		frylog.Log("  AUDIT: %s — running fix agent...", formatSeverityCounts(counts))
 
 		// Build and write fix prompt
 		fixPrompt := buildAuditFixPrompt(opts, string(content), prevFindingsRaw)
@@ -208,15 +210,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	}
 
 	maxSev := parseAuditSeverity(string(content))
+	finalCounts := countAuditSeverities(string(content))
 	if isAuditPass(maxSev) {
-		return &AuditResult{Passed: true, Iterations: maxIter, MaxSeverity: maxSev}, nil
+		frylog.Log("  AUDIT: pass after %d passes (%s)", maxIter, formatSeverityCounts(finalCounts))
+		return &AuditResult{Passed: true, Iterations: maxIter, MaxSeverity: maxSev, SeverityCounts: finalCounts}, nil
 	}
 
 	return &AuditResult{
-		Passed:      false,
-		Blocking:    isBlockingSeverity(maxSev),
-		Iterations:  maxIter,
-		MaxSeverity: maxSev,
+		Passed:         false,
+		Blocking:       isBlockingSeverity(maxSev),
+		Iterations:     maxIter,
+		MaxSeverity:    maxSev,
+		SeverityCounts: finalCounts,
 	}, nil
 }
 
@@ -407,6 +412,49 @@ func parseAuditSeverity(content string) string {
 	return maxSev
 }
 
+// countAuditSeverities counts the number of findings at each severity level
+// in the audit content. It uses the same parsing logic as parseAuditSeverity
+// (structured severity-labeled lines only) but counts all occurrences.
+func countAuditSeverities(content string) map[string]int {
+	counts := make(map[string]int)
+	for _, line := range strings.Split(content, "\n") {
+		if !severityLabelRe.MatchString(line) {
+			continue
+		}
+		upper := strings.ToUpper(line)
+		m := severityWordRe.FindString(upper)
+		if m == "" {
+			continue
+		}
+		counts[m]++
+	}
+	return counts
+}
+
+// severityOrder defines the display order for severity counts (highest first).
+var severityOrder = []string{"CRITICAL", "HIGH", "MODERATE", "LOW"}
+
+// formatSeverityCounts formats a severity count map into a single-line summary
+// like "1 CRITICAL, 2 HIGH, 4 MODERATE". Zero-count levels are omitted.
+// Returns "none" if the map is empty or all counts are zero.
+func formatSeverityCounts(counts map[string]int) string {
+	var parts []string
+	for _, sev := range severityOrder {
+		if n, ok := counts[sev]; ok && n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, sev))
+		}
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// FormatCounts formats a severity count map for external callers.
+func FormatCounts(counts map[string]int) string {
+	return formatSeverityCounts(counts)
+}
+
 func severityRank(sev string) int {
 	switch sev {
 	case "CRITICAL":
@@ -501,13 +549,6 @@ func Cleanup(projectDir string) error {
 		}
 	}
 	return nil
-}
-
-func displaySeverity(sev string) string {
-	if sev == "" {
-		return "none"
-	}
-	return sev
 }
 
 func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath string) (string, error) {

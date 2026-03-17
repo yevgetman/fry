@@ -429,8 +429,8 @@ var runCmd = &cobra.Command{
 					}
 					if !auditResult.Passed {
 						if auditResult.Blocking {
-							frlog.Log("  AUDIT: FAILED — %s issues remain after %d passes",
-								auditResult.MaxSeverity, auditResult.Iterations)
+							frlog.Log("  AUDIT: FAILED — %s remain after %d passes",
+								audit.FormatCounts(auditResult.SeverityCounts), auditResult.Iterations)
 							if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
 								frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
 							}
@@ -443,8 +443,8 @@ var runCmd = &cobra.Command{
 							exitErr = errBuildFailed
 							break
 						}
-						warning := fmt.Sprintf("%s issues remain after %d audit passes (advisory)",
-							auditResult.MaxSeverity, auditResult.Iterations)
+						warning := fmt.Sprintf("%s remain after %d audit passes (advisory)",
+							audit.FormatCounts(auditResult.SeverityCounts), auditResult.Iterations)
 						frlog.Log("  AUDIT: %s", warning)
 						mu.Lock()
 						results[sprintNum-startSprint].AuditWarning = warning
@@ -455,6 +455,7 @@ var runCmd = &cobra.Command{
 					}
 				}
 
+				frlog.Log("  GIT: checkpoint — sprint %d complete", spr.Number)
 				if err := git.GitCheckpoint(projectPath, ep.Name, spr.Number, "complete"); err != nil {
 					return err
 				}
@@ -470,6 +471,7 @@ var runCmd = &cobra.Command{
 				if err := sprint.AppendToEpicProgress(projectPath, compacted+"\n"); err != nil {
 					return err
 				}
+				frlog.Log("  GIT: checkpoint — sprint %d compacted", spr.Number)
 				if err := git.GitCheckpoint(projectPath, ep.Name, spr.Number, "compacted"); err != nil {
 					return err
 				}
@@ -494,6 +496,14 @@ var runCmd = &cobra.Command{
 					})
 					if err != nil {
 						return err
+					}
+
+					if reviewResult.Verdict == review.VerdictDeviate && reviewResult.Deviation != nil {
+						frlog.Log("  REVIEW: verdict DEVIATE — replanning sprints %s (risk: %s)",
+							formatAffectedSprints(reviewResult.Deviation.AffectedSprints),
+							reviewResult.Deviation.RiskAssessment)
+					} else {
+						frlog.Log("  REVIEW: verdict %s", reviewResult.Verdict)
 					}
 
 					entry := review.DeviationLogEntry{
@@ -551,6 +561,7 @@ var runCmd = &cobra.Command{
 						if _, err := verify.ParseVerification(verificationPath); err != nil && !os.IsNotExist(err) {
 							return err
 						}
+						frlog.Log("  GIT: checkpoint — sprint %d reviewed-deviate", spr.Number)
 						if err := git.GitCheckpoint(projectPath, ep.Name, spr.Number, "reviewed-deviate"); err != nil {
 							return err
 						}
@@ -589,6 +600,7 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			frlog.Log("WARNING: could not create engine for build summary: %v", err)
 		} else {
+			frlog.Log("▶ BUILD SUMMARY  generating...")
 			if summaryErr := summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
 				ProjectDir: projectPath,
 				EpicName:   ep.Name,
@@ -598,6 +610,8 @@ var runCmd = &cobra.Command{
 				Model:      ep.AgentModel,
 			}); summaryErr != nil {
 				frlog.Log("WARNING: build summary generation failed: %v", summaryErr)
+			} else {
+				frlog.Log("  BUILD SUMMARY: complete")
 			}
 		}
 
@@ -608,6 +622,7 @@ var runCmd = &cobra.Command{
 			if err != nil {
 				frlog.Log("WARNING: could not create engine for build audit: %v", err)
 			} else {
+				frlog.Log("▶ BUILD AUDIT  running holistic audit across all %d sprints...", ep.TotalSprints)
 				if auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
 					ProjectDir:       projectPath,
 					Epic:             ep,
@@ -620,6 +635,8 @@ var runCmd = &cobra.Command{
 				}); auditErr != nil {
 					frlog.Log("WARNING: build audit failed: %v", auditErr)
 				} else {
+					frlog.Log("  BUILD AUDIT: complete — report written to %s", config.BuildAuditFile)
+					frlog.Log("  GIT: checkpoint — build-audit")
 					if gitErr := git.GitCheckpoint(projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
 					}
@@ -904,6 +921,17 @@ func readDeferredFailuresArtifact(projectDir string) string {
 		return ""
 	}
 	return string(data)
+}
+
+func formatAffectedSprints(sprints []int) string {
+	if len(sprints) == 0 {
+		return "unknown"
+	}
+	parts := make([]string, len(sprints))
+	for i, s := range sprints {
+		parts[i] = strconv.Itoa(s)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // resolveMode reconciles the --mode flag with the legacy --planning bool flag.
