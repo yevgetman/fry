@@ -11,16 +11,70 @@ Fry provides status output at every phase so you always know what it's doing, ev
 
 ## Prepare Phase
 
-Each generation step prints a start and completion message:
+The prepare phase logs every input it detects and which inputs feed into each generation step.
+
+### Input detection
+
+Before generation begins, detected inputs are announced:
 
 ```
-[2026-03-10 11:50:00] Step 0: Generating plans/plan.md from plans/executive.md (engine: claude)...
+[2026-03-10 11:49:50] User prompt detected — will be included in generation.
+[2026-03-10 11:49:50] Supplementary assets detected (3 file(s) in assets/) — will be included in generation.
+[2026-03-10 11:49:50] Media assets detected (5 file(s) in media/) — manifest will be included in generation.
+```
+
+When existing files are reused (not regenerated), this is logged explicitly:
+
+```
+[2026-03-10 11:49:50] Using existing plans/executive.md.
+[2026-03-10 11:49:50] Using existing plans/plan.md.
+```
+
+### Bootstrap from user prompt (no plan or executive files)
+
+When neither `plans/plan.md` nor `plans/executive.md` exist and `--user-prompt` is provided:
+
+```
+[2026-03-10 11:49:50] User prompt detected — will be included in generation.
+[2026-03-10 11:49:51] Generating plans/executive.md from user prompt (engine: claude)...
+── Generated executive context ──────────────────────────────────
+[LLM-generated executive.md content]
+─────────────────────────────────────────────────────────────────
+Proceed with this executive context? [y/N] y
+[2026-03-10 11:50:00] Saved plans/executive.md.
+```
+
+When assets and media are also present, the bootstrap message lists them:
+
+```
+[2026-03-10 11:49:51] Generating plans/executive.md from user prompt, assets/ assets, media/ manifest (engine: claude)...
+```
+
+### Generation steps
+
+Each step logs its start with the full list of inputs, then a completion message:
+
+```
+[2026-03-10 11:50:00] Step 0: Generating plans/plan.md from plans/executive.md, assets/ assets, media/ manifest (engine: claude)...
 [2026-03-10 11:51:12] Generated plans/plan.md.
-[2026-03-10 11:51:12] Step 1: Generating .fry/AGENTS.md (engine: claude)...
+[2026-03-10 11:51:12] Step 1: Generating .fry/AGENTS.md from plans/plan.md, plans/executive.md, media/ manifest (engine: claude)...
 [2026-03-10 11:52:05] Generated .fry/AGENTS.md.
-[2026-03-10 11:52:05] Step 2: Generating .fry/epic.md (engine: claude)...
+[2026-03-10 11:52:05] Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md, user prompt, assets/ assets, media/ manifest (engine: claude)...
 [2026-03-10 11:53:30] Generated .fry/epic.md.
-[2026-03-10 11:53:30] Step 3: Generating .fry/verification.md (engine: claude)...
+[2026-03-10 11:53:30] Step 3: Generating .fry/verification.md from plans/plan.md, .fry/epic.md, user prompt, media/ manifest (engine: claude)...
+[2026-03-10 11:54:15] Generated .fry/verification.md.
+```
+
+When no user prompt, assets, or media are present and both plan files exist:
+
+```
+[2026-03-10 11:49:50] Using existing plans/executive.md.
+[2026-03-10 11:49:50] Using existing plans/plan.md.
+[2026-03-10 11:50:00] Step 1: Generating .fry/AGENTS.md from plans/plan.md, plans/executive.md (engine: claude)...
+[2026-03-10 11:52:05] Generated .fry/AGENTS.md.
+[2026-03-10 11:52:05] Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md (engine: claude)...
+[2026-03-10 11:53:30] Generated .fry/epic.md.
+[2026-03-10 11:53:30] Step 3: Generating .fry/verification.md from plans/plan.md, .fry/epic.md (engine: claude)...
 [2026-03-10 11:54:15] Generated .fry/verification.md.
 ```
 

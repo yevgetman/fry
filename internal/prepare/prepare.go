@@ -113,20 +113,47 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 	assetsSection := assets.BuildSection(assetsResult)
 
+	hasAssets := len(assetsResult.Assets) > 0
+	hasMedia := len(mediaAssets) > 0
+	hasUserPrompt := strings.TrimSpace(opts.UserPrompt) != ""
+
 	planPath := filepath.Join(projectDir, config.PlanFile)
 	executivePath := filepath.Join(projectDir, config.ExecutiveFile)
+	_, planStatErr := os.Stat(planPath)
+	_, execStatErr := os.Stat(executivePath)
+	planMissing := os.IsNotExist(planStatErr)
+	execMissing := os.IsNotExist(execStatErr)
+
+	// Log detected inputs for visibility.
+	if hasUserPrompt {
+		frylog.Log("User prompt detected — will be included in generation.")
+	}
+	if hasAssets {
+		frylog.Log("Supplementary assets detected (%d file(s) in %s/) — will be included in generation.", len(assetsResult.Assets), config.AssetsDir)
+	}
+	if hasMedia {
+		frylog.Log("Media assets detected (%d file(s) in %s/) — manifest will be included in generation.", len(mediaAssets), config.MediaDir)
+	}
 
 	// Bootstrap: generate executive.md from user prompt if neither plan nor executive exists.
-	if _, planErr := os.Stat(planPath); os.IsNotExist(planErr) {
-		if _, execErr := os.Stat(executivePath); os.IsNotExist(execErr) {
-			if err := bootstrapExecutive(ctx, eng, engName, opts, executivePath, mediaManifest, assetsSection); err != nil {
-				return err
-			}
+	if planMissing && execMissing {
+		if err := bootstrapExecutive(ctx, eng, engName, opts, executivePath, mediaManifest, assetsSection); err != nil {
+			return err
 		}
+	} else if !execMissing {
+		frylog.Log("Using existing %s.", config.ExecutiveFile)
 	}
 
 	if _, err := os.Stat(planPath); os.IsNotExist(err) {
-		frylog.Log("Step 0: Generating %s from %s (engine: %s)...", config.PlanFile, config.ExecutiveFile, engName)
+		var step0Inputs []string
+		step0Inputs = append(step0Inputs, config.ExecutiveFile)
+		if hasAssets {
+			step0Inputs = append(step0Inputs, config.AssetsDir+"/ assets")
+		}
+		if hasMedia {
+			step0Inputs = append(step0Inputs, fmt.Sprintf("%s/ manifest", config.MediaDir))
+		}
+		frylog.Log("Step 0: Generating %s from %s (engine: %s)...", config.PlanFile, strings.Join(step0Inputs, ", "), engName)
 		executiveContent, err := os.ReadFile(executivePath)
 		if err != nil {
 			return fmt.Errorf("run prepare: read executive: %w", err)
@@ -147,6 +174,8 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 			return err
 		}
 		frylog.Log("Generated %s.", config.PlanFile)
+	} else {
+		frylog.Log("Using existing %s.", config.PlanFile)
 	}
 
 	planContentBytes, err := os.ReadFile(planPath)
@@ -157,7 +186,15 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	executiveContent, _ := readPrepareOptional(executivePath)
 
 	agentsPath := filepath.Join(projectDir, config.AgentsFile)
-	frylog.Log("Step 1: Generating %s (engine: %s)...", config.AgentsFile, engName)
+	var step1Inputs []string
+	step1Inputs = append(step1Inputs, config.PlanFile)
+	if strings.TrimSpace(executiveContent) != "" {
+		step1Inputs = append(step1Inputs, config.ExecutiveFile)
+	}
+	if hasMedia {
+		step1Inputs = append(step1Inputs, config.MediaDir+"/ manifest")
+	}
+	frylog.Log("Step 1: Generating %s from %s (engine: %s)...", config.AgentsFile, strings.Join(step1Inputs, ", "), engName)
 	prompt := step1Prompt(opts.Mode, planContent, executiveContent, mediaManifest)
 	beforeMod := textutil.FileModTime(agentsPath)
 	output, err := runPrepareStep(ctx, eng, projectDir, prompt)
@@ -187,7 +224,18 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 	epicPath := filepath.Join(projectDir, epicFilename)
 
-	frylog.Log("Step 2: Generating %s (engine: %s)...", epicFilename, engName)
+	var step2Inputs []string
+	step2Inputs = append(step2Inputs, config.PlanFile, config.AgentsFile)
+	if hasUserPrompt {
+		step2Inputs = append(step2Inputs, "user prompt")
+	}
+	if hasAssets {
+		step2Inputs = append(step2Inputs, config.AssetsDir+"/ assets")
+	}
+	if hasMedia {
+		step2Inputs = append(step2Inputs, config.MediaDir+"/ manifest")
+	}
+	frylog.Log("Step 2: Generating %s from %s (engine: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName)
 	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
 	beforeMod = textutil.FileModTime(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
@@ -207,7 +255,15 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		return fmt.Errorf("run prepare: read epic: %w", err)
 	}
 
-	frylog.Log("Step 3: Generating %s (engine: %s)...", config.DefaultVerificationFile, engName)
+	var step3Inputs []string
+	step3Inputs = append(step3Inputs, config.PlanFile, epicFilename)
+	if hasUserPrompt {
+		step3Inputs = append(step3Inputs, "user prompt")
+	}
+	if hasMedia {
+		step3Inputs = append(step3Inputs, config.MediaDir+"/ manifest")
+	}
+	frylog.Log("Step 3: Generating %s from %s (engine: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), engName)
 	prompt = step3Prompt(opts.Mode, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest)
 	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	beforeMod = textutil.FileModTime(verificationPath)
@@ -244,7 +300,15 @@ func validatePreparePrerequisites(projectDir, userPrompt string) error {
 
 func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, opts PrepareOpts, executivePath, mediaManifest, assetsSection string) error {
 	// UserPrompt is guaranteed non-empty by the caller (validatePreparePrerequisites passed).
-	frylog.Log("Generating executive context from user prompt (engine: %s)...", engName)
+	var bootstrapInputs []string
+	bootstrapInputs = append(bootstrapInputs, "user prompt")
+	if strings.TrimSpace(assetsSection) != "" {
+		bootstrapInputs = append(bootstrapInputs, config.AssetsDir+"/ assets")
+	}
+	if strings.TrimSpace(mediaManifest) != "" {
+		bootstrapInputs = append(bootstrapInputs, config.MediaDir+"/ manifest")
+	}
+	frylog.Log("Generating %s from %s (engine: %s)...", config.ExecutiveFile, strings.Join(bootstrapInputs, ", "), engName)
 
 	prompt := executiveFromUserPromptPrompt(opts.Mode, opts.UserPrompt, mediaManifest, assetsSection)
 	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir})

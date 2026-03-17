@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/yevgetman/fry/internal/engine"
+	frylog "github.com/yevgetman/fry/internal/log"
 )
 
 type fakeEngine struct {
@@ -296,4 +297,166 @@ func TestBootstrapExecutive_UserDeclines(t *testing.T) {
 	require.ErrorIs(t, err, ErrUserDeclined)
 	_, statErr := os.Stat(executivePath)
 	assert.True(t, os.IsNotExist(statErr), "executive.md should not be created when user declines")
+}
+
+func TestBootstrapExecutive_LogsAssetsAndMedia(t *testing.T) {
+	// Not parallel: mutates package-level newEngine variable
+	dir := t.TempDir()
+	executivePath := dir + "/plans/executive.md"
+
+	stdin := strings.NewReader("y\n")
+	var stdout strings.Builder
+	var logBuf strings.Builder
+	frylog.SetLogFile(&logBuf)
+	defer frylog.SetLogFile(nil)
+
+	oldNewEngine := newEngine
+	newEngine = func(name string) (engine.Engine, error) {
+		return &fakeEngine{output: "# My Project\n\n" + strings.Repeat("word ", 100)}, nil
+	}
+	defer func() { newEngine = oldNewEngine }()
+
+	eng, _ := newEngine("fake")
+	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+		ProjectDir: dir,
+		UserPrompt: "build a todo app",
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, executivePath, "media manifest content", "assets section content")
+
+	require.NoError(t, err)
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "user prompt")
+	assert.Contains(t, logOutput, "assets/ assets")
+	assert.Contains(t, logOutput, "media/ manifest")
+}
+
+func TestBootstrapExecutive_LogsPromptOnlyWhenNoExtras(t *testing.T) {
+	// Not parallel: mutates package-level newEngine variable
+	dir := t.TempDir()
+	executivePath := dir + "/plans/executive.md"
+
+	stdin := strings.NewReader("y\n")
+	var stdout strings.Builder
+	var logBuf strings.Builder
+	frylog.SetLogFile(&logBuf)
+	defer frylog.SetLogFile(nil)
+
+	oldNewEngine := newEngine
+	newEngine = func(name string) (engine.Engine, error) {
+		return &fakeEngine{output: "# My Project\n\n" + strings.Repeat("word ", 100)}, nil
+	}
+	defer func() { newEngine = oldNewEngine }()
+
+	eng, _ := newEngine("fake")
+	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+		ProjectDir: dir,
+		UserPrompt: "build a todo app",
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, executivePath, "", "")
+
+	require.NoError(t, err)
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "from user prompt (engine: fake)")
+	assert.NotContains(t, logOutput, "assets/")
+	assert.NotContains(t, logOutput, "media/")
+}
+
+func TestRunPrepare_PlanExistsWithoutExecutive(t *testing.T) {
+	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
+	dir := t.TempDir()
+
+	// Create plan but NOT executive.
+	require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+	require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+
+	var logBuf strings.Builder
+	frylog.SetLogFile(&logBuf)
+	defer frylog.SetLogFile(nil)
+
+	oldNewEngine := newEngine
+	newEngine = func(name string) (engine.Engine, error) {
+		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
+	}
+	defer func() { newEngine = oldNewEngine }()
+
+	err := RunPrepare(context.Background(), PrepareOpts{
+		ProjectDir: dir,
+		Engine:     "claude",
+	})
+
+	require.NoError(t, err)
+	logOutput := logBuf.String()
+	// Executive doesn't exist — should not be mentioned.
+	assert.NotContains(t, logOutput, "Using existing plans/executive.md")
+	assert.Contains(t, logOutput, "Using existing plans/plan.md")
+	// Step 1 should list only plan.md (no executive).
+	assert.Contains(t, logOutput, "Step 1: Generating .fry/AGENTS.md from plans/plan.md (engine: claude)")
+}
+
+func TestRunPrepare_LogsExistingFiles(t *testing.T) {
+	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
+	dir := t.TempDir()
+
+	// Create existing plan and executive files.
+	require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+	require.NoError(t, os.WriteFile(dir+"/plans/executive.md", []byte("exec content"), 0o644))
+	require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+
+	var logBuf strings.Builder
+	frylog.SetLogFile(&logBuf)
+	defer frylog.SetLogFile(nil)
+
+	oldNewEngine := newEngine
+	newEngine = func(name string) (engine.Engine, error) {
+		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
+	}
+	defer func() { newEngine = oldNewEngine }()
+
+	err := RunPrepare(context.Background(), PrepareOpts{
+		ProjectDir: dir,
+		Engine:     "claude",
+	})
+
+	require.NoError(t, err)
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "Using existing plans/executive.md")
+	assert.Contains(t, logOutput, "Using existing plans/plan.md")
+}
+
+func TestRunPrepare_LogsUserPromptAndAssets(t *testing.T) {
+	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
+	dir := t.TempDir()
+
+	// Create existing plan and executive files.
+	require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+	require.NoError(t, os.WriteFile(dir+"/plans/executive.md", []byte("exec content"), 0o644))
+	require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+
+	// Create an assets directory with a file.
+	require.NoError(t, os.MkdirAll(dir+"/assets", 0o755))
+	require.NoError(t, os.WriteFile(dir+"/assets/spec.yaml", []byte("openapi: 3.0.0"), 0o644))
+
+	var logBuf strings.Builder
+	frylog.SetLogFile(&logBuf)
+	defer frylog.SetLogFile(nil)
+
+	oldNewEngine := newEngine
+	newEngine = func(name string) (engine.Engine, error) {
+		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
+	}
+	defer func() { newEngine = oldNewEngine }()
+
+	err := RunPrepare(context.Background(), PrepareOpts{
+		ProjectDir: dir,
+		Engine:     "claude",
+		UserPrompt: "focus on backend",
+	})
+
+	require.NoError(t, err)
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "User prompt detected")
+	assert.Contains(t, logOutput, "Supplementary assets detected (1 file(s) in assets/)")
+	assert.Contains(t, logOutput, "Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md, user prompt, assets/ assets")
 }
