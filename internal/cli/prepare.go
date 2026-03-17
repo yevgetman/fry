@@ -17,6 +17,7 @@ var (
 	preparePlanning       bool
 	prepareMode           string
 	prepareEffort         string
+	prepareNoSanityCheck  bool
 )
 
 var prepareCmd = &cobra.Command{
@@ -66,15 +67,16 @@ var prepareCmd = &cobra.Command{
 		}
 
 		return prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-			ProjectDir:   projectPath,
-			EpicFilename: epicArg,
-			Engine:       prepareEngine,
-			UserPrompt:   userPrompt,
-			ValidateOnly: false,
-			Mode:         mode,
-			EffortLevel:  effortLevel,
-			Stdin:        os.Stdin,
-			Stdout:       cmd.OutOrStdout(),
+			ProjectDir:      projectPath,
+			EpicFilename:    epicArg,
+			Engine:          prepareEngine,
+			UserPrompt:      userPrompt,
+			ValidateOnly:    false,
+			SkipSanityCheck: prepareNoSanityCheck,
+			Mode:            mode,
+			EffortLevel:     effortLevel,
+			Stdin:           os.Stdin,
+			Stdout:          cmd.OutOrStdout(),
 		})
 	},
 }
@@ -87,4 +89,5 @@ func init() {
 	prepareCmd.Flags().BoolVar(&preparePlanning, "planning", false, "Use planning prepare mode (alias for --mode planning)")
 	prepareCmd.Flags().StringVar(&prepareMode, "mode", "", "Execution mode: software, planning, writing")
 	prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
+	prepareCmd.Flags().BoolVar(&prepareNoSanityCheck, "no-sanity-check", false, "Skip the interactive project summary confirmation")
 }

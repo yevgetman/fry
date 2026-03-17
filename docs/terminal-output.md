@@ -50,6 +50,25 @@ When assets and media are also present, the bootstrap message lists them:
 [2026-03-10 11:49:51] Generating plans/executive.md from user prompt, assets/ assets, media/ manifest (engine: claude)...
 ```
 
+### Sanity check
+
+After `plan.md` is available (whether user-authored or generated), Fry shows an AI-generated project summary and asks for confirmation:
+
+```
+[2026-03-10 11:51:12] Sanity check: summarizing project...
+
+── Project summary ─────────────────────────────────────────────
+Project type:    Software (REST API)
+Goal:            Build a todo app with PostgreSQL backend
+Expected output: Go binary with REST API, database migrations, Docker setup
+Key topics:      REST API, PostgreSQL, authentication, Docker
+Effort:          medium (3-4 sprints)
+─────────────────────────────────────────────────────────────────
+Does this look right? [Y/n] y
+```
+
+The default is **Yes** (press Enter to accept). Use `--no-sanity-check` to skip this step for automation or CI.
+
 ### Generation steps
 
 Each step logs its start with the full list of inputs, then a completion message:

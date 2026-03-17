@@ -45,6 +45,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 
 **Key mechanisms:**
 
+- **Sanity check** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (skippable with `--no-sanity-check`)
 - **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
 - **Supplementary assets** -- optional `assets/` directory for text reference documents (specs, schemas, requirements) whose full contents are read during plan and epic generation

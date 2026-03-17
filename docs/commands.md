@@ -52,6 +52,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
+| `--no-sanity-check` | Skip the interactive project summary confirmation during auto-prepare |
 | `--no-audit` | Disable sprint and build audits for this run |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
@@ -87,6 +88,7 @@ fry --mode writing --user-prompt "Write a guide"  # Writing project (books, guid
 fry --user-prompt "focus on backend API, skip frontend"
 fry --user-prompt "build a todo app" --engine claude  # Start from just a prompt
 fry --user-prompt-file ./prompt.txt --engine claude   # Load prompt from a file
+fry --no-sanity-check                             # Skip project summary during auto-prepare
 fry --project-dir /path/to/project                # Operate on a different project
 FRY_ENGINE=claude fry                             # Set engine via environment variable
 ```
@@ -112,6 +114,7 @@ fry prepare [epic_filename] [flags]
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--validate-only` | Check that the epic is valid, then exit |
+| `--no-sanity-check` | Skip the interactive project summary confirmation |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 
@@ -123,6 +126,7 @@ All artifacts are **always regenerated** (overwritten) on each run.
 |---|---|---|
 | Bootstrap | Both files missing, `--user-prompt` provided | Generates `plans/executive.md` from user prompt (interactive review) |
 | Step 0 | `plan.md` missing, `executive.md` exists | Generates `plans/plan.md` from executive context |
+| Sanity Check | `plan.md` exists, `--no-sanity-check` not set | Displays AI-generated project summary for user confirmation |
 | Step 1 | Always | Generates `.fry/AGENTS.md` (numbered operational rules) |
 | Step 2 | Always | Generates `.fry/epic.md` (sprint definitions) |
 | Step 3 | Always | Generates `.fry/verification.md` (check primitives) |
@@ -140,6 +144,7 @@ fry prepare --user-prompt "no ORMs, use raw SQL only"
 fry prepare --user-prompt "build a blog engine" --engine claude  # Bootstrap from prompt
 fry prepare --user-prompt-file ./requirements.txt --engine claude # Prompt from file
 fry prepare --mode writing --user-prompt "Write a guide to Go concurrency"  # Writing mode
+fry prepare --no-sanity-check                      # Skip project summary confirmation
 fry prepare --validate-only                        # Validate existing epic only
 ```
 

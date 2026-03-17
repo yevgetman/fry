@@ -245,6 +245,10 @@ Common over-engineering signals to watch for:
 	}
 }
 
+func SoftwareSanityCheckPrompt(planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+	return buildSanityCheckPrompt("senior software architect", planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
+}
+
 func SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
 	userPromptLine := ""
 	if userPrompt != "" {

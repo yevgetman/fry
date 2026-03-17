@@ -47,6 +47,7 @@ var (
 	runRetry          bool
 	runSprint         int
 	runContinue       bool
+	runNoSanityCheck  bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -116,14 +117,15 @@ var runCmd = &cobra.Command{
 			}
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
 			if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-				ProjectDir:   projectPath,
-				EpicFilename: filepath.Base(epicPath),
-				Engine:       prepareEngineName,
-				UserPrompt:   userPrompt,
-				Mode:         mode,
-				EffortLevel:  effortLevel,
-				Stdin:        os.Stdin,
-				Stdout:       cmd.OutOrStdout(),
+				ProjectDir:      projectPath,
+				EpicFilename:    filepath.Base(epicPath),
+				Engine:          prepareEngineName,
+				UserPrompt:      userPrompt,
+				SkipSanityCheck: runNoSanityCheck || runDryRun,
+				Mode:            mode,
+				EffortLevel:     effortLevel,
+				Stdin:           os.Stdin,
+				Stdout:          cmd.OutOrStdout(),
 			}); err != nil {
 				return err
 			}
@@ -681,6 +683,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runRetry, "retry", false, "Retry failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
 	runCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
 	runCmd.Flags().BoolVar(&runContinue, "continue", false, "Use an LLM agent to analyze build state and resume from where it left off")
+	runCmd.Flags().BoolVar(&runNoSanityCheck, "no-sanity-check", false, "Skip the interactive project summary during auto-prepare")
 }
 
 func resolveProjectDir(dir string) (string, error) {

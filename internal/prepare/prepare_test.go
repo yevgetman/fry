@@ -363,6 +363,242 @@ func TestBootstrapExecutive_LogsPromptOnlyWhenNoExtras(t *testing.T) {
 	assert.NotContains(t, logOutput, "media/")
 }
 
+func TestParseSanitySummary(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected SanitySummary
+	}{
+		{
+			name: "well-formed output",
+			input: `PROJECT_TYPE: Software (REST API)
+GOAL: Build a todo app with PostgreSQL backend
+EXPECTED_OUTPUT: Go binary with REST API, database migrations, Docker setup
+KEY_TOPICS: REST API, PostgreSQL, authentication, Docker
+EFFORT: medium (3-4 sprints)`,
+			expected: SanitySummary{
+				ProjectType:    "Software (REST API)",
+				Goal:           "Build a todo app with PostgreSQL backend",
+				ExpectedOutput: "Go binary with REST API, database migrations, Docker setup",
+				KeyTopics:      "REST API, PostgreSQL, authentication, Docker",
+				EffortEstimate: "medium (3-4 sprints)",
+			},
+		},
+		{
+			name: "wrapped in markdown fences",
+			input: "```\nPROJECT_TYPE: Writing (guide)\nGOAL: Write a Go concurrency guide\nEXPECTED_OUTPUT: 6 chapters in output/\nKEY_TOPICS: goroutines, channels\nEFFORT: medium (3 sprints)\n```",
+			expected: SanitySummary{
+				ProjectType:    "Writing (guide)",
+				Goal:           "Write a Go concurrency guide",
+				ExpectedOutput: "6 chapters in output/",
+				KeyTopics:      "goroutines, channels",
+				EffortEstimate: "medium (3 sprints)",
+			},
+		},
+		{
+			name: "missing fields",
+			input: `PROJECT_TYPE: Planning (analysis)
+GOAL: Analyze market trends`,
+			expected: SanitySummary{
+				ProjectType: "Planning (analysis)",
+				Goal:        "Analyze market trends",
+			},
+		},
+		{
+			name: "extra noise lines",
+			input: `Here is the summary:
+
+PROJECT_TYPE: Software (CLI tool)
+GOAL: Build a CLI
+Some random line
+EXPECTED_OUTPUT: binary
+KEY_TOPICS: cobra, testing
+EFFORT: low (1 sprint)`,
+			expected: SanitySummary{
+				ProjectType:    "Software (CLI tool)",
+				Goal:           "Build a CLI",
+				ExpectedOutput: "binary",
+				KeyTopics:      "cobra, testing",
+				EffortEstimate: "low (1 sprint)",
+			},
+		},
+		{
+			name:     "empty input",
+			input:    "",
+			expected: SanitySummary{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := parseSanitySummary(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDisplaySanitySummary(t *testing.T) {
+	t.Parallel()
+
+	var buf strings.Builder
+	displaySanitySummary(&buf, SanitySummary{
+		ProjectType:    "Software (REST API)",
+		Goal:           "Build a todo app",
+		ExpectedOutput: "Go binary",
+		KeyTopics:      "REST, PostgreSQL",
+		EffortEstimate: "medium (3 sprints)",
+	})
+	output := buf.String()
+	assert.Contains(t, output, "Project summary")
+	assert.Contains(t, output, "Software (REST API)")
+	assert.Contains(t, output, "Build a todo app")
+	assert.Contains(t, output, "Go binary")
+	assert.Contains(t, output, "REST, PostgreSQL")
+	assert.Contains(t, output, "medium (3 sprints)")
+}
+
+func TestDisplaySanitySummary_UnknownFields(t *testing.T) {
+	t.Parallel()
+
+	var buf strings.Builder
+	displaySanitySummary(&buf, SanitySummary{
+		ProjectType: "Software (app)",
+	})
+	output := buf.String()
+	assert.Contains(t, output, "Software (app)")
+	assert.Contains(t, output, "(unknown)")
+}
+
+func TestRunSanityCheck_UserApproves(t *testing.T) {
+	// Not parallel: uses fakeEngine
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software (CLI)\nGOAL: Build a CLI tool\nEXPECTED_OUTPUT: binary\nKEY_TOPICS: cobra\nEFFORT: low (1 sprint)"}
+	stdin := strings.NewReader("y\n")
+	var stdout strings.Builder
+
+	err := runSanityCheck(context.Background(), eng, PrepareOpts{
+		ProjectDir: t.TempDir(),
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, "plan content", "", "", "", "")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Project summary")
+	assert.Contains(t, stdout.String(), "Software (CLI)")
+}
+
+func TestRunSanityCheck_DefaultYes(t *testing.T) {
+	// Not parallel: uses fakeEngine
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
+	stdin := strings.NewReader("\n") // empty line = default yes
+	var stdout strings.Builder
+
+	err := runSanityCheck(context.Background(), eng, PrepareOpts{
+		ProjectDir: t.TempDir(),
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, "plan", "", "", "", "")
+
+	require.NoError(t, err)
+}
+
+func TestRunSanityCheck_UserDeclines(t *testing.T) {
+	// Not parallel: uses fakeEngine
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
+	stdin := strings.NewReader("n\n")
+	var stdout strings.Builder
+
+	err := runSanityCheck(context.Background(), eng, PrepareOpts{
+		ProjectDir: t.TempDir(),
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, "plan", "", "", "", "")
+
+	require.ErrorIs(t, err, ErrSanityCheckDeclined)
+}
+
+func TestRunSanityCheck_EOF(t *testing.T) {
+	// Not parallel: uses fakeEngine
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
+	stdin := strings.NewReader("") // EOF
+	var stdout strings.Builder
+
+	err := runSanityCheck(context.Background(), eng, PrepareOpts{
+		ProjectDir: t.TempDir(),
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, "plan", "", "", "", "")
+
+	require.ErrorIs(t, err, ErrSanityCheckDeclined)
+}
+
+func TestSoftwareSanityCheckPrompt_IncludesInputs(t *testing.T) {
+	t.Parallel()
+
+	prompt := SoftwareSanityCheckPrompt("my plan", "my executive", "focus on backend", "medium", "media manifest", "assets section")
+	assert.Contains(t, prompt, "senior software architect")
+	assert.Contains(t, prompt, "my plan")
+	assert.Contains(t, prompt, "my executive")
+	assert.Contains(t, prompt, "focus on backend")
+	assert.Contains(t, prompt, "media manifest")
+	assert.Contains(t, prompt, "assets section")
+	assert.Contains(t, prompt, `"medium"`)
+}
+
+func TestSoftwareSanityCheckPrompt_OmitsMissingInputs(t *testing.T) {
+	t.Parallel()
+
+	prompt := SoftwareSanityCheckPrompt("my plan", "", "", "", "", "")
+	assert.Contains(t, prompt, "my plan")
+	assert.NotContains(t, prompt, "Executive context")
+	assert.NotContains(t, prompt, "User directive")
+	assert.NotContains(t, prompt, "Media assets")
+}
+
+func TestPlanningSanityCheckPrompt(t *testing.T) {
+	t.Parallel()
+
+	prompt := PlanningSanityCheckPrompt("plan", "", "", "", "", "")
+	assert.Contains(t, prompt, "senior strategic planner")
+}
+
+func TestWritingSanityCheckPrompt(t *testing.T) {
+	t.Parallel()
+
+	prompt := WritingSanityCheckPrompt("plan", "", "", "", "", "")
+	assert.Contains(t, prompt, "senior author and content strategist")
+}
+
+func TestRunPrepare_SanityCheckSkipped(t *testing.T) {
+	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+	require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+
+	var logBuf strings.Builder
+	frylog.SetLogFile(&logBuf)
+	defer frylog.SetLogFile(nil)
+
+	oldNewEngine := newEngine
+	newEngine = func(name string) (engine.Engine, error) {
+		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
+	}
+	defer func() { newEngine = oldNewEngine }()
+
+	err := RunPrepare(context.Background(), PrepareOpts{
+		ProjectDir:      dir,
+		Engine:          "claude",
+		SkipSanityCheck: true,
+	})
+
+	require.NoError(t, err)
+	logOutput := logBuf.String()
+	assert.NotContains(t, logOutput, "Sanity check")
+}
+
 func TestRunPrepare_PlanExistsWithoutExecutive(t *testing.T) {
 	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
 	dir := t.TempDir()
@@ -382,8 +618,9 @@ func TestRunPrepare_PlanExistsWithoutExecutive(t *testing.T) {
 	defer func() { newEngine = oldNewEngine }()
 
 	err := RunPrepare(context.Background(), PrepareOpts{
-		ProjectDir: dir,
-		Engine:     "claude",
+		ProjectDir:      dir,
+		Engine:          "claude",
+		SkipSanityCheck: true,
 	})
 
 	require.NoError(t, err)
@@ -415,8 +652,9 @@ func TestRunPrepare_LogsExistingFiles(t *testing.T) {
 	defer func() { newEngine = oldNewEngine }()
 
 	err := RunPrepare(context.Background(), PrepareOpts{
-		ProjectDir: dir,
-		Engine:     "claude",
+		ProjectDir:      dir,
+		Engine:          "claude",
+		SkipSanityCheck: true,
 	})
 
 	require.NoError(t, err)
@@ -449,9 +687,10 @@ func TestRunPrepare_LogsUserPromptAndAssets(t *testing.T) {
 	defer func() { newEngine = oldNewEngine }()
 
 	err := RunPrepare(context.Background(), PrepareOpts{
-		ProjectDir: dir,
-		Engine:     "claude",
-		UserPrompt: "focus on backend",
+		ProjectDir:      dir,
+		Engine:          "claude",
+		UserPrompt:      "focus on backend",
+		SkipSanityCheck: true,
 	})
 
 	require.NoError(t, err)

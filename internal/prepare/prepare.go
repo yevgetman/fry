@@ -22,15 +22,16 @@ import (
 )
 
 type PrepareOpts struct {
-	ProjectDir   string
-	EpicFilename string
-	Engine       string
-	UserPrompt   string
-	ValidateOnly bool
-	Mode         Mode
-	EffortLevel  epic.EffortLevel
-	Stdin        io.Reader // for interactive confirmation (defaults to os.Stdin)
-	Stdout       io.Writer // for displaying generated content (defaults to os.Stdout)
+	ProjectDir      string
+	EpicFilename    string
+	Engine          string
+	UserPrompt      string
+	ValidateOnly    bool
+	SkipSanityCheck bool
+	Mode            Mode
+	EffortLevel     epic.EffortLevel
+	Stdin           io.Reader // for interactive confirmation (defaults to os.Stdin)
+	Stdout          io.Writer // for displaying generated content (defaults to os.Stdout)
 }
 
 var newEngine = engine.NewEngine
@@ -184,6 +185,14 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 	planContent := string(planContentBytes)
 	executiveContent, _ := readPrepareOptional(executivePath)
+
+	// Sanity check: summarize project and ask user to confirm before generating artifacts.
+	if !opts.SkipSanityCheck {
+		if err := runSanityCheck(ctx, eng, opts,
+			planContent, executiveContent, opts.UserPrompt, mediaManifest, assetsSection); err != nil {
+			return err
+		}
+	}
 
 	agentsPath := filepath.Join(projectDir, config.AgentsFile)
 	var step1Inputs []string

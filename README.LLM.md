@@ -56,6 +56,7 @@ fry/
 │   │   └── types.go             # ReviewVerdict, DeviationSpec
 │   ├── prepare/
 │   │   ├── prepare.go           # Steps 0-3 artifact generation
+│   │   ├── sanity.go            # Interactive project summary sanity check
 │   │   ├── software.go          # Software project handling
 │   │   ├── planning.go          # Planning-mode (non-code) handling
 │   │   └── writing.go           # Writing-mode (books, guides) handling
@@ -189,9 +190,9 @@ Four check primitives: `@check_file` (file exists), `@check_file_contains` (rege
 User Input                          Generated Artifacts
 ─────────────────────               ────────────────────
 plans/plan.md         ──┐
-plans/executive.md    ──┤  fry prepare   →  .fry/AGENTS.md
---user-prompt "..."   ──┤  (Steps 0-3)   →  .fry/epic.md
-assets/               ──┘                 →  .fry/verification.md
+plans/executive.md    ──┤  fry prepare        →  .fry/AGENTS.md
+--user-prompt "..."   ──┤  (Sanity Check +    →  .fry/epic.md
+assets/               ──┘   Steps 0-3)        →  .fry/verification.md
 media/                ──(manifest only)
 
                         fry run
@@ -260,6 +261,7 @@ Key flags:
   --sprint N                         # Start from sprint N
   --retry                            # Skip iterations, verify + heal with boosted attempts
   --continue                         # LLM-assisted auto-resume from where build left off
+  --no-sanity-check                  # Skip interactive project summary
   --no-review                        # Skip mid-build sprint review
   --no-audit                         # Skip audits
   --verbose                          # Verbose logging

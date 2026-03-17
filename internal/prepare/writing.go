@@ -225,6 +225,10 @@ Do NOT default to HIGH — genuinely evaluate the plan's complexity.
 	}
 }
 
+func WritingSanityCheckPrompt(planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+	return buildSanityCheckPrompt("senior author and content strategist", planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
+}
+
 func WritingStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
 	userPromptLine := ""
 	if userPrompt != "" {
