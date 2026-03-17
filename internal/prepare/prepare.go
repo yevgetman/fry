@@ -189,7 +189,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	// Sanity check: summarize project and ask user to confirm before generating artifacts.
 	if !opts.SkipSanityCheck {
 		if err := runSanityCheck(ctx, eng, opts,
-			planContent, executiveContent, opts.UserPrompt, mediaManifest, assetsSection); err != nil {
+			planContent, executiveContent, mediaManifest, assetsSection); err != nil {
 			return err
 		}
 	}

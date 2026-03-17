@@ -55,7 +55,7 @@ When assets and media are also present, the bootstrap message lists them:
 After `plan.md` is available (whether user-authored or generated), Fry shows an AI-generated project summary and asks for confirmation:
 
 ```
-[2026-03-10 11:51:12] Sanity check: summarizing project...
+[2026-03-10 11:51:12] Sanity check: summarizing project (engine: claude)...
 
 ── Project summary ─────────────────────────────────────────────
 Project type:    Software (REST API)

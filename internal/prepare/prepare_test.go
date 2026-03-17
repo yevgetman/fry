@@ -473,7 +473,8 @@ func TestDisplaySanitySummary_UnknownFields(t *testing.T) {
 }
 
 func TestRunSanityCheck_UserApproves(t *testing.T) {
-	// Not parallel: uses fakeEngine
+	t.Parallel()
+
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software (CLI)\nGOAL: Build a CLI tool\nEXPECTED_OUTPUT: binary\nKEY_TOPICS: cobra\nEFFORT: low (1 sprint)"}
 	stdin := strings.NewReader("y\n")
 	var stdout strings.Builder
@@ -482,7 +483,7 @@ func TestRunSanityCheck_UserApproves(t *testing.T) {
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
-	}, "plan content", "", "", "", "")
+	}, "plan content", "", "", "")
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), "Project summary")
@@ -490,7 +491,8 @@ func TestRunSanityCheck_UserApproves(t *testing.T) {
 }
 
 func TestRunSanityCheck_DefaultYes(t *testing.T) {
-	// Not parallel: uses fakeEngine
+	t.Parallel()
+
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
 	stdin := strings.NewReader("\n") // empty line = default yes
 	var stdout strings.Builder
@@ -499,13 +501,14 @@ func TestRunSanityCheck_DefaultYes(t *testing.T) {
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
-	}, "plan", "", "", "", "")
+	}, "plan", "", "", "")
 
 	require.NoError(t, err)
 }
 
 func TestRunSanityCheck_UserDeclines(t *testing.T) {
-	// Not parallel: uses fakeEngine
+	t.Parallel()
+
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
 	stdin := strings.NewReader("n\n")
 	var stdout strings.Builder
@@ -514,13 +517,14 @@ func TestRunSanityCheck_UserDeclines(t *testing.T) {
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
-	}, "plan", "", "", "", "")
+	}, "plan", "", "", "")
 
 	require.ErrorIs(t, err, ErrSanityCheckDeclined)
 }
 
 func TestRunSanityCheck_EOF(t *testing.T) {
-	// Not parallel: uses fakeEngine
+	t.Parallel()
+
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
 	stdin := strings.NewReader("") // EOF
 	var stdout strings.Builder
@@ -529,7 +533,7 @@ func TestRunSanityCheck_EOF(t *testing.T) {
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
-	}, "plan", "", "", "", "")
+	}, "plan", "", "", "")
 
 	require.ErrorIs(t, err, ErrSanityCheckDeclined)
 }

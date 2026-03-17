@@ -27,11 +27,11 @@ type SanitySummary struct {
 }
 
 func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
-	planContent, executiveContent, userPrompt, mediaManifest, assetsSection string) error {
+	planContent, executiveContent, mediaManifest, assetsSection string) error {
 
-	frylog.Log("Sanity check: summarizing project...")
+	frylog.Log("Sanity check: summarizing project (engine: %s)...", eng.Name())
 
-	prompt := sanityCheckPrompt(opts.Mode, planContent, executiveContent, userPrompt, opts.EffortLevel, mediaManifest, assetsSection)
+	prompt := sanityCheckPrompt(opts.Mode, planContent, executiveContent, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
 	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir})
 	if err != nil && strings.TrimSpace(output) == "" {
 		return fmt.Errorf("run prepare: sanity check: %w", err)
