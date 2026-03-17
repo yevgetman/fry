@@ -169,11 +169,11 @@ The fix prompt includes:
 | Context | Source | When |
 |---|---|---|
 | Sprint goals | `@prompt` block from the epic | Always |
-| Previous audit findings | Prior iteration's `.fry/sprint-audit.txt` | Iteration 2+ only |
+| Previous audit findings | Prior iteration's findings (retained in memory) | Iteration 2+ only |
 | Current audit findings | This iteration's `.fry/sprint-audit.txt` | Always |
 | Context pointers | References to `sprint-progress.txt` and `plans/plan.md` | Always |
 
-On the first iteration, only the current findings are included. On subsequent iterations, the fix agent sees both the previous and current findings, allowing it to recognize recurring issues and try different remediation strategies.
+On the first iteration, only the current findings are included. On subsequent iterations, the fix agent sees both the previous and current findings, allowing it to recognize recurring issues and try different remediation strategies. Note: previous findings are held in memory between iterations — the `.fry/sprint-audit.txt` file is deleted after each pass to prevent stale results from contaminating the next audit, then recreated by the next audit agent invocation.
 
 ## Effort Level Interaction
 
