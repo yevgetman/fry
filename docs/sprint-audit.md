@@ -165,7 +165,19 @@ The git diff is refreshed before each audit pass (via a callback) so that fixes 
 ## Effort Level Interaction
 
 - **`low`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at low effort.
-- **`medium`**, **`high`**, **`max`** -- Audit runs normally when enabled.
+- **`medium`** -- Bounded audit: runs up to `@max_audit_iterations` (default: 3) audit→fix cycles. Stops when iterations are exhausted.
+- **`high`**, **`max`** -- Progress-based audit: continues as long as the fix agent is making progress (resolving findings or uncovering new ones). Safety cap at 10 iterations. Stops early if 2 consecutive audit passes show no progress (same findings repeating). This prevents wasting cycles when the fix agent cannot resolve an issue, while allowing thorough remediation when each cycle yields improvement.
+
+When `@max_audit_iterations` is explicitly set in the epic, it is always respected as a hard cap regardless of effort level, and progress detection is disabled. Progress-based behavior only activates when the iteration count is not explicitly configured.
+
+### Progress detection
+
+At `high` and `max` effort, Fry tracks audit findings across iterations by extracting structured `**Description:**` lines from each audit pass. After each audit:
+
+1. If no findings remain above LOW → pass (exit).
+2. If findings are identical to the previous pass or a superset (no issues resolved, no new issues) → increment stale counter.
+3. If any previous findings were resolved or new findings appeared → reset stale counter (progress made).
+4. After 2 consecutive stale passes → stop and run final audit.
 
 ## Terminal Output
 
@@ -175,12 +187,32 @@ The git diff is refreshed before each audit pass (via a callback) so that fixes 
 [2026-03-10 12:12:00]   AUDIT: pass (max severity: none)
 ```
 
-### Issues found and fixed:
+### Issues found and fixed (bounded):
 ```
 [2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
 [2026-03-10 12:12:00]   AUDIT: HIGH issues found — running fix agent...
 [2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2/3  engine=claude
 [2026-03-10 12:16:00]   AUDIT: pass (max severity: LOW)
+```
+
+### Progress-based audit (high/max effort):
+```
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:12:00]   AUDIT: HIGH issues found — running fix agent...
+[2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:16:00]   AUDIT: MODERATE issues found — running fix agent...
+[2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 3 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:20:00]   AUDIT: pass (max severity: LOW)
+```
+
+### Progress stall (high/max effort):
+```
+[2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 4 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:20:00]   AUDIT: no progress detected (1/2 stale iterations)
+[2026-03-10 12:20:00]   AUDIT: HIGH issues found — running fix agent...
+[2026-03-10 12:22:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 5 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:24:00]   AUDIT: no progress detected (2/2 stale iterations)
+[2026-03-10 12:24:00]   AUDIT: stopping — no progress after 5 iterations
 ```
 
 ### CRITICAL/HIGH issues persist (blocking):

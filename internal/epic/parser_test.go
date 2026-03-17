@@ -375,6 +375,7 @@ Do it.
 
 	assert.True(t, ep.AuditAfterSprint)
 	assert.Equal(t, 5, ep.MaxAuditIterations)
+	assert.True(t, ep.MaxAuditIterationsSet)
 	assert.Equal(t, "claude", ep.AuditEngine)
 	assert.Equal(t, "auditor-v1", ep.AuditModel)
 }
@@ -395,6 +396,7 @@ Do it.
 
 	assert.True(t, ep.AuditAfterSprint)
 	assert.Equal(t, config.DefaultMaxAuditIterations, ep.MaxAuditIterations)
+	assert.False(t, ep.MaxAuditIterationsSet)
 }
 
 func TestParseEpic_AuditDefaultEnabled(t *testing.T) {
@@ -412,6 +414,7 @@ Do it.
 
 	assert.True(t, ep.AuditAfterSprint)
 	assert.Equal(t, config.DefaultMaxAuditIterations, ep.MaxAuditIterations)
+	assert.False(t, ep.MaxAuditIterationsSet)
 }
 
 func TestParseEpic_NoAuditDirective(t *testing.T) {

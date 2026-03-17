@@ -97,7 +97,8 @@ type Epic struct {
 	ReviewModel          string
 	MaxDeviationScope    int
 	AuditAfterSprint     bool
-	MaxAuditIterations   int
+	MaxAuditIterations    int
+	MaxAuditIterationsSet bool
 	AuditEngine          string
 	AuditModel           string
 	Sprints              []Sprint

@@ -360,6 +360,7 @@ func equalGlobalDirectives(a, b *epic.Epic) bool {
 		a.MaxDeviationScope == b.MaxDeviationScope &&
 		a.AuditAfterSprint == b.AuditAfterSprint &&
 		a.MaxAuditIterations == b.MaxAuditIterations &&
+		a.MaxAuditIterationsSet == b.MaxAuditIterationsSet &&
 		a.AuditEngine == b.AuditEngine &&
 		a.AuditModel == b.AuditModel
 }

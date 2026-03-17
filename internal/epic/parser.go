@@ -104,6 +104,7 @@ func ParseEpic(path string) (*Epic, error) {
 					ep.AuditAfterSprint = false
 				case "@max_audit_iterations":
 					ep.MaxAuditIterations, err = parseIntDirective(directive, value)
+					ep.MaxAuditIterationsSet = true
 				case "@audit_engine":
 					ep.AuditEngine = value
 				case "@audit_model":

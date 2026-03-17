@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -333,4 +334,327 @@ func TestRunAuditLoopNilEngine(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "engine is required")
+}
+
+// --- extractFindings tests ---
+
+func TestExtractFindings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		content  string
+		expected map[string]struct{}
+	}{
+		{
+			name: "single finding",
+			content: "## Findings\n- **Description:** Missing null check\n- **Severity:** HIGH\n",
+			expected: map[string]struct{}{"missing null check": {}},
+		},
+		{
+			name: "multiple findings",
+			content: "- **Description:** SQL injection risk\n- **Description:** Missing auth check\n",
+			expected: map[string]struct{}{
+				"sql injection risk":  {},
+				"missing auth check":  {},
+			},
+		},
+		{
+			name:     "no findings",
+			content:  "## Summary\nAll good.\n## Verdict\nPASS\n",
+			expected: map[string]struct{}{},
+		},
+		{
+			name: "case insensitive label",
+			content: "- **description:** Unused variable\n",
+			expected: map[string]struct{}{"unused variable": {}},
+		},
+		{
+			name: "plain format without bold",
+			content: "- Description: Buffer overflow\n",
+			expected: map[string]struct{}{"buffer overflow": {}},
+		},
+		{
+			name: "duplicate descriptions deduplicated",
+			content: "- **Description:** Same issue\n- **Description:** Same issue\n",
+			expected: map[string]struct{}{"same issue": {}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := extractFindings(tt.content)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// --- hasProgress tests ---
+
+func TestHasProgress(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		previous map[string]struct{}
+		current  map[string]struct{}
+		expected bool
+	}{
+		{
+			name:     "current empty — all resolved",
+			previous: map[string]struct{}{"a": {}},
+			current:  map[string]struct{}{},
+			expected: true,
+		},
+		{
+			name:     "previous empty — first iteration",
+			previous: map[string]struct{}{},
+			current:  map[string]struct{}{"a": {}},
+			expected: true,
+		},
+		{
+			name:     "both empty",
+			previous: map[string]struct{}{},
+			current:  map[string]struct{}{},
+			expected: true,
+		},
+		{
+			name:     "identical findings — no progress",
+			previous: map[string]struct{}{"a": {}, "b": {}},
+			current:  map[string]struct{}{"a": {}, "b": {}},
+			expected: false,
+		},
+		{
+			name:     "fewer findings — progress",
+			previous: map[string]struct{}{"a": {}, "b": {}, "c": {}},
+			current:  map[string]struct{}{"a": {}, "b": {}},
+			expected: true,
+		},
+		{
+			name:     "different findings — progress",
+			previous: map[string]struct{}{"a": {}, "b": {}},
+			current:  map[string]struct{}{"c": {}, "d": {}},
+			expected: true,
+		},
+		{
+			name:     "superset of previous — no progress",
+			previous: map[string]struct{}{"a": {}, "b": {}},
+			current:  map[string]struct{}{"a": {}, "b": {}, "c": {}},
+			expected: false,
+		},
+		{
+			name:     "partial overlap with new — progress",
+			previous: map[string]struct{}{"a": {}, "b": {}},
+			current:  map[string]struct{}{"a": {}, "c": {}},
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, hasProgress(tt.previous, tt.current))
+		})
+	}
+}
+
+// --- effectiveMaxIter tests ---
+
+func TestEffectiveMaxIter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		epic          *epic.Epic
+		wantMax       int
+		wantProgress  bool
+	}{
+		{
+			name:         "medium effort default",
+			epic:         &epic.Epic{EffortLevel: epic.EffortMedium, MaxAuditIterations: 3},
+			wantMax:      3,
+			wantProgress: false,
+		},
+		{
+			name:         "high effort not explicitly set",
+			epic:         &epic.Epic{EffortLevel: epic.EffortHigh, MaxAuditIterations: 3},
+			wantMax:      config.MaxAuditIterationsSafetyCap,
+			wantProgress: true,
+		},
+		{
+			name:         "max effort not explicitly set",
+			epic:         &epic.Epic{EffortLevel: epic.EffortMax, MaxAuditIterations: 3},
+			wantMax:      config.MaxAuditIterationsSafetyCap,
+			wantProgress: true,
+		},
+		{
+			name:         "high effort explicitly set",
+			epic:         &epic.Epic{EffortLevel: epic.EffortHigh, MaxAuditIterations: 5, MaxAuditIterationsSet: true},
+			wantMax:      5,
+			wantProgress: false,
+		},
+		{
+			name:         "low effort",
+			epic:         &epic.Epic{EffortLevel: epic.EffortLow, MaxAuditIterations: 3},
+			wantMax:      3,
+			wantProgress: false,
+		},
+		{
+			name:         "unset effort",
+			epic:         &epic.Epic{MaxAuditIterations: 3},
+			wantMax:      3,
+			wantProgress: false,
+		},
+		{
+			name:         "unset effort zero iterations",
+			epic:         &epic.Epic{},
+			wantMax:      config.DefaultMaxAuditIterations,
+			wantProgress: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			maxIter, progressBased := effectiveMaxIter(tt.epic)
+			assert.Equal(t, tt.wantMax, maxIter)
+			assert.Equal(t, tt.wantProgress, progressBased)
+		})
+	}
+}
+
+// --- progress-based loop tests ---
+
+func TestRunAuditLoopProgressStopsOnStale(t *testing.T) {
+	t.Parallel()
+
+	// Stub engine always returns the same CRITICAL findings with same description.
+	// At high effort with progress-based mode, should stop after:
+	// pass 1: baseline (runs fix), pass 2: stale #1 (runs fix), pass 3: stale #2 (stops)
+	// Then final audit pass.
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				"## Findings\n- **Description:** Null pointer dereference\n- **Severity:** CRITICAL\n\n## Verdict\nFAIL\n")
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterationsSet = false
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	assert.True(t, result.Blocking)
+	assert.Equal(t, "CRITICAL", result.MaxSeverity)
+	// pass 1: audit+fix, pass 2: audit+fix, pass 3: audit (stale#2, break), final audit
+	// = 3 audits + 2 fixes + 1 final = 6 agent calls
+	assert.Len(t, eng.prompts, 6)
+}
+
+func TestRunAuditLoopProgressContinues(t *testing.T) {
+	t.Parallel()
+
+	// Stub engine returns different findings each time — progress is always made.
+	// Should continue beyond the default 3 iterations.
+	callCount := 0
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			callCount++
+			desc := fmt.Sprintf("Issue number %d", callIndex)
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				fmt.Sprintf("## Findings\n- **Description:** %s\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n", desc))
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortMax
+	opts.Epic.MaxAuditIterationsSet = false
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	assert.True(t, result.Blocking)
+	// Should have run all 10 iterations (safety cap) + final audit
+	// = 10 audits + 10 fixes + 1 final = 21 agent calls
+	assert.Len(t, eng.prompts, 21)
+}
+
+func TestRunAuditLoopExplicitCapAtHighEffort(t *testing.T) {
+	t.Parallel()
+
+	// User explicitly set @max_audit_iterations 2 at high effort.
+	// Should respect the cap without progress detection.
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				"## Findings\n- **Description:** Always the same\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n")
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterations = 2
+	opts.Epic.MaxAuditIterationsSet = true
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	assert.True(t, result.Blocking)
+	assert.Equal(t, 2, result.Iterations)
+	// 2 audit + 2 fix + 1 final = 5 (same as bounded behavior)
+	assert.Len(t, eng.prompts, 5)
+}
+
+func TestRunAuditLoopMediumEffortBounded(t *testing.T) {
+	t.Parallel()
+
+	// Medium effort: should use bounded behavior (3 iterations), no progress detection.
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				"## Findings\n- **Description:** Same issue\n- **Severity:** MODERATE\n\n## Verdict\nFAIL\n")
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortMedium
+	opts.Epic.MaxAuditIterations = 3
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	assert.False(t, result.Blocking)
+	assert.Equal(t, 3, result.Iterations)
+	// 3 audit + 3 fix + 1 final = 7 (bounded, no early stop from progress detection)
+	assert.Len(t, eng.prompts, 7)
+}
+
+func TestRunAuditLoopProgressResetsStaleCount(t *testing.T) {
+	t.Parallel()
+
+	// Alternating: stale, progress, stale, progress — should not trigger stale stop.
+	iteration := 0
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			iteration++
+			var desc string
+			if iteration%2 == 0 {
+				desc = "recurring issue"
+			} else {
+				desc = fmt.Sprintf("new issue %d", iteration)
+			}
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				fmt.Sprintf("## Findings\n- **Description:** %s\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n", desc))
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterationsSet = false
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	// Should run all 10 iterations (progress resets prevent early stop)
+	assert.Len(t, eng.prompts, 21) // 10 audit + 10 fix + 1 final
 }

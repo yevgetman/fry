@@ -35,6 +35,8 @@ type AuditResult struct {
 	MaxSeverity string // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
 }
 
+const maxStaleIterations = 2
+
 func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	if opts.Epic == nil || opts.Sprint == nil {
 		return nil, fmt.Errorf("run audit loop: epic and sprint are required")
@@ -43,15 +45,15 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		return nil, fmt.Errorf("run audit loop: engine is required")
 	}
 
-	maxIter := opts.Epic.MaxAuditIterations
-	if maxIter <= 0 {
-		maxIter = config.DefaultMaxAuditIterations
-	}
+	maxIter, progressBased := effectiveMaxIter(opts.Epic)
 
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("run audit loop: create build logs dir: %w", err)
 	}
+
+	var prevFindings map[string]struct{}
+	staleCount := 0
 
 	for iter := 1; iter <= maxIter; iter++ {
 		select {
@@ -77,15 +79,27 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			return nil, fmt.Errorf("run audit loop: write audit prompt: %w", err)
 		}
 
-		frylog.Log(
-			"▶ AUDIT  sprint %d/%d \"%s\"  pass %d/%d  engine=%s",
-			opts.Sprint.Number,
-			opts.Epic.TotalSprints,
-			opts.Sprint.Name,
-			iter,
-			maxIter,
-			opts.Engine.Name(),
-		)
+		if progressBased {
+			frylog.Log(
+				"▶ AUDIT  sprint %d/%d \"%s\"  pass %d (progress-based, cap %d)  engine=%s",
+				opts.Sprint.Number,
+				opts.Epic.TotalSprints,
+				opts.Sprint.Name,
+				iter,
+				maxIter,
+				opts.Engine.Name(),
+			)
+		} else {
+			frylog.Log(
+				"▶ AUDIT  sprint %d/%d \"%s\"  pass %d/%d  engine=%s",
+				opts.Sprint.Number,
+				opts.Epic.TotalSprints,
+				opts.Sprint.Name,
+				iter,
+				maxIter,
+				opts.Engine.Name(),
+			)
+		}
 
 		// Run audit agent
 		auditLogPath := filepath.Join(
@@ -114,10 +128,27 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			return &AuditResult{Passed: true, Iterations: iter, MaxSeverity: maxSev}, nil
 		}
 
+		// Progress detection for progress-based mode
+		if progressBased {
+			currentFindings := extractFindings(string(content))
+			if prevFindings != nil && !hasProgress(prevFindings, currentFindings) {
+				staleCount++
+				frylog.Log("  AUDIT: no progress detected (%d/%d stale iterations)", staleCount, maxStaleIterations)
+				if staleCount >= maxStaleIterations {
+					frylog.Log("  AUDIT: stopping — no progress after %d iterations", iter)
+					break
+				}
+			} else {
+				staleCount = 0
+			}
+			prevFindings = currentFindings
+		}
+
 		frylog.Log("  AUDIT: %s issues found — running fix agent...", maxSev)
 
 		// Build and write fix prompt
 		fixPrompt := buildAuditFixPrompt(opts, string(content))
+		promptPath = filepath.Join(opts.ProjectDir, config.AuditPromptFile)
 		if err := os.WriteFile(promptPath, []byte(fixPrompt), 0o644); err != nil {
 			return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
 		}
@@ -382,6 +413,69 @@ func isAuditPass(maxSeverity string) bool {
 
 func isBlockingSeverity(maxSeverity string) bool {
 	return maxSeverity == "CRITICAL" || maxSeverity == "HIGH"
+}
+
+// descriptionRe matches structured finding description lines.
+var descriptionRe = regexp.MustCompile(`(?i)\*?\*?Description:\*?\*?\s*(.+)`)
+
+// extractFindings parses structured audit findings and returns a normalized
+// set of finding descriptions for progress comparison across iterations.
+func extractFindings(content string) map[string]struct{} {
+	findings := make(map[string]struct{})
+	for _, line := range strings.Split(content, "\n") {
+		m := descriptionRe.FindStringSubmatch(line)
+		if len(m) < 2 {
+			continue
+		}
+		desc := strings.ToLower(strings.TrimSpace(m[1]))
+		if desc != "" {
+			findings[desc] = struct{}{}
+		}
+	}
+	return findings
+}
+
+// hasProgress returns true if the current findings represent progress compared
+// to the previous findings. Progress means: fewer total findings, or different
+// findings (not all previous issues still present).
+func hasProgress(previous, current map[string]struct{}) bool {
+	if len(current) == 0 {
+		return true // all findings resolved
+	}
+	if len(previous) == 0 {
+		return true // first iteration with findings
+	}
+	if len(current) < len(previous) {
+		return true // fewer findings = progress
+	}
+	// Check if all previous findings still exist
+	matchCount := 0
+	for key := range previous {
+		if _, ok := current[key]; ok {
+			matchCount++
+		}
+	}
+	// No progress if every previous finding is still present
+	return matchCount < len(previous)
+}
+
+// effectiveMaxIter determines the maximum audit iterations and whether
+// progress-based detection should be used, based on effort level and
+// whether the user explicitly set @max_audit_iterations.
+func effectiveMaxIter(ep *epic.Epic) (maxIter int, progressBased bool) {
+	if ep.MaxAuditIterationsSet {
+		return ep.MaxAuditIterations, false
+	}
+	switch ep.EffortLevel {
+	case epic.EffortHigh, epic.EffortMax:
+		return config.MaxAuditIterationsSafetyCap, true
+	default:
+		maxIter = ep.MaxAuditIterations
+		if maxIter <= 0 {
+			maxIter = config.DefaultMaxAuditIterations
+		}
+		return maxIter, false
+	}
 }
 
 func Cleanup(projectDir string) error {

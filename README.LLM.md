@@ -142,6 +142,7 @@ type Epic struct {
     MaxDeviationScope        int
     AuditAfterSprint         bool
     MaxAuditIterations       int
+    MaxAuditIterationsSet    bool
     AuditEngine, AuditModel  string
     Sprints                  []Sprint
     TotalSprints             int
@@ -209,7 +210,9 @@ For each sprint (startSprint → endSprint):
   7. If checks fail: heal loop (up to MaxHealAttempts)
   8. Sprint audit (if enabled & effort != low):
      │  ├─ Audit agent reviews git diff
-     │  └─ Fix loop on CRITICAL/HIGH (up to MaxAuditIterations)
+     │  └─ Fix loop on CRITICAL/HIGH:
+     │     ├─ medium: bounded (up to MaxAuditIterations, default 3)
+     │     └─ high/max: progress-based (cap 10, stops on stale findings)
   9. Git checkpoint commit
  10. Compact sprint progress → .fry/epic-progress.txt
  11. Optional sprint review:
@@ -273,7 +276,8 @@ Key flags:
 | `WritingOutputDir` | `output` | Output directory for writing-mode deliverables |
 | `DefaultMaxHealAttempts` | `3` | Heal loop retries |
 | `DefaultMaxFailPercent` | `20` | Max % of checks that can fail and still pass |
-| `DefaultMaxAuditIterations` | `3` | Audit fix loop retries |
+| `DefaultMaxAuditIterations` | `3` | Audit fix loop retries (medium effort) |
+| `MaxAuditIterationsSafetyCap` | `10` | Safety cap for progress-based audit (high/max effort) |
 | `DefaultDockerReadyTimeout` | `30` | Seconds for Docker health check |
 | `DefaultMaxDeviationScope` | `3` | Max sprints affected by replan |
 | `MaxAuditDiffBytes` | `100000` | Max diff size for audit context |

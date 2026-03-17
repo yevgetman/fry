@@ -37,7 +37,8 @@ const (
 	// Audit constants
 	SprintAuditFile           = ".fry/sprint-audit.txt"
 	AuditPromptFile           = ".fry/audit-prompt.md"
-	DefaultMaxAuditIterations = 3
+	DefaultMaxAuditIterations  = 3
+	MaxAuditIterationsSafetyCap = 10
 	MaxAuditDiffBytes         = 100_000
 	AuditInvocationPrompt     = "Read and execute ALL instructions in .fry/audit-prompt.md. You are a code auditor. Review the sprint's work and write your findings to .fry/sprint-audit.txt. Do NOT modify any source code."
 	AuditFixInvocationPrompt  = "Read and execute ALL instructions in .fry/audit-prompt.md. Fix the issues identified in .fry/sprint-audit.txt."
