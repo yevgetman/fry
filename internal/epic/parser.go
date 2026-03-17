@@ -85,9 +85,11 @@ func ParseEpic(path string) (*Epic, error) {
 				case "@max_heal_attempts":
 					ep.MaxHealAttempts, err = parseIntDirective(directive, value)
 					maxHealAttemptsSet = true
+					ep.MaxHealAttemptsSet = true
 				case "@max_fail_percent":
 					ep.MaxFailPercent, err = parseIntDirective(directive, value)
 					maxFailPercentSet = true
+					ep.MaxFailPercentSet = true
 				case "@compact_with_agent":
 					ep.CompactWithAgent = true
 				case "@review_between_sprints":

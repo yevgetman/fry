@@ -209,6 +209,7 @@ func TestRunSprintPassesWithPromiseAndChecks(t *testing.T) {
 			TotalSprints:     3,
 			VerificationFile: config.DefaultVerificationFile,
 			MaxHealAttempts:  1,
+			MaxHealAttemptsSet: true,
 			AgentModel:       "",
 			AgentFlags:       "",
 			PreIterationCmd:  "",
@@ -263,8 +264,9 @@ func TestRunSprintPassesWithPromiseNoChecks(t *testing.T) {
 	result, err := RunSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
-			TotalSprints:    1,
-			MaxHealAttempts: 1,
+			TotalSprints:       1,
+			MaxHealAttempts:    1,
+			MaxHealAttemptsSet: true,
 		},
 		Sprint: &epic.Sprint{
 			Number:        1,
@@ -322,6 +324,7 @@ func TestRunSprintNoPromiseChecksPass(t *testing.T) {
 			TotalSprints:     1,
 			VerificationFile: config.DefaultVerificationFile,
 			MaxHealAttempts:  1,
+			MaxHealAttemptsSet: true,
 		},
 		Sprint: &epic.Sprint{
 			Number:        1,
@@ -421,8 +424,9 @@ func TestDetermineOutcome(t *testing.T) {
 			cfg := RunConfig{
 				ProjectDir: projectDir,
 				Epic: &epic.Epic{
-					TotalSprints:    1,
-					MaxHealAttempts: 1,
+					TotalSprints:       1,
+					MaxHealAttempts:    1,
+					MaxHealAttemptsSet: true,
 				},
 				Sprint: &epic.Sprint{
 					Number:        1,
@@ -492,9 +496,11 @@ func TestDetermineOutcomeDeferredFailures(t *testing.T) {
 	cfg := RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
-			TotalSprints:    1,
-			MaxHealAttempts: 1,
-			MaxFailPercent:  20,
+			TotalSprints:       1,
+			MaxHealAttempts:    1,
+			MaxHealAttemptsSet: true,
+			MaxFailPercent:     20,
+			MaxFailPercentSet:  true,
 		},
 		Sprint: &epic.Sprint{
 			Number:        1,
@@ -534,6 +540,7 @@ func TestRunSprintDeferredFailuresInResult(t *testing.T) {
 			TotalSprints:     1,
 			VerificationFile: config.DefaultVerificationFile,
 			MaxHealAttempts:  1,
+			MaxHealAttemptsSet: true,
 			MaxFailPercent:   20,
 		},
 		Sprint: &epic.Sprint{
@@ -563,9 +570,10 @@ func TestRetrySprintPassesWhenChecksAlreadyPass(t *testing.T) {
 	result, err := RetrySprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
-			TotalSprints:     2,
-			VerificationFile: config.DefaultVerificationFile,
-			MaxHealAttempts:  3,
+			TotalSprints:       2,
+			VerificationFile:   config.DefaultVerificationFile,
+			MaxHealAttempts:    3,
+			MaxHealAttemptsSet: true,
 		},
 		Sprint: &epic.Sprint{
 			Number:        1,
@@ -599,9 +607,10 @@ func TestRetrySprintFailsWhenHealExhausted(t *testing.T) {
 	result, err := RetrySprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
-			TotalSprints:     1,
-			VerificationFile: config.DefaultVerificationFile,
-			MaxHealAttempts:  2,
+			TotalSprints:       1,
+			VerificationFile:   config.DefaultVerificationFile,
+			MaxHealAttempts:    2,
+			MaxHealAttemptsSet: true,
 		},
 		Sprint: &epic.Sprint{
 			Number:        1,
@@ -657,9 +666,10 @@ func TestRetrySprintPreservesProgress(t *testing.T) {
 	result, err := RetrySprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
-			TotalSprints:     5,
-			VerificationFile: config.DefaultVerificationFile,
-			MaxHealAttempts:  3,
+			TotalSprints:       5,
+			VerificationFile:   config.DefaultVerificationFile,
+			MaxHealAttempts:    3,
+			MaxHealAttemptsSet: true,
 		},
 		Sprint: &epic.Sprint{
 			Number:        3,

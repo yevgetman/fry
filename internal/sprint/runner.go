@@ -224,6 +224,7 @@ func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check,
 		Verbose:          cfg.Verbose,
 		SprintLogFile:    sprintLogPath,
 		MaxFailPercent:   cfg.Epic.MaxFailPercent,
+		EffortLevel:      cfg.Epic.EffortLevel,
 		Mode:             cfg.Mode,
 	}
 
@@ -323,10 +324,13 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		}, nil
 	}
 
-	// Calculate boosted heal attempts for retry
+	// Calculate boosted heal attempts for retry using effort-level-aware base
 	maxAttempts := cfg.Epic.MaxHealAttempts
 	if cfg.Sprint.MaxHealAttempts != nil {
 		maxAttempts = *cfg.Sprint.MaxHealAttempts
+	}
+	if !cfg.Epic.MaxHealAttemptsSet && maxAttempts <= 0 && cfg.Epic.EffortLevel != "" {
+		maxAttempts = cfg.Epic.EffortLevel.DefaultMaxHealAttempts()
 	}
 	if maxAttempts <= 0 {
 		maxAttempts = config.DefaultMaxHealAttempts
@@ -361,6 +365,7 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		SprintLogFile:       sprintLogPath,
 		MaxAttemptsOverride: boostedAttempts,
 		MaxFailPercent:      cfg.Epic.MaxFailPercent,
+		EffortLevel:         cfg.Epic.EffortLevel,
 		Mode:                cfg.Mode,
 	})
 	if err != nil {

@@ -29,7 +29,9 @@ Ship the first slice.
 	assert.Equal(t, "Basic Epic", ep.Name)
 	assert.Equal(t, config.DefaultVerificationFile, ep.VerificationFile)
 	assert.Equal(t, config.DefaultMaxHealAttempts, ep.MaxHealAttempts)
+	assert.False(t, ep.MaxHealAttemptsSet)
 	assert.Equal(t, config.DefaultMaxFailPercent, ep.MaxFailPercent)
+	assert.False(t, ep.MaxFailPercentSet)
 	assert.Equal(t, config.DefaultDockerReadyTimeout, ep.DockerReadyTimeout)
 	assert.Equal(t, config.DefaultMaxDeviationScope, ep.MaxDeviationScope)
 	require.Len(t, ep.Sprints, 1)
@@ -119,6 +121,7 @@ Do it.
 	assert.Equal(t, "--json --danger", ep.AgentFlags)
 	assert.Equal(t, "custom-verification.md", ep.VerificationFile)
 	assert.Equal(t, 7, ep.MaxHealAttempts)
+	assert.True(t, ep.MaxHealAttemptsSet)
 	assert.True(t, ep.CompactWithAgent)
 	assert.True(t, ep.ReviewBetweenSprints)
 	assert.Equal(t, "claude", ep.ReviewEngine)
@@ -526,6 +529,7 @@ Do it.
 `)
 
 	assert.Equal(t, 30, ep.MaxFailPercent)
+	assert.True(t, ep.MaxFailPercentSet)
 }
 
 func TestParseEpic_MaxFailPercentDefault(t *testing.T) {
@@ -542,6 +546,7 @@ Do it.
 `)
 
 	assert.Equal(t, config.DefaultMaxFailPercent, ep.MaxFailPercent)
+	assert.False(t, ep.MaxFailPercentSet)
 }
 
 func TestParseEpic_MaxFailPercentZero(t *testing.T) {
@@ -559,6 +564,7 @@ Do it.
 `)
 
 	assert.Equal(t, 0, ep.MaxFailPercent)
+	assert.True(t, ep.MaxFailPercentSet)
 }
 
 func TestParseEpic_MaxFailPercentHundred(t *testing.T) {

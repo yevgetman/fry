@@ -135,7 +135,9 @@ type Epic struct {
     AgentModel, AgentFlags   string
     VerificationFile         string
     MaxHealAttempts          int
-    MaxFailPercent           int            // 0-100; default 20
+    MaxHealAttemptsSet       bool           // true when @max_heal_attempts was explicitly set
+    MaxFailPercent           int            // 0-100; default 20 (10 for max effort)
+    MaxFailPercentSet        bool           // true when @max_fail_percent was explicitly set
     CompactWithAgent         bool
     ReviewBetweenSprints     bool
     ReviewEngine, ReviewModel string
@@ -207,7 +209,7 @@ For each sprint (startSprint → endSprint):
      │    ├─ Check promise token → early exit if found
      │    └─ No-op detection (no git diff) → early exit
   6. Run verification checks
-  7. If checks fail: heal loop (up to MaxHealAttempts)
+  7. If checks fail: heal loop (effort-level-aware: low=skip, medium=3, high=up to 10 with progress detection, max=unlimited with progress detection)
   8. Sprint audit (if enabled & effort != low):
      │  ├─ Audit agent reviews git diff
      │  └─ Fix loop on CRITICAL/HIGH:
@@ -274,8 +276,14 @@ Key flags:
 | `DefaultPlanningEngine` | `claude` | Default planning-mode engine |
 | `DefaultWritingEngine` | `claude` | Default writing-mode engine |
 | `WritingOutputDir` | `output` | Output directory for writing-mode deliverables |
-| `DefaultMaxHealAttempts` | `3` | Heal loop retries |
+| `DefaultMaxHealAttempts` | `3` | Heal loop retries (fallback for auto effort) |
 | `DefaultMaxFailPercent` | `20` | Max % of checks that can fail and still pass |
+| `HealAttemptsHigh` | `10` | Heal attempts for high effort |
+| `HealStuckThresholdHigh` | `2` | Consecutive no-progress attempts before exit (high) |
+| `HealStuckThresholdMax` | `3` | Consecutive no-progress attempts before exit (max) |
+| `HealMinAttemptsMax` | `10` | Min attempts before mid-loop threshold exit (max) |
+| `HealSafetyCapMax` | `50` | Hard safety cap for unlimited max-effort healing |
+| `MaxFailPercentMax` | `10` | Stricter threshold for max effort |
 | `DefaultMaxAuditIterations` | `3` | Audit fix loop retries (medium effort) |
 | `MaxAuditIterationsHighCap` | `50` | Safety cap for progress-based audit (high effort) |
 | `MaxAuditIterationsMaxCap` | `150` | Safety cap for progress-based audit (max effort) |

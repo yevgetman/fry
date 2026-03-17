@@ -110,8 +110,9 @@ func TestHealLoopMaxAttempts(t *testing.T) {
 			Name:   "Heal",
 		},
 		Epic: &epic.Epic{
-			TotalSprints:    2,
-			MaxHealAttempts: 2,
+			TotalSprints:       2,
+			MaxHealAttempts:    2,
+			MaxHealAttemptsSet: true,
 		},
 		Engine:        mockEngine,
 		SprintLogFile: sprintLog,
@@ -144,8 +145,9 @@ func TestHealPerSprintOverride(t *testing.T) {
 			MaxHealAttempts: &override,
 		},
 		Epic: &epic.Epic{
-			TotalSprints:    2,
-			MaxHealAttempts: 3,
+			TotalSprints:       2,
+			MaxHealAttempts:    3,
+			MaxHealAttemptsSet: true,
 		},
 		Engine:        mockEngine,
 		SprintLogFile: sprintLog,
@@ -173,8 +175,9 @@ func TestHealLoopMaxAttemptsOverride(t *testing.T) {
 			Name:   "Heal",
 		},
 		Epic: &epic.Epic{
-			TotalSprints:    2,
-			MaxHealAttempts: 2, // Would normally limit to 2
+			TotalSprints:       2,
+			MaxHealAttempts:    2, // Would normally limit to 2
+			MaxHealAttemptsSet: true,
 		},
 		Engine:              mockEngine,
 		SprintLogFile:       sprintLog,
@@ -205,8 +208,9 @@ func TestHealLoopSucceeds(t *testing.T) {
 			Name:   "Heal",
 		},
 		Epic: &epic.Epic{
-			TotalSprints:    1,
-			MaxHealAttempts: 2,
+			TotalSprints:       1,
+			MaxHealAttempts:    2,
+			MaxHealAttemptsSet: true,
 		},
 		Engine:        mockEngine,
 		SprintLogFile: sprintLog,
@@ -245,8 +249,9 @@ func TestHealLoopReloadsVerificationFile(t *testing.T) {
 			Name:   "Reload test",
 		},
 		Epic: &epic.Epic{
-			TotalSprints:    1,
-			MaxHealAttempts: 3,
+			TotalSprints:       1,
+			MaxHealAttempts:    3,
+			MaxHealAttemptsSet: true,
 		},
 		Engine:           fixEngine,
 		SprintLogFile:    sprintLog,
@@ -275,7 +280,7 @@ func TestHealLoopWithinThreshold(t *testing.T) {
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir: projectDir,
 		Sprint:     &epic.Sprint{Number: 1, Name: "Threshold"},
-		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 1},
+		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 1, MaxHealAttemptsSet: true},
 		Engine:     mockEngine,
 		SprintLogFile:  sprintLog,
 		MaxFailPercent: 20,
@@ -307,7 +312,7 @@ func TestHealLoopExceedsThreshold(t *testing.T) {
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir: projectDir,
 		Sprint:     &epic.Sprint{Number: 1, Name: "Exceed"},
-		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 1},
+		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 1, MaxHealAttemptsSet: true},
 		Engine:     mockEngine,
 		SprintLogFile:  sprintLog,
 		MaxFailPercent: 20,
@@ -337,7 +342,7 @@ func TestHealLoopZeroThreshold(t *testing.T) {
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir: projectDir,
 		Sprint:     &epic.Sprint{Number: 1, Name: "Strict"},
-		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 1},
+		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 1, MaxHealAttemptsSet: true},
 		Engine:     mockEngine,
 		SprintLogFile:  sprintLog,
 		MaxFailPercent: 0,
@@ -350,6 +355,502 @@ func TestHealLoopZeroThreshold(t *testing.T) {
 	assert.False(t, result.Healed)
 	assert.False(t, result.WithinThreshold)
 }
+
+// --- Effort-level-aware healing tests ---
+
+func TestHealLoopLowEffortNoAttempts(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	writeFile(t, filepath.Join(projectDir, "present.txt"), "ok\n")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	// Low effort: 1/5 checks fail = 20%, within 20% threshold → pass with no heal attempts
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "Low effort"},
+		Epic:        &epic.Epic{TotalSprints: 1},
+		Engine:      mockEngine,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortLow,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	assert.True(t, result.WithinThreshold, "should pass via threshold with no healing")
+	assert.Empty(t, mockEngine.prompts, "low effort should make zero heal attempts")
+}
+
+func TestHealLoopLowEffortExceedsThreshold(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	writeFile(t, filepath.Join(projectDir, "present.txt"), "ok\n")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	// Low effort: 2/3 checks fail = 67%, exceeds 20% → fail with no heal attempts
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "Low fail"},
+		Epic:        &epic.Epic{TotalSprints: 1},
+		Engine:      mockEngine,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortLow,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing1.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing2.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	assert.False(t, result.WithinThreshold, "should fail — too many failures")
+	assert.Empty(t, mockEngine.prompts, "low effort should make zero heal attempts even on failure")
+}
+
+func TestHealLoopMediumEffort(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	// Medium effort: should make exactly 3 heal attempts
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "Medium"},
+		Epic:        &epic.Epic{TotalSprints: 1},
+		Engine:      mockEngine,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortMedium,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	assert.Len(t, mockEngine.prompts, 3, "medium effort should make exactly 3 attempts")
+}
+
+func TestHealLoopHighEffortStuckExit(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	// High effort: stuck engine (no progress) should exit after stuck threshold (2)
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "High stuck"},
+		Epic:        &epic.Epic{TotalSprints: 1},
+		Engine:      mockEngine,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortHigh,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	// Should exit after 2 attempts (stuck threshold = 2 for high)
+	assert.Len(t, mockEngine.prompts, 2, "high effort should exit after 2 no-progress attempts")
+}
+
+func TestHealLoopHighEffortProgressContinues(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	// Engine that fixes one file per call, making progress each time
+	eng := &progressEngine{
+		projectDir: projectDir,
+		// Fix check files one at a time: a.txt, b.txt, c.txt
+		// After 3 calls, 3 of 5 are fixed, then stuck (d.txt, e.txt remain)
+		filesToCreate: []string{"a.txt", "b.txt", "c.txt"},
+	}
+
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "High progress"},
+		Epic:        &epic.Epic{TotalSprints: 1},
+		Engine:      eng,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortHigh,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "a.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "b.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "c.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "d.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "e.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	// 3 calls with progress + 2 stuck = 5 total
+	assert.Equal(t, 5, eng.calls, "should continue while making progress, stop after 2 stuck")
+}
+
+func TestHealLoopMaxEffortStuckExit(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	// Max effort: no progress, should exit after stuck threshold (3)
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "Max stuck"},
+		Epic:        &epic.Epic{TotalSprints: 1},
+		Engine:      mockEngine,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortMax,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	// Should exit after 3 attempts (stuck threshold = 3 for max)
+	assert.Len(t, mockEngine.prompts, 3, "max effort should exit after 3 no-progress attempts")
+}
+
+func TestHealLoopMaxEffortMidLoopThreshold(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	// Create 10 check files. Engine will fix them one at a time.
+	// After 10 attempts (minForThreshold), 10/11 pass = 9% fail < 10% threshold → exit
+	checkFiles := []string{"f1.txt", "f2.txt", "f3.txt", "f4.txt", "f5.txt",
+		"f6.txt", "f7.txt", "f8.txt", "f9.txt", "f10.txt"}
+	eng := &progressEngine{
+		projectDir:    projectDir,
+		filesToCreate: checkFiles,
+	}
+
+	var checks []verify.Check
+	for _, f := range checkFiles {
+		checks = append(checks, verify.Check{Sprint: 1, Type: verify.CheckFile, Path: f})
+	}
+	// One more check that will never pass
+	checks = append(checks, verify.Check{Sprint: 1, Type: verify.CheckFile, Path: "unfixable.txt"})
+
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "Max threshold"},
+		Epic:        &epic.Epic{TotalSprints: 1},
+		Engine:      eng,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortMax,
+		Checks:      checks,
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	assert.True(t, result.WithinThreshold, "should pass via mid-loop threshold at ≥10 attempts with ≤10%% fail")
+	assert.Equal(t, 10, eng.calls, "should exit at attempt 10 when within 10%% threshold")
+}
+
+func TestHealLoopMaxEffortContinuesPastMinWithProgress(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	// 5 check files. Engine fixes them one at a time over 5 calls.
+	// After 5 calls, 2/5 still fail = 40% > 10% threshold.
+	// But the mid-loop threshold only applies at attempt ≥10, so it runs all 5
+	// plus the stuck threshold (3) = 8 total (3 fix, then 2 stuck attempts don't fix more)
+	// Wait: engine creates 5 files, so f1-f5 get fixed over 5 calls. Then 0 remain.
+	// Let me use more unfixable files.
+	eng := &progressEngine{
+		projectDir:    projectDir,
+		filesToCreate: []string{"f1.txt", "f2.txt", "f3.txt"},
+	}
+
+	checks := []verify.Check{
+		{Sprint: 1, Type: verify.CheckFile, Path: "f1.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "f2.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "f3.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "unfixable1.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "unfixable2.txt"},
+	}
+
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "Max progress"},
+		Epic:        &epic.Epic{TotalSprints: 1},
+		Engine:      eng,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortMax,
+		Checks:      checks,
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	// 3 progress attempts + 3 stuck = 6 total. Stuck threshold=3 for max.
+	assert.Equal(t, 6, eng.calls, "should continue while making progress then stop after stuck threshold")
+}
+
+func TestHealLoopExplicitDirectiveOverridesEffort(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	// High effort defaults to 10 attempts with progress detection,
+	// but explicit @max_heal_attempts 5 overrides to 5 with no progress detection
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir: projectDir,
+		Sprint:     &epic.Sprint{Number: 1, Name: "Override"},
+		Epic: &epic.Epic{
+			TotalSprints:       1,
+			MaxHealAttempts:    5,
+			MaxHealAttemptsSet: true,
+		},
+		Engine:      mockEngine,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortHigh,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	// Explicit directive: exactly 5 attempts, no progress detection
+	assert.Len(t, mockEngine.prompts, 5, "explicit @max_heal_attempts should override effort-level default")
+}
+
+func TestHealLoopMaxEffortStricterThreshold(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	writeFile(t, filepath.Join(projectDir, "present.txt"), "ok\n")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	mockEngine := &stubEngine{name: "codex"}
+	// Max effort: 1/5 = 20% fail > 10% max threshold → fail (would pass at medium/high with 20%)
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir:  projectDir,
+		Sprint:      &epic.Sprint{Number: 1, Name: "Max strict"},
+		Epic:        &epic.Epic{TotalSprints: 1, MaxHealAttempts: 1, MaxHealAttemptsSet: true},
+		Engine:      mockEngine,
+		SprintLogFile: sprintLog,
+		EffortLevel: epic.EffortMax,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	assert.False(t, result.WithinThreshold, "20%% fail should exceed max effort's 10%% threshold")
+}
+
+func TestEffectiveHealConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		opts            HealOpts
+		wantMax         int
+		wantHardCap     bool
+		wantProgress    bool
+		wantStuck       int
+		wantFailPercent int
+	}{
+		{
+			name: "low effort defaults",
+			opts: HealOpts{
+				Sprint:      &epic.Sprint{Number: 1, Name: "s"},
+				Epic:        &epic.Epic{TotalSprints: 1},
+				EffortLevel: epic.EffortLow,
+			},
+			wantMax:         0,
+			wantHardCap:     true,
+			wantProgress:    false,
+			wantStuck:       0,
+			wantFailPercent: 20,
+		},
+		{
+			name: "medium effort defaults",
+			opts: HealOpts{
+				Sprint:      &epic.Sprint{Number: 1, Name: "s"},
+				Epic:        &epic.Epic{TotalSprints: 1},
+				EffortLevel: epic.EffortMedium,
+			},
+			wantMax:         3,
+			wantHardCap:     true,
+			wantProgress:    false,
+			wantStuck:       0,
+			wantFailPercent: 20,
+		},
+		{
+			name: "high effort defaults",
+			opts: HealOpts{
+				Sprint:      &epic.Sprint{Number: 1, Name: "s"},
+				Epic:        &epic.Epic{TotalSprints: 1},
+				EffortLevel: epic.EffortHigh,
+			},
+			wantMax:         10,
+			wantHardCap:     true,
+			wantProgress:    true,
+			wantStuck:       2,
+			wantFailPercent: 20,
+		},
+		{
+			name: "max effort defaults",
+			opts: HealOpts{
+				Sprint:      &epic.Sprint{Number: 1, Name: "s"},
+				Epic:        &epic.Epic{TotalSprints: 1},
+				EffortLevel: epic.EffortMax,
+			},
+			wantMax:         config.HealSafetyCapMax,
+			wantHardCap:     false,
+			wantProgress:    true,
+			wantStuck:       3,
+			wantFailPercent: 10,
+		},
+		{
+			name: "explicit directive overrides effort",
+			opts: HealOpts{
+				Sprint:      &epic.Sprint{Number: 1, Name: "s"},
+				Epic:        &epic.Epic{TotalSprints: 1, MaxHealAttempts: 7, MaxHealAttemptsSet: true},
+				EffortLevel: epic.EffortHigh,
+			},
+			wantMax:         7,
+			wantHardCap:     true,
+			wantProgress:    false,
+			wantStuck:       0,
+			wantFailPercent: 20,
+		},
+		{
+			name: "retry override takes priority",
+			opts: HealOpts{
+				Sprint:              &epic.Sprint{Number: 1, Name: "s"},
+				Epic:                &epic.Epic{TotalSprints: 1, MaxHealAttempts: 3, MaxHealAttemptsSet: true},
+				EffortLevel:         epic.EffortHigh,
+				MaxAttemptsOverride: 15,
+			},
+			wantMax:         15,
+			wantHardCap:     true,
+			wantProgress:    true,
+			wantStuck:       2,
+			wantFailPercent: 20,
+		},
+		{
+			name: "per-sprint override",
+			opts: func() HealOpts {
+				v := 4
+				return HealOpts{
+					Sprint:      &epic.Sprint{Number: 1, Name: "s", MaxHealAttempts: &v},
+					Epic:        &epic.Epic{TotalSprints: 1},
+					EffortLevel: epic.EffortHigh,
+				}
+			}(),
+			wantMax:         4,
+			wantHardCap:     true,
+			wantProgress:    false,
+			wantStuck:       0,
+			wantFailPercent: 20,
+		},
+		{
+			name: "auto effort fallback",
+			opts: HealOpts{
+				Sprint: &epic.Sprint{Number: 1, Name: "s"},
+				Epic:   &epic.Epic{TotalSprints: 1},
+			},
+			wantMax:         config.DefaultMaxHealAttempts,
+			wantHardCap:     true,
+			wantProgress:    false,
+			wantStuck:       0,
+			wantFailPercent: 0,
+		},
+		{
+			name: "explicit fail percent overrides effort",
+			opts: HealOpts{
+				Sprint:         &epic.Sprint{Number: 1, Name: "s"},
+				Epic:           &epic.Epic{TotalSprints: 1, MaxFailPercentSet: true},
+				EffortLevel:    epic.EffortMax,
+				MaxFailPercent: 30,
+			},
+			wantMax:         config.HealSafetyCapMax,
+			wantHardCap:     false,
+			wantProgress:    true,
+			wantStuck:       3,
+			wantFailPercent: 30,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := effectiveHealConfig(tt.opts)
+			assert.Equal(t, tt.wantMax, cfg.maxAttempts, "maxAttempts")
+			assert.Equal(t, tt.wantHardCap, cfg.hardCap, "hardCap")
+			assert.Equal(t, tt.wantProgress, cfg.progressBased, "progressBased")
+			assert.Equal(t, tt.wantStuck, cfg.stuckThreshold, "stuckThreshold")
+			assert.Equal(t, tt.wantFailPercent, cfg.maxFailPercent, "maxFailPercent")
+		})
+	}
+}
+
+// --- Test engines ---
+
+// progressEngine creates files on successive calls, simulating gradual fix progress.
+type progressEngine struct {
+	projectDir    string
+	calls         int
+	filesToCreate []string // create filesToCreate[i] on call i+1
+}
+
+func (p *progressEngine) Run(_ context.Context, _ string, opts engine.RunOpts) (string, int, error) {
+	if p.calls < len(p.filesToCreate) {
+		path := filepath.Join(p.projectDir, p.filesToCreate[p.calls])
+		_ = os.WriteFile(path, []byte("fixed"), 0o644)
+	}
+	p.calls++
+	if opts.Stdout != nil {
+		_, _ = opts.Stdout.Write([]byte("heal output\n"))
+	}
+	return "heal output\n", 0, nil
+}
+
+func (p *progressEngine) Name() string { return "progress-stub" }
 
 // fixingEngine rewrites the verification file on each call to point to a file
 // that exists, simulating an agent that fixes a bad verification check.

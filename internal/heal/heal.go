@@ -27,8 +27,9 @@ type HealOpts struct {
 	UserPrompt          string
 	Verbose             bool
 	SprintLogFile       string
-	MaxAttemptsOverride int // When > 0, overrides epic/sprint max heal attempts
+	MaxAttemptsOverride int // When > 0, overrides epic/sprint max heal attempts (used by --retry)
 	MaxFailPercent      int // Percentage of checks allowed to fail while still passing
+	EffortLevel         epic.EffortLevel
 	Mode                string
 }
 
@@ -40,6 +41,90 @@ type HealResult struct {
 	TotalCount       int
 }
 
+// healConfig holds the resolved healing parameters for a single heal loop run.
+type healConfig struct {
+	maxAttempts     int  // hard cap on attempts (ignored when hardCap is false)
+	hardCap         bool // when false, attempts are unlimited (max effort)
+	progressBased   bool // exit early when no progress is detected
+	stuckThreshold  int  // consecutive no-progress attempts before exit
+	maxFailPercent  int  // threshold for partial pass
+	minForThreshold int  // min attempts before mid-loop threshold check (max effort only)
+}
+
+// effectiveHealConfig resolves healing parameters from effort level, epic
+// directives, per-sprint overrides, and retry mode. The priority order is:
+//  1. MaxAttemptsOverride (from --retry, highest)
+//  2. Per-sprint @max_heal_attempts
+//  3. Global @max_heal_attempts (explicit)
+//  4. Effort-level default
+//  5. config.DefaultMaxHealAttempts (fallback when effort=auto)
+func effectiveHealConfig(opts HealOpts) healConfig {
+	failPercent := resolveFailPercent(opts)
+
+	// 1. Retry mode override — highest priority
+	if opts.MaxAttemptsOverride > 0 {
+		return healConfig{
+			maxAttempts:    opts.MaxAttemptsOverride,
+			hardCap:        true,
+			progressBased:  opts.EffortLevel.HealUsesProgressDetection(),
+			stuckThreshold: opts.EffortLevel.HealStuckThreshold(),
+			maxFailPercent: failPercent,
+		}
+	}
+
+	// 2. Per-sprint @max_heal_attempts
+	if opts.Sprint.MaxHealAttempts != nil {
+		return healConfig{
+			maxAttempts:    *opts.Sprint.MaxHealAttempts,
+			hardCap:        true,
+			maxFailPercent: failPercent,
+		}
+	}
+
+	// 3. Global @max_heal_attempts (explicitly set in epic)
+	if opts.Epic.MaxHealAttemptsSet {
+		return healConfig{
+			maxAttempts:    opts.Epic.MaxHealAttempts,
+			hardCap:        true,
+			maxFailPercent: failPercent,
+		}
+	}
+
+	// 4. Effort-level defaults
+	effort := opts.EffortLevel
+	cfg := healConfig{
+		maxAttempts:    effort.DefaultMaxHealAttempts(),
+		hardCap:        effort.HealHasHardCap(),
+		progressBased:  effort.HealUsesProgressDetection(),
+		stuckThreshold: effort.HealStuckThreshold(),
+		maxFailPercent: failPercent,
+	}
+	if effort == epic.EffortMax {
+		cfg.minForThreshold = config.HealMinAttemptsMax
+		cfg.maxAttempts = config.HealSafetyCapMax
+	}
+
+	// 5. Fallback for auto/empty effort level only — low effort intentionally uses 0
+	if effort == "" && cfg.maxAttempts <= 0 && cfg.hardCap {
+		cfg.maxAttempts = config.DefaultMaxHealAttempts
+	}
+
+	return cfg
+}
+
+// resolveFailPercent returns the effective max-fail-percent, preferring an
+// explicit @max_fail_percent directive over the effort-level default.
+// Falls back to whatever the caller passed in (typically the parser default).
+func resolveFailPercent(opts HealOpts) int {
+	if opts.Epic.MaxFailPercentSet {
+		return opts.MaxFailPercent
+	}
+	if opts.EffortLevel != "" {
+		return opts.EffortLevel.DefaultMaxFailPercent()
+	}
+	return opts.MaxFailPercent
+}
+
 func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 	if opts.Epic == nil || opts.Sprint == nil {
 		return nil, fmt.Errorf("run heal loop: epic and sprint are required")
@@ -48,16 +133,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		return nil, fmt.Errorf("run heal loop: engine is required")
 	}
 
-	maxAttempts := opts.Epic.MaxHealAttempts
-	if opts.Sprint.MaxHealAttempts != nil {
-		maxAttempts = *opts.Sprint.MaxHealAttempts
-	}
-	if maxAttempts <= 0 {
-		maxAttempts = config.DefaultMaxHealAttempts
-	}
-	if opts.MaxAttemptsOverride > 0 {
-		maxAttempts = opts.MaxAttemptsOverride
-	}
+	cfg := effectiveHealConfig(opts)
 
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
@@ -66,7 +142,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 	// Run an initial check to populate baseline results. This ensures
 	// lastResults/lastPass/lastTotal are always initialized even when
-	// maxAttempts is 0 (defensive) or when the loop exits early.
+	// maxAttempts is 0 (e.g., low effort) or when the loop exits early.
 	initialChecks, initialErr := reloadChecks(opts)
 	if initialErr != nil {
 		return nil, fmt.Errorf("run heal loop: initial check reload: %w", initialErr)
@@ -76,7 +152,10 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		return &HealResult{Healed: true, PassCount: lastPass, TotalCount: lastTotal}, nil
 	}
 
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	prevFailCount := lastTotal - lastPass
+	stuckCount := 0
+
+	for attempt := 1; !cfg.hardCap || attempt <= cfg.maxAttempts; attempt++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -100,16 +179,28 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			return nil, fmt.Errorf("run heal loop: write heal prompt: %w", err)
 		}
 
-		frylog.Log(
-			"▶ AGENT  sprint %d/%d \"%s\"  heal %d/%d  engine=%s  model=%s",
-			opts.Sprint.Number,
-			opts.Epic.TotalSprints,
-			opts.Sprint.Name,
-			attempt,
-			maxAttempts,
-			opts.Engine.Name(),
-			agentModel(opts.Epic.AgentModel),
-		)
+		if cfg.hardCap {
+			frylog.Log(
+				"▶ AGENT  sprint %d/%d \"%s\"  heal %d/%d  engine=%s  model=%s",
+				opts.Sprint.Number,
+				opts.Epic.TotalSprints,
+				opts.Sprint.Name,
+				attempt,
+				cfg.maxAttempts,
+				opts.Engine.Name(),
+				agentModel(opts.Epic.AgentModel),
+			)
+		} else {
+			frylog.Log(
+				"▶ AGENT  sprint %d/%d \"%s\"  heal %d (progress-based)  engine=%s  model=%s",
+				opts.Sprint.Number,
+				opts.Epic.TotalSprints,
+				opts.Sprint.Name,
+				attempt,
+				opts.Engine.Name(),
+				agentModel(opts.Epic.AgentModel),
+			)
+		}
 
 		healLogPath := filepath.Join(
 			buildLogsDir,
@@ -124,7 +215,6 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		}
 
 		frylog.Log("  Re-running verification after heal attempt %d...", attempt)
-		// Re-read verification file so on-disk fixes by the agent take effect.
 		checks, reloadErr = reloadChecks(opts)
 		if reloadErr != nil {
 			return nil, fmt.Errorf("run heal loop: reload checks after attempt %d: %w", attempt, reloadErr)
@@ -139,21 +229,66 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			return &HealResult{Healed: true, PassCount: passCount, TotalCount: totalCount}, nil
 		}
 
-		frylog.Log("  Heal attempt %d — %d/%d checks still failing.", attempt, totalCount-passCount, totalCount)
+		currentFailCount := totalCount - passCount
+		frylog.Log("  Heal attempt %d — %d/%d checks still failing.", attempt, currentFailCount, totalCount)
+
+		// Progress detection: exit early if stuck
+		if cfg.progressBased && cfg.stuckThreshold > 0 {
+			if currentFailCount >= prevFailCount {
+				stuckCount++
+			} else {
+				stuckCount = 0
+			}
+			prevFailCount = currentFailCount
+
+			if stuckCount >= cfg.stuckThreshold {
+				frylog.Log("  No healing progress for %d consecutive attempts — stopping.", stuckCount)
+				failureReport = verify.CollectFailures(results, passCount, totalCount)
+				entry := fmt.Sprintf("--- Heal attempt %d failed (stuck, stopping) ---\n\n%s\n\n", attempt, failureReport)
+				if err := appendToSprintProgress(opts.ProjectDir, entry); err != nil {
+					return nil, fmt.Errorf("run heal loop: append failure report: %w", err)
+				}
+				break
+			}
+		}
+
+		// Max effort: mid-loop threshold check after minimum attempts
+		if !cfg.hardCap && cfg.minForThreshold > 0 && attempt >= cfg.minForThreshold {
+			outcome := verify.EvaluateThreshold(results, passCount, totalCount, cfg.maxFailPercent)
+			if outcome.WithinThreshold {
+				frylog.Log("  After %d attempts, failure rate %.0f%% is within %d%% threshold — moving on.",
+					attempt, outcome.FailPercent, cfg.maxFailPercent)
+				return &HealResult{
+					WithinThreshold:  true,
+					DeferredFailures: outcome.DeferredFailures,
+					PassCount:        passCount,
+					TotalCount:       totalCount,
+				}, nil
+			}
+		}
+
 		failureReport = verify.CollectFailures(results, passCount, totalCount)
 		entry := fmt.Sprintf("--- Heal attempt %d failed ---\n\n%s\n\n", attempt, failureReport)
 		if err := appendToSprintProgress(opts.ProjectDir, entry); err != nil {
 			return nil, fmt.Errorf("run heal loop: append failure report: %w", err)
 		}
+
+		// Safety cap: prevent truly infinite loops even in unlimited mode
+		if !cfg.hardCap && cfg.maxAttempts > 0 && attempt >= cfg.maxAttempts {
+			frylog.Log("  Safety cap of %d heal attempts reached.", cfg.maxAttempts)
+			break
+		}
 	}
 
-	frylog.Log("  All %d heal attempts exhausted.", maxAttempts)
+	if cfg.hardCap && cfg.maxAttempts > 0 {
+		frylog.Log("  All %d heal attempts exhausted.", cfg.maxAttempts)
+	}
 
 	// Evaluate threshold: allow partial pass if failures are within tolerance
-	outcome := verify.EvaluateThreshold(lastResults, lastPass, lastTotal, opts.MaxFailPercent)
+	outcome := verify.EvaluateThreshold(lastResults, lastPass, lastTotal, cfg.maxFailPercent)
 	if outcome.WithinThreshold {
 		frylog.Log("  Failure rate %.0f%% is within %d%% threshold — deferring %d failures.",
-			outcome.FailPercent, opts.MaxFailPercent, len(outcome.DeferredFailures))
+			outcome.FailPercent, cfg.maxFailPercent, len(outcome.DeferredFailures))
 		return &HealResult{
 			WithinThreshold:  true,
 			DeferredFailures: outcome.DeferredFailures,

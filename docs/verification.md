@@ -45,13 +45,14 @@ The four primitives are designed for **basic programmatic checks**, not semantic
 
 ## Failure Threshold
 
-By default, up to **20%** of verification checks can fail (after self-healing) without blocking the sprint. This prevents a single minor check failure from blocking an otherwise complete sprint.
+By default, up to **20%** of verification checks can fail (after self-healing) without blocking the sprint. At `max` effort, this threshold is stricter at **10%**. This prevents a single minor check failure from blocking an otherwise complete sprint.
 
-Configure with the `@max_fail_percent` directive in the epic file:
+Configure with the `@max_fail_percent` directive in the epic file (overrides effort-level default):
 
 ```
-@max_fail_percent 20    # Default: up to 20% of checks can fail
-@max_fail_percent 0     # Strict mode: all checks must pass (legacy behavior)
+@max_fail_percent 20    # Default for low/medium/high effort
+@max_fail_percent 10    # Default for max effort
+@max_fail_percent 0     # Strict mode: all checks must pass
 @max_fail_percent 100   # Never fail on verification
 ```
 

@@ -10,8 +10,8 @@ When verification checks fail after a sprint completes, Fry enters a **heal loop
 4. **Agent re-runs** — a fresh agent session executes with the heal prompt
 5. **Pre-sprint hook re-runs** — if configured (e.g., `npm install`), runs again to pick up changes
 6. **Re-verification** — the verification file is re-read from disk (so agent edits to checks take effect), then all checks for the sprint run again
-7. **Repeat or exit** — if checks still fail, the failure report is appended to `.fry/sprint-progress.txt` and steps 2-6 repeat. Exits when all checks pass (**PASS (healed)**), or max attempts exhausted and remaining failures are evaluated against the `@max_fail_percent` threshold (default: 20%)
-8. **Threshold evaluation** — after all heal attempts are exhausted, if the failure percentage is within the threshold, the sprint passes with status **PASS (deferred failures)**. Deferred failures are documented in `.fry/deferred-failures.md` and passed to the final [Build Audit](build-audit.md) for remediation. If failures exceed the threshold, the sprint **FAIL**s
+7. **Repeat or exit** — if checks still fail, the failure report is appended to `.fry/sprint-progress.txt` and steps 2-6 repeat. Exits when all checks pass (**PASS (healed)**), max attempts exhausted, or the heal loop detects it is stuck (no progress for consecutive attempts — see effort-level behavior below)
+8. **Threshold evaluation** — after heal attempts are exhausted (or skipped), if the failure percentage is within the threshold, the sprint passes with status **PASS (deferred failures)**. Deferred failures are documented in `.fry/deferred-failures.md` and passed to the final [Build Audit](build-audit.md) for remediation. If failures exceed the threshold, the sprint **FAIL**s
 
 ## Heal Prompt Structure
 
@@ -26,27 +26,50 @@ In [writing mode](writing-mode.md), the heal instructions use content-oriented l
 
 Each failed attempt's report is appended to `.fry/sprint-progress.txt`, giving subsequent heal attempts cumulative knowledge of what was tried.
 
+## Effort-Level Behavior
+
+The heal loop adapts to the effort level, controlling how many attempts are made, whether progress detection is used, and what failure threshold applies:
+
+| Aspect | `low` | `medium` | `high` | `max` |
+|---|---|---|---|---|
+| Max heal attempts | 0 (no healing) | 3 (fixed) | 10 (with progress detection) | Unlimited (progress-based, safety cap 50) |
+| Progress detection | No | No | Yes (stuck after 2 no-progress) | Yes (stuck after 3 no-progress) |
+| Fail threshold | 20% | 20% | 20% | 10% |
+| Mid-loop threshold exit | N/A | N/A | N/A | After ≥10 attempts, exits if ≤10% fail |
+
+- **Low**: Skips healing entirely. If ≤20% of checks fail, the sprint passes with deferred failures; otherwise it fails immediately.
+- **Medium**: Makes exactly 3 heal attempts. After exhaustion, evaluates the 20% threshold.
+- **High**: Makes up to 10 heal attempts, but exits early if the agent is stuck (fail count did not decrease for 2 consecutive attempts). After exhaustion or stuck exit, evaluates the 20% threshold.
+- **Max**: Makes unlimited heal attempts (safety cap: 50) while the agent makes progress. Exits when stuck (3 consecutive no-progress attempts). Can also exit early after ≥10 attempts if failures are within the 10% threshold.
+
 ## Configuration
 
 | Directive | Scope | Default | Description |
 |---|---|---|---|
-| `@max_heal_attempts <N>` | Global | 3 | Maximum heal attempts for all sprints |
+| `@max_heal_attempts <N>` | Global | Effort-level default | Maximum heal attempts for all sprints (overrides effort default) |
 | `@max_heal_attempts <N>` | Per-sprint | Inherits global | Override for a specific sprint |
+| `@max_fail_percent <N>` | Global | Effort-level default | Maximum failure percentage before sprint fails |
+
+When `@max_heal_attempts` is explicitly set, it overrides the effort-level default and disables progress detection — the loop runs a fixed number of attempts.
+
+### Override Priority
+
+1. `--retry` override (highest — used by retry mode)
+2. Per-sprint `@max_heal_attempts` directive
+3. Global `@max_heal_attempts` directive
+4. Effort-level default
+5. `config.DefaultMaxHealAttempts` (3, fallback for auto/unset effort)
 
 ### Examples
 
 ```
-# Global: allow up to 5 heal attempts for all sprints
+# Global: allow up to 5 heal attempts for all sprints (overrides effort default)
 @max_heal_attempts 5
 
 @sprint 3
 @name Complex Integration
 @max_heal_attempts 8       # This sprint gets more attempts
 ```
-
-### Minimum Value
-
-Setting `@max_heal_attempts` to 0 or a negative value causes it to fall back to the default (3). The minimum effective value is 1.
 
 ## Terminal Output
 
@@ -100,15 +123,17 @@ The retry heal budget is calculated as:
 boosted = max(normal_max * 2, 6)
 ```
 
-| Normal max | Retry budget |
-|---|---|
-| 1 | 6 |
-| 2 | 6 |
-| 3 | 6 |
-| 4 | 8 |
-| 5 | 10 |
+The `normal_max` is determined by the effort-level default (or explicit `@max_heal_attempts`):
 
-The normal max is determined by `@max_heal_attempts` (global or per-sprint), defaulting to 3.
+| Effort | Normal max | Retry budget |
+|---|---|---|
+| `low` | 0 | 6 (minimum applies) |
+| `medium` | 3 | 6 |
+| `high` | 10 | 20 |
+| `max` | unlimited | 6 (minimum applies) |
+| Explicit `@max_heal_attempts 5` | 5 | 10 |
+
+Retry mode always uses a hard cap (no unlimited mode) but preserves progress detection for effort levels that use it.
 
 ## Build Log Files
 

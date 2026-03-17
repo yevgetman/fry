@@ -34,6 +34,14 @@ const (
 	RetryHealMultiplier       = 2
 	RetryMinHealAttempts      = 6
 
+	// Effort-level heal constants
+	HealAttemptsHigh       = 10
+	HealStuckThresholdHigh = 2
+	HealStuckThresholdMax  = 3
+	HealMinAttemptsMax     = 10 // min attempts before mid-loop threshold exit in max effort
+	HealSafetyCapMax       = 50 // hard safety cap for unlimited max-effort healing
+	MaxFailPercentMax      = 10 // stricter threshold for max effort
+
 	// Audit constants
 	SprintAuditFile           = ".fry/sprint-audit.txt"
 	AuditPromptFile           = ".fry/audit-prompt.md"

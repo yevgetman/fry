@@ -3,6 +3,8 @@ package epic
 import (
 	"fmt"
 	"strings"
+
+	"github.com/yevgetman/fry/internal/config"
 )
 
 // EffortLevel controls sprint count, iteration budget, and review rigor.
@@ -75,6 +77,60 @@ func (e EffortLevel) MaxSprintCount() int {
 	}
 }
 
+// DefaultMaxHealAttempts returns the default number of heal attempts for this
+// effort level. Returns 0 for low (no healing) and max (unlimited/progress-based).
+func (e EffortLevel) DefaultMaxHealAttempts() int {
+	switch e {
+	case EffortLow:
+		return 0
+	case EffortMedium:
+		return config.DefaultMaxHealAttempts
+	case EffortHigh:
+		return config.HealAttemptsHigh
+	case EffortMax:
+		return 0 // unlimited, governed by progress detection
+	default:
+		return config.DefaultMaxHealAttempts // auto = medium default
+	}
+}
+
+// DefaultMaxFailPercent returns the default verification failure threshold
+// for this effort level.
+func (e EffortLevel) DefaultMaxFailPercent() int {
+	switch e {
+	case EffortMax:
+		return config.MaxFailPercentMax
+	default:
+		return config.DefaultMaxFailPercent
+	}
+}
+
+// HealUsesProgressDetection returns whether this effort level uses
+// progress-based healing (exit early if stuck).
+func (e EffortLevel) HealUsesProgressDetection() bool {
+	return e == EffortHigh || e == EffortMax
+}
+
+// HealStuckThreshold returns the number of consecutive no-progress heal
+// attempts before the loop exits. Only meaningful when HealUsesProgressDetection
+// returns true.
+func (e EffortLevel) HealStuckThreshold() int {
+	switch e {
+	case EffortHigh:
+		return config.HealStuckThresholdHigh
+	case EffortMax:
+		return config.HealStuckThresholdMax
+	default:
+		return 0
+	}
+}
+
+// HealHasHardCap returns whether this effort level has a fixed upper bound on
+// heal attempts. Max effort is unlimited (progress-based), all others are capped.
+func (e EffortLevel) HealHasHardCap() bool {
+	return e != EffortMax
+}
+
 type Epic struct {
 	Name                 string
 	Engine               string
@@ -90,7 +146,9 @@ type Epic struct {
 	AgentFlags           string
 	VerificationFile     string
 	MaxHealAttempts      int
+	MaxHealAttemptsSet   bool
 	MaxFailPercent       int
+	MaxFailPercentSet    bool
 	CompactWithAgent     bool
 	ReviewBetweenSprints bool
 	ReviewEngine         string

@@ -65,7 +65,7 @@ For high-stakes projects where correctness is paramount. Same sprint count as `h
   - **Part 8: Analysis & Edge Cases** — enumerates every edge case, race condition, error scenario, and boundary condition
   - **Part 9: Quality Gates** — explicit quality criteria beyond verification (performance targets, security considerations, code review checklist items)
 - Automatically enables `@review_between_sprints` and `@compact_with_agent`
-- Sets `@max_heal_attempts` to 5 (default is 3)
+- Healing uses unlimited progress-based attempts (no hard cap; exits when stuck after 3 consecutive no-progress attempts or when ≤10% of checks fail after ≥10 attempts). See [Self-Healing](self-healing.md) for full effort-level healing behavior
 - Review bias shifts from CONTINUE to THOROUGH REVIEW — the reviewer applies heightened scrutiny and recommends DEVIATE for any deviation that could affect system correctness
 - No-op detection threshold is raised from 2 to 3 consecutive iterations, giving the agent more room to iterate
 - A quality directive is injected into every sprint prompt, instructing the agent to handle all edge cases, write defensive code, and validate assumptions
@@ -181,8 +181,9 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | Build audit | Skipped | Runs on full epic completion | Runs on full epic completion | Runs on full epic completion |
 | No-op threshold | 2 iterations | 2 iterations | 2 iterations | 3 iterations |
 | Quality directive | No | No | No | Yes (injected into every prompt) |
-| Heal attempts | Default (3) | Default (3) | Default (3) | 5 |
-| Retry heal attempts | 6 | 6 | 6 | 10 |
+| Heal attempts | 0 (skip) | 3 (fixed) | Up to 10 (progress-based, stuck=2) | Unlimited (progress-based, stuck=3) |
+| Heal fail threshold | 20% | 20% | 20% | 10% |
+| Retry heal attempts | 6 | 6 | 20 | 6 (min) |
 | Compact with agent | Default | Default | Default | Enabled |
 
 ## Writing Mode

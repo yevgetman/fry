@@ -89,3 +89,50 @@ func TestEffortLevel_MaxSprintCount(t *testing.T) {
 	assert.Equal(t, 10, EffortMax.MaxSprintCount())
 	assert.Equal(t, 10, EffortLevel("").MaxSprintCount()) // default
 }
+
+func TestEffortLevel_DefaultMaxHealAttempts(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 0, EffortLow.DefaultMaxHealAttempts())
+	assert.Equal(t, 3, EffortMedium.DefaultMaxHealAttempts())
+	assert.Equal(t, 10, EffortHigh.DefaultMaxHealAttempts())
+	assert.Equal(t, 0, EffortMax.DefaultMaxHealAttempts()) // unlimited, governed by progress
+	assert.Equal(t, 3, EffortLevel("").DefaultMaxHealAttempts()) // auto = medium default
+}
+
+func TestEffortLevel_DefaultMaxFailPercent(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 20, EffortLow.DefaultMaxFailPercent())
+	assert.Equal(t, 20, EffortMedium.DefaultMaxFailPercent())
+	assert.Equal(t, 20, EffortHigh.DefaultMaxFailPercent())
+	assert.Equal(t, 10, EffortMax.DefaultMaxFailPercent()) // stricter
+	assert.Equal(t, 20, EffortLevel("").DefaultMaxFailPercent())
+}
+
+func TestEffortLevel_HealUsesProgressDetection(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, EffortLow.HealUsesProgressDetection())
+	assert.False(t, EffortMedium.HealUsesProgressDetection())
+	assert.True(t, EffortHigh.HealUsesProgressDetection())
+	assert.True(t, EffortMax.HealUsesProgressDetection())
+}
+
+func TestEffortLevel_HealStuckThreshold(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 0, EffortLow.HealStuckThreshold())
+	assert.Equal(t, 0, EffortMedium.HealStuckThreshold())
+	assert.Equal(t, 2, EffortHigh.HealStuckThreshold())
+	assert.Equal(t, 3, EffortMax.HealStuckThreshold())
+}
+
+func TestEffortLevel_HealHasHardCap(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, EffortLow.HealHasHardCap())
+	assert.True(t, EffortMedium.HealHasHardCap())
+	assert.True(t, EffortHigh.HealHasHardCap())
+	assert.False(t, EffortMax.HealHasHardCap())
+}

@@ -353,6 +353,8 @@ func equalGlobalDirectives(a, b *epic.Epic) bool {
 		a.AgentFlags == b.AgentFlags &&
 		a.VerificationFile == b.VerificationFile &&
 		a.MaxHealAttempts == b.MaxHealAttempts &&
+		a.MaxHealAttemptsSet == b.MaxHealAttemptsSet &&
+		a.MaxFailPercentSet == b.MaxFailPercentSet &&
 		a.CompactWithAgent == b.CompactWithAgent &&
 		a.ReviewBetweenSprints == b.ReviewBetweenSprints &&
 		a.ReviewEngine == b.ReviewEngine &&
