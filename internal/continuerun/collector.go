@@ -46,16 +46,23 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*
 		}
 	}
 
-	// Determine next sprint and check for partial work
-	nextSprint := findNextSprint(state.CompletedSprints, ep.TotalSprints)
-	if nextSprint > 0 && nextSprint <= ep.TotalSprints {
-		active := collectActiveSprintState(projectDir, nextSprint, ep)
+	// Collect active state for all incomplete sprints that have evidence on disk
+	completedSet := make(map[int]bool, len(state.CompletedSprints))
+	for _, cs := range state.CompletedSprints {
+		completedSet[cs.Number] = true
+	}
+	for i := 1; i <= ep.TotalSprints; i++ {
+		if completedSet[i] {
+			continue
+		}
+		active := collectActiveSprintState(projectDir, i, ep)
 		if active != nil {
-			state.ActiveSprint = active
+			state.ActiveSprints = append(state.ActiveSprints, *active)
 		}
 	}
 
 	// Environment checks
+	nextSprint := findNextSprint(state.CompletedSprints, ep.TotalSprints)
 	state.DockerAvailable = checkDockerAvailable(ctx)
 	state.DockerRequired = ep.DockerFromSprint > 0 && nextSprint >= ep.DockerFromSprint
 	state.RequiredTools = checkRequiredTools(ep.RequiredTools)
@@ -155,14 +162,16 @@ func collectActiveSprintState(projectDir string, sprintNum int, ep *epic.Epic) *
 		active.LastLogTail = readTail(matches[len(matches)-1], 100)
 	}
 
-	// Check for audit severity
-	auditPath := filepath.Join(projectDir, config.SprintAuditFile)
-	if data, err := os.ReadFile(auditPath); err == nil {
-		active.AuditSeverity = extractMaxSeverity(string(data))
+	// sprint-audit.txt and sprint-progress.txt are both overwritten per sprint.
+	// Only read them if the progress file belongs to this sprint, avoiding
+	// misattribution of shared files to the wrong sprint.
+	if progressMentions {
+		auditPath := filepath.Join(projectDir, config.SprintAuditFile)
+		if data, err := os.ReadFile(auditPath); err == nil {
+			active.AuditSeverity = extractMaxSeverity(string(data))
+		}
+		active.ProgressExcerpt = readSprintProgressExcerpt(projectDir, sprintNum, 50)
 	}
-
-	// Sprint progress excerpt
-	active.ProgressExcerpt = readSprintProgressExcerpt(projectDir, 50)
 
 	return active
 }
@@ -276,10 +285,29 @@ func readTail(path string, n int) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-// readSprintProgressExcerpt reads the last n lines of sprint-progress.txt.
-func readSprintProgressExcerpt(projectDir string, n int) string {
+// readSprintProgressExcerpt reads sprint-progress.txt and returns only content
+// relevant to the specified sprint number. The file is overwritten per sprint
+// and headed by "# Sprint N: Name — Progress", so we verify the header matches
+// before returning content.
+func readSprintProgressExcerpt(projectDir string, sprintNum int, maxLines int) string {
 	path := filepath.Join(projectDir, config.SprintProgressFile)
-	return readTail(path, n)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	content := string(data)
+
+	// Verify the file actually belongs to the requested sprint
+	expectedHeader := fmt.Sprintf("# Sprint %d:", sprintNum)
+	if !strings.Contains(content, expectedHeader) {
+		return "" // file belongs to a different sprint
+	}
+
+	lines := strings.Split(content, "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 var (

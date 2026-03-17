@@ -232,7 +232,7 @@ func TestCollectBuildState_FreshBuild(t *testing.T) {
 	assert.Equal(t, 3, state.TotalSprints)
 	assert.Empty(t, state.CompletedSprints)
 	assert.Equal(t, 0, state.HighestCompleted)
-	assert.Nil(t, state.ActiveSprint)
+	assert.Empty(t, state.ActiveSprints)
 }
 
 func TestCollectBuildState_PartialBuild(t *testing.T) {
@@ -266,10 +266,118 @@ func TestCollectBuildState_PartialBuild(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, state.CompletedSprints, 1)
 	assert.Equal(t, 1, state.HighestCompleted)
-	require.NotNil(t, state.ActiveSprint)
-	assert.Equal(t, 2, state.ActiveSprint.Number)
-	assert.Equal(t, "Auth", state.ActiveSprint.Name)
-	assert.Equal(t, 1, state.ActiveSprint.IterationCount)
+	require.Len(t, state.ActiveSprints, 1)
+	assert.Equal(t, 2, state.ActiveSprints[0].Number)
+	assert.Equal(t, "Auth", state.ActiveSprints[0].Name)
+	assert.Equal(t, 1, state.ActiveSprints[0].IterationCount)
+}
+
+func TestCollectBuildState_MultipleActiveSprints(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	logsDir := filepath.Join(dir, config.BuildLogsDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+	require.NoError(t, os.MkdirAll(logsDir, 0o755))
+
+	// Sprints 2-5 completed, Sprint 1 unrecorded, Sprint 6 failed
+	epicProgress := "# Epic Progress\n\n" +
+		"## Sprint 2: Services — PASS\n\nDone.\n\n" +
+		"## Sprint 3: Projections — PASS\n\nDone.\n\n" +
+		"## Sprint 4: Pages — PASS (healed)\n\nDone.\n\n" +
+		"## Sprint 5: Auth — PASS\n\nDone.\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.EpicProgressFile), []byte(epicProgress), 0o644))
+
+	// Sprint 1 has build logs (completed but unrecorded)
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "sprint1_iter1_20260316_130000.log"), []byte("sprint 1 done"), 0o644))
+
+	// Sprint 6 has build logs (failed audit)
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "sprint6_iter1_20260316_190000.log"), []byte("sprint 6 work"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(logsDir, "sprint6_audit1_20260316_190100.log"), []byte("audit 1"), 0o644))
+
+	// Sprint progress file belongs to sprint 6
+	progress := "# Sprint 6: Dashboard — Progress\n\nDoing dashboard work.\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte(progress), 0o644))
+
+	// Audit file belongs to sprint 6 (shared file, overwritten per sprint)
+	auditContent := "## Finding 1\n**Severity:** HIGH\n**Description:** Some issue\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintAuditFile), []byte(auditContent), 0o644))
+
+	ep := &epic.Epic{
+		Name:         "TestEpic",
+		TotalSprints: 7,
+		Engine:       "claude",
+		EffortLevel:  epic.EffortHigh,
+		Sprints: []epic.Sprint{
+			{Number: 1, Name: "Scaffold"},
+			{Number: 2, Name: "Services"},
+			{Number: 3, Name: "Projections"},
+			{Number: 4, Name: "Pages"},
+			{Number: 5, Name: "Auth"},
+			{Number: 6, Name: "Dashboard"},
+			{Number: 7, Name: "MCP"},
+		},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep)
+	require.NoError(t, err)
+
+	// Should find two active sprints: 1 and 6 (7 has no evidence)
+	require.Len(t, state.ActiveSprints, 2)
+
+	// Sprint 1: has logs but progress file belongs to sprint 6
+	assert.Equal(t, 1, state.ActiveSprints[0].Number)
+	assert.Equal(t, "Scaffold", state.ActiveSprints[0].Name)
+	assert.Equal(t, 1, state.ActiveSprints[0].IterationCount)
+	assert.Empty(t, state.ActiveSprints[0].ProgressExcerpt)  // filtered out — belongs to sprint 6
+	assert.Empty(t, state.ActiveSprints[0].AuditSeverity)    // filtered out — audit file belongs to sprint 6
+
+	// Sprint 6: has logs, progress file, and audit file
+	assert.Equal(t, 6, state.ActiveSprints[1].Number)
+	assert.Equal(t, "Dashboard", state.ActiveSprints[1].Name)
+	assert.Equal(t, 1, state.ActiveSprints[1].IterationCount)
+	assert.Equal(t, 1, state.ActiveSprints[1].AuditCount)
+	assert.Contains(t, state.ActiveSprints[1].ProgressExcerpt, "Sprint 6")
+	assert.Equal(t, "HIGH", state.ActiveSprints[1].AuditSeverity) // correctly attributed
+}
+
+func TestReadSprintProgressExcerpt_FiltersBySprint(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns content for matching sprint", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+		content := "# Sprint 6: Dashboard — Progress\n\nSome work done.\n"
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte(content), 0o644))
+
+		result := readSprintProgressExcerpt(dir, 6, 50)
+		assert.Contains(t, result, "Sprint 6")
+		assert.Contains(t, result, "Some work done")
+	})
+
+	t.Run("returns empty for non-matching sprint", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+		content := "# Sprint 6: Dashboard — Progress\n\nSome work done.\n"
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte(content), 0o644))
+
+		result := readSprintProgressExcerpt(dir, 1, 50)
+		assert.Empty(t, result)
+	})
+
+	t.Run("returns empty for missing file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		result := readSprintProgressExcerpt(dir, 1, 50)
+		assert.Empty(t, result)
+	})
 }
 
 func TestCollectDeferredFailures(t *testing.T) {

@@ -41,31 +41,32 @@ func FormatReport(state *BuildState) string {
 		b.WriteString(fmt.Sprintf("## Next Sprint: %d (%s)\n\n", next, name))
 	}
 
-	// Active/partial sprint
-	if state.ActiveSprint != nil {
-		a := state.ActiveSprint
-		b.WriteString(fmt.Sprintf("## Partial Work Detected for Sprint %d\n", a.Number))
-		b.WriteString(fmt.Sprintf("- %d iterations completed, %d audit passes, %d heal attempts\n",
-			a.IterationCount, a.AuditCount, a.HealCount))
-		if a.HasRetryLog {
-			b.WriteString("- Has prior retry attempt\n")
-		}
-		if a.AuditSeverity != "" {
-			b.WriteString(fmt.Sprintf("- Last audit severity: %s\n", a.AuditSeverity))
-		}
-		if a.LastLogTail != "" {
-			b.WriteString("- Last log tail:\n```\n")
-			b.WriteString(a.LastLogTail)
-			b.WriteString("\n```\n")
-		}
-		if a.ProgressExcerpt != "" {
-			b.WriteString("- Sprint progress excerpt:\n> ")
-			// Indent all lines with >
-			lines := strings.Split(a.ProgressExcerpt, "\n")
-			b.WriteString(strings.Join(lines, "\n> "))
+	// Active/partial sprints
+	if len(state.ActiveSprints) > 0 {
+		b.WriteString(fmt.Sprintf("## Partial Work Detected (%d incomplete sprint(s))\n\n", len(state.ActiveSprints)))
+		for _, a := range state.ActiveSprints {
+			b.WriteString(fmt.Sprintf("### Sprint %d: %s\n", a.Number, a.Name))
+			b.WriteString(fmt.Sprintf("- %d iterations completed, %d audit passes, %d heal attempts\n",
+				a.IterationCount, a.AuditCount, a.HealCount))
+			if a.HasRetryLog {
+				b.WriteString("- Has prior retry attempt\n")
+			}
+			if a.AuditSeverity != "" {
+				b.WriteString(fmt.Sprintf("- Last audit severity: %s\n", a.AuditSeverity))
+			}
+			if a.LastLogTail != "" {
+				b.WriteString("- Last log tail:\n```\n")
+				b.WriteString(a.LastLogTail)
+				b.WriteString("\n```\n")
+			}
+			if a.ProgressExcerpt != "" {
+				b.WriteString("- Sprint progress excerpt:\n> ")
+				lines := strings.Split(a.ProgressExcerpt, "\n")
+				b.WriteString(strings.Join(lines, "\n> "))
+				b.WriteByte('\n')
+			}
 			b.WriteByte('\n')
 		}
-		b.WriteByte('\n')
 	}
 
 	// Environment

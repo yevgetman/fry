@@ -38,8 +38,8 @@ type BuildState struct {
 	CompletedSprints []CompletedSprint
 	HighestCompleted int // 0 if none
 
-	// Evidence of a started-but-not-passed sprint
-	ActiveSprint *ActiveSprintState // nil if no partial work detected
+	// Evidence of started-but-not-passed sprints (may be multiple)
+	ActiveSprints []ActiveSprintState // empty if no partial work detected
 
 	// Environment checks
 	DockerAvailable bool
