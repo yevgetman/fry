@@ -147,32 +147,34 @@ When all checks already pass on retry:
 
 ## Sprint Audit
 
-Sprint audits run by default after each sprint passes verification. The output now includes a severity breakdown showing the count of issues at each level:
+Sprint audits run by default after each sprint passes verification. The audit uses a two-level loop: outer audit cycles discover issues, inner fix loops resolve them.
 
+### Clean audit (no issues):
 ```
-[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 1/3  engine=claude
 [2026-03-10 12:12:00]   AUDIT: pass (none)
 ```
 
-When issues are found, the breakdown shows exact counts before running the fix agent:
-
+### Issues found and fixed:
 ```
-[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
-[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 2 MODERATE — running fix agent...
-[2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2/3  engine=claude
-[2026-03-10 12:16:00]   AUDIT: pass (1 LOW)
-```
-
-When issues persist after all passes (advisory, non-blocking):
-
-```
-[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit passes (advisory)
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 1/3  engine=claude
+[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 2 MODERATE — entering fix loop (3 issues)...
+[2026-03-10 12:12:01]   AUDIT FIX  cycle 1  fix 1/3 — targeting 3 issues (oldest first)
+[2026-03-10 12:14:00]   AUDIT VERIFY  cycle 1  fix 1/3 — 2 of 3 resolved
+[2026-03-10 12:14:01]   AUDIT FIX  cycle 1  fix 2/3 — targeting 1 issues (oldest first)
+[2026-03-10 12:16:00]   AUDIT VERIFY  cycle 1  fix 2/3 — all resolved (no findings file)
+[2026-03-10 12:16:01] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 2/3  engine=claude
+[2026-03-10 12:18:00]   AUDIT: pass (1 LOW)
 ```
 
-When issues persist and block (CRITICAL/HIGH):
-
+### Issues persist (advisory, non-blocking):
 ```
-[2026-03-10 12:20:00]   AUDIT: FAILED — 1 CRITICAL, 1 HIGH remain after 3 passes
+[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit cycles (advisory)
+```
+
+### Issues persist and block (CRITICAL/HIGH):
+```
+[2026-03-10 12:20:00]   AUDIT: FAILED — 1 CRITICAL, 1 HIGH remain after 3 audit cycles
 ```
 
 ## Build Audit

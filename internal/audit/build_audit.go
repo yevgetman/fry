@@ -189,9 +189,9 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 
 	b.WriteString("---\n\n")
 	b.WriteString("## Instructions\n\n")
-	iterCap := config.MaxAuditIterationsHighCap
+	iterCap := config.MaxOuterCyclesHighCap
 	if opts.Epic != nil && opts.Epic.EffortLevel == epic.EffortMax {
-		iterCap = config.MaxAuditIterationsMaxCap
+		iterCap = config.MaxOuterCyclesMaxCap
 	}
 	b.WriteString(fmt.Sprintf("Repeat the following cycle until the EXIT CONDITION is met (max %d iterations).\n\n", iterCap))
 

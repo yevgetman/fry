@@ -47,7 +47,7 @@ fry/
 │   │   └── collector.go         # Failure report aggregation
 │   ├── heal/heal.go             # Self-healing loop on verification failure
 │   ├── audit/
-│   │   ├── audit.go             # Per-sprint semantic audit with fix loop
+│   │   ├── audit.go             # Per-sprint two-level audit: outer audit cycles + inner fix loops
 │   │   └── build_audit.go       # Final holistic codebase audit
 │   ├── review/
 │   │   ├── reviewer.go          # Sprint review (CONTINUE vs DEVIATE verdict)
@@ -210,11 +210,12 @@ For each sprint (startSprint → endSprint):
      │    └─ No-op detection (no git diff) → early exit
   6. Run verification checks
   7. If checks fail: heal loop (effort-level-aware: low=skip, medium=3, high=up to 10 with progress detection, max=unlimited with progress detection)
-  8. Sprint audit (if enabled & effort != low):
-     │  ├─ Audit agent reviews git diff
-     │  └─ Fix loop on CRITICAL/HIGH:
-     │     ├─ medium: bounded (up to MaxAuditIterations, default 3)
-     │     └─ high: progress-based (cap 50), max: progress-based (cap 150)
+  8. Sprint audit (if enabled & effort != low) — two-level loop:
+     │  ├─ Outer loop (audit cycles): audit agent reviews + verifies previous issues
+     │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
+     │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
+     │  ├─ medium: bounded (3 outer cycles, 3 inner fix iterations)
+     │  └─ high: progress-based (cap 10 outer), max: progress-based (cap 15 outer)
   9. Git checkpoint commit
  10. Compact sprint progress → .fry/epic-progress.txt
  11. Optional sprint review:
@@ -284,9 +285,12 @@ Key flags:
 | `HealMinAttemptsMax` | `10` | Min attempts before mid-loop threshold exit (max) |
 | `HealSafetyCapMax` | `50` | Hard safety cap for unlimited max-effort healing |
 | `MaxFailPercentMax` | `10` | Stricter threshold for max effort |
-| `DefaultMaxAuditIterations` | `3` | Audit fix loop retries (medium effort) |
-| `MaxAuditIterationsHighCap` | `50` | Safety cap for progress-based audit (high effort) |
-| `MaxAuditIterationsMaxCap` | `150` | Safety cap for progress-based audit (max effort) |
+| `DefaultMaxOuterAuditCycles` | `3` | Outer audit cycles per sprint (medium/default) |
+| `DefaultMaxInnerFixIter` | `3` | Inner fix iterations per audit report (medium/default) |
+| `MaxOuterCyclesHighCap` | `10` | Outer audit cycles at high effort |
+| `MaxOuterCyclesMaxCap` | `15` | Outer audit cycles at max effort |
+| `MaxInnerFixIterHigh` | `5` | Inner fix iterations at high effort |
+| `MaxInnerFixIterMax` | `8` | Inner fix iterations at max effort |
 | `DefaultDockerReadyTimeout` | `30` | Seconds for Docker health check |
 | `DefaultMaxDeviationScope` | `3` | Max sprints affected by replan |
 | `MaxAuditDiffBytes` | `100000` | Max diff size for audit context |
@@ -392,6 +396,6 @@ Sprint prompts follow a 7-part convention: OPENER, REFERENCES, BUILD LIST, CONST
 - **Two-phase progress tracking:** per-sprint log (`sprint-progress.txt`) + cross-sprint compacted summaries (`epic-progress.txt`) for bounded context
 - **Promise tokens:** agent writes `===PROMISE: TOKEN===` to signal sprint completion → early exit
 - **No-op detection:** if git diff shows no changes for 2-3 consecutive iterations and verification passes → early exit
-- **Severity-gated audits:** CRITICAL/HIGH block the build and trigger fix loop; MODERATE is advisory only
+- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory
 - **Graceful signal handling:** Ctrl+C saves partial work via git checkpoint
 - **Engine abstraction:** any CLI-based AI tool can be added by implementing `Engine` interface (2 methods: `Run`, `Name`)

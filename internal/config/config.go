@@ -43,14 +43,20 @@ const (
 	MaxFailPercentMax      = 10 // stricter threshold for max effort
 
 	// Audit constants
-	SprintAuditFile           = ".fry/sprint-audit.txt"
-	AuditPromptFile           = ".fry/audit-prompt.md"
+	SprintAuditFile            = ".fry/sprint-audit.txt"
+	AuditPromptFile            = ".fry/audit-prompt.md"
 	DefaultMaxAuditIterations  = 3
-	MaxAuditIterationsHighCap = 50
-	MaxAuditIterationsMaxCap  = 150
-	MaxAuditDiffBytes         = 100_000
-	AuditInvocationPrompt     = "Read and execute ALL instructions in .fry/audit-prompt.md. You are a code auditor. Review the sprint's work and write your findings to .fry/sprint-audit.txt. Do NOT modify any source code."
-	AuditFixInvocationPrompt  = "Read and execute ALL instructions in .fry/audit-prompt.md. Fix the issues identified in .fry/sprint-audit.txt."
+	MaxAuditDiffBytes          = 100_000
+	AuditInvocationPrompt      = "Read and execute ALL instructions in .fry/audit-prompt.md. You are a code auditor. Review the sprint's work and write your findings to .fry/sprint-audit.txt. Do NOT modify any source code."
+	AuditFixInvocationPrompt   = "Read and execute ALL instructions in .fry/audit-prompt.md. Fix the issues described in the prompt."
+
+	// Two-level audit loop constants
+	DefaultMaxOuterAuditCycles = 3  // outer audit cycles (medium/default)
+	DefaultMaxInnerFixIter     = 3  // fix attempts per audit report (medium/default)
+	MaxOuterCyclesHighCap      = 10 // outer audit cycles at high effort
+	MaxOuterCyclesMaxCap       = 15 // outer audit cycles at max effort
+	MaxInnerFixIterHigh        = 5  // inner fix cap at high effort
+	MaxInnerFixIterMax         = 8  // inner fix cap at max effort
 
 	DeferredFailuresFile = ".fry/deferred-failures.md"
 

@@ -429,7 +429,7 @@ var runCmd = &cobra.Command{
 					}
 					if !auditResult.Passed {
 						if auditResult.Blocking {
-							frlog.Log("  AUDIT: FAILED — %s remain after %d passes",
+							frlog.Log("  AUDIT: FAILED — %s remain after %d audit cycles",
 								audit.FormatCounts(auditResult.SeverityCounts), auditResult.Iterations)
 							if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
 								frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
@@ -443,7 +443,7 @@ var runCmd = &cobra.Command{
 							exitErr = errBuildFailed
 							break
 						}
-						warning := fmt.Sprintf("%s remain after %d audit passes (advisory)",
+						warning := fmt.Sprintf("%s remain after %d audit cycles (advisory)",
 							audit.FormatCounts(auditResult.SeverityCounts), auditResult.Iterations)
 						frlog.Log("  AUDIT: %s", warning)
 						mu.Lock()

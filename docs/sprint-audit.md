@@ -1,6 +1,6 @@
 # Sprint Audit
 
-The sprint audit is a semantic quality gate that runs by default after each sprint passes verification. A separate AI agent session reviews the sprint's work holistically -- checking correctness, security, edge cases, and code quality -- then a fix agent remediates any issues found. This complements the syntactic verification system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
+The sprint audit is a semantic quality gate that runs by default after each sprint passes verification. It uses a two-level loop: an outer audit cycle discovers issues, and an inner fix loop resolves them before re-auditing. Issues are tracked individually across cycles and prioritized FIFO (oldest first). This complements the syntactic verification system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
 
 ## How It Works
 
@@ -8,19 +8,33 @@ The sprint audit is a semantic quality gate that runs by default after each spri
 Sprint passes verification
        │
        ▼
-  Audit agent reviews work (read-only)
+  Outer audit cycle 1
        │
-       ├─ PASS (no issues or all LOW) → continue to git checkpoint
-       │
-       ├─ FAIL (CRITICAL/HIGH/MODERATE found)
+       ├─ Audit agent reviews work (read-only)
        │       │
-       │       ▼
-       │   Fix agent remediates issues
+       │       ├─ PASS (no issues or all LOW) → continue to git checkpoint
        │       │
-       │       ▼
-       │   Re-audit (loop up to @max_audit_iterations)
+       │       └─ FAIL (CRITICAL/HIGH/MODERATE found)
+       │               │
+       │               ▼
+       │         Inner fix loop (FIFO order, oldest issues first)
+       │               │
+       │               ├─ Fix agent remediates listed issues
+       │               ├─ Verify agent checks which issues are resolved
+       │               ├─ If all resolved → break inner loop
+       │               ├─ If stale (no new resolutions) → break inner loop
+       │               └─ Repeat up to inner cap
        │
-       └─ Exhausted iterations
+       ▼
+  Outer audit cycle 2 (re-audit)
+       │
+       ├─ Verifies previous issues are resolved
+       ├─ Discovers any NEW issues introduced by fixes
+       │       │
+       │       ├─ All resolved, no new → PASS
+       │       └─ Issues remain or new found → inner fix loop again
+       │
+       └─ Repeat until PASS, iterations exhausted, or stale
                │
                ├─ CRITICAL or HIGH → sprint FAILS, epic stops
                └─ MODERATE → advisory warning, build continues
@@ -28,18 +42,39 @@ Sprint passes verification
 
 The audit runs **after** verification passes but **before** the git checkpoint, so that the checkpoint commits both the sprint's work and any audit fixes in one clean commit.
 
-## Two-Agent Design
+## Two-Level Loop Design
 
-The audit uses two separate agent sessions:
+The audit uses a two-level loop with three types of agent sessions:
 
-1. **Audit agent** -- reads the sprint's code changes and writes findings to `.fry/sprint-audit.txt`. This agent does not modify source code.
-2. **Fix agent** -- reads the audit findings and makes minimal code changes to address CRITICAL, HIGH, and MODERATE issues. LOW issues are left alone. The fix agent receives the sprint goals (`@prompt` block) for context, and on iteration 2+ it also receives the **previous iteration's audit findings** so it can avoid repeating failed approaches.
+### Outer loop (audit cycles)
 
-This separation mirrors the existing verify→heal pattern and keeps the audit agent's context focused on review.
+Each outer cycle runs the **audit agent** to review the codebase. On cycle 2+, the audit prompt includes previously identified issues and asks the agent to verify each as RESOLVED or STILL PRESENT while also scanning for new issues.
+
+### Inner loop (fix iterations per cycle)
+
+For each audit report, the **fix agent** runs repeatedly until all issues above LOW severity from that report are resolved:
+
+1. **Fix agent** -- reads the structured issue list (FIFO ordered, oldest first) and makes minimal code changes. It is instructed to focus exclusively on the listed issues and not search for new ones.
+2. **Verify agent** -- checks whether the specific issues have been resolved without modifying code. Reports each issue as RESOLVED or STILL PRESENT.
+3. If all actionable issues are resolved, the inner loop breaks and triggers a re-audit.
+4. If no new issues are resolved for 2 consecutive fix iterations, the inner loop breaks (stale detection).
+
+### Issue tracking across cycles
+
+Each finding has a stable identity (normalized description) and tracks:
+- **Origin cycle** -- which outer audit cycle discovered it (for FIFO ordering)
+- **Resolution status** -- whether it has been verified as resolved
+
+When the re-audit runs (cycle 2+), findings are classified as:
+- **Resolved** -- previously known issue no longer found
+- **Persisting** -- previously known issue still present (keeps its original cycle number)
+- **New** -- issue not seen in previous cycles (assigned current cycle number)
+
+This ensures older issues are always addressed before newer ones, and fix effort is not wasted on re-discovering known issues.
 
 ## Blocking vs Advisory
 
-After the audit loop exhausts its iterations, the outcome depends on the highest remaining severity:
+After the audit loop exhausts its cycles, the outcome depends on the highest remaining severity:
 
 - **CRITICAL or HIGH** -- The sprint **fails** and the epic stops. The build summary shows `FAIL (audit: CRITICAL)` or `FAIL (audit: HIGH)`. You can resume with `fry run <epic> <sprint>` after fixing the issues.
 - **MODERATE** -- The sprint **continues** with an advisory warning logged to the build output and build summary. This prevents moderate semantic disagreements between two AI agents from stalling the entire build.
@@ -47,10 +82,10 @@ After the audit loop exhausts its iterations, the outcome depends on the highest
 
 ```
 # Blocking (CRITICAL/HIGH) — exact severity counts:
-[2026-03-10 12:20:00]   AUDIT: FAILED — 1 CRITICAL, 1 HIGH remain after 3 passes
+[2026-03-10 12:20:00]   AUDIT: FAILED — 1 HIGH remain after 3 audit cycles
 
 # Advisory (MODERATE) — exact severity counts:
-[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit passes (advisory)
+[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit cycles (advisory)
 ```
 
 ## Configuration
@@ -79,7 +114,7 @@ To disable audits for a specific epic, add `@no_audit`:
 |---|---|
 | `@audit_after_sprint` | Enable post-sprint audit (default: enabled) |
 | `@no_audit` | Disable post-sprint audit |
-| `@max_audit_iterations <N>` | Maximum audit→fix cycles per sprint (default: 3) |
+| `@max_audit_iterations <N>` | Maximum outer audit cycles per sprint (default: 3) |
 | `@audit_engine <codex\|claude>` | AI engine for audit/fix sessions (default: same as `@engine`) |
 | `@audit_model <model>` | Model override for audit/fix sessions |
 
@@ -149,6 +184,22 @@ Brief overview of the audit results.
 FAIL (HIGH issues found)
 ```
 
+On cycle 2+, the audit output also includes a "Verified Previous Issues" section:
+
+```
+## Verified Previous Issues
+- **Issue:** 1
+- **Status:** RESOLVED
+- **Notes:** Parameterized query now used correctly.
+
+- **Issue:** 2
+- **Status:** STILL PRESENT
+- **Notes:** Variable name unchanged.
+
+## Findings
+(includes both STILL PRESENT previous issues and any NEW issues)
+```
+
 ## Context Provided to Audit Agent
 
 The audit prompt includes:
@@ -159,89 +210,126 @@ The audit prompt includes:
 | Sprint goals | `@prompt` block from the epic | Full content |
 | What was done | `.fry/sprint-progress.txt` | First 50KB |
 | Code changes | `git diff` of sprint work | First 100KB |
+| Previously identified issues | Findings from prior audit cycles | Cycle 2+ only |
 
-The git diff is refreshed before each audit pass (via a callback) so that fixes made by the fix agent are reflected in subsequent audits.
+The git diff is refreshed before each audit cycle (via a callback) so that fixes made by the fix agent are reflected in subsequent audits.
 
 ## Context Provided to Fix Agent
 
 The fix prompt includes:
 
-| Context | Source | When |
-|---|---|---|
-| Sprint goals | `@prompt` block from the epic | Always |
-| Previous audit findings | Prior iteration's findings (retained in memory) | Iteration 2+ only |
-| Current audit findings | This iteration's `.fry/sprint-audit.txt` | Always |
-| Context pointers | References to `sprint-progress.txt` and `plans/plan.md` | Always |
+| Context | Source |
+|---|---|
+| Sprint goals | `@prompt` block from the epic |
+| Issues to fix | Structured list, FIFO ordered (oldest first, highest severity within age group) |
+| Context pointers | References to `sprint-progress.txt` and `plans/plan.md` |
 
-On the first iteration, only the current findings are included. On subsequent iterations, the fix agent sees both the previous and current findings, allowing it to recognize recurring issues and try different remediation strategies. Note: previous findings are held in memory between iterations — the `.fry/sprint-audit.txt` file is deleted after each pass to prevent stale results from contaminating the next audit, then recreated by the next audit agent invocation.
+Issues are grouped by origin audit cycle when multiple cycles have contributed findings. The fix agent is explicitly instructed to focus only on the listed issues and not search for new ones.
+
+## Context Provided to Verify Agent
+
+After each fix iteration, a lightweight verify agent checks resolution:
+
+| Context | Source |
+|---|---|
+| Issues to verify | Numbered list of unresolved issues with location and severity |
+| Instructions | Check each issue, report RESOLVED or STILL PRESENT |
+
+The verify agent does not look for new issues and does not modify source code.
 
 ## Effort Level Interaction
 
 - **`low`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at low effort.
-- **`medium`** -- Bounded audit: runs up to `@max_audit_iterations` (default: 3) audit→fix cycles. Stops when iterations are exhausted.
-- **`high`** -- Progress-based audit: continues as long as the fix agent is making progress (resolving findings or uncovering new ones). Safety cap at 50 iterations. Stops early if 3 consecutive audit passes show no progress (same findings repeating).
-- **`max`** -- Same progress-based behavior as `high`, but with a safety cap of 150 iterations, allowing more thorough remediation for mission-critical builds.
+- **`medium`** -- Bounded audit: runs up to `@max_audit_iterations` outer audit cycles (default: 3), each with up to 3 inner fix iterations. Stops when cycles are exhausted.
+- **`high`** -- Progress-based audit: outer loop continues as long as progress is detected. Up to 10 outer cycles, 5 inner fix iterations per cycle. Stops early if 3 consecutive outer cycles show no progress (same findings persisting).
+- **`max`** -- Same progress-based behavior as `high`, but with up to 15 outer cycles and 8 inner fix iterations per cycle, allowing more thorough remediation for mission-critical builds.
 
-When `@max_audit_iterations` is explicitly set in the epic, it is always respected as a hard cap regardless of effort level, and progress detection is disabled. Progress-based behavior only activates when the iteration count is not explicitly configured.
+When `@max_audit_iterations` is explicitly set in the epic, it is always respected as the outer cycle cap regardless of effort level, and progress detection is disabled. Progress-based behavior only activates when the iteration count is not explicitly configured.
 
-### Progress detection
+### Progress detection (outer loop)
 
-At `high` and `max` effort, Fry tracks audit findings across iterations by extracting structured `**Description:**` lines from each audit pass. After each audit:
+At `high` and `max` effort, Fry tracks audit findings across outer cycles by comparing finding key sets:
 
 1. If no findings remain above LOW → pass (exit).
-2. If findings are identical to the previous pass or a superset (no issues resolved, no new issues) → increment stale counter.
+2. If findings are identical to the previous cycle (no issues resolved, no new issues) → increment stale counter.
 3. If any previous findings were resolved or new findings appeared → reset stale counter (progress made).
-4. After 3 consecutive stale passes → stop and run final audit.
+4. After 3 consecutive stale cycles → stop and run final audit.
+
+### Stale detection (inner loop)
+
+Within each fix cycle, the inner loop tracks how many issues are resolved after each fix+verify iteration:
+
+1. If all actionable issues are resolved → break inner loop (success).
+2. If no new issues were resolved for 2 consecutive fix iterations → break inner loop (stale).
+3. Otherwise, continue to the next fix iteration.
 
 ## Terminal Output
 
 ### Clean audit (no issues):
 ```
-[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 1/3  engine=claude
 [2026-03-10 12:12:00]   AUDIT: pass (none)
 ```
 
-### Issues found and fixed (bounded) — severity counts shown:
+### Issues found and fixed (bounded):
 ```
-[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1/3  engine=claude
-[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 2 MODERATE — running fix agent...
-[2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2/3  engine=claude
-[2026-03-10 12:16:00]   AUDIT: pass (1 LOW)
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 1/3  engine=claude
+[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 2 MODERATE — entering fix loop (3 issues)...
+[2026-03-10 12:12:01]   AUDIT FIX  cycle 1  fix 1/3 — targeting 3 issues (oldest first)
+[2026-03-10 12:14:00]   AUDIT VERIFY  cycle 1  fix 1/3 — 2 of 3 resolved
+[2026-03-10 12:14:01]   AUDIT FIX  cycle 1  fix 2/3 — targeting 1 issues (oldest first)
+[2026-03-10 12:16:00]   AUDIT VERIFY  cycle 1  fix 2/3 — all resolved (no findings file)
+[2026-03-10 12:16:01] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 2/3  engine=claude
+[2026-03-10 12:18:00]   AUDIT: pass (1 LOW)
+```
+
+### Fixes introduce new issues (multi-cycle):
+```
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 1/3  engine=claude
+[2026-03-10 12:12:00]   AUDIT: 1 HIGH — entering fix loop (1 issues)...
+[2026-03-10 12:12:01]   AUDIT FIX  cycle 1  fix 1/3 — targeting 1 issues (oldest first)
+[2026-03-10 12:14:00]   AUDIT VERIFY  cycle 1  fix 1/3 — 1 of 1 resolved
+[2026-03-10 12:14:01] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 2/3  engine=claude
+[2026-03-10 12:16:00]   AUDIT: 1 previously known issues resolved
+[2026-03-10 12:16:00]   AUDIT: 1 new issues discovered
+[2026-03-10 12:16:00]   AUDIT: 1 MODERATE — entering fix loop (1 issues)...
+[2026-03-10 12:16:01]   AUDIT FIX  cycle 2  fix 1/3 — targeting 1 issues (oldest first)
+[2026-03-10 12:18:00]   AUDIT VERIFY  cycle 2  fix 1/3 — 1 of 1 resolved
+[2026-03-10 12:18:01] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 3/3  engine=claude
+[2026-03-10 12:20:00]   AUDIT: pass (none)
 ```
 
 ### Progress-based audit (high/max effort):
 ```
-[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 1 (progress-based, cap 50)  engine=claude
-[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 1 MODERATE — running fix agent...
-[2026-03-10 12:14:30] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 2 (progress-based, cap 50)  engine=claude
-[2026-03-10 12:16:00]   AUDIT: 2 MODERATE — running fix agent...
-[2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 3 (progress-based, cap 50)  engine=claude
-[2026-03-10 12:20:00]   AUDIT: pass (1 LOW)
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 1 (progress-based, cap 10)  engine=claude
+[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 1 MODERATE — entering fix loop (2 issues)...
+[2026-03-10 12:12:01]   AUDIT FIX  cycle 1  fix 1/5 — targeting 2 issues (oldest first)
+...
 ```
 
-### Progress stall (high/max effort):
+### Inner loop stale detection:
 ```
-[2026-03-10 12:18:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 4 (progress-based, cap 50)  engine=claude
-[2026-03-10 12:20:00]   AUDIT: no progress detected (1/3 stale iterations)
-[2026-03-10 12:20:00]   AUDIT: 1 HIGH — running fix agent...
-[2026-03-10 12:22:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 5 (progress-based, cap 50)  engine=claude
-[2026-03-10 12:24:00]   AUDIT: no progress detected (2/3 stale iterations)
-[2026-03-10 12:24:00]   AUDIT: 1 HIGH — running fix agent...
-[2026-03-10 12:26:00] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  pass 6 (progress-based, cap 50)  engine=claude
-[2026-03-10 12:28:00]   AUDIT: no progress detected (3/3 stale iterations)
-[2026-03-10 12:28:00]   AUDIT: stopping — no progress after 6 iterations
+[2026-03-10 12:14:01]   AUDIT FIX  cycle 1  fix 2/5 — targeting 1 issues (oldest first)
+[2026-03-10 12:16:00]   AUDIT VERIFY  cycle 1  fix 2/5 — 0 of 1 resolved
+[2026-03-10 12:16:00]   AUDIT FIX: no progress after 2 fix iterations — moving to re-audit
 ```
 
-### CRITICAL/HIGH issues persist (blocking) — shows exact counts:
+### Outer loop stale detection:
 ```
-[2026-03-10 12:20:00]   AUDIT: FAILED — 1 HIGH remain after 3 passes
+[2026-03-10 12:20:00]   AUDIT: no progress detected (3/3 stale cycles)
+[2026-03-10 12:20:00]   AUDIT: stopping — no progress after 4 cycles
+```
+
+### CRITICAL/HIGH issues persist (blocking):
+```
+[2026-03-10 12:20:00]   AUDIT: FAILED — 1 HIGH remain after 3 audit cycles
 Retry:  fry run --retry --sprint 3
 Resume: fry run --sprint 3
 ```
 
-### MODERATE issues persist (advisory) — shows exact counts:
+### MODERATE issues persist (advisory):
 ```
-[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit passes (advisory)
+[2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit cycles (advisory)
 ```
 
 ## Build Logs
@@ -249,9 +337,13 @@ Resume: fry run --sprint 3
 Audit sessions are logged to `.fry/build-logs/`:
 
 ```
-sprint1_audit1_20060102_150405.log       # Audit pass 1
-sprint1_auditfix_1_20060102_150405.log   # Fix agent pass 1
-sprint1_audit_final_20060102_150405.log  # Final audit-only pass
+sprint1_audit1_20060102_150405.log           # Audit cycle 1
+sprint1_auditfix_1_1_20060102_150405.log     # Fix agent: cycle 1, fix 1
+sprint1_auditverify_1_1_20060102_150405.log  # Verify agent: cycle 1, fix 1
+sprint1_auditfix_1_2_20060102_150405.log     # Fix agent: cycle 1, fix 2
+sprint1_auditverify_1_2_20060102_150405.log  # Verify agent: cycle 1, fix 2
+sprint1_audit2_20060102_150405.log           # Audit cycle 2 (re-audit)
+sprint1_audit_final_20060102_150405.log      # Final audit pass
 ```
 
 ## Cleanup
@@ -267,7 +359,7 @@ After the audit completes (pass or fail), Fry removes `.fry/sprint-audit.txt` an
 @engine claude
 ```
 
-Audits run by default: 3 max iterations, same engine and model as the build agent.
+Audits run by default: 3 outer audit cycles, 3 inner fix iterations per cycle, same engine and model as the build agent.
 
 ### Custom audit configuration
 
@@ -279,7 +371,7 @@ Audits run by default: 3 max iterations, same engine and model as the build agen
 @audit_model claude-sonnet-4-20250514
 ```
 
-Uses Codex for building but Claude for auditing, with up to 5 audit→fix cycles.
+Uses Codex for building but Claude for auditing, with up to 5 outer audit cycles.
 
 ### Disable in epic
 

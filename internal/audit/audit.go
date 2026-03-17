@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,27 +19,60 @@ import (
 	"github.com/yevgetman/fry/internal/textutil"
 )
 
+// Finding represents a single structured audit finding tracked across iterations.
+type Finding struct {
+	Location       string
+	Description    string
+	Severity       string
+	RecommendedFix string
+	OriginCycle    int  // which outer audit cycle discovered this finding
+	Resolved       bool // whether this finding has been verified resolved
+}
+
+// key returns a normalized identity for deduplication and comparison across cycles.
+func (f Finding) key() string {
+	return strings.ToLower(strings.TrimSpace(f.Description))
+}
+
+// isActionable returns true if the finding has severity above LOW and is not resolved.
+func (f Finding) isActionable() bool {
+	return f.Severity != "" && f.Severity != "LOW" && !f.Resolved
+}
+
 type AuditOpts struct {
 	ProjectDir string
 	Sprint     *epic.Sprint
 	Epic       *epic.Epic
 	Engine     engine.Engine
-	GitDiff    string                // initial diff; used if DiffFn is nil
+	GitDiff    string                 // initial diff; used if DiffFn is nil
 	DiffFn     func() (string, error) // if set, called before each audit pass to refresh the diff
 	Verbose    bool
 	Mode       string
 }
 
 type AuditResult struct {
-	Passed         bool
-	Blocking       bool              // true when CRITICAL or HIGH issues remain after all iterations
-	Iterations     int
-	MaxSeverity    string            // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
-	SeverityCounts map[string]int    // count of findings per severity level
+	Passed             bool
+	Blocking           bool           // true when CRITICAL or HIGH issues remain after all cycles
+	Iterations         int            // number of outer audit cycles completed
+	MaxSeverity        string         // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
+	SeverityCounts     map[string]int // count of findings per severity level
+	UnresolvedFindings []Finding      // remaining findings after all cycles
 }
 
-const maxStaleIterations = 3
+const (
+	maxStaleIterations      = 3 // outer loop stale threshold
+	maxInnerStaleIterations = 2 // inner loop stale threshold
+)
 
+// RunAuditLoop runs a two-level audit loop for a sprint.
+//
+// Outer loop (audit cycles): each cycle runs the audit agent to discover issues,
+// then enters an inner fix loop to resolve them. After the inner loop resolves all
+// issues (or stalls), a re-audit verifies resolution and discovers new issues.
+//
+// Inner loop (fix iterations): for each audit report, the fix agent runs repeatedly
+// until all issues above LOW severity are resolved, or the inner cap is reached.
+// Issues are presented to the fix agent in FIFO order (oldest first).
 func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	if opts.Epic == nil || opts.Sprint == nil {
 		return nil, fmt.Errorf("run audit loop: epic and sprint are required")
@@ -46,165 +81,263 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		return nil, fmt.Errorf("run audit loop: engine is required")
 	}
 
-	maxIter, progressBased := effectiveMaxIter(opts.Epic)
+	maxOuter, progressBased := effectiveOuterCycles(opts.Epic)
+	maxInner := effectiveInnerIter(opts.Epic)
 
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("run audit loop: create build logs dir: %w", err)
 	}
 
-	var prevFindings map[string]struct{}
-	var prevFindingsRaw string
-	staleCount := 0
+	auditFilePath := filepath.Join(opts.ProjectDir, config.SprintAuditFile)
+	promptPath := filepath.Join(opts.ProjectDir, config.AuditPromptFile)
 
-	for iter := 1; iter <= maxIter; iter++ {
+	var knownFindings []Finding // tracked across outer cycles
+	outerStaleCount := 0
+	var lastCycle int
+
+	for cycle := 1; cycle <= maxOuter; cycle++ {
+		lastCycle = cycle
+
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
 		}
 
-		// Refresh diff if a diff function is available
-		if opts.DiffFn != nil {
-			if freshDiff, diffErr := opts.DiffFn(); diffErr == nil {
-				opts.GitDiff = freshDiff
-			}
-		}
+		refreshDiff(&opts)
 
-		// Build and write audit prompt
-		auditPrompt := buildAuditPrompt(opts)
-		promptPath := filepath.Join(opts.ProjectDir, config.AuditPromptFile)
-		if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
-			return nil, fmt.Errorf("run audit loop: create fry dir: %w", err)
-		}
-		if err := os.WriteFile(promptPath, []byte(auditPrompt), 0o644); err != nil {
+		// Build and write audit prompt (with known findings for verification on cycle 2+)
+		auditPrompt := buildAuditPrompt(opts, knownFindings)
+		if err := writePromptFile(promptPath, auditPrompt); err != nil {
 			return nil, fmt.Errorf("run audit loop: write audit prompt: %w", err)
 		}
 
 		if progressBased {
 			frylog.Log(
-				"▶ AUDIT  sprint %d/%d \"%s\"  pass %d (progress-based, cap %d)  engine=%s",
-				opts.Sprint.Number,
-				opts.Epic.TotalSprints,
-				opts.Sprint.Name,
-				iter,
-				maxIter,
-				opts.Engine.Name(),
+				"▶ AUDIT  sprint %d/%d \"%s\"  cycle %d (progress-based, cap %d)  engine=%s",
+				opts.Sprint.Number, opts.Epic.TotalSprints, opts.Sprint.Name,
+				cycle, maxOuter, opts.Engine.Name(),
 			)
 		} else {
 			frylog.Log(
-				"▶ AUDIT  sprint %d/%d \"%s\"  pass %d/%d  engine=%s",
-				opts.Sprint.Number,
-				opts.Epic.TotalSprints,
-				opts.Sprint.Name,
-				iter,
-				maxIter,
-				opts.Engine.Name(),
+				"▶ AUDIT  sprint %d/%d \"%s\"  cycle %d/%d  engine=%s",
+				opts.Sprint.Number, opts.Epic.TotalSprints, opts.Sprint.Name,
+				cycle, maxOuter, opts.Engine.Name(),
 			)
 		}
 
 		// Run audit agent
-		auditLogPath := filepath.Join(
-			buildLogsDir,
-			fmt.Sprintf("sprint%d_audit%d_%s.log", opts.Sprint.Number, iter, time.Now().Format("20060102_150405")),
+		auditLogPath := filepath.Join(buildLogsDir,
+			fmt.Sprintf("sprint%d_audit%d_%s.log", opts.Sprint.Number, cycle, time.Now().Format("20060102_150405")),
 		)
 		if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, auditLogPath); err != nil {
 			return nil, err
 		}
 
-		// Read and parse audit findings
-		auditFilePath := filepath.Join(opts.ProjectDir, config.SprintAuditFile)
+		// Read audit findings
 		content, err := os.ReadFile(auditFilePath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				// Audit agent didn't write findings — treat as pass
 				frylog.Log("  AUDIT: no findings file written — treating as pass.")
-				return &AuditResult{Passed: true, Iterations: iter}, nil
+				return &AuditResult{Passed: true, Iterations: cycle}, nil
 			}
 			return nil, fmt.Errorf("run audit loop: read audit file: %w", err)
 		}
+		_ = os.Remove(auditFilePath)
 
+		// Quick severity check
 		maxSev := parseAuditSeverity(string(content))
 		counts := countAuditSeverities(string(content))
 		if isAuditPass(maxSev) {
 			frylog.Log("  AUDIT: pass (%s)", formatSeverityCounts(counts))
-			return &AuditResult{Passed: true, Iterations: iter, MaxSeverity: maxSev, SeverityCounts: counts}, nil
+			return &AuditResult{
+				Passed: true, Iterations: cycle,
+				MaxSeverity: maxSev, SeverityCounts: counts,
+			}, nil
 		}
 
-		// Progress detection for progress-based mode
-		if progressBased {
-			currentFindings := extractFindings(string(content))
-			if prevFindings != nil && !hasProgress(prevFindings, currentFindings) {
-				staleCount++
-				frylog.Log("  AUDIT: no progress detected (%d/%d stale iterations)", staleCount, maxStaleIterations)
-				if staleCount >= maxStaleIterations {
-					frylog.Log("  AUDIT: stopping — no progress after %d iterations", iter)
+		// Parse structured findings
+		currentFindings := parseFindings(string(content))
+
+		// Fallback: severity indicates issues but no structured findings parsed
+		if len(currentFindings) == 0 {
+			currentFindings = []Finding{{
+				Description: "Audit agent reported issues but structured findings could not be parsed. See raw audit output for details.",
+				Severity:    maxSev,
+				OriginCycle: cycle,
+			}}
+		}
+
+		// Classify findings against known set
+		var activeFindings []Finding
+		if cycle > 1 && len(knownFindings) > 0 {
+			resolved, persisting, newFindings := classifyFindings(knownFindings, currentFindings)
+			for i := range newFindings {
+				newFindings[i].OriginCycle = cycle
+			}
+			activeFindings = mergeFindings(persisting, newFindings)
+			if len(resolved) > 0 {
+				frylog.Log("  AUDIT: %d previously known issues resolved", len(resolved))
+			}
+			if len(newFindings) > 0 {
+				frylog.Log("  AUDIT: %d new issues discovered", len(newFindings))
+			}
+		} else {
+			for i := range currentFindings {
+				currentFindings[i].OriginCycle = cycle
+			}
+			activeFindings = currentFindings
+		}
+
+		// Check actionable count
+		actionable := countActionableFindings(activeFindings)
+		if actionable == 0 {
+			frylog.Log("  AUDIT: pass (no actionable issues)")
+			return &AuditResult{
+				Passed: true, Iterations: cycle,
+				MaxSeverity: maxSev, SeverityCounts: counts,
+			}, nil
+		}
+
+		// Outer stale detection (progress-based mode only)
+		if progressBased && cycle > 1 {
+			prevKeys := findingKeySet(knownFindings)
+			currKeys := findingKeySet(activeFindings)
+			if !hasProgress(prevKeys, currKeys) {
+				outerStaleCount++
+				frylog.Log("  AUDIT: no progress detected (%d/%d stale cycles)", outerStaleCount, maxStaleIterations)
+				if outerStaleCount >= maxStaleIterations {
+					frylog.Log("  AUDIT: stopping — no progress after %d cycles", cycle)
 					break
 				}
 			} else {
-				staleCount = 0
+				outerStaleCount = 0
 			}
-			prevFindings = currentFindings
 		}
 
-		frylog.Log("  AUDIT: %s — running fix agent...", formatSeverityCounts(counts))
+		frylog.Log("  AUDIT: %s — entering fix loop (%d issues)...", formatSeverityCounts(counts), actionable)
 
-		// Build and write fix prompt
-		fixPrompt := buildAuditFixPrompt(opts, string(content), prevFindingsRaw)
-		prevFindingsRaw = string(content)
-		promptPath = filepath.Join(opts.ProjectDir, config.AuditPromptFile)
-		if err := os.WriteFile(promptPath, []byte(fixPrompt), 0o644); err != nil {
-			return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
+		// Sort findings FIFO for fix agent
+		sortFindingsFIFO(activeFindings)
+
+		// Inner fix loop
+		innerStaleCount := 0
+		lastResolvedCount := 0
+
+		for fixIter := 1; fixIter <= maxInner; fixIter++ {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
+
+			unresolved := filterUnresolved(activeFindings)
+			if len(unresolved) == 0 {
+				break
+			}
+
+			frylog.Log("  AUDIT FIX  cycle %d  fix %d/%d — targeting %d issues (oldest first)",
+				cycle, fixIter, maxInner, len(unresolved))
+
+			// Build and write fix prompt
+			fixPrompt := buildAuditFixPrompt(opts, unresolved)
+			if err := writePromptFile(promptPath, fixPrompt); err != nil {
+				return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
+			}
+
+			// Run fix agent
+			fixLogPath := filepath.Join(buildLogsDir,
+				fmt.Sprintf("sprint%d_auditfix_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
+			)
+			if _, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath); err != nil {
+				return nil, err
+			}
+
+			// Remove stale audit file before verify
+			_ = os.Remove(auditFilePath)
+
+			// Build and write verify prompt
+			verifyPrompt := buildVerifyPrompt(opts, unresolved)
+			if err := writePromptFile(promptPath, verifyPrompt); err != nil {
+				return nil, fmt.Errorf("run audit loop: write verify prompt: %w", err)
+			}
+
+			// Run verify agent
+			verifyLogPath := filepath.Join(buildLogsDir,
+				fmt.Sprintf("sprint%d_auditverify_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
+			)
+			if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, verifyLogPath); err != nil {
+				return nil, err
+			}
+
+			// Parse verification results
+			verifyContent, verifyErr := os.ReadFile(auditFilePath)
+			if verifyErr != nil {
+				if os.IsNotExist(verifyErr) {
+					// No file = all resolved (optimistic)
+					markAllResolved(activeFindings)
+					frylog.Log("  AUDIT VERIFY  cycle %d  fix %d/%d — all resolved (no findings file)", cycle, fixIter, maxInner)
+					break
+				}
+				return nil, fmt.Errorf("run audit loop: read verify file: %w", verifyErr)
+			}
+			_ = os.Remove(auditFilePath)
+
+			resolved := parseVerificationStatuses(string(verifyContent), unresolved)
+			applyResolutionsByKey(activeFindings, unresolved, resolved)
+
+			nowResolved := countResolved(activeFindings)
+			totalActionable := countAboveLow(activeFindings)
+			remaining := filterUnresolved(activeFindings)
+			frylog.Log("  AUDIT VERIFY  cycle %d  fix %d/%d — %d of %d resolved",
+				cycle, fixIter, maxInner, nowResolved, totalActionable)
+
+			if len(remaining) == 0 {
+				break
+			}
+
+			// Inner stale detection
+			if nowResolved <= lastResolvedCount {
+				innerStaleCount++
+				if innerStaleCount >= maxInnerStaleIterations {
+					frylog.Log("  AUDIT FIX: no progress after %d fix iterations — moving to re-audit", fixIter)
+					break
+				}
+			} else {
+				innerStaleCount = 0
+			}
+			lastResolvedCount = nowResolved
 		}
 
-		// Run fix agent
-		fixLogPath := filepath.Join(
-			buildLogsDir,
-			fmt.Sprintf("sprint%d_auditfix_%d_%s.log", opts.Sprint.Number, iter, time.Now().Format("20060102_150405")),
-		)
-		if _, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath); err != nil {
-			return nil, err
-		}
-
-		// Remove stale audit file before re-audit
-		_ = os.Remove(auditFilePath)
+		// Update known findings for next outer cycle
+		knownFindings = collectUnresolved(activeFindings)
 	}
 
-	// Refresh diff for final pass
-	if opts.DiffFn != nil {
-		if freshDiff, diffErr := opts.DiffFn(); diffErr == nil {
-			opts.GitDiff = freshDiff
-		}
-	}
-
-	// Final audit-only pass to check current state
-	auditPrompt := buildAuditPrompt(opts)
-	promptPath := filepath.Join(opts.ProjectDir, config.AuditPromptFile)
-	if err := os.WriteFile(promptPath, []byte(auditPrompt), 0o644); err != nil {
+	// Final audit pass to determine current state
+	refreshDiff(&opts)
+	finalPrompt := buildAuditPrompt(opts, knownFindings)
+	if err := writePromptFile(promptPath, finalPrompt); err != nil {
 		return nil, fmt.Errorf("run audit loop: write final audit prompt: %w", err)
 	}
 
 	frylog.Log(
 		"▶ AUDIT  sprint %d/%d \"%s\"  final pass  engine=%s",
-		opts.Sprint.Number,
-		opts.Epic.TotalSprints,
-		opts.Sprint.Name,
+		opts.Sprint.Number, opts.Epic.TotalSprints, opts.Sprint.Name,
 		opts.Engine.Name(),
 	)
 
-	finalLogPath := filepath.Join(
-		buildLogsDir,
+	finalLogPath := filepath.Join(buildLogsDir,
 		fmt.Sprintf("sprint%d_audit_final_%s.log", opts.Sprint.Number, time.Now().Format("20060102_150405")),
 	)
 	if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, finalLogPath); err != nil {
 		return nil, err
 	}
 
-	auditFilePath := filepath.Join(opts.ProjectDir, config.SprintAuditFile)
 	content, err := os.ReadFile(auditFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &AuditResult{Passed: true, Iterations: maxIter}, nil
+			return &AuditResult{Passed: true, Iterations: lastCycle}, nil
 		}
 		return nil, fmt.Errorf("run audit loop: read final audit file: %w", err)
 	}
@@ -212,20 +345,26 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	maxSev := parseAuditSeverity(string(content))
 	finalCounts := countAuditSeverities(string(content))
 	if isAuditPass(maxSev) {
-		frylog.Log("  AUDIT: pass after %d passes (%s)", maxIter, formatSeverityCounts(finalCounts))
-		return &AuditResult{Passed: true, Iterations: maxIter, MaxSeverity: maxSev, SeverityCounts: finalCounts}, nil
+		frylog.Log("  AUDIT: pass after %d cycles (%s)", lastCycle, formatSeverityCounts(finalCounts))
+		return &AuditResult{
+			Passed: true, Iterations: lastCycle,
+			MaxSeverity: maxSev, SeverityCounts: finalCounts,
+		}, nil
 	}
 
 	return &AuditResult{
-		Passed:         false,
-		Blocking:       isBlockingSeverity(maxSev),
-		Iterations:     maxIter,
-		MaxSeverity:    maxSev,
-		SeverityCounts: finalCounts,
+		Passed:             false,
+		Blocking:           isBlockingSeverity(maxSev),
+		Iterations:         lastCycle,
+		MaxSeverity:        maxSev,
+		SeverityCounts:     finalCounts,
+		UnresolvedFindings: parseFindings(string(content)),
 	}, nil
 }
 
-func buildAuditPrompt(opts AuditOpts) string {
+// --- Prompt builders ---
+
+func buildAuditPrompt(opts AuditOpts, previousFindings []Finding) string {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# SPRINT AUDIT — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
@@ -282,6 +421,22 @@ func buildAuditPrompt(opts AuditOpts) string {
 	b.WriteString(diff)
 	b.WriteString("\n```\n\n")
 
+	// Previously identified issues (cycle 2+)
+	actionablePrev := filterUnresolved(previousFindings)
+	if len(actionablePrev) > 0 {
+		b.WriteString("## Previously Identified Issues\n\n")
+		b.WriteString("The following issues were found in previous audit cycles. Verify whether\n")
+		b.WriteString("each has been resolved. Include your verdict for each in your report.\n\n")
+		for i, f := range actionablePrev {
+			b.WriteString(fmt.Sprintf("%d. ", i+1))
+			if f.Location != "" {
+				b.WriteString(fmt.Sprintf("[%s] ", f.Location))
+			}
+			b.WriteString(fmt.Sprintf("%s (%s)\n", f.Description, f.Severity))
+		}
+		b.WriteString("\n")
+	}
+
 	// Audit criteria
 	b.WriteString("## Audit Criteria\n")
 	if opts.Mode == "writing" {
@@ -324,8 +479,21 @@ func buildAuditPrompt(opts AuditOpts) string {
 	b.WriteString("```\n")
 	b.WriteString("## Summary\n")
 	b.WriteString("<1-2 sentence overview>\n\n")
+
+	if len(actionablePrev) > 0 {
+		b.WriteString("## Verified Previous Issues\n")
+		b.WriteString("For each previously identified issue:\n")
+		b.WriteString("- **Issue:** <number from list above>\n")
+		b.WriteString("- **Status:** RESOLVED | STILL PRESENT\n")
+		b.WriteString("- **Notes:** <brief explanation>\n\n")
+	}
+
 	b.WriteString("## Findings\n")
-	b.WriteString("For each issue:\n")
+	if len(actionablePrev) > 0 {
+		b.WriteString("For each issue (include both STILL PRESENT previous issues and any NEW issues):\n")
+	} else {
+		b.WriteString("For each issue:\n")
+	}
 	b.WriteString("- **Location:** <file:line>\n")
 	b.WriteString("- **Description:** <what is wrong>\n")
 	b.WriteString("- **Severity:** CRITICAL | HIGH | MODERATE | LOW\n")
@@ -337,34 +505,46 @@ func buildAuditPrompt(opts AuditOpts) string {
 	return b.String()
 }
 
-func buildAuditFixPrompt(opts AuditOpts, auditFindings string, previousFindings string) string {
+func buildAuditFixPrompt(opts AuditOpts, findings []Finding) string {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# AUDIT FIX — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
 	if opts.Mode == "writing" {
-		b.WriteString("The content audit found issues. Fix ONLY the CRITICAL, HIGH, and MODERATE\n")
-		b.WriteString("issues listed below. Do NOT fix LOW issues. Make minimal editorial changes.\n\n")
+		b.WriteString("The content audit found issues. Fix ONLY the issues listed below.\n")
+		b.WriteString("Do NOT fix LOW issues. Make minimal editorial changes.\n\n")
 	} else {
-		b.WriteString("The sprint audit found issues. Fix ONLY the CRITICAL, HIGH, and MODERATE\n")
-		b.WriteString("issues listed below. Do NOT fix LOW issues. Make minimal changes.\n\n")
+		b.WriteString("The sprint audit found issues. Fix ONLY the issues listed below.\n")
+		b.WriteString("Do NOT fix LOW issues. Make minimal changes.\n\n")
 	}
+
+	b.WriteString("**Important:** Focus exclusively on fixing the listed issues. Do not search\n")
+	b.WriteString("for new issues. Address the oldest issues first (listed in priority order).\n\n")
 
 	b.WriteString("## Sprint Goals\n")
 	b.WriteString(opts.Sprint.Prompt)
 	b.WriteString("\n\n")
 
-	if previousFindings != "" {
-		b.WriteString("## Previous Audit Findings\n")
-		b.WriteString("The following issues were identified in the prior audit pass. A fix was already\n")
-		b.WriteString("attempted. Review what was tried before and avoid repeating the same approach\n")
-		b.WriteString("if the issues persist in the current findings below.\n\n")
-		b.WriteString(previousFindings)
-		b.WriteString("\n\n")
-	}
+	b.WriteString("## Issues to Fix\n\n")
+	b.WriteString("Issues are listed in priority order (oldest first, highest severity within age group).\n\n")
 
-	b.WriteString("## Current Audit Findings\n")
-	b.WriteString(auditFindings)
-	b.WriteString("\n\n")
+	// Group by origin cycle for clarity
+	groups := groupByCycle(findings)
+	for _, group := range groups {
+		if len(groups) > 1 {
+			b.WriteString(fmt.Sprintf("### From Audit Cycle %d\n\n", group.cycle))
+		}
+		for _, f := range group.findings {
+			if f.Location != "" {
+				b.WriteString(fmt.Sprintf("- **Location:** %s\n", f.Location))
+			}
+			b.WriteString(fmt.Sprintf("- **Description:** %s\n", f.Description))
+			b.WriteString(fmt.Sprintf("- **Severity:** %s\n", f.Severity))
+			if f.RecommendedFix != "" {
+				b.WriteString(fmt.Sprintf("- **Recommended Fix:** %s\n", f.RecommendedFix))
+			}
+			b.WriteString("\n")
+		}
+	}
 
 	b.WriteString("## Context\n")
 	b.WriteString(fmt.Sprintf("- Read %s for what was built\n", config.SprintProgressFile))
@@ -375,6 +555,35 @@ func buildAuditFixPrompt(opts AuditOpts, auditFindings string, previousFindings 
 	return b.String()
 }
 
+func buildVerifyPrompt(opts AuditOpts, findings []Finding) string {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("# VERIFY FIXES — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
+	b.WriteString("Check whether the following issues have been resolved by recent changes.\n")
+	b.WriteString("For each issue, inspect the specified location and verify whether it is fixed.\n\n")
+	b.WriteString("Do NOT look for new issues. Only verify the listed issues.\n")
+	b.WriteString("Do NOT modify any source code.\n\n")
+
+	b.WriteString("Write your results to .fry/sprint-audit.txt in this format:\n\n")
+	b.WriteString("For each issue:\n")
+	b.WriteString("- **Issue:** <number>\n")
+	b.WriteString("- **Status:** RESOLVED | STILL PRESENT\n\n")
+
+	b.WriteString("## Issues to Verify\n\n")
+
+	for i, f := range findings {
+		b.WriteString(fmt.Sprintf("%d. ", i+1))
+		if f.Location != "" {
+			b.WriteString(fmt.Sprintf("[%s] ", f.Location))
+		}
+		b.WriteString(fmt.Sprintf("%s (%s)\n", f.Description, f.Severity))
+	}
+
+	return b.String()
+}
+
+// --- Parsers ---
+
 // severityLabelRe matches lines containing a severity label (e.g., "**Severity:**" or "Severity:").
 var severityLabelRe = regexp.MustCompile(`(?i)\bseverity\b`)
 
@@ -383,21 +592,12 @@ var severityLabelRe = regexp.MustCompile(`(?i)\bseverity\b`)
 var severityWordRe = regexp.MustCompile(`\b(CRITICAL|HIGH|MODERATE|LOW)\b`)
 
 func parseAuditSeverity(content string) string {
-	// Look for severity markers in structured finding lines only.
-	// Matches patterns like "**Severity:** CRITICAL" or "Severity: HIGH"
-	// to avoid false positives from words appearing in diffs or prose.
-	// Uses word-boundary matching to prevent substring false positives
-	// (e.g., "HIGHLY" should not match "HIGH").
-	// Only the FIRST severity keyword after the "Severity" label on each line
-	// is considered — additional keywords in trailing prose are ignored.
 	maxSev := ""
 	for _, line := range strings.Split(content, "\n") {
-		// Match lines containing "severity" as a label
 		if !severityLabelRe.MatchString(line) {
 			continue
 		}
 		upper := strings.ToUpper(line)
-		// Extract only the first severity keyword on this line
 		m := severityWordRe.FindString(upper)
 		if m == "" {
 			continue
@@ -406,15 +606,12 @@ func parseAuditSeverity(content string) string {
 			maxSev = m
 		}
 		if maxSev == "CRITICAL" {
-			return "CRITICAL" // highest possible, return immediately
+			return "CRITICAL"
 		}
 	}
 	return maxSev
 }
 
-// countAuditSeverities counts the number of findings at each severity level
-// in the audit content. It uses the same parsing logic as parseAuditSeverity
-// (structured severity-labeled lines only) but counts all occurrences.
 func countAuditSeverities(content string) map[string]int {
 	counts := make(map[string]int)
 	for _, line := range strings.Split(content, "\n") {
@@ -431,12 +628,314 @@ func countAuditSeverities(content string) map[string]int {
 	return counts
 }
 
-// severityOrder defines the display order for severity counts (highest first).
+// Regexes for structured finding fields.
+var (
+	locationRe       = regexp.MustCompile(`(?i)\*?\*?Location:\*?\*?\s*(.+)`)
+	descriptionRe    = regexp.MustCompile(`(?i)\*?\*?Description:\*?\*?\s*(.+)`)
+	recommendedFixRe = regexp.MustCompile(`(?i)\*?\*?Recommended\s*Fix:\*?\*?\s*(.+)`)
+)
+
+// parseFindings extracts structured findings from audit output. Each finding
+// is delimited by a new Location or Description line. Findings without a
+// Description are discarded.
+func parseFindings(content string) []Finding {
+	var findings []Finding
+	var current Finding
+	hasCurrent := false
+
+	emit := func() {
+		if hasCurrent && strings.TrimSpace(current.Description) != "" {
+			findings = append(findings, current)
+		}
+	}
+
+	for _, line := range strings.Split(content, "\n") {
+		// Check for Location (starts a new finding)
+		if m := locationRe.FindStringSubmatch(line); len(m) >= 2 {
+			emit()
+			current = Finding{Location: strings.TrimSpace(m[1])}
+			hasCurrent = true
+			continue
+		}
+
+		// Check for Description (starts a new finding if current already has one)
+		if m := descriptionRe.FindStringSubmatch(line); len(m) >= 2 {
+			if hasCurrent && strings.TrimSpace(current.Description) != "" {
+				emit()
+				current = Finding{}
+			}
+			if !hasCurrent {
+				current = Finding{}
+				hasCurrent = true
+			}
+			current.Description = strings.TrimSpace(m[1])
+			continue
+		}
+
+		// Check for Severity
+		if hasCurrent && severityLabelRe.MatchString(line) {
+			upper := strings.ToUpper(line)
+			if m := severityWordRe.FindString(upper); m != "" {
+				current.Severity = m
+			}
+			continue
+		}
+
+		// Check for Recommended Fix
+		if hasCurrent {
+			if m := recommendedFixRe.FindStringSubmatch(line); len(m) >= 2 {
+				current.RecommendedFix = strings.TrimSpace(m[1])
+				continue
+			}
+		}
+	}
+
+	emit()
+	return findings
+}
+
+// Regexes for verification status parsing.
+var (
+	issueNumberRe = regexp.MustCompile(`(?i)\*?\*?Issue:\*?\*?\s*(\d+)`)
+	statusRe      = regexp.MustCompile(`(?i)\*?\*?Status:\*?\*?\s*(RESOLVED|STILL\s*PRESENT)`)
+)
+
+// parseVerificationStatuses parses the verification agent's output to determine
+// which findings are resolved. Returns a boolean slice aligned with the findings slice.
+func parseVerificationStatuses(content string, findings []Finding) []bool {
+	resolved := make([]bool, len(findings))
+
+	currentIssue := -1
+	for _, line := range strings.Split(content, "\n") {
+		// Check for issue number
+		if m := issueNumberRe.FindStringSubmatch(line); len(m) >= 2 {
+			num, err := strconv.Atoi(strings.TrimSpace(m[1]))
+			if err == nil && num >= 1 && num <= len(findings) {
+				currentIssue = num - 1
+			}
+		}
+
+		// Check for status (may be on same line or next line)
+		if m := statusRe.FindStringSubmatch(line); len(m) >= 2 && currentIssue >= 0 {
+			status := strings.ToUpper(strings.TrimSpace(m[1]))
+			if strings.HasPrefix(status, "RESOLVED") {
+				resolved[currentIssue] = true
+			}
+			currentIssue = -1
+		}
+	}
+
+	return resolved
+}
+
+// --- Classification and comparison ---
+
+// classifyFindings compares a set of known findings against newly parsed findings.
+// Returns findings that were resolved (no longer present), findings that persist
+// (still present from a previous cycle), and genuinely new findings.
+func classifyFindings(known, current []Finding) (resolved, persisting, newFindings []Finding) {
+	// Build a set of current finding keys for quick lookup.
+	currentKeys := make(map[string]struct{})
+	for _, f := range current {
+		currentKeys[f.key()] = struct{}{}
+	}
+
+	// Classify known findings as resolved or persisting.
+	knownKeys := make(map[string]struct{})
+	for _, kf := range known {
+		k := kf.key()
+		knownKeys[k] = struct{}{}
+		if _, exists := currentKeys[k]; exists {
+			// Issue persists — keep origin cycle from known.
+			// Find the matching current finding for updated fields.
+			for _, cf := range current {
+				if cf.key() == k {
+					cf.OriginCycle = kf.OriginCycle
+					persisting = append(persisting, cf)
+					break
+				}
+			}
+		} else {
+			resolved = append(resolved, kf)
+		}
+	}
+
+	// Collect genuinely new findings (not in known set). Use a seen set
+	// to avoid emitting duplicates from the current list.
+	seen := make(map[string]struct{})
+	for _, cf := range current {
+		k := cf.key()
+		if _, isKnown := knownKeys[k]; isKnown {
+			continue
+		}
+		if _, alreadySeen := seen[k]; alreadySeen {
+			continue
+		}
+		seen[k] = struct{}{}
+		newFindings = append(newFindings, cf)
+	}
+
+	return
+}
+
+// hasProgress returns true if the current finding set represents progress
+// compared to the previous set. Progress means: fewer findings, or different
+// findings (not all previous issues still present).
+func hasProgress(previous, current map[string]struct{}) bool {
+	if len(current) == 0 {
+		return true
+	}
+	if len(previous) == 0 {
+		return true
+	}
+	if len(current) < len(previous) {
+		return true
+	}
+	matchCount := 0
+	for key := range previous {
+		if _, ok := current[key]; ok {
+			matchCount++
+		}
+	}
+	return matchCount < len(previous)
+}
+
+// findingKeySet extracts normalized description keys from actionable findings.
+func findingKeySet(findings []Finding) map[string]struct{} {
+	keys := make(map[string]struct{})
+	for _, f := range findings {
+		if f.isActionable() {
+			keys[f.key()] = struct{}{}
+		}
+	}
+	return keys
+}
+
+// --- Sorting and grouping ---
+
+// sortFindingsFIFO sorts findings by OriginCycle ascending (oldest first),
+// then by severity descending within the same cycle.
+func sortFindingsFIFO(findings []Finding) {
+	sort.SliceStable(findings, func(i, j int) bool {
+		if findings[i].OriginCycle != findings[j].OriginCycle {
+			return findings[i].OriginCycle < findings[j].OriginCycle
+		}
+		return severityRank(findings[i].Severity) > severityRank(findings[j].Severity)
+	})
+}
+
+// mergeFindings combines persisting and new findings into a single FIFO-ordered list.
+func mergeFindings(persisting, newFindings []Finding) []Finding {
+	merged := make([]Finding, 0, len(persisting)+len(newFindings))
+	merged = append(merged, persisting...)
+	merged = append(merged, newFindings...)
+	sortFindingsFIFO(merged)
+	return merged
+}
+
+type findingGroup struct {
+	cycle    int
+	findings []Finding
+}
+
+// groupByCycle groups findings by their OriginCycle, returning groups in ascending cycle order.
+func groupByCycle(findings []Finding) []findingGroup {
+	cycleMap := make(map[int][]Finding)
+	var cycles []int
+	for _, f := range findings {
+		if _, seen := cycleMap[f.OriginCycle]; !seen {
+			cycles = append(cycles, f.OriginCycle)
+		}
+		cycleMap[f.OriginCycle] = append(cycleMap[f.OriginCycle], f)
+	}
+	sort.Ints(cycles)
+	groups := make([]findingGroup, len(cycles))
+	for i, c := range cycles {
+		groups[i] = findingGroup{cycle: c, findings: cycleMap[c]}
+	}
+	return groups
+}
+
+// --- Filtering and counting helpers ---
+
+func filterUnresolved(findings []Finding) []Finding {
+	var result []Finding
+	for _, f := range findings {
+		if f.Severity != "" && f.Severity != "LOW" && !f.Resolved {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
+func countActionableFindings(findings []Finding) int {
+	n := 0
+	for _, f := range findings {
+		if f.isActionable() {
+			n++
+		}
+	}
+	return n
+}
+
+func collectUnresolved(findings []Finding) []Finding {
+	var result []Finding
+	for _, f := range findings {
+		if !f.Resolved {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
+// countAboveLow counts findings with severity above LOW, regardless of resolution status.
+func countAboveLow(findings []Finding) int {
+	n := 0
+	for _, f := range findings {
+		if f.Severity != "" && f.Severity != "LOW" {
+			n++
+		}
+	}
+	return n
+}
+
+func countResolved(findings []Finding) int {
+	n := 0
+	for _, f := range findings {
+		if f.Resolved {
+			n++
+		}
+	}
+	return n
+}
+
+func markAllResolved(findings []Finding) {
+	for i := range findings {
+		findings[i].Resolved = true
+	}
+}
+
+// applyResolutionsByKey marks findings as resolved based on the verification results.
+// The resolved slice is aligned with the checked slice (a subset of all findings).
+func applyResolutionsByKey(all []Finding, checked []Finding, resolved []bool) {
+	for i, flag := range resolved {
+		if !flag || i >= len(checked) {
+			continue
+		}
+		key := checked[i].key()
+		for j := range all {
+			if all[j].key() == key && !all[j].Resolved {
+				all[j].Resolved = true
+				break
+			}
+		}
+	}
+}
+
+// --- Severity helpers ---
+
 var severityOrder = []string{"CRITICAL", "HIGH", "MODERATE", "LOW"}
 
-// formatSeverityCounts formats a severity count map into a single-line summary
-// like "1 CRITICAL, 2 HIGH, 4 MODERATE". Zero-count levels are omitted.
-// Returns "none" if the map is empty or all counts are zero.
 func formatSeverityCounts(counts map[string]int) string {
 	var parts []string
 	for _, sev := range severityOrder {
@@ -478,70 +977,41 @@ func isBlockingSeverity(maxSeverity string) bool {
 	return maxSeverity == "CRITICAL" || maxSeverity == "HIGH"
 }
 
-// descriptionRe matches structured finding description lines.
-var descriptionRe = regexp.MustCompile(`(?i)\*?\*?Description:\*?\*?\s*(.+)`)
+// --- Iteration limit helpers ---
 
-// extractFindings parses structured audit findings and returns a normalized
-// set of finding descriptions for progress comparison across iterations.
-func extractFindings(content string) map[string]struct{} {
-	findings := make(map[string]struct{})
-	for _, line := range strings.Split(content, "\n") {
-		m := descriptionRe.FindStringSubmatch(line)
-		if len(m) < 2 {
-			continue
-		}
-		desc := strings.ToLower(strings.TrimSpace(m[1]))
-		if desc != "" {
-			findings[desc] = struct{}{}
-		}
-	}
-	return findings
-}
-
-// hasProgress returns true if the current findings represent progress compared
-// to the previous findings. Progress means: fewer total findings, or different
-// findings (not all previous issues still present).
-func hasProgress(previous, current map[string]struct{}) bool {
-	if len(current) == 0 {
-		return true // all findings resolved
-	}
-	if len(previous) == 0 {
-		return true // first iteration with findings
-	}
-	if len(current) < len(previous) {
-		return true // fewer findings = progress
-	}
-	// Check if all previous findings still exist
-	matchCount := 0
-	for key := range previous {
-		if _, ok := current[key]; ok {
-			matchCount++
-		}
-	}
-	// No progress if every previous finding is still present
-	return matchCount < len(previous)
-}
-
-// effectiveMaxIter determines the maximum audit iterations and whether
-// progress-based detection should be used, based on effort level and
-// whether the user explicitly set @max_audit_iterations.
-func effectiveMaxIter(ep *epic.Epic) (maxIter int, progressBased bool) {
+// effectiveOuterCycles determines the maximum outer audit cycles and whether
+// progress-based detection should be used.
+func effectiveOuterCycles(ep *epic.Epic) (maxCycles int, progressBased bool) {
 	if ep.MaxAuditIterationsSet {
 		return ep.MaxAuditIterations, false
 	}
 	switch ep.EffortLevel {
 	case epic.EffortMax:
-		return config.MaxAuditIterationsMaxCap, true
+		return config.MaxOuterCyclesMaxCap, true
 	case epic.EffortHigh:
-		return config.MaxAuditIterationsHighCap, true
+		return config.MaxOuterCyclesHighCap, true
 	default:
-		maxIter = ep.MaxAuditIterations
-		if maxIter <= 0 {
-			maxIter = config.DefaultMaxAuditIterations
+		maxCycles = ep.MaxAuditIterations
+		if maxCycles <= 0 {
+			maxCycles = config.DefaultMaxOuterAuditCycles
 		}
-		return maxIter, false
+		return maxCycles, false
 	}
 }
+
+// effectiveInnerIter determines the maximum inner fix iterations per audit cycle.
+func effectiveInnerIter(ep *epic.Epic) int {
+	switch ep.EffortLevel {
+	case epic.EffortMax:
+		return config.MaxInnerFixIterMax
+	case epic.EffortHigh:
+		return config.MaxInnerFixIterHigh
+	default:
+		return config.DefaultMaxInnerFixIter
+	}
+}
+
+// --- File and agent helpers ---
 
 func Cleanup(projectDir string) error {
 	for _, rel := range []string{config.SprintAuditFile, config.AuditPromptFile} {
@@ -551,6 +1021,21 @@ func Cleanup(projectDir string) error {
 		}
 	}
 	return nil
+}
+
+func writePromptFile(path string, content string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func refreshDiff(opts *AuditOpts) {
+	if opts.DiffFn != nil {
+		if freshDiff, diffErr := opts.DiffFn(); diffErr == nil {
+			opts.GitDiff = freshDiff
+		}
+	}
 }
 
 func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath string) (string, error) {
