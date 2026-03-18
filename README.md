@@ -2,14 +2,51 @@
 
 ![fry](trustmepro.png)
 
-< The following is written by a human >
+## Human-Written Part
 
-Fry is an autonomous document engine built for long-run coding tasks but capable of so much more. Fry is designed for generating a large corpus of documents -- one-shot run on large complex codebases that actually work, yes, but also research documents, strategic analyses, business plans, it'll even write you an complete book. And the thing is, it actaully doesnt suck. 
+Fry is an agent orchestration tool designed for long-run coding, planning, and writing tasks. You provide some input — as little as a simple prompt or as much as a comprehensive build plan with an extensive corpus of supporting documents — and it will apply a layered system of planning, building, and checking its own work to produce a result with the level of effort of your choosing. To put it simply, you give it as much or as little you want, and it will do as much or as little as you want it to do.
 
-</ end of stuff written by human >
+### What does it actually do?
 
-It breaks your plan into sprints, runs each one through an AI agent loop, then verifies the output with machine-executable checks. If a check fails, it re-runs the sprint with a targeted fix prompt. An effort system sizes the run to match the task — a small fix gets one sprint, a large project gets phased execution with mid-build review and dynamic replanning. After each sprint, a separate AI agent audits the work and blocks the build on critical issues. Once all sprints finish, a final holistic audit reviews the full output. Every sprint is git-checkpointed automatically.
+Fry can code, write planning documents, or write human-language content like essays, technical writing, and can even write a complete book!
 
+### Input
+
+Fry takes one or all of the following as input:
+
+- **A user prompt** — provided as text on the command line or a path to a text file.
+- **An executive.md file** — a high-level description of the project. Think of this as the "What and Why" for the project.
+- **A plan.md file** — a detailed plan to build/write the output. Think of this as the "How" for the project.
+
+Any of the above can be something you write yourself or have an LLM write for you.
+
+### Plan Resolution
+
+- If only a user prompt is provided, Fry generates a `plan.md` from the user prompt.
+- If an `executive.md` is provided as well, Fry uses it to inform the generated `plan.md`.
+- If a `plan.md` is provided, Fry uses it directly.
+
+In short, Fry will do its best to use whatever info you provide to generate a `plan.md` file, if one was not explicitly provided.
+
+### Preparation
+
+However it comes about, Fry will then:
+
+1. Generate an `AGENTS.md` file (if one was not provided) establishing best practices for the agents
+2. Decompose `plan.md` into an epic, delimited by sprints with each sprint broken up by specific tasks
+3. Generate a `verification.md` for high-level checks to run after each sprint (deep semantic checks are done as part of a separate audit system)
+
+### The Build
+
+Fry deploys agents using either OpenAI Codex or Claude Code — the specific models used vary by task and user-defined effort level.
+
+A single agent carries out the work to complete a sprint (although there is a parallel mode to run multiple agents at once).
+
+Once a sprint is complete, verification checks run as a basic sanity check. If any verifications fail, a self-heal system deploys to fix the issues.
+
+If/when all verification checks pass, an audit process is deployed to ensure the work has been completed with no bugs, edge cases covered, etc. — basically that it was done well. The audit process is layered and iterative, making multiple passes (based on effort level) to ensure issues are fixed on a first-in-first-out basis before a follow-up audit is run to verify and/or surface new issues. The process repeats until the exit condition is met.
+
+The build continues in this manner until complete.
 
 ## How It Works
 
