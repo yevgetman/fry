@@ -1,6 +1,6 @@
 # fry 🍳
 
-![fry](bestfry-1.jpg)
+![fry](trustmepro.png)
 
 < The following is written by a human >
 
@@ -10,8 +10,6 @@ Fry is an autonomous document engine built for long-run coding tasks but capable
 
 It breaks your plan into sprints, runs each one through an AI agent loop, then verifies the output with machine-executable checks. If a check fails, it re-runs the sprint with a targeted fix prompt. An effort system sizes the run to match the task — a small fix gets one sprint, a large project gets phased execution with mid-build review and dynamic replanning. After each sprint, a separate AI agent audits the work and blocks the build on critical issues. Once all sprints finish, a final holistic audit reviews the full output. Every sprint is git-checkpointed automatically.
 
-
-> This is the Go rewrite of [Fry](https://github.com/yevgetman/fry). Same capabilities, single static binary, no bash 4.0+ dependency.
 
 ## How It Works
 
