@@ -3,6 +3,7 @@ package summary
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -200,7 +201,7 @@ func TestBuildSummaryPrompt_CapsTotalLogBytes(t *testing.T) {
 	logContent := strings.Repeat("x", maxLogBytes-100)
 	count := (maxTotalLogCap / (maxLogBytes - 100)) + 2
 	for i := 0; i < count; i++ {
-		name := filepath.Join(logsDir, strings.Repeat("0", 3-len(string(rune('0'+i))))+string(rune('a'+i))+".log")
+		name := filepath.Join(logsDir, fmt.Sprintf("log_%02d.log", i))
 		require.NoError(t, os.WriteFile(name, []byte(logContent), 0o644))
 	}
 
@@ -266,11 +267,6 @@ func TestGenerateBuildSummary_EngineWritesSummary(t *testing.T) {
 	projectDir := t.TempDir()
 	summaryPath := filepath.Join(projectDir, config.SummaryFile)
 
-	eng := &stubSummaryEngine{output: "summary output"}
-
-	// Simulate the engine writing the summary file (as it would in real usage)
-	origRun := eng.Run
-	_ = origRun
 	wrapper := &writingSummaryEngine{
 		projectDir:  projectDir,
 		summaryText: "# Build Summary\nAll sprints passed.\n",
