@@ -4,17 +4,17 @@
 
 ## Human-Written Part
 
-Fry is an agent orchestration tool designed for long-run coding, planning, and writing tasks. You provide some input — as little as a simple prompt or as much as a comprehensive build plan with an extensive corpus of supporting documents — and it will apply a layered system of planning, building, and checking its own work to produce a result with the level of effort of your choosing. To put it simply, you give it as much or as little you want, and it will do as much or as little as you want it to do.
+Fry is an agent orchestration tool designed for long-run coding, planning, and writing tasks. You provide some input — as little as a simple prompt or as much as a comprehensive build plan with an extensive corpus of supporting documents — and it will apply a layered system of planning, building, and checking its own work to produce a result with the level of effort of your choosing. To put it simply, **you give it as much or as little you want, and it will do as much or as little as you want it to do.**
 
 ### What does it actually do?
 
-Fry can code, write planning documents, or write human-language content like essays, technical writing, and can even write a complete book!
+Fry can code, write [planning documents](docs/planning-mode.md), or write human-language content like essays, technical writing, and can even [write a complete book](docs/writing-mode.md)!
 
 ### Input
 
 Fry takes one or all of the following as input:
 
-- **A user prompt** — provided as text on the command line or a path to a text file.
+- **A [user prompt](docs/user-prompt.md)** — provided as text on the command line or a path to a text file.
 - **An executive.md file** — a high-level description of the project. Think of this as the "What and Why" for the project.
 - **A plan.md file** — a detailed plan to build/write the output. Think of this as the "How" for the project.
 
@@ -33,18 +33,18 @@ In short, Fry will do its best to use whatever info you provide to generate a `p
 However it comes about, Fry will then:
 
 1. Generate an `AGENTS.md` file (if one was not provided) establishing best practices for the agents
-2. Decompose `plan.md` into an epic, delimited by sprints with each sprint broken up by specific tasks
-3. Generate a `verification.md` for high-level checks to run after each sprint (deep semantic checks are done as part of a separate audit system)
+2. Decompose `plan.md` into an [epic](docs/epic-format.md), delimited by sprints with each sprint broken up by specific tasks
+3. Generate a `verification.md` for [high-level checks](docs/verification.md) to run after each sprint (deep semantic checks are done as part of a separate [audit system](docs/sprint-audit.md))
 
 ### The Build
 
-Fry deploys agents using either OpenAI Codex or Claude Code — the specific models used vary by task and user-defined effort level.
+Fry deploys agents using either [OpenAI Codex or Claude Code](docs/engines.md) — the specific models used vary by task and user-defined [effort level](docs/effort-levels.md).
 
 A single agent carries out the work to complete a sprint (although there is a parallel mode to run multiple agents at once).
 
-Once a sprint is complete, verification checks run as a basic sanity check. If any verifications fail, a self-heal system deploys to fix the issues.
+Once a sprint is complete, [verification checks](docs/verification.md) run as a basic sanity check. If any verifications fail, a [self-heal system](docs/self-healing.md) deploys to fix the issues.
 
-If/when all verification checks pass, an audit process is deployed to ensure the work has been completed with no bugs, edge cases covered, etc. — basically that it was done well. The audit process is layered and iterative, making multiple passes (based on effort level) to ensure issues are fixed on a first-in-first-out basis before a follow-up audit is run to verify and/or surface new issues. The process repeats until the exit condition is met.
+If/when all verification checks pass, an [audit process](docs/sprint-audit.md) is deployed to ensure the work has been completed with no bugs, edge cases covered, etc. — basically that it was done well. The audit process is layered and iterative, making multiple passes (based on effort level) to ensure issues are fixed on a first-in-first-out basis before a follow-up audit is run to verify and/or surface new issues. The process repeats until the exit condition is met.
 
 The build continues in this manner until complete.
 
