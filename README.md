@@ -2,7 +2,7 @@
 
 ![fry](trustmepro.png)
 
-## Human-Written Part
+## What is Fry?
 
 Fry is an agent orchestration tool designed for long-run coding, planning, and writing tasks. You provide some input — as little as a simple prompt or as much as a comprehensive build plan with an extensive corpus of supporting documents — and it will apply a layered system of planning, building, and checking its own work to produce a result with the level of effort of your choosing. To put it simply, **you give it as much or as little you want, and it will do as much or as little as you want it to do.**
 
