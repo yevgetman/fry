@@ -199,33 +199,37 @@ media/                ──(manifest only)
 
                         fry run
                         ───────
-For each sprint (startSprint → endSprint):
+Before sprint loop:
   1. Preflight checks (required tools + custom commands)
-  2. Docker up (if @docker_from_sprint <= current sprint)
-  3. Git init (if needed)
-  4. Assemble layered prompt → .fry/prompt.md
-  5. Agent iteration loop:
+  2. Git init (if needed)
+  3. --continue: collect build state + LLM analysis (auto-detect resume point)
+
+For each sprint (startSprint → endSprint):
+  4. Docker up (if @docker_from_sprint <= current sprint)
+  5. Pre-sprint shell hook
+  6. Assemble layered prompt → .fry/prompt.md
+  7. Agent iteration loop:
      │  for iter = 1 to maxIterations:
      │    ├─ Pre-iteration shell hook
      │    ├─ Run AI engine (codex|claude CLI)
      │    ├─ Append output → .fry/sprint-progress.txt
      │    ├─ Check promise token → early exit if found
      │    └─ No-op detection (no git diff) → early exit
-  6. Run verification checks
-  7. If checks fail: heal loop (effort-level-aware: low=skip, medium=3, high=up to 10 with progress detection, max=unlimited with progress detection)
-  8. Sprint audit (if enabled & effort != low) — two-level loop:
+  8. Run verification checks
+  9. If checks fail: heal loop (effort-level-aware: low=skip, medium=3, high=up to 10 with progress detection, max=unlimited with progress detection)
+ 10. Sprint audit (if enabled & effort != low) — two-level loop:
      │  ├─ Outer loop (audit cycles): audit agent reviews + verifies previous issues
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
      │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
      │  ├─ medium: bounded (3 outer cycles, 3 inner fix iterations)
      │  └─ high: progress-based (cap 12 outer, 7 inner), max: progress-based (cap 20 outer, 10 inner)
-  9. Git checkpoint commit
- 10. Compact sprint progress → .fry/epic-progress.txt
- 11. Optional sprint review:
+ 11. Git checkpoint commit
+ 12. Compact sprint progress → .fry/epic-progress.txt
+ 13. Optional sprint review:
      │  ├─ Review agent: CONTINUE or DEVIATE
      │  └─ If DEVIATE: replan affected sprints
 
-Final: build audit → build-summary.md
+Final: build summary → build audit (if full epic completed)
 ```
 
 ### Prompt Layering (8 layers, assembled in `sprint/prompt.go`)

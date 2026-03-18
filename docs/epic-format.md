@@ -30,7 +30,7 @@ Placed before any `@sprint` block:
 | Directive | Description |
 |---|---|
 | `@epic <name>` | Display name for logs and summaries |
-| `@engine <codex\|claude>` | AI engine (default: codex) |
+| `@engine <codex\|claude>` | AI engine (default: codex for software mode, claude for planning/writing). See [AI Engines](engines.md). |
 | `@effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `@docker_from_sprint <N>` | Start docker-compose from sprint N |
 | `@docker_ready_cmd <cmd>` | Custom health check after docker-compose up |
@@ -42,7 +42,7 @@ Placed before any `@sprint` block:
 | `@model <model>` | Override the agent model (alias: `@codex_model`) |
 | `@engine_flags <flags>` | Extra CLI flags for the agent (alias: `@codex_flags`) |
 | `@verification <file>` | Verification checks file (default: `.fry/verification.md`) |
-| `@max_heal_attempts <N>` | Auto-heal attempts after verification failure (default: 3; 0 or negative falls back to default) |
+| `@max_heal_attempts <N>` | Auto-heal attempts after verification failure (default: effort-level default or 3). When explicitly set, overrides effort-level behavior and disables progress detection. Set to 0 to disable healing. |
 | `@max_fail_percent <N>` | Maximum percentage of checks that can fail while still passing the sprint (default: 20; 0 = strict, 100 = always pass). See [Verification](verification.md). |
 | `@compact_with_agent` | Use AI agent to summarize sprint progress (default: mechanical extraction) |
 | `@review_between_sprints` | Enable mid-build sprint review (default: disabled) |

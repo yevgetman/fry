@@ -91,7 +91,7 @@ This is not optional. When you add, modify, or remove a feature:
 
 - `cmd/fry/main.go` — Entry point only. Calls `cli.Execute()` and nothing else.
 - `internal/cli/` — Cobra command definitions. All user-facing CLI logic goes here.
-- `internal/<feature>/` — One package per feature domain (e.g., `epic`, `sprint`, `verify`, `heal`, `audit`, `review`, `engine`, `prepare`, `git`, `docker`, `preflight`, `lock`, `log`, `media`, `assets`, `summary`, `shellhook`, `textutil`).
+- `internal/<feature>/` — One package per feature domain (e.g., `epic`, `sprint`, `verify`, `heal`, `audit`, `review`, `engine`, `prepare`, `git`, `docker`, `preflight`, `lock`, `log`, `media`, `assets`, `summary`, `shellhook`, `textutil`, `continuerun`).
 - `internal/config/` — Constants only. No logic, no functions.
 - `templates/` — Embedded markdown templates (compiled into binary via `//go:embed`).
 

@@ -14,8 +14,10 @@ npm i -g @openai/codex
 
 Invocation:
 ```
-codex exec --dangerously-bypass-approvals-and-sandbox [--model MODEL] [FLAGS] PROMPT
+echo PROMPT | codex exec --dangerously-bypass-approvals-and-sandbox [--model MODEL] [FLAGS]
 ```
+
+The prompt is passed via stdin.
 
 ### Claude (Anthropic)
 
@@ -27,8 +29,10 @@ npm i -g @anthropic-ai/claude-code
 
 Invocation:
 ```
-claude -p --dangerously-skip-permissions [--model MODEL] [FLAGS] PROMPT
+echo PROMPT | claude -p --dangerously-skip-permissions [--model MODEL] [FLAGS]
 ```
+
+The prompt is passed via stdin.
 
 ## Engine Resolution
 
@@ -104,9 +108,11 @@ Epic directives override the automatic tier selection for their session group:
 
 ```
 @model opus[1m]                # Overrides sprint execution + heal + compaction + summary
-@audit_model sonnet            # Overrides audit + audit fix + audit verify + build audit
+@audit_model sonnet            # Overrides audit + audit fix + audit verify + build audit + continue analysis
 @review_model claude-sonnet-4-6  # Overrides review + replan
 ```
+
+The continue analysis session (`--continue`) uses `@audit_model` if set, otherwise falls back to `@model`.
 
 Or via `--model` flag for `fry replan`.
 

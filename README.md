@@ -55,7 +55,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Independent verification** -- machine-executable checks run after each sprint with a configurable failure threshold (`@max_fail_percent`, default 20%) — minor failures are deferred rather than blocking the build
 - **Self-healing** -- automatic re-runs with targeted fix prompts on verification failure; `--retry` picks up where a failed build left off with boosted heal attempts; `--continue` uses an LLM agent to analyze build state and auto-resume (automatically restores the build mode from the previous run)
 - **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop (CRITICAL/HIGH block the build; MODERATE is advisory)
-- **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation (up to 10 passes)
+- **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
