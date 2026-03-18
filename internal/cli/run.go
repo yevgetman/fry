@@ -452,6 +452,20 @@ var runCmd = &cobra.Command{
 						results[sprintNum-startSprint].AuditWarning = warning
 						mu.Unlock()
 					}
+					// Note LOW remainders at high/max effort (audit passed but LOW items remain)
+					if auditResult.Passed && auditResult.SeverityCounts["LOW"] > 0 &&
+						(ep.EffortLevel == epic.EffortHigh || ep.EffortLevel == epic.EffortMax) {
+						lowNote := fmt.Sprintf("%d LOW issues remain after %d audit cycles (non-blocking)",
+							auditResult.SeverityCounts["LOW"], auditResult.Iterations)
+						frlog.Log("  AUDIT: %s", lowNote)
+						mu.Lock()
+						if results[sprintNum-startSprint].AuditWarning == "" {
+							results[sprintNum-startSprint].AuditWarning = lowNote
+						} else {
+							results[sprintNum-startSprint].AuditWarning += "; " + lowNote
+						}
+						mu.Unlock()
+					}
 					if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
 						frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
 					}

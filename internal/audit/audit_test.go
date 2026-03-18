@@ -1205,15 +1205,15 @@ func TestRunAuditLoopProgressContinues(t *testing.T) {
 	assert.False(t, result.Passed)
 	assert.True(t, result.Blocking)
 
-	// MaxOuterCyclesMaxCap=15, MaxInnerFixIterMax=8
+	// MaxOuterCyclesMaxCap=20, MaxInnerFixIterMax=10
 	// Each cycle: audit + (fix+verify)*2 (inner stale since same content every call) = 5
 	// Except: findings are DIFFERENT each time because callIndex varies.
 	// The inner verify also writes unique findings, so verify parser finds no Issue/Status format.
 	// Inner always stales after 2 fix attempts.
 	// Outer: each cycle gets a different description (based on callIndex of the audit call),
 	// so progress is detected (different finding keys).
-	// 15 cycles * 5 calls + 1 final = 76
-	assert.Len(t, eng.prompts, 76)
+	// 20 cycles * 5 calls + 1 final = 101
+	assert.Len(t, eng.prompts, 101)
 }
 
 func TestRunAuditLoopExplicitCapAtHighEffort(t *testing.T) {
@@ -1318,4 +1318,148 @@ func TestRunAuditLoopUnresolvedFindingsInResult(t *testing.T) {
 	assert.False(t, result.Passed)
 	assert.NotEmpty(t, result.UnresolvedFindings)
 	assert.Equal(t, "Null pointer dereference", result.UnresolvedFindings[0].Description)
+}
+
+// --- filterFixable tests ---
+
+func TestFilterFixable(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{Description: "Critical bug", Severity: "CRITICAL"},
+		{Description: "High bug", Severity: "HIGH"},
+		{Description: "Moderate issue", Severity: "MODERATE"},
+		{Description: "Low style", Severity: "LOW"},
+		{Description: "No severity", Severity: ""},
+		{Description: "Resolved high", Severity: "HIGH", Resolved: true},
+		{Description: "Resolved low", Severity: "LOW", Resolved: true},
+	}
+
+	// Without LOW: same as filterUnresolved
+	withoutLow := filterFixable(findings, false)
+	assert.Len(t, withoutLow, 3)
+	assert.Equal(t, "Critical bug", withoutLow[0].Description)
+	assert.Equal(t, "High bug", withoutLow[1].Description)
+	assert.Equal(t, "Moderate issue", withoutLow[2].Description)
+
+	// With LOW: includes unresolved LOW
+	withLow := filterFixable(findings, true)
+	assert.Len(t, withLow, 4)
+	assert.Equal(t, "Critical bug", withLow[0].Description)
+	assert.Equal(t, "High bug", withLow[1].Description)
+	assert.Equal(t, "Moderate issue", withLow[2].Description)
+	assert.Equal(t, "Low style", withLow[3].Description)
+}
+
+func TestCountFixable(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{Description: "A", Severity: "HIGH"},
+		{Description: "B", Severity: "LOW"},
+		{Description: "C", Severity: "MODERATE", Resolved: true},
+		{Description: "D", Severity: "LOW", Resolved: true},
+	}
+
+	// countFixable counts ALL findings matching severity filter (resolved or not)
+	// because it serves as the total denominator in progress logs.
+	assert.Equal(t, 2, countFixable(findings, false))  // HIGH + resolved MODERATE
+	assert.Equal(t, 4, countFixable(findings, true))   // all four
+}
+
+func TestCountUnresolvedLow(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{Description: "A", Severity: "HIGH"},
+		{Description: "B", Severity: "LOW"},
+		{Description: "C", Severity: "LOW", Resolved: true},
+		{Description: "D", Severity: "LOW"},
+	}
+
+	assert.Equal(t, 2, countUnresolvedLow(findings))
+}
+
+func TestFixIncludesLow(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortLow}))
+	assert.False(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortMedium}))
+	assert.False(t, fixIncludesLow(&epic.Epic{EffortLevel: ""}))
+	assert.True(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortHigh}))
+	assert.True(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortMax}))
+}
+
+// --- Effort-aware LOW fix integration tests ---
+
+func TestRunAuditLoopHighEffortFixesLow(t *testing.T) {
+	t.Parallel()
+
+	// High effort: audit finds MODERATE + LOW. Fix agent should receive both.
+	// Verify resolves both. Re-audit is clean → pass.
+	mixedFindings := "## Findings\n- **Description:** Edge case gap\n- **Severity:** MODERATE\n- **Description:** Variable naming\n- **Severity:** LOW\n\n## Verdict\nFAIL\n"
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			path := filepath.Join(projectDir, config.SprintAuditFile)
+			switch callIndex {
+			case 0: // cycle 1 audit
+				writeFile(t, path, mixedFindings)
+			case 1: // fix 1 (no write needed)
+			case 2: // verify 1 → both resolved
+				writeFile(t, path,
+					"- **Issue:** 1\n- **Status:** RESOLVED\n- **Issue:** 2\n- **Status:** RESOLVED\n")
+			case 3: // cycle 2 audit → clean
+				writeFile(t, path, cleanAudit)
+			}
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterationsSet = true
+	opts.Epic.MaxAuditIterations = 5
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.True(t, result.Passed)
+
+	// Fix prompt should have been called and should contain both issues
+	require.True(t, len(eng.prompts) >= 2, "expected at least audit + fix prompts")
+	// The fix agent prompt (index 1) is AuditFixInvocationPrompt
+	assert.Equal(t, config.AuditFixInvocationPrompt, eng.prompts[1])
+}
+
+func TestRunAuditLoopMediumEffortIgnoresLow(t *testing.T) {
+	t.Parallel()
+
+	// Medium effort: audit finds MODERATE + LOW. Fix agent should receive only MODERATE.
+	// Verify resolves it. Re-audit finds only LOW → pass (LOW-only = pass).
+	mixedFindings := "## Findings\n- **Description:** Edge case gap\n- **Severity:** MODERATE\n- **Description:** Variable naming\n- **Severity:** LOW\n\n## Verdict\nFAIL\n"
+	lowOnlyFindings := "## Findings\n- **Description:** Variable naming\n- **Severity:** LOW\n\n## Verdict\nPASS\n"
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			path := filepath.Join(projectDir, config.SprintAuditFile)
+			switch callIndex {
+			case 0: // cycle 1 audit
+				writeFile(t, path, mixedFindings)
+			case 1: // fix 1
+			case 2: // verify 1 → MODERATE resolved
+				writeFile(t, path,
+					"- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 3: // cycle 2 audit → only LOW remains
+				writeFile(t, path, lowOnlyFindings)
+			}
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortMedium
+	opts.Epic.MaxAuditIterations = 5
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.True(t, result.Passed)
+	assert.Equal(t, 2, result.Iterations)
 }

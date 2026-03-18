@@ -35,8 +35,15 @@ func (f Finding) key() string {
 }
 
 // isActionable returns true if the finding has severity above LOW and is not resolved.
+// This is the pass/fail predicate — LOW findings never affect pass/fail.
 func (f Finding) isActionable() bool {
 	return f.Severity != "" && f.Severity != "LOW" && !f.Resolved
+}
+
+// fixIncludesLow returns true if the effort level includes LOW findings in fix scope.
+// At high and max effort, the fix agent addresses LOW findings alongside higher-severity items.
+func fixIncludesLow(ep *epic.Epic) bool {
+	return ep.EffortLevel == epic.EffortHigh || ep.EffortLevel == epic.EffortMax
 }
 
 type AuditOpts struct {
@@ -83,6 +90,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 	maxOuter, progressBased := effectiveOuterCycles(opts.Epic)
 	maxInner := effectiveInnerIter(opts.Epic)
+	includeLow := fixIncludesLow(opts.Epic)
 
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
@@ -216,7 +224,8 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			}
 		}
 
-		frylog.Log("  AUDIT: %s — entering fix loop (%d issues)...", formatSeverityCounts(counts), actionable)
+		fixableCount := countFixable(activeFindings, includeLow)
+		frylog.Log("  AUDIT: %s — entering fix loop (%d issues)...", formatSeverityCounts(counts), fixableCount)
 
 		// Sort findings FIFO for fix agent
 		sortFindingsFIFO(activeFindings)
@@ -232,7 +241,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			default:
 			}
 
-			unresolved := filterUnresolved(activeFindings)
+			unresolved := filterFixable(activeFindings, includeLow)
 			if len(unresolved) == 0 {
 				break
 			}
@@ -288,10 +297,10 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			applyResolutionsByKey(activeFindings, unresolved, resolved)
 
 			nowResolved := countResolved(activeFindings)
-			totalActionable := countAboveLow(activeFindings)
-			remaining := filterUnresolved(activeFindings)
+			totalFixable := countFixable(activeFindings, includeLow)
+			remaining := filterFixable(activeFindings, includeLow)
 			frylog.Log("  AUDIT VERIFY  cycle %d  fix %d/%d — %d of %d resolved",
-				cycle, fixIter, maxInner, nowResolved, totalActionable)
+				cycle, fixIter, maxInner, nowResolved, totalFixable)
 
 			if len(remaining) == 0 {
 				break
@@ -312,6 +321,14 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 		// Update known findings for next outer cycle
 		knownFindings = collectUnresolved(activeFindings)
+	}
+
+	// Log remaining LOW findings at high/max effort
+	if includeLow {
+		lowRemaining := countUnresolvedLow(knownFindings)
+		if lowRemaining > 0 {
+			frylog.Log("  AUDIT: %d LOW issues remain (non-blocking)", lowRemaining)
+		}
 	}
 
 	// Final audit pass to determine current state
@@ -509,12 +526,19 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding) string {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# AUDIT FIX — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
+	skipLow := !fixIncludesLow(opts.Epic)
 	if opts.Mode == "writing" {
 		b.WriteString("The content audit found issues. Fix ONLY the issues listed below.\n")
-		b.WriteString("Do NOT fix LOW issues. Make minimal editorial changes.\n\n")
+		if skipLow {
+			b.WriteString("Do NOT fix LOW issues. ")
+		}
+		b.WriteString("Make minimal editorial changes.\n\n")
 	} else {
 		b.WriteString("The sprint audit found issues. Fix ONLY the issues listed below.\n")
-		b.WriteString("Do NOT fix LOW issues. Make minimal changes.\n\n")
+		if skipLow {
+			b.WriteString("Do NOT fix LOW issues. ")
+		}
+		b.WriteString("Make minimal changes.\n\n")
 	}
 
 	b.WriteString("**Important:** Focus exclusively on fixing the listed issues. Do not search\n")
@@ -866,6 +890,50 @@ func filterUnresolved(findings []Finding) []Finding {
 		}
 	}
 	return result
+}
+
+// filterFixable returns unresolved findings eligible for fix at the given effort level.
+// At high/max effort (includeLow=true), LOW findings are included alongside higher-severity items.
+// At other levels, only findings above LOW are returned (same as filterUnresolved).
+func filterFixable(findings []Finding, includeLow bool) []Finding {
+	var result []Finding
+	for _, f := range findings {
+		if f.Severity == "" || f.Resolved {
+			continue
+		}
+		if !includeLow && f.Severity == "LOW" {
+			continue
+		}
+		result = append(result, f)
+	}
+	return result
+}
+
+// countFixable counts findings in scope for the fix agent at the given effort level,
+// regardless of resolution status. Used as the total denominator in progress logs.
+func countFixable(findings []Finding, includeLow bool) int {
+	n := 0
+	for _, f := range findings {
+		if f.Severity == "" {
+			continue
+		}
+		if !includeLow && f.Severity == "LOW" {
+			continue
+		}
+		n++
+	}
+	return n
+}
+
+// countUnresolvedLow counts unresolved LOW-severity findings.
+func countUnresolvedLow(findings []Finding) int {
+	n := 0
+	for _, f := range findings {
+		if f.Severity == "LOW" && !f.Resolved {
+			n++
+		}
+	}
+	return n
 }
 
 func countActionableFindings(findings []Finding) int {

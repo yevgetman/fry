@@ -133,7 +133,7 @@ The audit agent classifies each finding with a severity level. Descriptions are 
 | CRITICAL | Data loss, security breach, or crash under normal use | Fix agent remediates | **Blocks** sprint |
 | HIGH | Significant bug; affects core functionality | Fix agent remediates | **Blocks** sprint |
 | MODERATE | Edge case gaps, poor error handling, quality concerns | Fix agent remediates | Advisory warning |
-| LOW | Style, naming, cosmetic | Ignored by fix agent | Ignored |
+| LOW | Style, naming, cosmetic | Fix agent remediates (high/max effort) | Non-blocking; noted in summary |
 
 Severity is parsed from structured `**Severity:**` lines in the audit output, preventing false positives from severity keywords appearing in code diffs or prose.
 
@@ -240,9 +240,9 @@ The verify agent does not look for new issues and does not modify source code.
 ## Effort Level Interaction
 
 - **`low`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at low effort.
-- **`medium`** -- Bounded audit: runs up to `@max_audit_iterations` outer audit cycles (default: 3), each with up to 3 inner fix iterations. Stops when cycles are exhausted.
-- **`high`** -- Progress-based audit: outer loop continues as long as progress is detected. Up to 10 outer cycles, 5 inner fix iterations per cycle. Stops early if 3 consecutive outer cycles show no progress (same findings persisting).
-- **`max`** -- Same progress-based behavior as `high`, but with up to 15 outer cycles and 8 inner fix iterations per cycle, allowing more thorough remediation for mission-critical builds.
+- **`medium`** -- Bounded audit: runs up to `@max_audit_iterations` outer audit cycles (default: 3), each with up to 3 inner fix iterations. LOW findings are ignored by the fix agent. Stops when cycles are exhausted.
+- **`high`** -- Progress-based audit: outer loop continues as long as progress is detected. Up to 12 outer cycles, 7 inner fix iterations per cycle. **LOW findings are included** in the fix agent's scope alongside higher-severity items (non-blocking). Stops early if 3 consecutive outer cycles show no progress (same findings persisting).
+- **`max`** -- Same progress-based behavior as `high`, but with up to 20 outer cycles and 10 inner fix iterations per cycle. **LOW findings are included** in fix scope. Allows more thorough remediation for mission-critical builds.
 
 When `@max_audit_iterations` is explicitly set in the epic, it is always respected as the outer cycle cap regardless of effort level, and progress detection is disabled. Progress-based behavior only activates when the iteration count is not explicitly configured.
 
@@ -301,9 +301,9 @@ Within each fix cycle, the inner loop tracks how many issues are resolved after 
 
 ### Progress-based audit (high/max effort):
 ```
-[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 1 (progress-based, cap 10)  engine=claude
-[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 1 MODERATE — entering fix loop (2 issues)...
-[2026-03-10 12:12:01]   AUDIT FIX  cycle 1  fix 1/5 — targeting 2 issues (oldest first)
+[2026-03-10 12:10:36] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 1 (progress-based, cap 12)  engine=claude
+[2026-03-10 12:12:00]   AUDIT: 1 HIGH, 1 MODERATE, 2 LOW — entering fix loop (4 issues)...
+[2026-03-10 12:12:01]   AUDIT FIX  cycle 1  fix 1/7 — targeting 4 issues (oldest first)
 ...
 ```
 
@@ -330,6 +330,12 @@ Resume: fry run --sprint 3
 ### MODERATE issues persist (advisory):
 ```
 [2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit cycles (advisory)
+```
+
+### LOW issues remain after audit (high/max effort, non-blocking):
+```
+[2026-03-10 12:20:00]   AUDIT: 3 LOW issues remain (non-blocking)
+[2026-03-10 12:20:00]   AUDIT: pass after 4 cycles (3 LOW)
 ```
 
 ## Build Logs
