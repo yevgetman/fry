@@ -29,7 +29,7 @@ Enable Docker support with the `@docker_from_sprint` directive:
 
 ### Default Behavior
 
-Without a custom `@docker_ready_cmd`, Fry checks that all containers report healthy status — no container should be in "starting" or "unhealthy" state.
+Without a custom `@docker_ready_cmd`, Fry checks that all detected services are actually running and healthy. Fry treats `starting`, `unhealthy`, `exited`, `dead`, `created`, and `restarting` as not ready, and it will not proceed until every reported service is in a ready state.
 
 ### Custom Health Check
 

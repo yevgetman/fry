@@ -111,14 +111,13 @@ func runReadyCommand(ctx context.Context, projectDir, readyCmd string) error {
 }
 
 func containersAlreadyRunning(output string) bool {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	if len(lines) <= 1 {
+	lines := serviceStatusLines(output)
+	if len(lines) == 0 {
 		return false
 	}
 
-	for _, line := range lines[1:] {
-		line = strings.TrimSpace(line)
-		if line != "" {
+	for _, line := range lines {
+		if serviceStateReady(line) {
 			return true
 		}
 	}
@@ -126,6 +125,47 @@ func containersAlreadyRunning(output string) bool {
 }
 
 func composeHealthy(output string) bool {
-	normalized := strings.ToLower(output)
-	return !strings.Contains(normalized, "starting") && !strings.Contains(normalized, "unhealthy")
+	lines := serviceStatusLines(output)
+	if len(lines) == 0 {
+		return false
+	}
+
+	for _, line := range lines {
+		if serviceStateBlocked(line) || !serviceStateReady(line) {
+			return false
+		}
+	}
+	return true
+}
+
+func serviceStatusLines(output string) []string {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) <= 1 {
+		return nil
+	}
+
+	var statuses []string
+	for _, line := range lines[1:] {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			statuses = append(statuses, line)
+		}
+	}
+	return statuses
+}
+
+func serviceStateReady(line string) bool {
+	normalized := strings.ToLower(line)
+	return (strings.Contains(normalized, " up ") || strings.Contains(normalized, " running")) &&
+		!serviceStateBlocked(normalized)
+}
+
+func serviceStateBlocked(line string) bool {
+	normalized := strings.ToLower(line)
+	return strings.Contains(normalized, "starting") ||
+		strings.Contains(normalized, "unhealthy") ||
+		strings.Contains(normalized, "exited") ||
+		strings.Contains(normalized, "dead") ||
+		strings.Contains(normalized, "created") ||
+		strings.Contains(normalized, "restarting")
 }

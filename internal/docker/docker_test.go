@@ -139,6 +139,8 @@ func TestContainersAlreadyRunning(t *testing.T) {
 	assert.False(t, containersAlreadyRunning("HEADER\n  \n"))
 	assert.True(t, containersAlreadyRunning("HEADER\ncontainer1  running"))
 	assert.True(t, containersAlreadyRunning("NAME\napp  Up 5 minutes"))
+	assert.False(t, containersAlreadyRunning("NAME\napp  Exited (1)"))
+	assert.False(t, containersAlreadyRunning("NAME\napp  Restarting (1)"))
 }
 
 // P3: composeHealthy
@@ -147,7 +149,10 @@ func TestComposeHealthy(t *testing.T) {
 	t.Parallel()
 
 	assert.True(t, composeHealthy("NAME  STATUS\napp  Up 5 minutes (healthy)"))
+	assert.True(t, composeHealthy("NAME  STATUS\napp  running(healthy)"))
 	assert.False(t, composeHealthy("NAME  STATUS\napp  Up 5 minutes (starting)"))
 	assert.False(t, composeHealthy("NAME  STATUS\napp  Up 5 minutes (unhealthy)"))
-	assert.True(t, composeHealthy(""))
+	assert.False(t, composeHealthy("NAME  STATUS\napp  Exited (1)"))
+	assert.False(t, composeHealthy("NAME  STATUS\napp  Created"))
+	assert.False(t, composeHealthy(""))
 }

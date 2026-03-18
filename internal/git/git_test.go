@@ -73,6 +73,36 @@ func TestGitDiffForAudit(t *testing.T) {
 	assert.Empty(t, strings.TrimSpace(string(out)), "no files should be staged after GitDiffForAudit")
 }
 
+func TestGitDiffForAudit_PreservesExistingStagedChanges(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitGit(projectDir))
+
+	require.NoError(t, os.WriteFile(projectDir+"/tracked.txt", []byte("original\n"), 0o644))
+	cmd := exec.Command("bash", "-c", "git add tracked.txt && git commit -m 'add tracked'")
+	cmd.Dir = projectDir
+	require.NoError(t, cmd.Run())
+
+	require.NoError(t, os.WriteFile(projectDir+"/tracked.txt", []byte("staged change\n"), 0o644))
+	stageCmd := exec.Command("bash", "-c", "git add tracked.txt")
+	stageCmd.Dir = projectDir
+	require.NoError(t, stageCmd.Run())
+
+	require.NoError(t, os.WriteFile(projectDir+"/newfile.txt", []byte("new content\n"), 0o644))
+
+	diff, err := GitDiffForAudit(projectDir)
+	require.NoError(t, err)
+	assert.Contains(t, diff, "tracked.txt")
+	assert.Contains(t, diff, "newfile.txt")
+
+	statusCmd := exec.Command("bash", "-c", "git diff --cached --name-only")
+	statusCmd.Dir = projectDir
+	out, err := statusCmd.Output()
+	require.NoError(t, err)
+	assert.Equal(t, "tracked.txt", strings.TrimSpace(string(out)))
+}
+
 func TestGitDiffForAuditExcludesFryDir(t *testing.T) {
 	t.Parallel()
 

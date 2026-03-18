@@ -131,10 +131,12 @@ func runBash(projectDir, command string) error {
 }
 
 func GitDiffForAudit(projectDir string) (string, error) {
-	// Record intent-to-add for untracked files so they appear in the diff
-	if err := runBash(projectDir, "git add -N -- . ':!.fry/'"); err != nil {
-		// Non-fatal: if this fails, we still try to get a diff of tracked files
-		_ = err
+	untrackedPaths, err := listUntrackedPaths(projectDir)
+	if err == nil && len(untrackedPaths) > 0 {
+		if addErr := runGit(projectDir, append([]string{"add", "-N", "--"}, untrackedPaths...)...); addErr != nil {
+			// Non-fatal: if this fails, we still try to get a diff of tracked files.
+			untrackedPaths = nil
+		}
 	}
 
 	cmd := execCommand("bash", "-c", "git diff HEAD -- . ':!.fry/'")
@@ -142,15 +144,48 @@ func GitDiffForAudit(projectDir string) (string, error) {
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = nil
-	err := cmd.Run()
+	err = cmd.Run()
 
-	// Undo intent-to-add regardless of diff outcome
-	if resetErr := runBash(projectDir, "git reset -- ."); resetErr != nil {
-		fmt.Fprintf(os.Stderr, "fry: warning: git reset after diff failed: %v\n", resetErr)
+	// Undo only the temporary intent-to-add entries we created for untracked files.
+	if len(untrackedPaths) > 0 {
+		if resetErr := runGit(projectDir, append([]string{"reset", "--"}, untrackedPaths...)...); resetErr != nil {
+			fmt.Fprintf(os.Stderr, "fry: warning: git reset after diff failed: %v\n", resetErr)
+		}
 	}
 
 	if err != nil {
 		return "", fmt.Errorf("git diff for audit: %w", err)
 	}
 	return stdout.String(), nil
+}
+
+func listUntrackedPaths(projectDir string) ([]string, error) {
+	cmd := execCommand("bash", "-c", "git ls-files --others --exclude-standard -- . ':!.fry/'")
+	cmd.Dir = projectDir
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("list untracked paths: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	var paths []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			paths = append(paths, line)
+		}
+	}
+	return paths, nil
+}
+
+func runGit(projectDir string, args ...string) error {
+	cmd := execCommand("git", args...)
+	cmd.Dir = projectDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(string(output)))
+	}
+	return nil
 }
