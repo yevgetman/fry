@@ -103,8 +103,11 @@ After each sprint completes, progress is compacted:
 | `PASS (healed)` | Verification initially failed, then fixed via healing |
 | `PASS (verification passed, no promise)` | No promise token found, but verification passed |
 | `PASS (healed, no promise)` | Healed without promise token |
+| `PASS (deferred failures)` | Verification failures within `@max_fail_percent` threshold — deferred to build audit |
+| `PASS (healed, deferred failures)` | Healed with remaining failures within threshold — deferred to build audit |
 | `FAIL (verification failed, heal exhausted)` | All heal attempts exhausted |
 | `FAIL (no promise, verification failed, heal exhausted)` | No promise + healing failed |
+| `FAIL (audit: SEVERITY)` | Sprint audit found blocking CRITICAL or HIGH issues after all audit cycles |
 | `FAIL (no promise after N iters)` | No promise token found and no verification checks exist |
 | `FAIL (no prompt)` | Sprint had no prompt text |
 | `SKIPPED` | Sprint was not in the run range |
@@ -118,11 +121,14 @@ Build logs are written to `.fry/build-logs/`:
   sprint1_iter1_20060102_150405.log        # Per-iteration log
   sprint1_iter2_20060102_150405.log        # Per-iteration log
   sprint1_heal1_20060102_150405.log        # Heal attempt log
+  sprint1_retry_20060102_150405.log        # Retry mode aggregate log (--retry)
   sprint1_audit1_20060102_150405.log       # Audit pass log
-  sprint1_auditfix_1_20060102_150405.log   # Audit fix agent log
+  sprint1_auditfix_1_1_20060102_150405.log # Audit fix agent log (cycle_fix)
+  sprint1_auditverify_1_1_20060102_150405.log # Audit verify agent log (cycle_fix)
   sprint1_audit_final_20060102_150405.log  # Final audit pass log
   summary_20060102_150405.log              # Build summary agent log
   build_audit_20060102_150405.log          # Build audit agent log
+  continue_20060102_150405.log             # Continue analysis agent log (--continue)
 ```
 
 ## Shell Hooks

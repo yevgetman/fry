@@ -36,7 +36,7 @@ When neither `plans/plan.md` nor `plans/executive.md` exist and `--user-prompt` 
 
 ```
 [2026-03-10 11:49:50] User prompt detected — will be included in generation.
-[2026-03-10 11:49:51] Generating plans/executive.md from user prompt (engine: claude)...
+[2026-03-10 11:49:51] Generating plans/executive.md from user prompt (engine: claude, model: sonnet)...
 ── Generated executive context ──────────────────────────────────
 [LLM-generated executive.md content]
 ─────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ Proceed with this executive context? [y/N] y
 When assets and media are also present, the bootstrap message lists them:
 
 ```
-[2026-03-10 11:49:51] Generating plans/executive.md from user prompt, assets/ assets, media/ manifest (engine: claude)...
+[2026-03-10 11:49:51] Generating plans/executive.md from user prompt, assets/ assets, media/ manifest (engine: claude, model: sonnet)...
 ```
 
 ### Sanity check
@@ -55,7 +55,7 @@ When assets and media are also present, the bootstrap message lists them:
 After `plan.md` is available (whether user-authored or generated), Fry shows an AI-generated project summary and asks for confirmation:
 
 ```
-[2026-03-10 11:51:12] Sanity check: summarizing project (engine: claude)...
+[2026-03-10 11:51:12] Sanity check: summarizing project (engine: claude, model: haiku)...
 
 ── Project summary ─────────────────────────────────────────────
 Project type:    Software (REST API)
@@ -74,13 +74,13 @@ The default is **Yes** (press Enter to accept). Use `--no-sanity-check` to skip 
 Each step logs its start with the full list of inputs, then a completion message:
 
 ```
-[2026-03-10 11:50:00] Step 0: Generating plans/plan.md from plans/executive.md, assets/ assets, media/ manifest (engine: claude)...
+[2026-03-10 11:50:00] Step 0: Generating plans/plan.md from plans/executive.md, assets/ assets, media/ manifest (engine: claude, model: sonnet)...
 [2026-03-10 11:51:12] Generated plans/plan.md.
-[2026-03-10 11:51:12] Step 1: Generating .fry/AGENTS.md from plans/plan.md, plans/executive.md, media/ manifest (engine: claude)...
+[2026-03-10 11:51:12] Step 1: Generating .fry/AGENTS.md from plans/plan.md, plans/executive.md, media/ manifest (engine: claude, model: sonnet)...
 [2026-03-10 11:52:05] Generated .fry/AGENTS.md.
-[2026-03-10 11:52:05] Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md, user prompt, assets/ assets, media/ manifest (engine: claude)...
+[2026-03-10 11:52:05] Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md, user prompt, assets/ assets, media/ manifest (engine: claude, model: sonnet)...
 [2026-03-10 11:53:30] Generated .fry/epic.md.
-[2026-03-10 11:53:30] Step 3: Generating .fry/verification.md from plans/plan.md, .fry/epic.md, user prompt, media/ manifest (engine: claude)...
+[2026-03-10 11:53:30] Step 3: Generating .fry/verification.md from plans/plan.md, .fry/epic.md, user prompt, media/ manifest (engine: claude, model: sonnet)...
 [2026-03-10 11:54:15] Generated .fry/verification.md.
 ```
 
@@ -89,11 +89,11 @@ When no user prompt, assets, or media are present and both plan files exist:
 ```
 [2026-03-10 11:49:50] Using existing plans/executive.md.
 [2026-03-10 11:49:50] Using existing plans/plan.md.
-[2026-03-10 11:50:00] Step 1: Generating .fry/AGENTS.md from plans/plan.md, plans/executive.md (engine: claude)...
+[2026-03-10 11:50:00] Step 1: Generating .fry/AGENTS.md from plans/plan.md, plans/executive.md (engine: claude, model: sonnet)...
 [2026-03-10 11:52:05] Generated .fry/AGENTS.md.
-[2026-03-10 11:52:05] Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md (engine: claude)...
+[2026-03-10 11:52:05] Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md (engine: claude, model: sonnet)...
 [2026-03-10 11:53:30] Generated .fry/epic.md.
-[2026-03-10 11:53:30] Step 3: Generating .fry/verification.md from plans/plan.md, .fry/epic.md (engine: claude)...
+[2026-03-10 11:53:30] Step 3: Generating .fry/verification.md from plans/plan.md, .fry/epic.md (engine: claude, model: sonnet)...
 [2026-03-10 11:54:15] Generated .fry/verification.md.
 ```
 
@@ -101,6 +101,31 @@ When no user prompt, assets, or media are present and both plan files exist:
 
 ```
 [2026-03-10 11:54:16] Preflight checks passed.
+```
+
+## Continue Mode (`--continue`)
+
+When `--continue` is used, Fry collects build state, runs an LLM analysis agent, and displays the decision:
+
+```
+[2026-03-10 11:55:00] ▶ CONTINUE  collecting build state...
+[2026-03-10 11:55:00] ▶ CONTINUE  auto-detected mode: software
+[2026-03-10 11:55:01] ▶ CONTINUE  analyzing with engine=claude  model=haiku...
+[2026-03-10 11:55:10] ▶ CONTINUE  decision: RESUME_RETRY sprint 4 — "verification failed on 2 checks; code exists"
+Decision: RESUME_RETRY (sprint 4)
+Reason: verification failed on 2 checks; code exists
+```
+
+When the build is already complete:
+
+```
+All 6 sprints already complete. Nothing to do.
+```
+
+When the build is blocked (e.g., Docker not running):
+
+```
+continue: blocked — Docker is required for sprint 4 but is not running
 ```
 
 ## Sprint Execution
@@ -201,7 +226,7 @@ Sprint audits run by default after each sprint passes verification. The audit us
 After all sprints complete successfully, a final holistic audit runs on the entire codebase:
 
 ```
-[2026-03-10 13:00:00] ▶ BUILD AUDIT  running holistic audit across all 8 sprints...
+[2026-03-10 13:00:00] ▶ BUILD AUDIT  running holistic audit across all 8 sprints...  engine=claude  model=sonnet
 [2026-03-10 13:15:00]   BUILD AUDIT: complete — report written to audit.md
 [2026-03-10 13:15:01]   GIT: checkpoint — build-audit
 ```
@@ -244,7 +269,13 @@ When `@compact_with_agent` is enabled:
 After all sprints complete, Fry prints a summary table with the status of each sprint, then generates a summary document:
 
 ```
-[2026-03-10 13:00:00] ▶ BUILD SUMMARY  generating...
+Effort level: medium
+SPRINT  NAME                  STATUS        DURATION
+1       Scaffolding           PASS          2m35s
+2       Data Layer            PASS (healed) 5m12s
+3       API Handlers          PASS          3m47s
+
+[2026-03-10 13:00:00] ▶ BUILD SUMMARY  generating...  engine=claude  model=haiku
 [2026-03-10 13:02:00]   BUILD SUMMARY: complete
 ```
 

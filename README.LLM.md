@@ -22,13 +22,14 @@ fry/
 ├── internal/
 │   ├── cli/                     # Cobra commands: root, run, prepare, replan, version
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose, --engine, etc.)
-│   │   ├── run.go               # Main orchestration (685 lines): sprint loop, audit, review
+│   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
 │   │   ├── prepare.go           # Generate .fry/ artifacts from plans
 │   │   ├── replan.go            # Mid-build replanning
 │   │   └── version.go           # Version subcommand
 │   ├── config/config.go         # All constants: paths, defaults, invocation prompts
 │   ├── engine/
 │   │   ├── engine.go            # Engine interface + ResolveEngine + NewEngine
+│   │   ├── models.go            # Tier-based model selection, validation, session types
 │   │   ├── codex.go             # Codex CLI wrapper
 │   │   └── claude.go            # Claude Code CLI wrapper
 │   ├── epic/
@@ -52,14 +53,15 @@ fry/
 │   ├── review/
 │   │   ├── reviewer.go          # Sprint review (CONTINUE vs DEVIATE verdict)
 │   │   ├── replanner.go         # Dynamic epic modification
-│   │   ├── deviation.go         # Deviation spec parsing
+│   │   ├── deviation.go         # Deviation log entry management and build summary
 │   │   └── types.go             # ReviewVerdict, DeviationSpec
 │   ├── prepare/
 │   │   ├── prepare.go           # Steps 0-3 artifact generation
+│   │   ├── mode.go              # Mode type (software, planning, writing) + ParseMode
 │   │   ├── sanity.go            # Interactive project summary sanity check
-│   │   ├── software.go          # Software project handling
-│   │   ├── planning.go          # Planning-mode (non-code) handling
-│   │   └── writing.go           # Writing-mode (books, guides) handling
+│   │   ├── software.go          # Software-mode prompt builders
+│   │   ├── planning.go          # Planning-mode prompt builders
+│   │   └── writing.go           # Writing-mode prompt builders
 │   ├── git/git.go               # Git init, checkpoints, diff capture
 │   ├── docker/docker.go         # Docker Compose lifecycle, health checks
 │   ├── preflight/preflight.go   # Pre-build tool/command validation
@@ -216,7 +218,7 @@ For each sprint (startSprint → endSprint):
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
      │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
      │  ├─ medium: bounded (3 outer cycles, 3 inner fix iterations)
-     │  └─ high: progress-based (cap 10 outer), max: progress-based (cap 15 outer)
+     │  └─ high: progress-based (cap 12 outer, 7 inner), max: progress-based (cap 20 outer, 10 inner)
   9. Git checkpoint commit
  10. Compact sprint progress → .fry/epic-progress.txt
  11. Optional sprint review:
@@ -328,7 +330,7 @@ make install   # build + cp bin/fry /usr/local/bin/fry
 make clean     # rm -rf bin/
 ```
 
-**20 test files** covering all packages. Tests use `t.Parallel()`, temp directories, env mocking, and mock engines. No CI/CD configured — local testing only.
+**27 test files** covering all packages. Tests use `t.Parallel()`, temp directories, env mocking, and mock engines. No CI/CD configured — local testing only.
 
 ---
 

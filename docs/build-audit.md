@@ -18,7 +18,7 @@ All sprints complete successfully
        +-- Report to audit.md
        +-- If clean (no issues or all LOW) --> stop
        +-- If issues remain --> remediate, then re-audit
-       |       (loop up to 10 iterations at high, 15 at max effort)
+       |       (loop up to 12 iterations at high, 20 at max effort)
        |
        v
   Git checkpoint ("build-audit")
@@ -36,7 +36,7 @@ Unlike the sprint audit (which uses separate audit and fix agents), the build au
 4. **Evaluate** -- if all issues are LOW or none exist, stop
 5. **Remediate** -- fix all issues (including LOW), then re-audit
 
-The agent repeats this cycle up to 10 iterations (high effort) or 15 iterations (max effort). This design gives the agent full context across audit and fix passes, enabling more coherent remediation of cross-cutting issues.
+The agent repeats this cycle up to 12 iterations (high effort) or 20 iterations (max effort). This design gives the agent full context across audit and fix passes, enabling more coherent remediation of cross-cutting issues.
 
 ## Deferred Failure Resolution
 
@@ -186,7 +186,7 @@ build_audit_20060102_150405.log
 | Scope | Single sprint's changes | Entire codebase |
 | Timing | After each sprint passes verification | After all sprints complete |
 | Agent design | Two agents (audit + fix) | Single agent (audit + fix in one session) |
-| Iterations | Up to `@max_audit_iterations` (default: 3) | Up to 10 |
+| Iterations | Up to `@max_audit_iterations` (default: 3) | Up to 12 (high) or 20 (max) |
 | Blocking | CRITICAL/HIGH block the sprint | Non-blocking (advisory) |
 | Output file | `.fry/sprint-audit.txt` (transient) | `audit.md` (persisted) |
 | Context | Sprint diff + sprint progress | Full codebase + plan artifacts |

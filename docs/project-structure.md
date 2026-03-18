@@ -32,8 +32,12 @@ your-project/
     replan-prompt.md                     #   Assembled replanner prompt (transient)
     audit-prompt.md                      #   Assembled sprint audit prompt (transient, cleaned up after audit)
     sprint-audit.txt                     #   Sprint audit findings (transient, cleaned up after audit)
+    deferred-failures.md                 #   Accumulated deferred verification failures across sprints
     build-audit-prompt.md                #   Assembled build audit prompt (transient, cleaned up after audit)
     summary-prompt.md                    #   Assembled build summary prompt (transient, cleaned up after summary)
+    continue-prompt.md                   #   Assembled prompt for --continue analysis agent (transient)
+    continue-decision.txt                #   LLM agent's resume decision: verdict, sprint, reason (transient)
+    continue-report.md                   #   Programmatic build state report for --continue (transient)
     build-logs/                          #   Per-iteration logs
     .fry.lock                            #   Concurrency lock
   build-summary.md                       # Build summary report (persisted in project root)
@@ -70,11 +74,15 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 | `.fry/replan-prompt.md` | Assembled replanner prompt (transient) | `fry run` at runtime |
 | `.fry/audit-prompt.md` | Assembled sprint audit/fix prompt (transient) | `fry run` at runtime |
 | `.fry/sprint-audit.txt` | Sprint audit findings (transient) | `fry run` at runtime |
+| `.fry/deferred-failures.md` | Accumulated deferred verification failures across sprints | `fry run` at runtime |
 | `.fry/build-audit-prompt.md` | Assembled build audit prompt (transient) | `fry run` at runtime |
 | `.fry/summary-prompt.md` | Assembled build summary prompt (transient) | `fry run` at runtime |
+| `.fry/continue-prompt.md` | Assembled prompt for `--continue` analysis agent (transient) | `fry run --continue` |
+| `.fry/continue-decision.txt` | LLM agent's resume decision (verdict, sprint, reason) (transient) | `fry run --continue` |
+| `.fry/continue-report.md` | Programmatic build state report (transient) | `fry run --continue` |
 | `build-summary.md` | Build summary report (persisted in project root) | `fry run` at runtime |
 | `audit.md` | Build audit report (persisted in project root) | `fry run` at runtime |
-| `.fry/build-logs/` | Per-iteration, per-sprint, and retry logs | `fry run` at runtime |
+| `.fry/build-logs/` | Per-iteration, per-sprint, retry, audit, and continue logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 
 ### Auto-Generation Behavior

@@ -11,16 +11,17 @@ internal/
   audit/                 Post-sprint and post-build semantic audit (sprint audit loop + build audit)
   cli/                   Cobra command definitions (root, run, prepare, replan, version)
   config/                Constants: file paths, defaults, version string
+  continuerun/           Build state collection, LLM analysis, and resume logic for --continue
   docker/                Docker Compose lifecycle management
-  engine/                AI engine abstraction (Codex and Claude implementations)
-  epic/                  Epic file parser, types, and validator
+  engine/                AI engine abstraction (Codex and Claude), tier-based model selection, validation
+  epic/                  Epic file parser, types (Epic, Sprint, EffortLevel), and validator
   git/                   Git operations (init, checkpoint, commit)
   heal/                  Self-healing loop (re-run agent on verification failure)
   lock/                  File-based concurrency lock (PID-based)
   log/                   Timestamped logging with verbose mode
   media/                 Media directory scanner and manifest builder
   preflight/             Pre-build validation checks
-  prepare/               Artifact generation (Steps 0-3)
+  prepare/               Artifact generation (Steps 0-3), mode handling, sanity check
   review/                Dynamic sprint review, replanning, deviation tracking
   shellhook/             Shell command execution for hooks
   sprint/                Sprint execution loop, prompt assembly, progress tracking
@@ -52,6 +53,7 @@ User Input (plans/, media/, assets/, or --user-prompt)
        │
        ▼
    fry prepare ──► Bootstrap: --user-prompt → plans/executive.md (interactive review)
+               ──► Sanity check: AI-generated project summary for user confirmation
                ──► Step 0: plans/executive.md → plans/plan.md
                ──► Steps 1-3: .fry/AGENTS.md, epic.md, verification.md
                    (scans media/ for asset manifest, reads assets/ for supplementary context)
@@ -60,6 +62,7 @@ User Input (plans/, media/, assets/, or --user-prompt)
    fry run
        │
        ├─ Parse & validate epic (epic/)
+       ├─ --continue: collect build state + LLM analysis (continuerun/)
        ├─ Acquire lock (lock/)
        ├─ Preflight checks (preflight/)
        ├─ Init git (git/)
