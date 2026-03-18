@@ -53,10 +53,10 @@ const (
 	// Two-level audit loop constants
 	DefaultMaxOuterAuditCycles = 3  // outer audit cycles (medium/default)
 	DefaultMaxInnerFixIter     = 3  // fix attempts per audit report (medium/default)
-	MaxOuterCyclesHighCap      = 10 // outer audit cycles at high effort
-	MaxOuterCyclesMaxCap       = 15 // outer audit cycles at max effort
-	MaxInnerFixIterHigh        = 5  // inner fix cap at high effort
-	MaxInnerFixIterMax         = 8  // inner fix cap at max effort
+	MaxOuterCyclesHighCap      = 12 // outer audit cycles at high effort
+	MaxOuterCyclesMaxCap       = 20 // outer audit cycles at max effort
+	MaxInnerFixIterHigh        = 7  // inner fix cap at high effort
+	MaxInnerFixIterMax         = 10 // inner fix cap at max effort
 
 	DeferredFailuresFile = ".fry/deferred-failures.md"
 

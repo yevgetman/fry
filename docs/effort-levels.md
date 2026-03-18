@@ -177,7 +177,7 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | Prompt structure | Concise | Moderate 7-part | Full 7-part | Extended 9-part |
 | Scaffolding sprint | Merged into Sprint 1 | Normal | Normal | Normal |
 | Review behavior | Skipped | Normal | Normal | Thorough (lower DEVIATE threshold) |
-| Sprint audit | Skipped | 3 outer cycles, 3 inner fix (bounded) | Progress-based (10 outer, 5 inner) | Progress-based (15 outer, 8 inner) |
+| Sprint audit | Skipped | 3 outer cycles, 3 inner fix (bounded); LOW ignored | Progress-based (12 outer, 7 inner); LOW included in fix | Progress-based (20 outer, 10 inner); LOW included in fix |
 | Build audit | Skipped | Runs on full epic completion | Runs on full epic completion | Runs on full epic completion |
 | No-op threshold | 2 iterations | 2 iterations | 2 iterations | 3 iterations |
 | Quality directive | No | No | No | Yes (injected into every prompt) |

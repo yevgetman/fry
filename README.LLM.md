@@ -289,10 +289,10 @@ Key flags:
 | `MaxFailPercentMax` | `10` | Stricter threshold for max effort |
 | `DefaultMaxOuterAuditCycles` | `3` | Outer audit cycles per sprint (medium/default) |
 | `DefaultMaxInnerFixIter` | `3` | Inner fix iterations per audit report (medium/default) |
-| `MaxOuterCyclesHighCap` | `10` | Outer audit cycles at high effort |
-| `MaxOuterCyclesMaxCap` | `15` | Outer audit cycles at max effort |
-| `MaxInnerFixIterHigh` | `5` | Inner fix iterations at high effort |
-| `MaxInnerFixIterMax` | `8` | Inner fix iterations at max effort |
+| `MaxOuterCyclesHighCap` | `12` | Outer audit cycles at high effort |
+| `MaxOuterCyclesMaxCap` | `20` | Outer audit cycles at max effort |
+| `MaxInnerFixIterHigh` | `7` | Inner fix iterations at high effort |
+| `MaxInnerFixIterMax` | `10` | Inner fix iterations at max effort |
 | `DefaultDockerReadyTimeout` | `30` | Seconds for Docker health check |
 | `DefaultMaxDeviationScope` | `3` | Max sprints affected by replan |
 | `MaxAuditDiffBytes` | `100000` | Max diff size for audit context |
@@ -398,6 +398,6 @@ Sprint prompts follow a 7-part convention: OPENER, REFERENCES, BUILD LIST, CONST
 - **Two-phase progress tracking:** per-sprint log (`sprint-progress.txt`) + cross-sprint compacted summaries (`epic-progress.txt`) for bounded context
 - **Promise tokens:** agent writes `===PROMISE: TOKEN===` to signal sprint completion → early exit
 - **No-op detection:** if git diff shows no changes for 2-3 consecutive iterations and verification passes → early exit
-- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory
+- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory, LOW included in fix at high/max effort (non-blocking)
 - **Graceful signal handling:** Ctrl+C saves partial work via git checkpoint
 - **Engine abstraction:** any CLI-based AI tool can be added by implementing `Engine` interface (2 methods: `Run`, `Name`)
