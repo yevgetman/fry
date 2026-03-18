@@ -56,7 +56,7 @@ func Analyze(ctx context.Context, opts AnalyzeOpts) (*ContinueDecision, error) {
 		return nil, fmt.Errorf("continue analyze: write prompt: %w", err)
 	}
 
-	frylog.Log("▶ CONTINUE  analyzing with engine=%s...", opts.Engine.Name())
+	frylog.Log("▶ CONTINUE  analyzing with engine=%s  model=%s...", opts.Engine.Name(), opts.Model)
 
 	// Create log file
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)

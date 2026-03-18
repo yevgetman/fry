@@ -91,7 +91,7 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 	}
 	defer os.Remove(promptPath)
 
-	frylog.Log("  Running replanner agent...")
+	frylog.Log("  Running replanner agent...  engine=%s  model=%s", opts.Engine.Name(), opts.Model)
 	runOpts := engine.RunOpts{
 		Model:   opts.Model,
 		WorkDir: opts.ProjectDir,

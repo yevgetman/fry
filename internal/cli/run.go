@@ -186,12 +186,11 @@ var runCmd = &cobra.Command{
 			fmt.Fprint(cmd.OutOrStdout(), report)
 			fmt.Fprintln(cmd.OutOrStdout())
 
-			continueModel := ""
-			if ep.AuditModel != "" {
-				continueModel = ep.AuditModel
-			} else {
-				continueModel = ep.AgentModel
+			continueOverride := ep.AuditModel
+			if continueOverride == "" {
+				continueOverride = ep.AgentModel
 			}
+			continueModel := engine.ResolveModel(continueOverride, engineName, string(ep.EffortLevel), engine.SessionContinue)
 			decision, analyzeErr := continuerun.Analyze(cmd.Context(), continuerun.AnalyzeOpts{
 				ProjectDir: projectPath,
 				State:      state,
@@ -480,7 +479,8 @@ var runCmd = &cobra.Command{
 				if err != nil {
 					return err
 				}
-				compacted, err := sprint.CompactSprintProgress(ctx, projectPath, spr.Number, spr.Name, result.Status, compactEngine, ep.CompactWithAgent, ep.AgentModel)
+				compactModel := engine.ResolveModel(ep.AgentModel, engineName, string(ep.EffortLevel), engine.SessionCompaction)
+			compacted, err := sprint.CompactSprintProgress(ctx, projectPath, spr.Number, spr.Name, result.Status, compactEngine, ep.CompactWithAgent, compactModel)
 				if err != nil {
 					return err
 				}
@@ -548,6 +548,7 @@ var runCmd = &cobra.Command{
 						if reviewResult.Deviation == nil {
 							return fmt.Errorf("review requested deviation without a deviation spec")
 						}
+						replanModel := engine.ResolveModel(ep.ReviewModel, reviewEngine.Name(), string(ep.EffortLevel), engine.SessionReplan)
 						if err := review.RunReplan(ctx, review.ReplanOpts{
 							ProjectDir:      projectPath,
 							EpicPath:        epicPath,
@@ -555,7 +556,7 @@ var runCmd = &cobra.Command{
 							CompletedSprint: spr.Number,
 							MaxScope:        ep.MaxDeviationScope,
 							Engine:          reviewEngine,
-							Model:           ep.ReviewModel,
+							Model:           replanModel,
 							Verbose:         frlog.Verbose,
 						}); err != nil {
 							return err
@@ -616,14 +617,15 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			frlog.Log("WARNING: could not create engine for build summary: %v", err)
 		} else {
-			frlog.Log("▶ BUILD SUMMARY  generating...")
+			summaryModel := engine.ResolveModel(ep.AgentModel, engineName, string(ep.EffortLevel), engine.SessionBuildSummary)
+			frlog.Log("▶ BUILD SUMMARY  generating...  engine=%s  model=%s", engineName, summaryModel)
 			if summaryErr := summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
 				ProjectDir: projectPath,
 				EpicName:   ep.Name,
 				Engine:     summaryEngine,
 				Results:    summaryCopy,
 				Verbose:    frlog.Verbose,
-				Model:      ep.AgentModel,
+				Model:      summaryModel,
 			}); summaryErr != nil {
 				frlog.Log("WARNING: build summary generation failed: %v", summaryErr)
 			} else {
@@ -638,14 +640,15 @@ var runCmd = &cobra.Command{
 			if err != nil {
 				frlog.Log("WARNING: could not create engine for build audit: %v", err)
 			} else {
-				frlog.Log("▶ BUILD AUDIT  running holistic audit across all %d sprints...", ep.TotalSprints)
+				buildAuditModel := engine.ResolveModel(ep.AuditModel, auditEngine.Name(), string(ep.EffortLevel), engine.SessionBuildAudit)
+				frlog.Log("▶ BUILD AUDIT  running holistic audit across all %d sprints...  engine=%s  model=%s", ep.TotalSprints, auditEngine.Name(), buildAuditModel)
 				if auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
 					ProjectDir:       projectPath,
 					Epic:             ep,
 					Engine:           auditEngine,
 					Results:          summaryCopy,
 					Verbose:          frlog.Verbose,
-					Model:            ep.AuditModel,
+					Model:            buildAuditModel,
 					DeferredFailures: deferredContent,
 					Mode:             string(mode),
 				}); auditErr != nil {

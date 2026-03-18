@@ -201,6 +201,15 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 		return nil, fmt.Errorf("run sprint review: project dir is required")
 	}
 
+	effortStr := ""
+	if opts.Epic != nil {
+		effortStr = string(opts.Epic.EffortLevel)
+	}
+	reviewOverride := ""
+	if opts.Epic != nil {
+		reviewOverride = opts.Epic.ReviewModel
+	}
+
 	frylog.Log("  --- SPRINT REVIEW: after Sprint %d ---", opts.SprintNum)
 
 	promptOpts, err := buildReviewPromptOpts(opts)
@@ -229,13 +238,11 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 		return nil, fmt.Errorf("run sprint review: engine is required")
 	}
 
-	model := ""
-	if opts.Epic != nil {
-		model = opts.Epic.ReviewModel
-	}
+	resolvedModel := engine.ResolveModel(reviewOverride, opts.Engine.Name(), effortStr, engine.SessionReview)
+	frylog.Log("  REVIEW  engine=%s  model=%s", opts.Engine.Name(), resolvedModel)
 
 	runOpts := engine.RunOpts{
-		Model:   model,
+		Model:   resolvedModel,
 		WorkDir: opts.ProjectDir,
 	}
 	if opts.Verbose {

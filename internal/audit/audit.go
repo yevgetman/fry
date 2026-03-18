@@ -121,17 +121,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			return nil, fmt.Errorf("run audit loop: write audit prompt: %w", err)
 		}
 
+		auditModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAudit)
 		if progressBased {
 			frylog.Log(
-				"▶ AUDIT  sprint %d/%d \"%s\"  cycle %d (progress-based, cap %d)  engine=%s",
+				"▶ AUDIT  sprint %d/%d \"%s\"  cycle %d (progress-based, cap %d)  engine=%s  model=%s",
 				opts.Sprint.Number, opts.Epic.TotalSprints, opts.Sprint.Name,
-				cycle, maxOuter, opts.Engine.Name(),
+				cycle, maxOuter, opts.Engine.Name(), auditModel,
 			)
 		} else {
 			frylog.Log(
-				"▶ AUDIT  sprint %d/%d \"%s\"  cycle %d/%d  engine=%s",
+				"▶ AUDIT  sprint %d/%d \"%s\"  cycle %d/%d  engine=%s  model=%s",
 				opts.Sprint.Number, opts.Epic.TotalSprints, opts.Sprint.Name,
-				cycle, maxOuter, opts.Engine.Name(),
+				cycle, maxOuter, opts.Engine.Name(), auditModel,
 			)
 		}
 
@@ -139,7 +140,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		auditLogPath := filepath.Join(buildLogsDir,
 			fmt.Sprintf("sprint%d_audit%d_%s.log", opts.Sprint.Number, cycle, time.Now().Format("20060102_150405")),
 		)
-		if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, auditLogPath); err != nil {
+		if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, auditLogPath, auditModel); err != nil {
 			return nil, err
 		}
 
@@ -246,8 +247,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				break
 			}
 
-			frylog.Log("  AUDIT FIX  cycle %d  fix %d/%d — targeting %d issues (oldest first)",
-				cycle, fixIter, maxInner, len(unresolved))
+			fixModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditFix)
+			frylog.Log("  AUDIT FIX  cycle %d  fix %d/%d — targeting %d issues (oldest first)  engine=%s  model=%s",
+				cycle, fixIter, maxInner, len(unresolved), opts.Engine.Name(), fixModel)
 
 			// Build and write fix prompt
 			fixPrompt := buildAuditFixPrompt(opts, unresolved)
@@ -259,7 +261,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			fixLogPath := filepath.Join(buildLogsDir,
 				fmt.Sprintf("sprint%d_auditfix_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
 			)
-			if _, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath); err != nil {
+			if _, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel); err != nil {
 				return nil, err
 			}
 
@@ -273,10 +275,11 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			}
 
 			// Run verify agent
+			verifyModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditVerify)
 			verifyLogPath := filepath.Join(buildLogsDir,
 				fmt.Sprintf("sprint%d_auditverify_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
 			)
-			if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, verifyLogPath); err != nil {
+			if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, verifyLogPath, verifyModel); err != nil {
 				return nil, err
 			}
 
@@ -338,16 +341,17 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		return nil, fmt.Errorf("run audit loop: write final audit prompt: %w", err)
 	}
 
+	finalAuditModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAudit)
 	frylog.Log(
-		"▶ AUDIT  sprint %d/%d \"%s\"  final pass  engine=%s",
+		"▶ AUDIT  sprint %d/%d \"%s\"  final pass  engine=%s  model=%s",
 		opts.Sprint.Number, opts.Epic.TotalSprints, opts.Sprint.Name,
-		opts.Engine.Name(),
+		opts.Engine.Name(), finalAuditModel,
 	)
 
 	finalLogPath := filepath.Join(buildLogsDir,
 		fmt.Sprintf("sprint%d_audit_final_%s.log", opts.Sprint.Number, time.Now().Format("20060102_150405")),
 	)
-	if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, finalLogPath); err != nil {
+	if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, finalLogPath, finalAuditModel); err != nil {
 		return nil, err
 	}
 
@@ -1106,7 +1110,7 @@ func refreshDiff(opts *AuditOpts) {
 	}
 }
 
-func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath string) (string, error) {
+func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model string) (string, error) {
 	logFile, err := os.Create(logPath)
 	if err != nil {
 		return "", fmt.Errorf("run audit loop: create log: %w", err)
@@ -1114,7 +1118,7 @@ func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath string
 	defer logFile.Close()
 
 	runOpts := engine.RunOpts{
-		Model:   opts.Epic.AuditModel,
+		Model:   model,
 		WorkDir: opts.ProjectDir,
 	}
 

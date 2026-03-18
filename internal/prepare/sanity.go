@@ -29,10 +29,11 @@ type SanitySummary struct {
 func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 	planContent, executiveContent, mediaManifest, assetsSection string) error {
 
-	frylog.Log("Sanity check: summarizing project (engine: %s)...", eng.Name())
+	sanityModel := engine.ResolveModelForSession(eng.Name(), string(opts.EffortLevel), engine.SessionSanityCheck)
+	frylog.Log("Sanity check: summarizing project (engine: %s, model: %s)...", eng.Name(), sanityModel)
 
 	prompt := sanityCheckPrompt(opts.Mode, planContent, executiveContent, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
-	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir})
+	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: sanityModel})
 	if err != nil && strings.TrimSpace(output) == "" {
 		return fmt.Errorf("run prepare: sanity check: %w", err)
 	}

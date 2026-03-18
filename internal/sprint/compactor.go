@@ -17,7 +17,7 @@ func CompactSprintProgress(ctx context.Context, projectDir string, sprintNum int
 
 	compacted := mechanicalCompaction(progress)
 	if useAgent {
-		frylog.Log("  Compacting sprint progress with agent...")
+		frylog.Log("  Compacting sprint progress with agent...  model=%s", model)
 		if eng == nil {
 			return "", fmt.Errorf("compact sprint progress: engine is required for agent compaction")
 		}

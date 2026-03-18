@@ -99,6 +99,12 @@ Auto-detection watches for common over-engineering signals:
 - Adding schema/migration sprints for projects with no database
 - Creating separate "wiring" sprints for simple, flat architectures
 
+## Model Selection
+
+Effort level directly affects which AI model is used for each session type. Higher effort levels use more capable (and more expensive) models. See [AI Engines — Automatic Model Selection](engines.md#automatic-model-selection-tier-system) for the full session × effort rules matrix.
+
+In summary: `low`/`medium` builds use **Standard**-tier models (e.g., Sonnet, gpt-5.3-codex) for most sessions, while `high`/`max` builds upgrade to **Frontier**-tier models (e.g., Opus, gpt-5.4). Lightweight tasks like compaction and sanity checks always use cheaper models regardless of effort level.
+
 ## Usage
 
 ### CLI Flag

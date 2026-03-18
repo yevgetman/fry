@@ -138,7 +138,8 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 			return nil, fmt.Errorf("run sprint pre-iteration hook: %w", err)
 		}
 
-		frylog.AgentBanner(cfg.Sprint.Number, cfg.Epic.TotalSprints, cfg.Sprint.Name, iter, cfg.Sprint.MaxIterations, cfg.Engine.Name(), cfg.Epic.AgentModel)
+		resolvedModel := engine.ResolveModel(cfg.Epic.AgentModel, cfg.Engine.Name(), string(cfg.Epic.EffortLevel), engine.SessionSprint)
+		frylog.AgentBanner(cfg.Sprint.Number, cfg.Epic.TotalSprints, cfg.Sprint.Name, iter, cfg.Sprint.MaxIterations, cfg.Engine.Name(), resolvedModel)
 
 		// Snapshot working tree before agent runs (for no-op detection)
 		preIterDiff := gitDiffStat(ctx, cfg.ProjectDir)
@@ -437,8 +438,9 @@ func runAgentWithDualLogs(ctx context.Context, cfg RunConfig, prompt, iterPath, 
 	}
 	defer sprintLog.Close()
 
+	resolvedModel := engine.ResolveModel(cfg.Epic.AgentModel, cfg.Engine.Name(), string(cfg.Epic.EffortLevel), engine.SessionSprint)
 	opts := engine.RunOpts{
-		Model:      cfg.Epic.AgentModel,
+		Model:      resolvedModel,
 		ExtraFlags: strings.Fields(cfg.Epic.AgentFlags),
 		WorkDir:    cfg.ProjectDir,
 	}

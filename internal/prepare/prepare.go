@@ -61,6 +61,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if err != nil {
 		return fmt.Errorf("run prepare: %w", err)
 	}
+	prepModel := engine.ResolveModelForSession(engName, string(opts.EffortLevel), engine.SessionPrepare)
 
 	fryDir := filepath.Join(projectDir, config.FryDir)
 	if err := os.MkdirAll(fryDir, 0o755); err != nil {
@@ -154,7 +155,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if hasMedia {
 			step0Inputs = append(step0Inputs, fmt.Sprintf("%s/ manifest", config.MediaDir))
 		}
-		frylog.Log("Step 0: Generating %s from %s (engine: %s)...", config.PlanFile, strings.Join(step0Inputs, ", "), engName)
+		frylog.Log("Step 0: Generating %s from %s (engine: %s, model: %s)...", config.PlanFile, strings.Join(step0Inputs, ", "), engName, prepModel)
 		executiveContent, err := os.ReadFile(executivePath)
 		if err != nil {
 			return fmt.Errorf("run prepare: read executive: %w", err)
@@ -164,7 +165,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		}
 		prompt := step0Prompt(opts.Mode, string(executiveContent), mediaManifest, assetsSection)
 		beforeMod := textutil.FileModTime(planPath)
-		output, err := runPrepareStep(ctx, eng, projectDir, prompt)
+		output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 		if err != nil {
 			return err
 		}
@@ -203,10 +204,10 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step1Inputs = append(step1Inputs, config.MediaDir+"/ manifest")
 	}
-	frylog.Log("Step 1: Generating %s from %s (engine: %s)...", config.AgentsFile, strings.Join(step1Inputs, ", "), engName)
+	frylog.Log("Step 1: Generating %s from %s (engine: %s, model: %s)...", config.AgentsFile, strings.Join(step1Inputs, ", "), engName, prepModel)
 	prompt := step1Prompt(opts.Mode, planContent, executiveContent, mediaManifest)
 	beforeMod := textutil.FileModTime(agentsPath)
-	output, err := runPrepareStep(ctx, eng, projectDir, prompt)
+	output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 	if err != nil {
 		return err
 	}
@@ -244,10 +245,10 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step2Inputs = append(step2Inputs, config.MediaDir+"/ manifest")
 	}
-	frylog.Log("Step 2: Generating %s from %s (engine: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName)
+	frylog.Log("Step 2: Generating %s from %s (engine: %s, model: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName, prepModel)
 	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
 	beforeMod = textutil.FileModTime(epicPath)
-	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
+	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 	if err != nil {
 		return err
 	}
@@ -272,11 +273,11 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step3Inputs = append(step3Inputs, config.MediaDir+"/ manifest")
 	}
-	frylog.Log("Step 3: Generating %s from %s (engine: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), engName)
+	frylog.Log("Step 3: Generating %s from %s (engine: %s, model: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), engName, prepModel)
 	prompt = step3Prompt(opts.Mode, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest)
 	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	beforeMod = textutil.FileModTime(verificationPath)
-	output, err = runPrepareStep(ctx, eng, projectDir, prompt)
+	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 	if err != nil {
 		return err
 	}
@@ -317,10 +318,11 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 	if strings.TrimSpace(mediaManifest) != "" {
 		bootstrapInputs = append(bootstrapInputs, config.MediaDir+"/ manifest")
 	}
-	frylog.Log("Generating %s from %s (engine: %s)...", config.ExecutiveFile, strings.Join(bootstrapInputs, ", "), engName)
+	prepModel := engine.ResolveModelForSession(engName, string(opts.EffortLevel), engine.SessionPrepare)
+	frylog.Log("Generating %s from %s (engine: %s, model: %s)...", config.ExecutiveFile, strings.Join(bootstrapInputs, ", "), engName, prepModel)
 
 	prompt := executiveFromUserPromptPrompt(opts.Mode, opts.UserPrompt, mediaManifest, assetsSection)
-	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir})
+	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: prepModel})
 	if err != nil && strings.TrimSpace(output) == "" {
 		return fmt.Errorf("run prepare: generate executive: %w", err)
 	}
@@ -416,8 +418,8 @@ func validateStep3(verificationPath string) error {
 	return nil
 }
 
-func runPrepareStep(ctx context.Context, eng engine.Engine, projectDir, prompt string) (string, error) {
-	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: projectDir})
+func runPrepareStep(ctx context.Context, eng engine.Engine, projectDir, prompt, model string) (string, error) {
+	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: projectDir, Model: model})
 	if err != nil && strings.TrimSpace(output) == "" {
 		return "", fmt.Errorf("run prepare step: %w", err)
 	}

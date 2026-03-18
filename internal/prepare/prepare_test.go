@@ -358,7 +358,7 @@ func TestBootstrapExecutive_LogsPromptOnlyWhenNoExtras(t *testing.T) {
 
 	require.NoError(t, err)
 	logOutput := logBuf.String()
-	assert.Contains(t, logOutput, "from user prompt (engine: fake)")
+	assert.Contains(t, logOutput, "from user prompt (engine: fake, model:")
 	assert.NotContains(t, logOutput, "assets/")
 	assert.NotContains(t, logOutput, "media/")
 }
@@ -633,7 +633,7 @@ func TestRunPrepare_PlanExistsWithoutExecutive(t *testing.T) {
 	assert.NotContains(t, logOutput, "Using existing plans/executive.md")
 	assert.Contains(t, logOutput, "Using existing plans/plan.md")
 	// Step 1 should list only plan.md (no executive).
-	assert.Contains(t, logOutput, "Step 1: Generating .fry/AGENTS.md from plans/plan.md (engine: claude)")
+	assert.Contains(t, logOutput, "Step 1: Generating .fry/AGENTS.md from plans/plan.md (engine: claude, model:")
 }
 
 func TestRunPrepare_LogsExistingFiles(t *testing.T) {

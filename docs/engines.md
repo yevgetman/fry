@@ -70,12 +70,42 @@ When [dynamic sprint review](sprint-review.md) is enabled, the reviewer session 
 @review_model claude-sonnet-4-6
 ```
 
+## Automatic Model Selection (Tier System)
+
+Fry automatically selects the best model for each agent session based on the **engine**, **effort level**, and **session type**. Models are organized into four tiers:
+
+| Tier | Purpose | Claude | Codex |
+|------|---------|--------|-------|
+| **Frontier** | Most capable, highest cost | `opus[1m]` | `gpt-5.4` |
+| **Standard** | Strong all-rounder | `sonnet` | `gpt-5.3-codex` |
+| **Mini** | Fast, cost-efficient | `haiku` | `gpt-5.4-mini` |
+| **Labor** | Cheapest, no reasoning needed | `haiku` | `gpt-5-codex-mini` |
+
+To update models when new ones release, change only the tier mapping table in `internal/engine/models.go`.
+
+### Session × Effort Rules
+
+| Session | low | medium | high | max |
+|---------|-----|--------|------|-----|
+| Sprint execution, Heal, Audit fix, Review, Replan | Standard | Standard | Frontier | Frontier |
+| Audit, Audit verify, Build audit (Claude) | Standard | Standard | Standard | Frontier |
+| Audit, Audit verify, Build audit (Codex) | Mini | Standard | Frontier | Frontier |
+| Build summary | Mini | Mini | Standard | Standard |
+| Compaction | Labor | Labor | Labor | Mini |
+| Continue analysis | Mini | Mini | Standard | Standard |
+| Sanity check | Labor | Labor | Labor | Labor |
+| Prepare | Standard | Standard | Standard | Standard |
+
+Empty effort level defaults to "medium" behavior.
+
 ## Model Override
 
-Override the default model for any engine:
+Epic directives override the automatic tier selection for their session group:
 
 ```
-@model gpt-4.1              # In the epic file
+@model opus[1m]                # Overrides sprint execution + heal + compaction + summary
+@audit_model sonnet            # Overrides audit + audit fix + audit verify + build audit
+@review_model claude-sonnet-4-6  # Overrides review + replan
 ```
 
 Or via `--model` flag for `fry replan`.

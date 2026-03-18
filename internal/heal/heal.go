@@ -154,6 +154,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 	prevFailCount := lastTotal - lastPass
 	stuckCount := 0
+	resolvedModel := engine.ResolveModel(opts.Epic.AgentModel, opts.Engine.Name(), string(opts.EffortLevel), engine.SessionHeal)
 
 	for attempt := 1; !cfg.hardCap || attempt <= cfg.maxAttempts; attempt++ {
 		select {
@@ -188,7 +189,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 				attempt,
 				cfg.maxAttempts,
 				opts.Engine.Name(),
-				agentModel(opts.Epic.AgentModel),
+				agentModel(resolvedModel),
 			)
 		} else {
 			frylog.Log(
@@ -198,7 +199,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 				opts.Sprint.Name,
 				attempt,
 				opts.Engine.Name(),
-				agentModel(opts.Epic.AgentModel),
+				agentModel(resolvedModel),
 			)
 		}
 
@@ -206,7 +207,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			buildLogsDir,
 			fmt.Sprintf("sprint%d_heal%d_%s.log", opts.Sprint.Number, attempt, time.Now().Format("20060102_150405")),
 		)
-		if _, err := runAgentWithDualLogs(ctx, opts, config.HealInvocationPrompt, healLogPath); err != nil {
+		if _, err := runAgentWithDualLogs(ctx, opts, config.HealInvocationPrompt, healLogPath, resolvedModel); err != nil {
 			return nil, err
 		}
 
@@ -360,7 +361,7 @@ func buildHealPrompt(opts HealOpts, failureReport string) string {
 	return b.String()
 }
 
-func runAgentWithDualLogs(ctx context.Context, opts HealOpts, prompt, iterPath string) (string, error) {
+func runAgentWithDualLogs(ctx context.Context, opts HealOpts, prompt, iterPath, model string) (string, error) {
 	iterLog, err := os.Create(iterPath)
 	if err != nil {
 		return "", fmt.Errorf("run heal loop: create iteration log: %w", err)
@@ -374,7 +375,7 @@ func runAgentWithDualLogs(ctx context.Context, opts HealOpts, prompt, iterPath s
 	defer sprintLog.Close()
 
 	runOpts := engine.RunOpts{
-		Model:      opts.Epic.AgentModel,
+		Model:      model,
 		ExtraFlags: strings.Fields(opts.Epic.AgentFlags),
 		WorkDir:    opts.ProjectDir,
 	}

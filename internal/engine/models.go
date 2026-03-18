@@ -1,6 +1,9 @@
 package engine
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Model represents a valid model identifier with its capability ranking.
 // Rank 1 is the most capable; higher numbers are less capable.
@@ -8,6 +11,55 @@ import "fmt"
 type Model struct {
 	ID   string
 	Rank int
+}
+
+// ModelTier represents a capability tier used for automatic model selection.
+// The tier maps to a concrete model ID per engine via the tier mapping tables.
+// To update models when new ones release, change the mapping tables only.
+type ModelTier string
+
+const (
+	TierFrontier ModelTier = "frontier" // Most capable, highest cost
+	TierStandard ModelTier = "standard" // Strong all-rounder
+	TierMini     ModelTier = "mini"     // Fast, cost-efficient
+	TierLabor    ModelTier = "labor"    // Cheapest, no reasoning needed
+)
+
+// SessionType identifies the kind of agent session being launched.
+type SessionType string
+
+const (
+	SessionSprint       SessionType = "sprint"
+	SessionHeal         SessionType = "heal"
+	SessionAudit        SessionType = "audit"
+	SessionAuditFix     SessionType = "audit-fix"
+	SessionAuditVerify  SessionType = "audit-verify"
+	SessionReview       SessionType = "review"
+	SessionReplan       SessionType = "replan"
+	SessionBuildAudit   SessionType = "build-audit"
+	SessionBuildSummary SessionType = "build-summary"
+	SessionCompaction   SessionType = "compaction"
+	SessionContinue     SessionType = "continue"
+	SessionSanityCheck  SessionType = "sanity-check"
+	SessionPrepare      SessionType = "prepare"
+)
+
+// Tier-to-model mapping tables.
+// These are the ONLY places where concrete model IDs are associated with tiers.
+// When a new frontier model is released, update these tables and all session
+// rules automatically pick up the change.
+var claudeTierModels = map[ModelTier]string{
+	TierFrontier: "opus[1m]",
+	TierStandard: "sonnet",
+	TierMini:     "haiku",
+	TierLabor:    "haiku",
+}
+
+var codexTierModels = map[ModelTier]string{
+	TierFrontier: "gpt-5.4",
+	TierStandard: "gpt-5.3-codex",
+	TierMini:     "gpt-5.4-mini",
+	TierLabor:    "gpt-5-codex-mini",
 }
 
 // ClaudeModels lists valid model identifiers for the Claude engine, ordered by capability.
@@ -50,22 +102,25 @@ var CodexModels = []Model{
 	// Rank 2 — Frontier codex-optimized
 	{ID: "gpt-5.3-codex", Rank: 2},
 
-	// Rank 3 — Previous frontier
+	// Ranks 3-4 — Previous frontier
 	{ID: "gpt-5.2-codex", Rank: 3},
 	{ID: "gpt-5.2", Rank: 4},
 
-	// Rank 5 — Deep reasoning
+	// Ranks 5-7 — Deep reasoning
 	{ID: "gpt-5.1-codex-max", Rank: 5},
 	{ID: "gpt-5.1-codex", Rank: 6},
 	{ID: "gpt-5.1", Rank: 7},
 
-	// Rank 8 — Older generation
-	{ID: "gpt-5-codex", Rank: 8},
-	{ID: "gpt-5", Rank: 9},
+	// Rank 8 — Current-gen mini (fast, efficient)
+	{ID: "gpt-5.4-mini", Rank: 8},
 
-	// Rank 10 — Mini (speed/cost optimized)
-	{ID: "gpt-5.1-codex-mini", Rank: 10},
-	{ID: "gpt-5-codex-mini", Rank: 11},
+	// Ranks 9-10 — Older generation
+	{ID: "gpt-5-codex", Rank: 9},
+	{ID: "gpt-5", Rank: 10},
+
+	// Ranks 11-12 — Legacy mini (speed/cost optimized)
+	{ID: "gpt-5.1-codex-mini", Rank: 11},
+	{ID: "gpt-5-codex-mini", Rank: 12},
 }
 
 // claudeModelSet and codexModelSet are lookup maps for validation.
@@ -80,6 +135,105 @@ func buildModelSet(models []Model) map[string]int {
 		m[model.ID] = model.Rank
 	}
 	return m
+}
+
+// TierModel returns the concrete model ID for a tier and engine.
+func TierModel(engineName string, tier ModelTier) string {
+	switch engineName {
+	case "claude":
+		return claudeTierModels[tier]
+	case "codex":
+		return codexTierModels[tier]
+	default:
+		return ""
+	}
+}
+
+// TierForSession returns the model tier for a given session type, engine, and effort level.
+// Empty effort is treated as "medium".
+func TierForSession(engineName, effort string, session SessionType) ModelTier {
+	e := normalizeEffort(effort)
+
+	switch session {
+	case SessionSprint, SessionHeal, SessionAuditFix, SessionReview, SessionReplan:
+		if e == "high" || e == "max" {
+			return TierFrontier
+		}
+		return TierStandard
+
+	case SessionAudit, SessionAuditVerify, SessionBuildAudit:
+		return auditTier(engineName, e)
+
+	case SessionBuildSummary:
+		if e == "high" || e == "max" {
+			return TierStandard
+		}
+		return TierMini
+
+	case SessionCompaction:
+		if e == "max" {
+			return TierMini
+		}
+		return TierLabor
+
+	case SessionContinue:
+		if e == "high" || e == "max" {
+			return TierStandard
+		}
+		return TierMini
+
+	case SessionSanityCheck:
+		return TierLabor
+
+	case SessionPrepare:
+		return TierStandard
+
+	default:
+		return TierStandard
+	}
+}
+
+func auditTier(engineName, effort string) ModelTier {
+	if engineName == "codex" {
+		switch effort {
+		case "low":
+			return TierMini
+		case "medium":
+			return TierStandard
+		default: // high, max
+			return TierFrontier
+		}
+	}
+	// claude: standard for all except max
+	if effort == "max" {
+		return TierFrontier
+	}
+	return TierStandard
+}
+
+func normalizeEffort(effort string) string {
+	e := strings.ToLower(strings.TrimSpace(effort))
+	if e == "" {
+		return "medium"
+	}
+	return e
+}
+
+// ResolveModelForSession returns the concrete model for a session based on
+// engine, effort level, and session type, using the tier system.
+func ResolveModelForSession(engineName, effort string, session SessionType) string {
+	tier := TierForSession(engineName, effort, session)
+	return TierModel(engineName, tier)
+}
+
+// ResolveModel returns the model to use for an engine call. If epicOverride is
+// non-empty, it is returned directly (epic directive takes precedence). Otherwise,
+// the tier system resolves the model based on session type, effort, and engine.
+func ResolveModel(epicOverride, engineName, effort string, session SessionType) string {
+	if epicOverride != "" {
+		return epicOverride
+	}
+	return ResolveModelForSession(engineName, effort, session)
 }
 
 // ModelsForEngine returns the ranked model list for the given engine.
