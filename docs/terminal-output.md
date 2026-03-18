@@ -113,8 +113,8 @@ Each sprint gets a start banner (including verification check count), per-iterat
 [2026-03-10 12:00:00] Max iterations: 25
 [2026-03-10 12:00:00] Verification checks: 4 applicable to this sprint
 [2026-03-10 12:00:00] =========================================
-[2026-03-10 12:00:01] ▶ AGENT  sprint 3/8 "Auth & Permissions"  iter 1/25  engine=claude  model=default
-[2026-03-10 12:05:12] ▶ AGENT  sprint 3/8 "Auth & Permissions"  iter 2/25  engine=claude  model=default
+[2026-03-10 12:00:01] ▶ AGENT  Sprint 3/8 "Auth & Permissions"  iter 1/25  engine=claude  model=default
+[2026-03-10 12:05:12] ▶ AGENT  Sprint 3/8 "Auth & Permissions"  iter 2/25  engine=claude  model=default
 [2026-03-10 12:10:30] Running verification checks...
 [2026-03-10 12:10:35] Verification: 4/4 checks passed.
 [2026-03-10 12:10:35] SPRINT 3 PASS (2m35s)
@@ -130,7 +130,7 @@ When the agent produces no file changes, a no-op line appears:
 ## Self-Healing
 
 ```
-[2026-03-10 12:10:30] ▶ AGENT  sprint 3/8 "Auth & Permissions"  heal 1/3  engine=claude  model=default
+[2026-03-10 12:10:30] ▶ AGENT  Sprint 3/8 "Auth & Permissions"  heal 1/3  engine=claude  model=default
 [2026-03-10 12:12:00] Re-running verification after heal attempt 1...
 [2026-03-10 12:12:05] Heal attempt 1 SUCCEEDED — all checks now pass.
 ```
@@ -146,7 +146,7 @@ When `--retry` is used, the sprint banner indicates retry mode and skips straigh
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:01]   Verification: 2/5 checks passed.
 [2026-03-10 12:00:01]   Entering heal loop with 6 attempts (retry mode, was 3)...
-[2026-03-10 12:00:01] ▶ AGENT  sprint 4/8 "API Integration"  heal 1/6  engine=claude  model=default
+[2026-03-10 12:00:01] ▶ AGENT  Sprint 4/8 "API Integration"  heal 1/6  engine=claude  model=default
 [2026-03-10 12:02:30]   Re-running verification after heal attempt 1...
 [2026-03-10 12:02:35]   Heal attempt 1 SUCCEEDED — all checks now pass.
 [2026-03-10 12:02:35] SPRINT 4 RETRY PASS (healed) (2m35s)

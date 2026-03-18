@@ -42,7 +42,7 @@ func AgentBanner(sprintNum, totalSprints int, sprintName string, iter, maxIter i
 		model = "default"
 	}
 	banner := fmt.Sprintf(
-		"▶ AGENT  sprint %d/%d \"%s\"  iter %d/%d  engine=%s  model=%s",
+		"▶ AGENT  Sprint %d/%d \"%s\"  iter %d/%d  engine=%s  model=%s",
 		sprintNum,
 		totalSprints,
 		sprintName,

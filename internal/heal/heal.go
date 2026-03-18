@@ -181,7 +181,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 		if cfg.hardCap {
 			frylog.Log(
-				"▶ AGENT  sprint %d/%d \"%s\"  heal %d/%d  engine=%s  model=%s",
+				"▶ AGENT  Sprint %d/%d \"%s\"  heal %d/%d  engine=%s  model=%s",
 				opts.Sprint.Number,
 				opts.Epic.TotalSprints,
 				opts.Sprint.Name,
@@ -192,7 +192,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			)
 		} else {
 			frylog.Log(
-				"▶ AGENT  sprint %d/%d \"%s\"  heal %d (progress-based)  engine=%s  model=%s",
+				"▶ AGENT  Sprint %d/%d \"%s\"  heal %d (progress-based)  engine=%s  model=%s",
 				opts.Sprint.Number,
 				opts.Epic.TotalSprints,
 				opts.Sprint.Name,
