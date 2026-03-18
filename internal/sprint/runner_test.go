@@ -690,6 +690,310 @@ func TestRetrySprintPreservesProgress(t *testing.T) {
 	assert.Contains(t, string(progress), "RETRY MODE")
 }
 
+// --- P0: RetrySprint additional coverage ---
+
+func TestRetrySprintNilEpic(t *testing.T) {
+	t.Parallel()
+
+	_, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: t.TempDir(),
+		Sprint:     &epic.Sprint{Number: 1, Name: "X"},
+		Engine:     &stubEngine{name: "codex"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "epic and sprint are required")
+}
+
+func TestRetrySprintNilEngine(t *testing.T) {
+	t.Parallel()
+
+	_, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: t.TempDir(),
+		Epic:       &epic.Epic{TotalSprints: 1},
+		Sprint:     &epic.Sprint{Number: 1, Name: "X"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "engine is required")
+}
+
+func TestRetrySprintDeferredFailures(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1 — Progress\n\n")
+	// 4 of 5 checks pass → 20% failure → within threshold
+	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile),
+		"@sprint 1\n@check_file a.txt\n@check_file b.txt\n@check_file c.txt\n@check_file d.txt\n@check_file missing.txt\n")
+	writeFile(t, filepath.Join(projectDir, "a.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "b.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "c.txt"), "ok\n")
+	writeFile(t, filepath.Join(projectDir, "d.txt"), "ok\n")
+
+	result, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:       1,
+			VerificationFile:   config.DefaultVerificationFile,
+			MaxHealAttempts:    1,
+			MaxHealAttemptsSet: true,
+			MaxFailPercent:     20,
+			MaxFailPercentSet:  true,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Threshold",
+			MaxIterations: 1,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: &stubEngine{name: "codex"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusPassWithDeferredFailures, result.Status)
+	assert.Len(t, result.DeferredFailures, 1)
+}
+
+func TestRetrySprintBoostedAttempts(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1 — Progress\n\n")
+	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file missing.txt\n")
+
+	mockEngine := &stubEngine{name: "codex"}
+
+	// With explicit heal attempts of 4, boosted = max(4*2, 6) = 8
+	result, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:       1,
+			VerificationFile:   config.DefaultVerificationFile,
+			MaxHealAttempts:    4,
+			MaxHealAttemptsSet: true,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Boosted",
+			MaxIterations: 1,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusFailVerificationFailedHealExhausted, result.Status)
+	// Boosted attempts are passed as MaxAttemptsOverride to heal loop.
+	// Exact count depends on stuck detection, but at least some attempts are made.
+	assert.GreaterOrEqual(t, len(mockEngine.prompts), 1)
+}
+
+func TestRetrySprintEffortLevelHealBase(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1 — Progress\n\n")
+	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 1\n@check_file missing.txt\n")
+
+	mockEngine := &stubEngine{name: "codex"}
+
+	// Effort high → default heal = 10, boosted = max(10*2, 6) = 20
+	result, err := RetrySprint(context.Background(), RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints:     1,
+			VerificationFile: config.DefaultVerificationFile,
+			EffortLevel:      epic.EffortHigh,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "High Effort",
+			MaxIterations: 1,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: mockEngine,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusFailVerificationFailedHealExhausted, result.Status)
+	// High effort uses progress-based detection — stub engine makes no progress,
+	// so stuck threshold (2) causes early exit. At least 1 attempt must be made.
+	assert.GreaterOrEqual(t, len(mockEngine.prompts), 1)
+}
+
+// --- P0: Progress file tests ---
+
+func TestInitEpicProgress(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitEpicProgress(projectDir, "My Epic"))
+
+	content, err := os.ReadFile(filepath.Join(projectDir, config.EpicProgressFile))
+	require.NoError(t, err)
+	assert.Equal(t, "# Epic Progress — My Epic\n\n", string(content))
+}
+
+func TestAppendToSprintProgress(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitSprintProgress(projectDir, 1, "Setup"))
+	require.NoError(t, AppendToSprintProgress(projectDir, "## Iteration 1\nDid work.\n"))
+	require.NoError(t, AppendToSprintProgress(projectDir, "## Iteration 2\nMore work.\n"))
+
+	content, err := os.ReadFile(filepath.Join(projectDir, config.SprintProgressFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "# Sprint 1: Setup — Progress")
+	assert.Contains(t, string(content), "## Iteration 1")
+	assert.Contains(t, string(content), "## Iteration 2")
+}
+
+func TestAppendToEpicProgress(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitEpicProgress(projectDir, "Epic"))
+	require.NoError(t, AppendToEpicProgress(projectDir, "Sprint 1 summary.\n"))
+
+	content, err := os.ReadFile(filepath.Join(projectDir, config.EpicProgressFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "Sprint 1 summary.")
+}
+
+func TestReadSprintProgress_MissingFile(t *testing.T) {
+	t.Parallel()
+
+	content, err := ReadSprintProgress(t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, "", content)
+}
+
+func TestReadEpicProgress_MissingFile(t *testing.T) {
+	t.Parallel()
+
+	content, err := ReadEpicProgress(t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, "", content)
+}
+
+func TestReadSprintProgress_WithContent(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitSprintProgress(projectDir, 3, "Build"))
+
+	content, err := ReadSprintProgress(projectDir)
+	require.NoError(t, err)
+	assert.Contains(t, content, "# Sprint 3: Build — Progress")
+}
+
+func TestReadEpicProgress_WithContent(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitEpicProgress(projectDir, "Demo"))
+
+	content, err := ReadEpicProgress(projectDir)
+	require.NoError(t, err)
+	assert.Contains(t, content, "# Epic Progress — Demo")
+}
+
+// --- P0: CompactSprintProgress tests ---
+
+func TestCompactSprintProgressMechanical(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	progressContent := "# Sprint 1 — Progress\n\n## Iteration 1\nFirst\n\n## Iteration 2\nSecond\n"
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), progressContent)
+
+	result, err := CompactSprintProgress(context.Background(), projectDir, 1, "Setup", "PASS", nil, false, "")
+	require.NoError(t, err)
+	assert.Contains(t, result, "## Sprint 1: Setup — PASS")
+	assert.Contains(t, result, "## Iteration 2")
+	assert.Contains(t, result, "Second")
+	assert.NotContains(t, result, "## Iteration 1")
+}
+
+func TestCompactSprintProgressAgentNilEngine(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "progress\n")
+
+	_, err := CompactSprintProgress(context.Background(), projectDir, 1, "X", "PASS", nil, true, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "engine is required")
+}
+
+func TestCompactSprintProgressAgent(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "long progress content\n")
+
+	eng := &stubEngine{
+		name:    "codex",
+		outputs: []string{"Summary: completed auth module."},
+	}
+
+	result, err := CompactSprintProgress(context.Background(), projectDir, 2, "Auth", "PASS", eng, true, "sonnet")
+	require.NoError(t, err)
+	assert.Contains(t, result, "## Sprint 2: Auth — PASS")
+	assert.Contains(t, result, "Summary: completed auth module.")
+}
+
+// --- P0: countChecksForSprint ---
+
+func TestCountChecksForSprint(t *testing.T) {
+	t.Parallel()
+
+	checks := []verify.Check{
+		{Sprint: 1, Type: verify.CheckFile, Path: "a.txt"},
+		{Sprint: 1, Type: verify.CheckFile, Path: "b.txt"},
+		{Sprint: 2, Type: verify.CheckFile, Path: "c.txt"},
+		{Sprint: 3, Type: verify.CheckFile, Path: "d.txt"},
+	}
+
+	assert.Equal(t, 2, countChecksForSprint(checks, 1))
+	assert.Equal(t, 1, countChecksForSprint(checks, 2))
+	assert.Equal(t, 1, countChecksForSprint(checks, 3))
+	assert.Equal(t, 0, countChecksForSprint(checks, 99))
+}
+
+func TestCountChecksForSprint_Empty(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 0, countChecksForSprint(nil, 1))
+	assert.Equal(t, 0, countChecksForSprint([]verify.Check{}, 1))
+}
+
+// --- P0: RunSprint context cancellation ---
+
+func TestRunSprintContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := RunSprint(ctx, RunConfig{
+		ProjectDir: projectDir,
+		Epic: &epic.Epic{
+			TotalSprints: 1,
+		},
+		Sprint: &epic.Sprint{
+			Number:        1,
+			Name:          "Cancelled",
+			MaxIterations: 5,
+			Promise:       "DONE",
+			Prompt:        "Build it.",
+		},
+		Engine: &stubEngine{name: "codex"},
+	})
+	require.Error(t, err)
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))

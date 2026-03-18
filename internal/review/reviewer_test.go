@@ -357,3 +357,321 @@ func TestAssembleReviewPromptDefaults(t *testing.T) {
 	assert.Contains(t, prompt, "(No sprint progress recorded.)")
 	assert.Contains(t, prompt, "(No remaining sprints.)")
 }
+
+// --- P0: RunSprintReview tests ---
+
+func TestRunSprintReview_EmptyProjectDir(t *testing.T) {
+	t.Parallel()
+
+	_, err := RunSprintReview(context.Background(), RunReviewOpts{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "project dir is required")
+}
+
+func TestRunSprintReview_SimulateContinue(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
+
+	result, err := RunSprintReview(context.Background(), RunReviewOpts{
+		ProjectDir:      projectDir,
+		SprintNum:       1,
+		TotalSprints:    3,
+		SprintName:      "Setup",
+		SimulateVerdict: "CONTINUE",
+		Epic: &epic.Epic{
+			TotalSprints: 3,
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "Setup", Prompt: "Build setup."},
+				{Number: 2, Name: "Core", Prompt: "Build core."},
+				{Number: 3, Name: "Polish", Prompt: "Polish."},
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, VerdictContinue, result.Verdict)
+	assert.Nil(t, result.Deviation)
+}
+
+func TestRunSprintReview_SimulateDeviate(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
+
+	result, err := RunSprintReview(context.Background(), RunReviewOpts{
+		ProjectDir:      projectDir,
+		SprintNum:       1,
+		TotalSprints:    3,
+		SprintName:      "Setup",
+		SimulateVerdict: "DEVIATE",
+		Epic: &epic.Epic{
+			TotalSprints: 3,
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "Setup", Prompt: "Build setup."},
+				{Number: 2, Name: "Core", Prompt: "Build core."},
+				{Number: 3, Name: "Polish", Prompt: "Polish."},
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, VerdictDeviate, result.Verdict)
+	assert.NotNil(t, result.Deviation)
+	assert.Contains(t, result.Deviation.RawText, "Simulated deviation")
+}
+
+func TestRunSprintReview_SimulateInvalidVerdict(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
+
+	_, err := RunSprintReview(context.Background(), RunReviewOpts{
+		ProjectDir:      projectDir,
+		SprintNum:       1,
+		TotalSprints:    2,
+		SprintName:      "Setup",
+		SimulateVerdict: "INVALID",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown simulation verdict")
+}
+
+func TestRunSprintReview_NilEngineWithoutSimulation(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
+
+	_, err := RunSprintReview(context.Background(), RunReviewOpts{
+		ProjectDir:   projectDir,
+		SprintNum:    1,
+		TotalSprints: 2,
+		SprintName:   "Setup",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "engine is required")
+}
+
+func TestRunSprintReview_WithEngine(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
+
+	eng := &stubReplanEngine{
+		output: "### Analysis\nAll good.\n\n### Decision\n<verdict>CONTINUE</verdict>\n",
+	}
+
+	result, err := RunSprintReview(context.Background(), RunReviewOpts{
+		ProjectDir:   projectDir,
+		SprintNum:    1,
+		TotalSprints: 2,
+		SprintName:   "Setup",
+		Engine:       eng,
+		Epic: &epic.Epic{
+			TotalSprints: 2,
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "Setup", Prompt: "Build setup."},
+				{Number: 2, Name: "Core", Prompt: "Build core."},
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, VerdictContinue, result.Verdict)
+}
+
+func TestRunSprintReview_EngineReturnsDeviate(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
+
+	eng := &stubReplanEngine{
+		output: "### Analysis\nDeviated.\n\n### Decision\n<verdict>DEVIATE</verdict>\n\n### Deviation Spec\n- **Trigger**: path changed\n- **Affected sprints**: 2\n- **Risk assessment**: Low\n",
+	}
+
+	result, err := RunSprintReview(context.Background(), RunReviewOpts{
+		ProjectDir:   projectDir,
+		SprintNum:    1,
+		TotalSprints: 2,
+		SprintName:   "Setup",
+		Engine:       eng,
+		Epic: &epic.Epic{
+			TotalSprints: 2,
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "Setup", Prompt: "Build setup."},
+				{Number: 2, Name: "Core", Prompt: "Build core."},
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, VerdictDeviate, result.Verdict)
+	require.NotNil(t, result.Deviation)
+	assert.Equal(t, "path changed", result.Deviation.Trigger)
+}
+
+// --- AssembleReviewPrompt max effort ---
+
+func TestAssembleReviewPromptMaxEffort(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	prompt, err := AssembleReviewPrompt(ReviewPromptOpts{
+		ProjectDir:   projectDir,
+		SprintNum:    1,
+		TotalSprints: 3,
+		SprintName:   "Setup",
+		EffortLevel:  epic.EffortMax,
+	})
+	require.NoError(t, err)
+
+	assert.Contains(t, prompt, "## Bias: THOROUGH REVIEW")
+	assert.NotContains(t, prompt, "## Bias: CONTINUE")
+	assert.Contains(t, prompt, "heightened scrutiny")
+}
+
+// --- ExtractDeviationSpec edge cases ---
+
+func TestExtractDeviationSpec_NoSection(t *testing.T) {
+	t.Parallel()
+	assert.Nil(t, ExtractDeviationSpec("### Decision\n<verdict>CONTINUE</verdict>\n"))
+}
+
+func TestExtractDeviationSpec_EmptyBody(t *testing.T) {
+	t.Parallel()
+	assert.Nil(t, ExtractDeviationSpec("### Deviation Spec\n\n"))
+}
+
+// --- RunReplan additional tests ---
+
+func TestRunReplan_EmptyProjectDir(t *testing.T) {
+	t.Parallel()
+
+	err := RunReplan(context.Background(), ReplanOpts{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "project dir is required")
+}
+
+func TestRunReplan_MissingDeviationSpec(t *testing.T) {
+	t.Parallel()
+
+	err := RunReplan(context.Background(), ReplanOpts{
+		ProjectDir: t.TempDir(),
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "deviation spec")
+}
+
+func TestRunReplan_DryRun(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	epicContent := "@epic Demo\n@sprint 1\n@name One\n@max_iterations 3\n@promise ONE\n@prompt\nFirst.\n" +
+		"@sprint 2\n@name Two\n@max_iterations 3\n@promise TWO\n@prompt\nSecond.\n"
+	epicPath := filepath.Join(projectDir, config.FryDir, "epic.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(epicPath), 0o755))
+	require.NoError(t, os.WriteFile(epicPath, []byte(epicContent), 0o644))
+
+	err := RunReplan(context.Background(), ReplanOpts{
+		ProjectDir:      projectDir,
+		EpicPath:        epicPath,
+		DeviationSpec:   &DeviationSpec{Trigger: "test", RawText: "test deviation"},
+		CompletedSprint: 1,
+		MaxScope:        2,
+		DryRun:          true,
+	})
+	require.NoError(t, err)
+
+	promptPath := filepath.Join(projectDir, config.FryDir, "replan-prompt.md")
+	_, err = os.Stat(promptPath)
+	assert.NoError(t, err)
+}
+
+func TestRunReplan_NilEngine(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	epicContent := "@epic Demo\n@sprint 1\n@name One\n@max_iterations 3\n@promise ONE\n@prompt\nFirst.\n"
+	epicPath := filepath.Join(projectDir, config.FryDir, "epic.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(epicPath), 0o755))
+	require.NoError(t, os.WriteFile(epicPath, []byte(epicContent), 0o644))
+
+	err := RunReplan(context.Background(), ReplanOpts{
+		ProjectDir:      projectDir,
+		EpicPath:        epicPath,
+		DeviationSpec:   &DeviationSpec{RawText: "test"},
+		CompletedSprint: 0,
+		MaxScope:        1,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "engine is required")
+}
+
+// --- ValidateReplan additional ---
+
+func TestValidateReplan_NilArgs(t *testing.T) {
+	t.Parallel()
+
+	err := ValidateReplan(nil, nil, 1, 2)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "original and updated epic are required")
+}
+
+func TestValidateReplan_SprintCountChanged(t *testing.T) {
+	t.Parallel()
+
+	original := mustParseEpic(t, "@epic Demo\n@sprint 1\n@name One\n@max_iterations 3\n@promise ONE\n@prompt\nFirst.\n@sprint 2\n@name Two\n@max_iterations 3\n@promise TWO\n@prompt\nSecond.\n")
+	updated := mustParseEpic(t, "@epic Demo\n@sprint 1\n@name One\n@max_iterations 3\n@promise ONE\n@prompt\nFirst.\n")
+
+	err := ValidateReplan(original, updated, 0, 5)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sprint count changed")
+}
+
+func TestValidateReplan_GlobalDirectivesChanged(t *testing.T) {
+	t.Parallel()
+
+	original := mustParseEpic(t, "@epic Demo\n@engine claude\n@sprint 1\n@name One\n@max_iterations 3\n@promise ONE\n@prompt\nFirst.\n")
+	updated := mustParseEpic(t, "@epic Demo\n@engine codex\n@sprint 1\n@name One\n@max_iterations 3\n@promise ONE\n@prompt\nFirst.\n")
+
+	err := ValidateReplan(original, updated, 0, 1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "global directives")
+}
+
+// --- Helper function tests ---
+
+func TestDefaultIfEmpty(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "fallback", defaultIfEmpty("", "fallback"))
+	assert.Equal(t, "fallback", defaultIfEmpty("   ", "fallback"))
+	assert.Equal(t, "value", defaultIfEmpty("value\n", "fallback"))
+}
+
+func TestAfterColon(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, " value", afterColon("key: value"))
+	assert.Equal(t, "", afterColon("no colon here"))
+	assert.Equal(t, " a:b", afterColon("key: a:b"))
+}
+
+func TestSimulationOutput_LastSprint(t *testing.T) {
+	t.Parallel()
+
+	output, err := simulatedReviewOutput("DEVIATE", 5, 5)
+	require.NoError(t, err)
+	assert.Contains(t, output, "- **Affected sprints**: 5")
+}
+
+func TestParseSprintNumber(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 3, parseSprintNumber("@sprint 3"))
+	assert.Equal(t, 12, parseSprintNumber("@sprint 12"))
+	assert.Equal(t, 0, parseSprintNumber("not a sprint"))
+	assert.Equal(t, 0, parseSprintNumber("@sprint"))
+}

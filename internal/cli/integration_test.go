@@ -19,6 +19,8 @@ import (
 )
 
 func TestDryRunParsing(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, "plans"), 0o755))
@@ -57,6 +59,8 @@ Implement the CLI.
 }
 
 func TestEpicPathResolution(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 
 	existingPath := filepath.Join(projectDir, "custom-epic.md")
@@ -74,6 +78,7 @@ func TestEpicPathResolution(t *testing.T) {
 }
 
 func TestEngineResolution(t *testing.T) {
+	// Not parallel: uses t.Setenv which is incompatible with t.Parallel()
 	t.Setenv("FRY_ENGINE", "claude")
 
 	name, err := engine.ResolveEngine("codex", "claude", "", "")
@@ -95,14 +100,20 @@ func TestEngineResolution(t *testing.T) {
 }
 
 func TestBuildSucceeds(t *testing.T) {
+	t.Parallel()
+
 	runRepoCommand(t, "go", "build", "./...")
 }
 
 func TestVetPasses(t *testing.T) {
+	t.Parallel()
+
 	runRepoCommand(t, "go", "vet", "./...")
 }
 
 func TestBuildSummaryIncludesSprintName(t *testing.T) {
+	t.Parallel()
+
 	var out bytes.Buffer
 	printBuildSummary(&out, []sprint.SprintResult{
 		{

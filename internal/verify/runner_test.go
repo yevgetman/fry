@@ -346,6 +346,120 @@ func TestCollectDeferredSummary(t *testing.T) {
 	assert.Contains(t, summary, "DEFERRED: Command output mismatch: echo nope (expected pattern: ^ok$)")
 }
 
+// --- P1: cappedBuffer tests ---
+
+func TestCappedBuffer_NormalWrite(t *testing.T) {
+	t.Parallel()
+
+	var buf cappedBuffer
+	n, err := buf.Write([]byte("hello"))
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+	assert.Equal(t, "hello", buf.String())
+	assert.Equal(t, 5, buf.Len())
+}
+
+func TestCappedBuffer_ExceedsCap(t *testing.T) {
+	t.Parallel()
+
+	var buf cappedBuffer
+	// Write up to near the cap
+	bigChunk := make([]byte, maxCheckOutput-10)
+	for i := range bigChunk {
+		bigChunk[i] = 'x'
+	}
+	_, err := buf.Write(bigChunk)
+	require.NoError(t, err)
+	assert.Equal(t, maxCheckOutput-10, buf.Len())
+
+	// Write more than remaining — truncated to remaining (10 bytes)
+	n, err := buf.Write([]byte("0123456789extra"))
+	require.NoError(t, err)
+	assert.Equal(t, 10, n) // only 10 remaining bytes accepted
+	assert.Equal(t, maxCheckOutput, buf.Len())
+}
+
+func TestCappedBuffer_DiscardAfterFull(t *testing.T) {
+	t.Parallel()
+
+	var buf cappedBuffer
+	full := make([]byte, maxCheckOutput)
+	for i := range full {
+		full[i] = 'a'
+	}
+	_, err := buf.Write(full)
+	require.NoError(t, err)
+
+	// Subsequent writes silently discarded
+	n, err := buf.Write([]byte("more data"))
+	require.NoError(t, err)
+	assert.Equal(t, 9, n)
+	assert.Equal(t, maxCheckOutput, buf.Len())
+}
+
+// --- P1: RunChecks sprint filtering ---
+
+func TestRunChecks_SprintFiltering(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "a.txt"), []byte("content\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "b.txt"), []byte("content\n"), 0o644))
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckFile, Path: "a.txt"},
+		{Sprint: 2, Type: CheckFile, Path: "b.txt"},
+		{Sprint: 1, Type: CheckFile, Path: "b.txt"},
+	}
+
+	results, pass, total := RunChecks(context.Background(), checks, 1, projectDir)
+	assert.Equal(t, 2, total, "should only run sprint 1 checks")
+	assert.Equal(t, 2, pass)
+	assert.Len(t, results, 2)
+
+	results2, pass2, total2 := RunChecks(context.Background(), checks, 2, projectDir)
+	assert.Equal(t, 1, total2)
+	assert.Equal(t, 1, pass2)
+	assert.Len(t, results2, 1)
+}
+
+func TestRunChecks_EmptyChecks(t *testing.T) {
+	t.Parallel()
+
+	results, pass, total := RunChecks(context.Background(), nil, 1, t.TempDir())
+	assert.Equal(t, 0, total)
+	assert.Equal(t, 0, pass)
+	assert.Empty(t, results)
+}
+
+func TestRunChecks_NoMatchingSprint(t *testing.T) {
+	t.Parallel()
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckFile, Path: "a.txt"},
+	}
+	results, pass, total := RunChecks(context.Background(), checks, 99, t.TempDir())
+	assert.Equal(t, 0, total)
+	assert.Equal(t, 0, pass)
+	assert.Empty(t, results)
+}
+
+// --- P1: CheckFile zero-size ---
+
+func TestRunCheck_CheckFileZeroSize(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "empty.txt"), []byte(""), 0o644))
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckFile, Path: "empty.txt"},
+	}
+	results, pass, _ := RunChecks(context.Background(), checks, 1, projectDir)
+	assert.Equal(t, 0, pass, "zero-size file should not pass CheckFile")
+	assert.False(t, results[0].Passed)
+}
+
 func writeVerificationFile(t *testing.T, contents string) string {
 	t.Helper()
 

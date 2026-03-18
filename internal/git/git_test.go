@@ -11,6 +11,8 @@ import (
 )
 
 func TestInitGit(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	require.NoError(t, InitGit(projectDir))
 
@@ -20,6 +22,8 @@ func TestInitGit(t *testing.T) {
 }
 
 func TestGitCheckpoint(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	require.NoError(t, InitGit(projectDir))
 	require.NoError(t, os.WriteFile(projectDir+"/file.txt", []byte("data\n"), 0o644))
@@ -33,39 +37,35 @@ func TestGitCheckpoint(t *testing.T) {
 }
 
 func TestInitGitIdempotent(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	require.NoError(t, InitGit(projectDir))
 	require.NoError(t, InitGit(projectDir))
 }
 
 func TestGitDiffForAudit(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	require.NoError(t, InitGit(projectDir))
 
-	// Create a tracked file and commit it
 	require.NoError(t, os.WriteFile(projectDir+"/existing.txt", []byte("original\n"), 0o644))
 	cmd := exec.Command("bash", "-c", "git add -A && git commit -m 'add existing'")
 	cmd.Dir = projectDir
 	require.NoError(t, cmd.Run())
 
-	// Modify the tracked file
 	require.NoError(t, os.WriteFile(projectDir+"/existing.txt", []byte("modified\n"), 0o644))
-
-	// Add a new untracked file
 	require.NoError(t, os.WriteFile(projectDir+"/newfile.txt", []byte("new content\n"), 0o644))
 
 	diff, err := GitDiffForAudit(projectDir)
 	require.NoError(t, err)
 
-	// Should contain changes to tracked file
 	assert.Contains(t, diff, "existing.txt")
 	assert.Contains(t, diff, "modified")
-
-	// Should contain new file content
 	assert.Contains(t, diff, "newfile.txt")
 	assert.Contains(t, diff, "new content")
 
-	// Verify no staged changes remain after GitDiffForAudit
 	statusCmd := exec.Command("bash", "-c", "git diff --cached --name-only")
 	statusCmd.Dir = projectDir
 	out, err := statusCmd.Output()
@@ -74,14 +74,13 @@ func TestGitDiffForAudit(t *testing.T) {
 }
 
 func TestGitDiffForAuditExcludesFryDir(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	require.NoError(t, InitGit(projectDir))
 
-	// Create a file in .fry/ — should be excluded from diff
 	require.NoError(t, os.MkdirAll(projectDir+"/.fry", 0o755))
 	require.NoError(t, os.WriteFile(projectDir+"/.fry/sprint-progress.txt", []byte("progress\n"), 0o644))
-
-	// Create a normal file — should be included
 	require.NoError(t, os.WriteFile(projectDir+"/code.go", []byte("package main\n"), 0o644))
 
 	diff, err := GitDiffForAudit(projectDir)
@@ -89,4 +88,156 @@ func TestGitDiffForAuditExcludesFryDir(t *testing.T) {
 
 	assert.Contains(t, diff, "code.go")
 	assert.NotContains(t, diff, "sprint-progress.txt")
+}
+
+// P1: CommitPartialWork
+
+func TestCommitPartialWork(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, os.WriteFile(projectDir+"/partial.txt", []byte("wip\n"), 0o644))
+	require.NoError(t, CommitPartialWork(projectDir, "TestEpic", 3))
+
+	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
+	cmd.Dir = projectDir
+	output, err := cmd.Output()
+	require.NoError(t, err)
+	assert.Equal(t, "TestEpic: Sprint 3 failed-partial [automated]", strings.TrimSpace(string(output)))
+}
+
+// P1: ensureLocalIdentity
+
+func TestEnsureLocalIdentity(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	initCmd := exec.Command("bash", "-c", "git init")
+	initCmd.Dir = projectDir
+	require.NoError(t, initCmd.Run())
+
+	// ensureLocalIdentity should not error regardless of whether
+	// global git config provides user.name/user.email or not.
+	require.NoError(t, ensureLocalIdentity(projectDir))
+
+	// After calling ensureLocalIdentity, at least one of local or global
+	// should provide user.name — verify git agrees.
+	nameVal := gitConfigValue(projectDir, "user.name")
+	assert.NotEmpty(t, strings.TrimSpace(nameVal))
+
+	emailVal := gitConfigValue(projectDir, "user.email")
+	assert.NotEmpty(t, strings.TrimSpace(emailVal))
+}
+
+func TestEnsureLocalIdentity_PreservesExisting(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	cmd := exec.Command("bash", "-c", "git init && git config user.name 'Custom User' && git config user.email 'custom@test.com'")
+	cmd.Dir = projectDir
+	require.NoError(t, cmd.Run())
+
+	require.NoError(t, ensureLocalIdentity(projectDir))
+
+	name := gitConfigValue(projectDir, "user.name")
+	assert.Equal(t, "Custom User", strings.TrimSpace(name))
+
+	email := gitConfigValue(projectDir, "user.email")
+	assert.Equal(t, "custom@test.com", strings.TrimSpace(email))
+}
+
+// P1: ensureGitignoreEntries
+
+func TestEnsureGitignoreEntries(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, ensureGitignoreEntries(projectDir, []string{".fry/", ".env"}))
+
+	data, err := os.ReadFile(projectDir + "/.gitignore")
+	require.NoError(t, err)
+	assert.Contains(t, string(data), ".fry/")
+	assert.Contains(t, string(data), ".env")
+}
+
+func TestEnsureGitignoreEntries_Idempotent(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(projectDir+"/.gitignore", []byte(".fry/\n"), 0o644))
+
+	require.NoError(t, ensureGitignoreEntries(projectDir, []string{".fry/", ".env"}))
+
+	data, err := os.ReadFile(projectDir + "/.gitignore")
+	require.NoError(t, err)
+	content := string(data)
+	assert.Equal(t, 1, strings.Count(content, ".fry/"))
+	assert.Contains(t, content, ".env")
+}
+
+// P1: GitDiffForAudit with no changes
+
+func TestGitDiffForAudit_NoChanges(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitGit(projectDir))
+
+	diff, err := GitDiffForAudit(projectDir)
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(diff))
+}
+
+// P1: gitConfigValue for missing key
+
+func TestGitConfigValue_MissingKey(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	cmd := exec.Command("bash", "-c", "git init")
+	cmd.Dir = projectDir
+	require.NoError(t, cmd.Run())
+
+	val := gitConfigValue(projectDir, "nonexistent.key")
+	assert.Empty(t, strings.TrimSpace(val))
+}
+
+// P1: hasHead
+
+func TestHasHead_EmptyRepo(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	cmd := exec.Command("bash", "-c", "git init")
+	cmd.Dir = projectDir
+	require.NoError(t, cmd.Run())
+
+	assert.False(t, hasHead(projectDir))
+}
+
+func TestHasHead_AfterCommit(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitGit(projectDir))
+
+	assert.True(t, hasHead(projectDir))
+}
+
+// P1: GitCheckpoint with special characters in epic name
+
+func TestGitCheckpoint_SpecialChars(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, os.WriteFile(projectDir+"/file.txt", []byte("data\n"), 0o644))
+	require.NoError(t, GitCheckpoint(projectDir, "Epic's \"Name\" (v2)", 1, "complete"))
+
+	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
+	cmd.Dir = projectDir
+	output, err := cmd.Output()
+	require.NoError(t, err)
+	assert.Contains(t, strings.TrimSpace(string(output)), "Epic's")
 }
