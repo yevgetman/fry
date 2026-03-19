@@ -231,7 +231,7 @@ For each sprint (startSprint → endSprint):
      │  ├─ Review agent: CONTINUE or DEVIATE
      │  └─ If DEVIATE: replan affected sprints
 
-Final: build summary → build audit (if full epic completed) → auto-archive (if full epic succeeded)
+Final: build audit (if full epic completed) → deferred check re-run → build summary (includes audit results) → auto-archive (if full epic succeeded)
 ```
 
 ### Prompt Layering (8 layers, assembled in `sprint/prompt.go`)

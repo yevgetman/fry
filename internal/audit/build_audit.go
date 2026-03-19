@@ -38,12 +38,14 @@ type BuildAuditOpts struct {
 // RunBuildAudit performs a final holistic audit of the entire codebase after
 // all sprints have completed. It launches a single agent session that iteratively
 // audits, classifies, reports, and remediates issues across the full build.
-func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) error {
+// The returned AuditResult contains structured findings parsed from the agent's
+// report, enabling downstream consumers (e.g., build summary) to include audit results.
+func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, error) {
 	if opts.Epic == nil {
-		return fmt.Errorf("run build audit: epic is required")
+		return nil, fmt.Errorf("run build audit: epic is required")
 	}
 	if opts.Engine == nil {
-		return fmt.Errorf("run build audit: engine is required")
+		return nil, fmt.Errorf("run build audit: engine is required")
 	}
 
 	frylog.Log("▶ BUILD AUDIT  running final holistic audit for %q", opts.Epic.Name)
@@ -53,23 +55,23 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) error {
 	// Write prompt file
 	promptPath := filepath.Join(opts.ProjectDir, config.BuildAuditPromptFile)
 	if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
-		return fmt.Errorf("run build audit: create dir: %w", err)
+		return nil, fmt.Errorf("run build audit: create dir: %w", err)
 	}
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
-		return fmt.Errorf("run build audit: write prompt: %w", err)
+		return nil, fmt.Errorf("run build audit: write prompt: %w", err)
 	}
 
 	// Create log file
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
-		return fmt.Errorf("run build audit: create logs dir: %w", err)
+		return nil, fmt.Errorf("run build audit: create logs dir: %w", err)
 	}
 	logPath := filepath.Join(buildLogsDir,
 		fmt.Sprintf("build_audit_%s.log", time.Now().Format("20060102_150405")),
 	)
 	logFile, err := os.Create(logPath)
 	if err != nil {
-		return fmt.Errorf("run build audit: create log: %w", err)
+		return nil, fmt.Errorf("run build audit: create log: %w", err)
 	}
 	defer logFile.Close()
 
@@ -91,14 +93,15 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) error {
 	if runErr != nil && ctx.Err() == nil {
 		frylog.Log("  BUILD AUDIT: agent exited with error (non-fatal): %v", runErr)
 	} else if runErr != nil {
-		return fmt.Errorf("run build audit: %w", runErr)
+		return nil, fmt.Errorf("run build audit: %w", runErr)
 	}
 
-	// Verify audit file was produced
+	// Parse audit results from the report file
 	auditPath := filepath.Join(opts.ProjectDir, config.BuildAuditFile)
-	if _, err := os.Stat(auditPath); err != nil {
+	content, readErr := os.ReadFile(auditPath)
+	if readErr != nil {
 		frylog.Log("  BUILD AUDIT: WARNING — agent did not produce %s", config.BuildAuditFile)
-		return nil
+		return &AuditResult{Passed: true, Iterations: 1}, nil
 	}
 
 	frylog.Log("  BUILD AUDIT: report written to %s", config.BuildAuditFile)
@@ -106,7 +109,19 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) error {
 	// Cleanup prompt file
 	_ = os.Remove(promptPath)
 
-	return nil
+	// Parse structured results from the report
+	maxSev := parseAuditSeverity(string(content))
+	counts := countAuditSeverities(string(content))
+	findings := parseFindings(string(content))
+
+	return &AuditResult{
+		Passed:             isAuditPass(maxSev),
+		Blocking:           isBlockingSeverity(maxSev),
+		Iterations:         1,
+		MaxSeverity:        maxSev,
+		SeverityCounts:     counts,
+		UnresolvedFindings: findings,
+	}, nil
 }
 
 func buildBuildAuditPrompt(opts BuildAuditOpts) string {

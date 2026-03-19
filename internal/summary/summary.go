@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	frylog "github.com/yevgetman/fry/internal/log"
@@ -24,12 +25,13 @@ const (
 )
 
 type SummaryOpts struct {
-	ProjectDir string
-	EpicName   string
-	Engine     engine.Engine
-	Results    []sprint.SprintResult
-	Verbose    bool
-	Model      string
+	ProjectDir       string
+	EpicName         string
+	Engine           engine.Engine
+	Results          []sprint.SprintResult
+	Verbose          bool
+	Model            string
+	BuildAuditResult *audit.AuditResult // nil if build audit was skipped or failed
 }
 
 // GenerateBuildSummary invokes a separate agent session that reads all build
@@ -131,6 +133,35 @@ func buildSummaryPrompt(opts SummaryOpts) string {
 	}
 	b.WriteString("\n")
 
+	// Build audit results
+	if opts.BuildAuditResult != nil {
+		r := opts.BuildAuditResult
+		b.WriteString("## Build Audit Results\n\n")
+		status := "PASS"
+		if !r.Passed {
+			status = "FAIL"
+		}
+		b.WriteString(fmt.Sprintf("- **Status:** %s\n", status))
+		if r.MaxSeverity != "" {
+			b.WriteString(fmt.Sprintf("- **Max Severity:** %s\n", r.MaxSeverity))
+		}
+		b.WriteString(fmt.Sprintf("- **Severity Counts:** %s\n", audit.FormatCounts(r.SeverityCounts)))
+		if r.Blocking {
+			b.WriteString("- **Blocking:** yes (CRITICAL or HIGH issues remain)\n")
+		}
+		if len(r.UnresolvedFindings) > 0 {
+			b.WriteString("\n### Unresolved Findings\n\n")
+			for i, f := range r.UnresolvedFindings {
+				loc := f.Location
+				if loc == "" {
+					loc = "(no location)"
+				}
+				b.WriteString(fmt.Sprintf("%d. [%s] %s (**%s**)\n", i+1, loc, f.Description, f.Severity))
+			}
+		}
+		b.WriteString("\n")
+	}
+
 	// Epic file
 	epicPath := filepath.Join(opts.ProjectDir, config.FryDir, "epic.md")
 	if data, err := os.ReadFile(epicPath); err == nil {
@@ -216,6 +247,7 @@ func buildSummaryPrompt(opts SummaryOpts) string {
 	b.WriteString("- For each sprint: list all audit findings with severity\n")
 	b.WriteString("- Detail which findings were remediated and which remain\n")
 	b.WriteString("- Highlight any CRITICAL or HIGH issues that blocked the build\n")
+	b.WriteString("- Include the build-level audit results: overall pass/fail, severity breakdown, fixes applied, and any unresolved cross-cutting findings\n")
 	b.WriteString("- List all verification checks and their pass/fail status\n\n")
 	b.WriteString("### 5. Advisory Messages\n")
 	b.WriteString("- Collect ALL advisory messages, warnings, and non-blocking issues\n")

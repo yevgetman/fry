@@ -247,16 +247,27 @@ Sprint audits run by default after each sprint passes verification. The audit us
 
 ## Build Audit
 
-After all sprints complete successfully, a final holistic audit runs on the entire codebase:
+After all sprints complete successfully, a final holistic audit runs on the entire codebase (before the build summary is generated):
 
+### Pass (clean or LOW only):
 ```
 [2026-03-10 13:00:00] ▶ BUILD AUDIT  running holistic audit across all 8 sprints...  engine=claude  model=sonnet
-[2026-03-10 13:15:00]   BUILD AUDIT: complete — report written to build-audit.md
+[2026-03-10 13:15:00]   BUILD AUDIT: report written to build-audit.md
+[2026-03-10 13:15:00]   BUILD AUDIT: PASS (1 LOW)
 [2026-03-10 13:15:01]   GIT: checkpoint — build-audit
 ```
 
-If the agent does not produce a report:
+### Fail (CRITICAL or HIGH remain):
+```
+[2026-03-10 13:15:00]   BUILD AUDIT: FAILED — 1 HIGH, 2 MODERATE remain
+```
 
+### Advisory (MODERATE remain, no CRITICAL/HIGH):
+```
+[2026-03-10 13:15:00]   BUILD AUDIT: 2 MODERATE remain (advisory)
+```
+
+### Agent does not produce a report:
 ```
 [2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce build-audit.md
 ```

@@ -613,28 +613,9 @@ var runCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "Reviews: %d, deviations: %d\n", reviewSummary.ReviewsConducted, reviewSummary.DeviationsApplied)
 		}
 
-		// Generate build summary document
-		summaryEngine, err := engine.NewEngine(engineName)
-		if err != nil {
-			frlog.Log("WARNING: could not create engine for build summary: %v", err)
-		} else {
-			summaryModel := engine.ResolveModel(ep.AgentModel, engineName, string(ep.EffortLevel), engine.SessionBuildSummary)
-			frlog.Log("▶ BUILD SUMMARY  generating...  engine=%s  model=%s", engineName, summaryModel)
-			if summaryErr := summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
-				ProjectDir: projectPath,
-				EpicName:   ep.Name,
-				Engine:     summaryEngine,
-				Results:    summaryCopy,
-				Verbose:    frlog.Verbose,
-				Model:      summaryModel,
-			}); summaryErr != nil {
-				frlog.Log("WARNING: build summary generation failed: %v", summaryErr)
-			} else {
-				frlog.Log("  BUILD SUMMARY: complete")
-			}
-		}
-
-		// Run final build audit once the entire epic has completed successfully
+		// Run final build audit once the entire epic has completed successfully.
+		// This runs BEFORE the build summary so that audit results can be included in the summary.
+		var buildAuditResult *audit.AuditResult
 		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && ep.EffortLevel != epic.EffortLow {
 			deferredContent := readDeferredFailuresArtifact(projectPath)
 			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
@@ -643,7 +624,7 @@ var runCmd = &cobra.Command{
 			} else {
 				buildAuditModel := engine.ResolveModel(ep.AuditModel, auditEngine.Name(), string(ep.EffortLevel), engine.SessionBuildAudit)
 				frlog.Log("▶ BUILD AUDIT  running holistic audit across all %d sprints...  engine=%s  model=%s", ep.TotalSprints, auditEngine.Name(), buildAuditModel)
-				if auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
+				result, auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
 					ProjectDir:       projectPath,
 					Epic:             ep,
 					Engine:           auditEngine,
@@ -652,10 +633,18 @@ var runCmd = &cobra.Command{
 					Model:            buildAuditModel,
 					DeferredFailures: deferredContent,
 					Mode:             string(mode),
-				}); auditErr != nil {
+				})
+				if auditErr != nil {
 					frlog.Log("WARNING: build audit failed: %v", auditErr)
 				} else {
-					frlog.Log("  BUILD AUDIT: complete — report written to %s", config.BuildAuditFile)
+					buildAuditResult = result
+					if result.Passed {
+						frlog.Log("  BUILD AUDIT: PASS (%s)", audit.FormatCounts(result.SeverityCounts))
+					} else if result.Blocking {
+						frlog.Log("  BUILD AUDIT: FAILED — %s remain", audit.FormatCounts(result.SeverityCounts))
+					} else {
+						frlog.Log("  BUILD AUDIT: %s remain (advisory)", audit.FormatCounts(result.SeverityCounts))
+					}
 					frlog.Log("  GIT: checkpoint — build-audit")
 					if gitErr := git.GitCheckpoint(projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
@@ -678,6 +667,28 @@ var runCmd = &cobra.Command{
 						frlog.Log("  Sprint %d deferred failures: %d/%d still failing", entry.SprintNumber, totalCount-passCount, totalCount)
 					}
 				}
+			}
+		}
+
+		// Generate build summary document (after build audit so results can be included)
+		summaryEngine, err := engine.NewEngine(engineName)
+		if err != nil {
+			frlog.Log("WARNING: could not create engine for build summary: %v", err)
+		} else {
+			summaryModel := engine.ResolveModel(ep.AgentModel, engineName, string(ep.EffortLevel), engine.SessionBuildSummary)
+			frlog.Log("▶ BUILD SUMMARY  generating...  engine=%s  model=%s", engineName, summaryModel)
+			if summaryErr := summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
+				ProjectDir:       projectPath,
+				EpicName:         ep.Name,
+				Engine:           summaryEngine,
+				Results:          summaryCopy,
+				Verbose:          frlog.Verbose,
+				Model:            summaryModel,
+				BuildAuditResult: buildAuditResult,
+			}); summaryErr != nil {
+				frlog.Log("WARNING: build summary generation failed: %v", summaryErr)
+			} else {
+				frlog.Log("  BUILD SUMMARY: complete")
 			}
 		}
 

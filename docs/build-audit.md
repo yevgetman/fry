@@ -8,9 +8,6 @@ The build audit is a final holistic quality gate that runs once the entire epic 
 All sprints complete successfully
        |
        v
-  Build summary generated
-       |
-       v
   Build audit agent launched (single session)
        |
        +-- Audit entire codebase
@@ -22,9 +19,15 @@ All sprints complete successfully
        |
        v
   Git checkpoint ("build-audit")
+       |
+       v
+  Re-run deferred verification checks
+       |
+       v
+  Build summary generated (includes audit results)
 ```
 
-The build audit runs **after** the build summary is generated and **before** the lock is released. Any code changes made during remediation are committed in a final git checkpoint.
+The build audit runs **before** the build summary so that audit results (pass/fail, severity counts, unresolved findings) are included in the summary. Any code changes made during remediation are committed in a git checkpoint before the summary is generated.
 
 ## Single-Agent Iterative Design
 
@@ -126,7 +129,7 @@ Artifacts deliberately excluded from the prompt:
 |---|---|
 | Build logs (`.fry/build-logs/`) | Noisy; agent reads the codebase directly |
 | Epic progress (`.fry/epic-progress.txt`) | Redundant with the epic definition and codebase |
-| Build summary (`build-summary.md`) | Just generated; agent can read it from disk if needed |
+| Build summary (`build-summary.md`) | Not yet generated (build audit runs before summary) |
 | Deviation log (`.fry/deviation-log.md`) | Agent can read it from disk if needed |
 
 The agent reads the actual codebase directly during its audit passes, so it has full access to all source files.
@@ -155,13 +158,25 @@ The report includes:
 
 ## Terminal Output
 
+### Successful audit (pass):
 ```
-[2026-03-10 13:00:00] > BUILD AUDIT  running final holistic audit for "My Project"
+[2026-03-10 13:00:00] ▶ BUILD AUDIT  running holistic audit across all 8 sprints...  engine=claude  model=sonnet
 [2026-03-10 13:15:00]   BUILD AUDIT: report written to build-audit.md
+[2026-03-10 13:15:00]   BUILD AUDIT: PASS (none)
+[2026-03-10 13:15:01]   GIT: checkpoint — build-audit
 ```
 
-If the agent fails to produce the report:
+### Issues found (advisory -- MODERATE or below):
+```
+[2026-03-10 13:15:00]   BUILD AUDIT: 2 MODERATE, 1 LOW remain (advisory)
+```
 
+### Issues found (blocking -- CRITICAL or HIGH):
+```
+[2026-03-10 13:15:00]   BUILD AUDIT: FAILED — 1 HIGH, 2 MODERATE remain
+```
+
+### Agent fails to produce the report:
 ```
 [2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce build-audit.md
 ```

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/sprint"
@@ -361,4 +362,80 @@ func TestBuildSummaryPrompt_NoOptionalFiles(t *testing.T) {
 	assert.NotContains(t, prompt, "## Epic Progress")
 	assert.NotContains(t, prompt, "## Deferred Verification Failures")
 	assert.NotContains(t, prompt, "## Deviation Log")
+	assert.NotContains(t, prompt, "## Build Audit Results")
+}
+
+func TestBuildSummaryPromptWithBuildAuditResult(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildSummaryPrompt(SummaryOpts{
+		ProjectDir: t.TempDir(),
+		EpicName:   "AuditTest",
+		BuildAuditResult: &audit.AuditResult{
+			Passed:      false,
+			Blocking:    true,
+			Iterations:  1,
+			MaxSeverity: "HIGH",
+			SeverityCounts: map[string]int{
+				"HIGH":     2,
+				"MODERATE": 1,
+			},
+			UnresolvedFindings: []audit.Finding{
+				{Location: "main.go:10", Description: "Missing error check", Severity: "HIGH"},
+				{Location: "api.go:42", Description: "SQL injection", Severity: "HIGH"},
+				{Description: "Code duplication", Severity: "MODERATE"},
+			},
+		},
+	})
+
+	assert.Contains(t, prompt, "## Build Audit Results")
+	assert.Contains(t, prompt, "**Status:** FAIL")
+	assert.Contains(t, prompt, "**Max Severity:** HIGH")
+	assert.Contains(t, prompt, "**Blocking:** yes")
+	assert.Contains(t, prompt, "### Unresolved Findings")
+	assert.Contains(t, prompt, "[main.go:10] Missing error check (**HIGH**)")
+	assert.Contains(t, prompt, "[api.go:42] SQL injection (**HIGH**)")
+	assert.Contains(t, prompt, "[(no location)] Code duplication (**MODERATE**)")
+}
+
+func TestBuildSummaryPromptWithPassingBuildAudit(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildSummaryPrompt(SummaryOpts{
+		ProjectDir: t.TempDir(),
+		EpicName:   "PassTest",
+		BuildAuditResult: &audit.AuditResult{
+			Passed:         true,
+			Iterations:     1,
+			SeverityCounts: map[string]int{},
+		},
+	})
+
+	assert.Contains(t, prompt, "## Build Audit Results")
+	assert.Contains(t, prompt, "**Status:** PASS")
+	assert.NotContains(t, prompt, "**Blocking:**")
+	assert.NotContains(t, prompt, "### Unresolved Findings")
+}
+
+func TestBuildSummaryPromptWithoutBuildAuditResult(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildSummaryPrompt(SummaryOpts{
+		ProjectDir:       t.TempDir(),
+		EpicName:         "NoAudit",
+		BuildAuditResult: nil,
+	})
+
+	assert.NotContains(t, prompt, "## Build Audit Results")
+}
+
+func TestBuildSummaryPromptIncludesBuildAuditInstructions(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildSummaryPrompt(SummaryOpts{
+		ProjectDir: t.TempDir(),
+		EpicName:   "Test",
+	})
+
+	assert.Contains(t, prompt, "build-level audit results")
 }
