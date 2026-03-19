@@ -62,12 +62,36 @@ Project type:    Software (REST API)
 Goal:            Build a todo app with PostgreSQL backend
 Expected output: Go binary with REST API, database migrations, Docker setup
 Key topics:      REST API, PostgreSQL, authentication, Docker
-Effort:          medium (3-4 sprints)
+Effort:          medium (2-4 sprints)
 ─────────────────────────────────────────────────────────────────
-Does this look right? [Y/n] y
+Does this look right? [Y/n/a] (a = adjust) y
 ```
 
 The default is **Yes** (press Enter to accept). Use `--no-sanity-check` to skip this step for automation or CI.
+
+### Adjusting the plan
+
+If the summary doesn't look right but you don't want to start over, type `a` to adjust:
+
+```
+Does this look right? [Y/n/a] (a = adjust) a
+
+Adjustment (describe changes, or leave blank to skip): focus on backend, skip the frontend for now
+Effort level [auto] (low/medium/high/max, or Enter to keep): high
+[2026-03-10 11:51:30] Regenerating project summary with adjustments...
+[2026-03-10 11:51:32] Sanity check: summarizing project (engine: claude, model: haiku)...
+
+── Project summary ─────────────────────────────────────────────
+Project type:    Software (REST API)
+Goal:            Build a backend-only todo API with PostgreSQL
+Expected output: Go binary with REST API, database migrations, Docker setup
+Key topics:      REST API, PostgreSQL, authentication, Docker
+Effort:          high (4-10 sprints)
+─────────────────────────────────────────────────────────────────
+Does this look right? [Y/n/a] (a = adjust) y
+```
+
+Adjustments are appended to the user prompt (or become the user prompt if none was provided) and carried through to epic and verification generation. You can adjust multiple times before accepting.
 
 ### Generation steps
 

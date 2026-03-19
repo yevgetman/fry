@@ -15,7 +15,7 @@ import (
 )
 
 // ErrSanityCheckDeclined is returned when the user declines the project summary.
-var ErrSanityCheckDeclined = fmt.Errorf("user declined project summary — adjust your inputs and re-run")
+var ErrSanityCheckDeclined = fmt.Errorf("user declined project summary")
 
 // SanitySummary holds the parsed fields from the AI-generated project summary.
 type SanitySummary struct {
@@ -26,19 +26,14 @@ type SanitySummary struct {
 	EffortEstimate string
 }
 
+// SanityResult holds adjusted values from the sanity check confirmation loop.
+type SanityResult struct {
+	UserPrompt  string
+	EffortLevel epic.EffortLevel
+}
+
 func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
-	planContent, executiveContent, mediaManifest, assetsSection string) error {
-
-	sanityModel := engine.ResolveModelForSession(eng.Name(), string(opts.EffortLevel), engine.SessionSanityCheck)
-	frylog.Log("Sanity check: summarizing project (engine: %s, model: %s)...", eng.Name(), sanityModel)
-
-	prompt := sanityCheckPrompt(opts.Mode, planContent, executiveContent, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
-	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: sanityModel})
-	if err != nil && strings.TrimSpace(output) == "" {
-		return fmt.Errorf("run prepare: sanity check: %w", err)
-	}
-
-	summary := parseSanitySummary(output)
+	planContent, executiveContent, mediaManifest, assetsSection string) (*SanityResult, error) {
 
 	stdout := opts.Stdout
 	if stdout == nil {
@@ -49,18 +44,67 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 		stdin = os.Stdin
 	}
 
-	displaySanitySummary(stdout, summary)
-	fmt.Fprint(stdout, "Does this look right? [Y/n] ")
-
+	userPrompt := opts.UserPrompt
+	effortLevel := opts.EffortLevel
 	scanner := bufio.NewScanner(stdin)
-	if !scanner.Scan() {
-		return ErrSanityCheckDeclined
+
+	for {
+		sanityModel := engine.ResolveModelForSession(eng.Name(), string(effortLevel), engine.SessionSanityCheck)
+		frylog.Log("Sanity check: summarizing project (engine: %s, model: %s)...", eng.Name(), sanityModel)
+
+		prompt := sanityCheckPrompt(opts.Mode, planContent, executiveContent, userPrompt, effortLevel, mediaManifest, assetsSection)
+		output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: sanityModel})
+		if err != nil && strings.TrimSpace(output) == "" {
+			return nil, fmt.Errorf("run prepare: sanity check: %w", err)
+		}
+
+		summary := parseSanitySummary(output)
+		displaySanitySummary(stdout, summary)
+		fmt.Fprint(stdout, "Does this look right? [Y/n/a] (a = adjust) ")
+
+		if !scanner.Scan() {
+			return nil, ErrSanityCheckDeclined
+		}
+		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+
+		if answer == "" || answer == "y" || answer == "yes" {
+			return &SanityResult{UserPrompt: userPrompt, EffortLevel: effortLevel}, nil
+		}
+
+		if answer == "a" || answer == "adjust" {
+			fmt.Fprint(stdout, "\nAdjustment (describe changes, or leave blank to skip): ")
+			if !scanner.Scan() {
+				return nil, ErrSanityCheckDeclined
+			}
+			adjustment := strings.TrimSpace(scanner.Text())
+			if adjustment != "" {
+				if strings.TrimSpace(userPrompt) == "" {
+					userPrompt = adjustment
+				} else {
+					userPrompt = userPrompt + "\n\n" + adjustment
+				}
+			}
+
+			fmt.Fprintf(stdout, "Effort level [%s] (low/medium/high/max, or Enter to keep): ", effortLevel.String())
+			if !scanner.Scan() {
+				return nil, ErrSanityCheckDeclined
+			}
+			effortInput := strings.TrimSpace(strings.ToLower(scanner.Text()))
+			if effortInput != "" {
+				parsed, parseErr := epic.ParseEffortLevel(effortInput)
+				if parseErr != nil {
+					fmt.Fprintf(stdout, "Invalid effort level %q — keeping %s.\n", effortInput, effortLevel.String())
+				} else {
+					effortLevel = parsed
+				}
+			}
+
+			frylog.Log("Regenerating project summary with adjustments...")
+			continue
+		}
+
+		return nil, ErrSanityCheckDeclined
 	}
-	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
-	if answer == "" || answer == "y" || answer == "yes" {
-		return nil
-	}
-	return ErrSanityCheckDeclined
 }
 
 func sanityCheckPrompt(mode Mode, planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
@@ -152,7 +196,7 @@ Rules:
 - GOAL should be specific and actionable
 - EXPECTED_OUTPUT should describe concrete deliverables
 - KEY_TOPICS should list 3-7 items
-- EFFORT should estimate based on the plan's scope and complexity
+- EFFORT must express scope as a sprint count — NEVER use hours or days. Use the format "level (N-M sprints)". Sprint ranges by level: low = 1-2, medium = 2-4, high = 4-10, max = 4-10.
 `)
 
 	if effort != "" {

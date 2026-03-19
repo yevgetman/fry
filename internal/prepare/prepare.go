@@ -189,10 +189,16 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	// Sanity check: summarize project and ask user to confirm before generating artifacts.
 	if !opts.SkipSanityCheck {
-		if err := runSanityCheck(ctx, eng, opts,
-			planContent, executiveContent, mediaManifest, assetsSection); err != nil {
+		result, err := runSanityCheck(ctx, eng, opts,
+			planContent, executiveContent, mediaManifest, assetsSection)
+		if err != nil {
 			return err
 		}
+		opts.UserPrompt = result.UserPrompt
+		opts.EffortLevel = result.EffortLevel
+		// Refresh derived flags — user may have added a prompt or changed effort via adjust.
+		hasUserPrompt = strings.TrimSpace(opts.UserPrompt) != ""
+		prepModel = engine.ResolveModelForSession(engName, string(opts.EffortLevel), engine.SessionPrepare)
 	}
 
 	agentsPath := filepath.Join(projectDir, config.AgentsFile)
