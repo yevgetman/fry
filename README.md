@@ -191,15 +191,6 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Terminal Output](docs/terminal-output.md) | Status banners, verbose mode, log format |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
 
-## Requirements
-
-- **git** -- for automatic checkpointing
-- **bash** -- required by AI engine CLIs and verification commands
-- **Go 1.22+** -- to build from source
-- **OpenAI Codex CLI** (`npm i -g @openai/codex`) -- if using the codex engine
-- **Claude Code CLI** (`npm i -g @anthropic-ai/claude-code`) -- if using the claude engine
-- **Docker** (optional) -- only needed if your epic uses `@docker_from_sprint`
-
 ## License
 
 See repository for license information.
