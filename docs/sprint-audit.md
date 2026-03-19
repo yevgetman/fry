@@ -323,8 +323,8 @@ Within each fix cycle, the inner loop tracks how many issues are resolved after 
 ### CRITICAL/HIGH issues persist (blocking):
 ```
 [2026-03-10 12:20:00]   AUDIT: FAILED — 1 HIGH remain after 3 audit cycles
-Retry:  fry run --retry --sprint 3
-Resume: fry run --sprint 3
+Resume:   fry run --resume --sprint 3
+Restart:  fry run --sprint 3
 ```
 
 ### MODERATE issues persist (advisory):

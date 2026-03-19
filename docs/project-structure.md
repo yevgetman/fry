@@ -82,7 +82,7 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 | `.fry/continue-report.md` | Programmatic build state report (transient) | `fry run --continue` |
 | `build-summary.md` | Build summary report (persisted in project root) | `fry run` at runtime |
 | `audit.md` | Build audit report (persisted in project root) | `fry run` at runtime |
-| `.fry/build-logs/` | Per-iteration, per-sprint, retry, audit, and continue logs | `fry run` at runtime |
+| `.fry/build-logs/` | Per-iteration, per-sprint, resume, audit, and continue logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 
 ### Auto-Generation Behavior

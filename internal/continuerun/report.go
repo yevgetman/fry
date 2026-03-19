@@ -48,8 +48,8 @@ func FormatReport(state *BuildState) string {
 			b.WriteString(fmt.Sprintf("### Sprint %d: %s\n", a.Number, a.Name))
 			b.WriteString(fmt.Sprintf("- %d iterations completed, %d audit passes, %d heal attempts\n",
 				a.IterationCount, a.AuditCount, a.HealCount))
-			if a.HasRetryLog {
-				b.WriteString("- Has prior retry attempt\n")
+			if a.HasResumeLog {
+				b.WriteString("- Has prior resume attempt\n")
 			}
 			if a.AuditSeverity != "" {
 				b.WriteString(fmt.Sprintf("- Last audit severity: %s\n", a.AuditSeverity))

@@ -54,7 +54,7 @@ When `@max_heal_attempts` is explicitly set, it overrides the effort-level defau
 
 ### Override Priority
 
-1. `--retry` override (highest — used by retry mode)
+1. `--resume` override (highest — used by resume mode)
 2. Per-sprint `@max_heal_attempts` directive
 3. Global `@max_heal_attempts` directive
 4. Effort-level default
@@ -91,33 +91,33 @@ When heal attempts are exhausted but failures are within the `@max_fail_percent`
 [2026-03-10 12:14:05] Failure rate 10% is within 20% threshold — deferring 1 failures.
 ```
 
-## Retrying After Heal Exhaustion
+## Resuming After Heal Exhaustion
 
 When all heal attempts are exhausted and the sprint fails, Fry prints two recovery commands:
 
 ```
-Retry:  fry run --retry --sprint 4
-Resume: fry run --sprint 4
+Resume:   fry run --resume --sprint 4
+Restart:  fry run --sprint 4
 ```
 
-### `--retry` (recommended)
+### `--resume` (recommended)
 
-The `--retry` flag skips the iteration loop entirely and goes straight to verification + healing with a **boosted heal budget** (2x the normal max, minimum 6 attempts). It preserves the existing `.fry/sprint-progress.txt`, giving the heal agent full context from the previous run — including all prior iteration logs and failed heal attempt reports.
+The `--resume` flag skips the iteration loop entirely and goes straight to verification + healing with a **boosted heal budget** (2x the normal max, minimum 6 attempts). It preserves the existing `.fry/sprint-progress.txt`, giving the heal agent full context from the previous run — including all prior iteration logs and failed heal attempt reports.
 
-Use `--retry` when:
+Use `--resume` when:
 - The sprint's code was largely correct but verification checks are failing
 - The heal loop ran out of attempts but more effort could fix the remaining issues
 - You don't want to re-run iterations that would overwrite existing work
 
-After the retried sprint passes, subsequent sprints in the range run normally with full iterations.
+After the resumed sprint passes, subsequent sprints in the range run normally with full iterations.
 
 ### Resume (full re-run)
 
 `fry run --sprint 4` re-runs the sprint from scratch — fresh iterations, fresh progress file. Use this when the sprint's approach was fundamentally wrong and needs a clean start.
 
-### Retry heal budget
+### Resume heal budget
 
-The retry heal budget is calculated as:
+The resume heal budget is calculated as:
 
 ```
 boosted = max(normal_max * 2, 6)
@@ -125,7 +125,7 @@ boosted = max(normal_max * 2, 6)
 
 The `normal_max` is determined by the effort-level default (or explicit `@max_heal_attempts`):
 
-| Effort | Normal max | Retry budget |
+| Effort | Normal max | Resume budget |
 |---|---|---|
 | `low` | 0 | 6 (minimum applies) |
 | `medium` | 3 | 6 |
@@ -133,7 +133,7 @@ The `normal_max` is determined by the effort-level default (or explicit `@max_he
 | `max` | unlimited | 6 (minimum applies) |
 | Explicit `@max_heal_attempts 5` | 5 | 10 |
 
-Retry mode always uses a hard cap (no unlimited mode) but preserves progress detection for effort levels that use it.
+Resume mode always uses a hard cap (no unlimited mode) but preserves progress detection for effort levels that use it.
 
 ## Build Log Files
 
@@ -142,5 +142,5 @@ Heal attempt logs are stored alongside regular iteration logs:
 .fry/build-logs/
   sprint3_heal1_20060102_150405.log
   sprint3_heal2_20060102_150405.log
-  sprint3_retry_20060102_150405.log      # Retry mode aggregate log
+  sprint3_resume_20060102_150405.log     # Resume mode aggregate log
 ```

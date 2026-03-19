@@ -265,7 +265,7 @@ Key flags:
   --user-prompt-file path            # Load directive from file
   --dry-run                          # Validate without executing
   --sprint N                         # Start from sprint N
-  --retry                            # Skip iterations, verify + heal with boosted attempts
+  --resume                           # Skip iterations, verify + heal with boosted attempts
   --continue                         # LLM-assisted auto-resume from where build left off
   --no-sanity-check                  # Skip interactive project summary
   --no-review                        # Skip mid-build sprint review
@@ -302,8 +302,8 @@ Key flags:
 | `DefaultDockerReadyTimeout` | `30` | Seconds for Docker health check |
 | `DefaultMaxDeviationScope` | `3` | Max sprints affected by replan |
 | `MaxAuditDiffBytes` | `100000` | Max diff size for audit context |
-| `RetryHealMultiplier` | `2` | Heal iteration multiplier on retry |
-| `RetryMinHealAttempts` | `6` | Minimum heal attempts on retry |
+| `ResumeHealMultiplier` | `2` | Heal iteration multiplier on resume |
+| `ResumeMinHealAttempts` | `6` | Minimum heal attempts on resume |
 | `BuildModeFile` | `.fry/build-mode.txt` | Persisted build mode for `--continue` |
 
 ---

@@ -27,7 +27,7 @@ type AnalyzeOpts struct {
 }
 
 var (
-	verdictRe = regexp.MustCompile(`<verdict>(RESUME_RETRY|RESUME_FRESH|CONTINUE_NEXT|ALL_COMPLETE|BLOCKED)</verdict>`)
+	verdictRe = regexp.MustCompile(`<verdict>(RESUME|RESUME_FRESH|CONTINUE_NEXT|ALL_COMPLETE|BLOCKED)</verdict>`)
 	sprintRe  = regexp.MustCompile(`<sprint>(\d+)</sprint>`)
 	reasonRe  = regexp.MustCompile(`(?s)<reason>(.*?)</reason>`)
 )
@@ -158,7 +158,7 @@ func buildAnalysisPrompt(state *BuildState, report string) string {
 	b.WriteString("## Decision Options\n\n")
 	b.WriteString("| Verdict | When to use |\n")
 	b.WriteString("|---|---|\n")
-	b.WriteString("| RESUME_RETRY | Sprint was partially completed — code work exists but verification failed. Skip to verification + healing. |\n")
+	b.WriteString("| RESUME | Sprint was partially completed — code work exists but verification failed. Skip to verification + healing. |\n")
 	b.WriteString("| RESUME_FRESH | Sprint needs a full re-run from scratch (e.g., work was corrupted or insufficient). |\n")
 	b.WriteString("| CONTINUE_NEXT | The active sprint is actually done but wasn't recorded as complete. Start the next unstarted sprint. |\n")
 	b.WriteString("| ALL_COMPLETE | All sprints have passed. Nothing to do. |\n")
@@ -166,13 +166,13 @@ func buildAnalysisPrompt(state *BuildState, report string) string {
 
 	b.WriteString("## Important Guidelines\n\n")
 	b.WriteString("- If the last failure was an environment issue (Docker not running, missing tool) and the\n")
-	b.WriteString("  environment is now fixed, recommend RESUME_RETRY so verification re-runs.\n")
+	b.WriteString("  environment is now fixed, recommend RESUME so verification re-runs.\n")
 	b.WriteString("- If the environment issue is still present, recommend BLOCKED with preconditions.\n")
 	b.WriteString("- If partial work exists (iterations ran, code was written) but verification failed\n")
-	b.WriteString("  for code reasons, recommend RESUME_RETRY to attempt healing.\n")
+	b.WriteString("  for code reasons, recommend RESUME to attempt healing.\n")
 	b.WriteString("- If no work exists for the next sprint, recommend RESUME_FRESH.\n")
 	b.WriteString("- If there's evidence of successful iterations but no PASS recorded, check\n")
-	b.WriteString("  whether the work looks complete and recommend RESUME_RETRY or CONTINUE_NEXT.\n\n")
+	b.WriteString("  whether the work looks complete and recommend RESUME or CONTINUE_NEXT.\n\n")
 
 	b.WriteString("## Output Format\n\n")
 	b.WriteString("Write your analysis to .fry/continue-decision.txt in EXACTLY this format:\n\n")
@@ -186,7 +186,7 @@ func buildAnalysisPrompt(state *BuildState, report string) string {
 	b.WriteString("## Pre-conditions\n")
 	b.WriteString("- [ ] Action the user must take (if any)\n\n")
 	b.WriteString("## Recommended Command\n")
-	b.WriteString("fry run --retry --sprint N  (or whatever is appropriate)\n")
+	b.WriteString("fry run --resume --sprint N  (or whatever is appropriate)\n")
 	b.WriteString("```\n")
 
 	return b.String()

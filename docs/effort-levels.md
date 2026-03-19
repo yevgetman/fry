@@ -189,7 +189,7 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | Quality directive | No | No | No | Yes (injected into every prompt) |
 | Heal attempts | 0 (skip) | 3 (fixed) | Up to 10 (progress-based, stuck=2) | Unlimited (progress-based, stuck=3) |
 | Heal fail threshold | 20% | 20% | 20% | 10% |
-| Retry heal attempts | 6 | 6 | 20 | 6 (min) |
+| Resume heal attempts | 6 | 6 | 20 | 6 (min) |
 | Compact with agent | Default | Default | Default | Enabled |
 
 ## Writing Mode

@@ -166,7 +166,7 @@ func TestCollectActiveSprintState(t *testing.T) {
 		assert.Equal(t, 2, result.IterationCount)
 		assert.Equal(t, 1, result.AuditCount)
 		assert.Equal(t, 0, result.HealCount)
-		assert.False(t, result.HasRetryLog)
+		assert.False(t, result.HasResumeLog)
 	})
 
 	t.Run("has sprint progress mention", func(t *testing.T) {
@@ -185,7 +185,7 @@ func TestCollectActiveSprintState(t *testing.T) {
 		assert.Contains(t, result.ProgressExcerpt, "Sprint 2")
 	})
 
-	t.Run("has retry log", func(t *testing.T) {
+	t.Run("has resume log (old format)", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		logsDir := filepath.Join(dir, config.BuildLogsDir)
@@ -195,7 +195,20 @@ func TestCollectActiveSprintState(t *testing.T) {
 
 		result := collectActiveSprintState(dir, 2, ep)
 		require.NotNil(t, result)
-		assert.True(t, result.HasRetryLog)
+		assert.True(t, result.HasResumeLog)
+	})
+
+	t.Run("has resume log (new format)", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		logsDir := filepath.Join(dir, config.BuildLogsDir)
+		require.NoError(t, os.MkdirAll(logsDir, 0o755))
+
+		require.NoError(t, os.WriteFile(filepath.Join(logsDir, "sprint2_resume_20260316_100000.log"), []byte("resume"), 0o644))
+
+		result := collectActiveSprintState(dir, 2, ep)
+		require.NotNil(t, result)
+		assert.True(t, result.HasResumeLog)
 	})
 }
 

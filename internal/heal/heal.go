@@ -27,7 +27,7 @@ type HealOpts struct {
 	UserPrompt          string
 	Verbose             bool
 	SprintLogFile       string
-	MaxAttemptsOverride int // When > 0, overrides epic/sprint max heal attempts (used by --retry)
+	MaxAttemptsOverride int // When > 0, overrides epic/sprint max heal attempts (used by --resume)
 	MaxFailPercent      int // Percentage of checks allowed to fail while still passing
 	EffortLevel         epic.EffortLevel
 	Mode                string
@@ -52,8 +52,8 @@ type healConfig struct {
 }
 
 // effectiveHealConfig resolves healing parameters from effort level, epic
-// directives, per-sprint overrides, and retry mode. The priority order is:
-//  1. MaxAttemptsOverride (from --retry, highest)
+// directives, per-sprint overrides, and resume mode. The priority order is:
+//  1. MaxAttemptsOverride (from --resume, highest)
 //  2. Per-sprint @max_heal_attempts
 //  3. Global @max_heal_attempts (explicit)
 //  4. Effort-level default
@@ -61,7 +61,7 @@ type healConfig struct {
 func effectiveHealConfig(opts HealOpts) healConfig {
 	failPercent := resolveFailPercent(opts)
 
-	// 1. Retry mode override — highest priority
+	// 1. Resume mode override — highest priority
 	if opts.MaxAttemptsOverride > 0 {
 		return healConfig{
 			maxAttempts:    opts.MaxAttemptsOverride,

@@ -88,7 +88,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Two-file progress tracking** -- per-sprint iteration log + cross-sprint compacted summary for bounded context
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
 - **Independent verification** -- machine-executable checks run after each sprint with a configurable failure threshold (`@max_fail_percent`, default 20%) — minor failures are deferred rather than blocking the build
-- **Self-healing** -- automatic re-runs with targeted fix prompts on verification failure; `--retry` picks up where a failed build left off with boosted heal attempts; `--continue` uses an LLM agent to analyze build state and auto-resume (automatically restores the build mode from the previous run)
+- **Self-healing** -- automatic re-runs with targeted fix prompts on verification failure; `--resume` picks up where a failed build left off with boosted heal attempts; `--continue` uses an LLM agent to analyze build state and auto-resume (automatically restores the build mode from the previous run)
 - **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop (CRITICAL/HIGH block the build; MODERATE is advisory)
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
@@ -139,7 +139,7 @@ fry --engine claude                    # Use Claude Code for build stage
 fry --effort low                       # Simple task: 1-2 sprints, minimal overhead
 fry --effort max --engine claude       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
-fry run --retry --sprint 4             # Retry failed sprint 4 (skip iterations, heal only)
+fry run --resume --sprint 4             # Resume failed sprint 4 (skip iterations, heal only)
 fry run --continue                     # Auto-detect and resume from where you left off
 fry --mode planning                    # Planning mode (documents, not code) — claude for both stages
 fry --mode writing --user-prompt "..."  # Writing mode (books, guides) — claude for both stages

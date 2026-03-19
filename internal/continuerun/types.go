@@ -6,7 +6,7 @@ import "fmt"
 type ContinueVerdict string
 
 const (
-	VerdictResumeRetry  ContinueVerdict = "RESUME_RETRY"
+	VerdictResume       ContinueVerdict = "RESUME"
 	VerdictResumeFresh  ContinueVerdict = "RESUME_FRESH"
 	VerdictContinueNext ContinueVerdict = "CONTINUE_NEXT"
 	VerdictAllComplete  ContinueVerdict = "ALL_COMPLETE"
@@ -71,7 +71,7 @@ type ActiveSprintState struct {
 	IterationCount  int
 	AuditCount      int
 	HealCount       int
-	HasRetryLog     bool
+	HasResumeLog    bool
 	LastLogTail     string // tail ~100 lines of most recent log
 	AuditSeverity   string // from sprint-audit.txt if present
 	ProgressExcerpt string // last entry from sprint-progress.txt

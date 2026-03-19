@@ -119,13 +119,13 @@ This parses the epic, checks prerequisites, and shows the sprint plan without ex
 When a sprint fails, Fry prints recovery commands:
 
 ```bash
-Retry:    fry run --retry --sprint 4
-Resume:   fry run --sprint 4
+Resume:   fry run --resume --sprint 4
+Restart:  fry run --sprint 4
 Continue: fry run --continue
 ```
 
 - **`--continue`** (recommended) — uses an LLM agent to analyze build state and automatically determine where and how to resume. Restores the build mode from the previous run. See [Sprint Execution — Resuming Failed Builds](sprint-execution.md#resuming-failed-builds).
-- **`--retry`** — skip iterations and go straight to verification + healing with more attempts. Use when the code is already written but checks are failing.
+- **`--resume`** — skip iterations and go straight to verification + healing with more attempts. Use when the code is already written but checks are failing.
 - **Resume** (no flags) — re-run the sprint from scratch if the approach was fundamentally wrong.
 
 See [Self-Healing](self-healing.md) for details.

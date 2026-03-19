@@ -121,7 +121,7 @@ Build logs are written to `.fry/build-logs/`:
   sprint1_iter1_20060102_150405.log        # Per-iteration log
   sprint1_iter2_20060102_150405.log        # Per-iteration log
   sprint1_heal1_20060102_150405.log        # Heal attempt log
-  sprint1_retry_20060102_150405.log        # Retry mode aggregate log (--retry)
+  sprint1_resume_20060102_150405.log       # Resume mode aggregate log (--resume)
   sprint1_audit1_20060102_150405.log       # Audit pass log
   sprint1_auditfix_1_1_20060102_150405.log # Audit fix agent log (cycle_fix)
   sprint1_auditverify_1_1_20060102_150405.log # Audit verify agent log (cycle_fix)
@@ -147,8 +147,8 @@ Hooks execute via `bash -c` in the project directory.
 When a sprint fails (after exhausting heal attempts), Fry commits partial work and prints three recovery commands:
 
 ```
-Retry:    fry run --retry --sprint 4
-Resume:   fry run --sprint 4
+Resume:   fry run --resume --sprint 4
+Restart:  fry run --sprint 4
 Continue: fry run --continue
 ```
 
@@ -159,7 +159,7 @@ The `--continue` flag uses an LLM agent to analyze the build state and automatic
 1. Programmatically collects build state from `.fry/` artifacts (completed sprints, build logs, environment checks)
 2. Automatically restores the build mode (`software`, `planning`, or `writing`) from `.fry/build-mode.txt` — no need to pass `--mode` again
 3. Formats a structured report and passes it to an LLM analysis agent
-4. The agent decides: which sprint to resume, whether to retry or start fresh, and whether any pre-conditions must be met
+4. The agent decides: which sprint to resume, whether to resume or start fresh, and whether any pre-conditions must be met
 
 ```bash
 fry run --continue                # Auto-detect and resume (mode preserved)
@@ -168,18 +168,18 @@ fry run --continue --engine claude # Resume with a different engine
 fry run --continue --mode software # Explicit mode override
 ```
 
-Cannot be combined with `--sprint`, `--retry`, or positional sprint arguments — `--continue` auto-detects all of these.
+Cannot be combined with `--sprint`, `--resume`, or positional sprint arguments — `--continue` auto-detects all of these.
 
-### `--retry` (manual retry for verification failures)
+### `--resume` (manual resume for verification failures)
 
-The `--retry` flag skips the iteration loop entirely and goes straight to verification + healing with a boosted heal budget (2x normal attempts, minimum 6). It preserves the existing `.fry/sprint-progress.txt` so the agent retains full context from the previous failed attempt — including prior iteration logs and heal failure reports.
+The `--resume` flag skips the iteration loop entirely and goes straight to verification + healing with a boosted heal budget (2x normal attempts, minimum 6). It preserves the existing `.fry/sprint-progress.txt` so the agent retains full context from the previous failed attempt — including prior iteration logs and heal failure reports.
 
-Use `--retry` when:
+Use `--resume` when:
 - The sprint's code was largely written correctly but verification checks are failing
 - The heal loop was exhausted but more attempts might fix remaining issues
 - You don't want to re-run iterations that would overwrite existing work
 
-After the retried sprint passes, subsequent sprints in the range run normally.
+After the resumed sprint passes, subsequent sprints in the range run normally.
 
 ### Resume (full re-run)
 

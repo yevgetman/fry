@@ -558,7 +558,7 @@ func TestRunSprintDeferredFailuresInResult(t *testing.T) {
 	assert.Equal(t, "missing.txt", result.DeferredFailures[0].Check.Path)
 }
 
-func TestRetrySprintPassesWhenChecksAlreadyPass(t *testing.T) {
+func TestResumeSprintPassesWhenChecksAlreadyPass(t *testing.T) {
 	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1: Test — Progress\n\nprevious context\n")
@@ -567,7 +567,7 @@ func TestRetrySprintPassesWhenChecksAlreadyPass(t *testing.T) {
 
 	mockEngine := &stubEngine{name: "codex"}
 
-	result, err := RetrySprint(context.Background(), RunConfig{
+	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
 			TotalSprints:       2,
@@ -593,10 +593,10 @@ func TestRetrySprintPassesWhenChecksAlreadyPass(t *testing.T) {
 	progress, err := os.ReadFile(filepath.Join(projectDir, config.SprintProgressFile))
 	require.NoError(t, err)
 	assert.Contains(t, string(progress), "previous context")
-	assert.Contains(t, string(progress), "RETRY MODE")
+	assert.Contains(t, string(progress), "RESUME MODE")
 }
 
-func TestRetrySprintFailsWhenHealExhausted(t *testing.T) {
+func TestResumeSprintFailsWhenHealExhausted(t *testing.T) {
 	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1: Test — Progress\n\n")
@@ -604,7 +604,7 @@ func TestRetrySprintFailsWhenHealExhausted(t *testing.T) {
 
 	mockEngine := &stubEngine{name: "codex"}
 
-	result, err := RetrySprint(context.Background(), RunConfig{
+	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
 			TotalSprints:       1,
@@ -623,18 +623,18 @@ func TestRetrySprintFailsWhenHealExhausted(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, StatusFailVerificationFailedHealExhausted, result.Status)
-	// Retry mode should use boosted attempts: max(2*2, 6) = 6
-	assert.Len(t, mockEngine.prompts, config.RetryMinHealAttempts)
+	// Resume mode should use boosted attempts: max(2*2, 6) = 6
+	assert.Len(t, mockEngine.prompts, config.ResumeMinHealAttempts)
 }
 
-func TestRetrySprintNoChecks(t *testing.T) {
+func TestResumeSprintNoChecks(t *testing.T) {
 	t.Parallel()
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "# Sprint 1 — Progress\n\n")
 
 	mockEngine := &stubEngine{name: "codex"}
 
-	result, err := RetrySprint(context.Background(), RunConfig{
+	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
 			TotalSprints: 1,
@@ -653,7 +653,7 @@ func TestRetrySprintNoChecks(t *testing.T) {
 	assert.Empty(t, mockEngine.prompts)
 }
 
-func TestRetrySprintPreservesProgress(t *testing.T) {
+func TestResumeSprintPreservesProgress(t *testing.T) {
 	t.Parallel()
 	projectDir := t.TempDir()
 	originalProgress := "# Sprint 3: Auth — Progress\n\n## Iteration 1\nDid auth work\n\n--- Heal attempt 1 failed ---\nSome failure\n"
@@ -663,7 +663,7 @@ func TestRetrySprintPreservesProgress(t *testing.T) {
 
 	mockEngine := &stubEngine{name: "codex"}
 
-	result, err := RetrySprint(context.Background(), RunConfig{
+	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
 			TotalSprints:       5,
@@ -683,19 +683,19 @@ func TestRetrySprintPreservesProgress(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, StatusPass, result.Status)
 
-	// Verify original progress was preserved and retry marker appended
+	// Verify original progress was preserved and resume marker appended
 	progress, err := os.ReadFile(filepath.Join(projectDir, config.SprintProgressFile))
 	require.NoError(t, err)
 	assert.Contains(t, string(progress), "Heal attempt 1 failed")
-	assert.Contains(t, string(progress), "RETRY MODE")
+	assert.Contains(t, string(progress), "RESUME MODE")
 }
 
-// --- P0: RetrySprint additional coverage ---
+// --- P0: ResumeSprint additional coverage ---
 
-func TestRetrySprintNilEpic(t *testing.T) {
+func TestResumeSprintNilEpic(t *testing.T) {
 	t.Parallel()
 
-	_, err := RetrySprint(context.Background(), RunConfig{
+	_, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: t.TempDir(),
 		Sprint:     &epic.Sprint{Number: 1, Name: "X"},
 		Engine:     &stubEngine{name: "codex"},
@@ -704,10 +704,10 @@ func TestRetrySprintNilEpic(t *testing.T) {
 	assert.Contains(t, err.Error(), "epic and sprint are required")
 }
 
-func TestRetrySprintNilEngine(t *testing.T) {
+func TestResumeSprintNilEngine(t *testing.T) {
 	t.Parallel()
 
-	_, err := RetrySprint(context.Background(), RunConfig{
+	_, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: t.TempDir(),
 		Epic:       &epic.Epic{TotalSprints: 1},
 		Sprint:     &epic.Sprint{Number: 1, Name: "X"},
@@ -716,7 +716,7 @@ func TestRetrySprintNilEngine(t *testing.T) {
 	assert.Contains(t, err.Error(), "engine is required")
 }
 
-func TestRetrySprintDeferredFailures(t *testing.T) {
+func TestResumeSprintDeferredFailures(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
@@ -729,7 +729,7 @@ func TestRetrySprintDeferredFailures(t *testing.T) {
 	writeFile(t, filepath.Join(projectDir, "c.txt"), "ok\n")
 	writeFile(t, filepath.Join(projectDir, "d.txt"), "ok\n")
 
-	result, err := RetrySprint(context.Background(), RunConfig{
+	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
 			TotalSprints:       1,
@@ -753,7 +753,7 @@ func TestRetrySprintDeferredFailures(t *testing.T) {
 	assert.Len(t, result.DeferredFailures, 1)
 }
 
-func TestRetrySprintBoostedAttempts(t *testing.T) {
+func TestResumeSprintBoostedAttempts(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
@@ -763,7 +763,7 @@ func TestRetrySprintBoostedAttempts(t *testing.T) {
 	mockEngine := &stubEngine{name: "codex"}
 
 	// With explicit heal attempts of 4, boosted = max(4*2, 6) = 8
-	result, err := RetrySprint(context.Background(), RunConfig{
+	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
 			TotalSprints:       1,
@@ -787,7 +787,7 @@ func TestRetrySprintBoostedAttempts(t *testing.T) {
 	assert.GreaterOrEqual(t, len(mockEngine.prompts), 1)
 }
 
-func TestRetrySprintEffortLevelHealBase(t *testing.T) {
+func TestResumeSprintEffortLevelHealBase(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
@@ -797,7 +797,7 @@ func TestRetrySprintEffortLevelHealBase(t *testing.T) {
 	mockEngine := &stubEngine{name: "codex"}
 
 	// Effort high → default heal = 10, boosted = max(10*2, 6) = 20
-	result, err := RetrySprint(context.Background(), RunConfig{
+	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
 			TotalSprints:     1,

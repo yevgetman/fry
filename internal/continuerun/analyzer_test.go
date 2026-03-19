@@ -18,13 +18,13 @@ func TestParseDecision(t *testing.T) {
 		wantReason   string
 	}{
 		{
-			name: "resume retry",
+			name: "resume",
 			output: `## Decision
-<verdict>RESUME_RETRY</verdict>
+<verdict>RESUME</verdict>
 <sprint>4</sprint>
 <reason>Sprint 4 code work is complete but Docker was not running.</reason>`,
 			totalSprints: 7,
-			wantVerdict:  VerdictResumeRetry,
+			wantVerdict:  VerdictResume,
 			wantSprint:   4,
 			wantReason:   "Sprint 4 code work is complete but Docker was not running.",
 		},
@@ -88,11 +88,11 @@ func TestParseDecision(t *testing.T) {
 		},
 		{
 			name: "sprint out of range ignored",
-			output: `<verdict>RESUME_RETRY</verdict>
+			output: `<verdict>RESUME</verdict>
 <sprint>99</sprint>
 <reason>Bad sprint number.</reason>`,
 			totalSprints: 5,
-			wantVerdict:  VerdictResumeRetry,
+			wantVerdict:  VerdictResume,
 			wantSprint:   0, // invalid sprint is rejected
 		},
 	}
@@ -121,7 +121,7 @@ func TestParsePreconditions(t *testing.T) {
 	}{
 		{
 			name:     "no preconditions",
-			output:   "## Decision\n<verdict>RESUME_RETRY</verdict>",
+			output:   "## Decision\n<verdict>RESUME</verdict>",
 			expected: nil,
 		},
 		{
@@ -164,7 +164,7 @@ func TestBuildAnalysisPrompt(t *testing.T) {
 
 	assert.Contains(t, prompt, "Continue Analysis")
 	assert.Contains(t, prompt, "build analyst")
-	assert.Contains(t, prompt, "RESUME_RETRY")
+	assert.Contains(t, prompt, "RESUME")
 	assert.Contains(t, prompt, "RESUME_FRESH")
 	assert.Contains(t, prompt, "CONTINUE_NEXT")
 	assert.Contains(t, prompt, "ALL_COMPLETE")

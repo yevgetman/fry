@@ -160,33 +160,33 @@ When the agent produces no file changes, a no-op line appears:
 [2026-03-10 12:12:05] Heal attempt 1 SUCCEEDED — all checks now pass.
 ```
 
-## Retry Mode
+## Resume Mode
 
-When `--retry` is used, the sprint banner indicates retry mode and skips straight to verification:
+When `--resume` is used, the sprint banner indicates resume mode and skips straight to verification:
 
 ```
 [2026-03-10 12:00:00] =========================================
-[2026-03-10 12:00:00] RETRYING SPRINT 4: API Integration
+[2026-03-10 12:00:00] RESUMING SPRINT 4: API Integration
 [2026-03-10 12:00:00] Skipping iterations — going straight to verification + heal
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:01]   Verification: 2/5 checks passed.
-[2026-03-10 12:00:01]   Entering heal loop with 6 attempts (retry mode, was 3)...
+[2026-03-10 12:00:01]   Entering heal loop with 6 attempts (resume mode, was 3)...
 [2026-03-10 12:00:01] ▶ AGENT  Sprint 4/8 "API Integration"  heal 1/6  engine=claude  model=default
 [2026-03-10 12:02:30]   Re-running verification after heal attempt 1...
 [2026-03-10 12:02:35]   Heal attempt 1 SUCCEEDED — all checks now pass.
-[2026-03-10 12:02:35] SPRINT 4 RETRY PASS (healed) (2m35s)
+[2026-03-10 12:02:35] SPRINT 4 RESUME PASS (healed) (2m35s)
 ```
 
-When all checks already pass on retry:
+When all checks already pass on resume:
 
 ```
 [2026-03-10 12:00:00] =========================================
-[2026-03-10 12:00:00] RETRYING SPRINT 4: API Integration
+[2026-03-10 12:00:00] RESUMING SPRINT 4: API Integration
 [2026-03-10 12:00:00] Skipping iterations — going straight to verification + heal
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:01]   Verification: 5/5 checks passed.
 [2026-03-10 12:00:01]   All checks pass — no healing needed.
-[2026-03-10 12:00:01] SPRINT 4 RETRY PASS (1s)
+[2026-03-10 12:00:01] SPRINT 4 RESUME PASS (1s)
 ```
 
 ## Sprint Audit

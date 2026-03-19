@@ -759,7 +759,7 @@ func TestEffectiveHealConfig(t *testing.T) {
 			wantFailPercent: 20,
 		},
 		{
-			name: "retry override takes priority",
+			name: "resume override takes priority",
 			opts: HealOpts{
 				Sprint:              &epic.Sprint{Number: 1, Name: "s"},
 				Epic:                &epic.Epic{TotalSprints: 1, MaxHealAttempts: 3, MaxHealAttemptsSet: true},

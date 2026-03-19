@@ -44,7 +44,7 @@ var (
 	runMode           string
 	runEffort         string
 	runNoAudit        bool
-	runRetry          bool
+	runResume          bool
 	runSprint         int
 	runContinue       bool
 	runNoSanityCheck  bool
@@ -109,8 +109,8 @@ var runCmd = &cobra.Command{
 		printMigrationHintIfNeeded(cmd.OutOrStdout(), projectPath, epicArg)
 
 		if !epicExists {
-			if runRetry {
-				return fmt.Errorf("--retry requires existing build artifacts; epic file not found at %s", epicArg)
+			if runResume {
+				return fmt.Errorf("--resume requires existing build artifacts; epic file not found at %s", epicArg)
 			}
 			if runContinue {
 				return fmt.Errorf("--continue requires existing build artifacts; epic file not found at %s", epicArg)
@@ -169,8 +169,8 @@ var runCmd = &cobra.Command{
 			if len(args) > 1 {
 				return fmt.Errorf("cannot use --continue with positional sprint arguments")
 			}
-			if runRetry {
-				return fmt.Errorf("cannot use --continue with --retry; --continue auto-detects whether to retry")
+			if runResume {
+				return fmt.Errorf("cannot use --continue with --resume; --continue auto-detects whether to resume")
 			}
 		}
 
@@ -217,10 +217,10 @@ var runCmd = &cobra.Command{
 				return nil
 			case continuerun.VerdictBlocked:
 				return fmt.Errorf("continue: blocked — %s", decision.Reason)
-			case continuerun.VerdictResumeRetry:
+			case continuerun.VerdictResume:
 				startSprint = decision.StartSprint
 				endSprint = ep.TotalSprints
-				runRetry = true
+				runResume = true
 			case continuerun.VerdictResumeFresh:
 				startSprint = decision.StartSprint
 				endSprint = ep.TotalSprints
@@ -347,18 +347,18 @@ var runCmd = &cobra.Command{
 				return err
 			}
 
-			// Skip epic progress reset in retry mode to preserve prior context
-			if !runRetry && sprint.ShouldResetEpicProgress(startSprint, sprintNum, endSprint, ep.TotalSprints) {
+			// Skip epic progress reset in resume mode to preserve prior context
+			if !runResume && sprint.ShouldResetEpicProgress(startSprint, sprintNum, endSprint, ep.TotalSprints) {
 				if err := sprint.InitEpicProgress(projectPath, ep.Name); err != nil {
 					return err
 				}
 			}
 
-			// In retry mode, the first sprint skips iterations and goes straight
+			// In resume mode, the first sprint skips iterations and goes straight
 			// to verification + healing with a boosted attempt budget.
 			var result *sprint.SprintResult
-			if runRetry && sprintNum == startSprint {
-				result, err = sprint.RetrySprint(ctx, sprint.RunConfig{
+			if runResume && sprintNum == startSprint {
+				result, err = sprint.ResumeSprint(ctx, sprint.RunConfig{
 					ProjectDir:  projectPath,
 					Epic:        ep,
 					Sprint:      spr,
@@ -438,8 +438,8 @@ var runCmd = &cobra.Command{
 							mu.Lock()
 							results[sprintNum-startSprint].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
 							mu.Unlock()
-							fmt.Fprintf(cmd.OutOrStdout(), "Retry:    fry run --retry --sprint %d\n", spr.Number)
-							fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --sprint %d\n", spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
 							fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
 							exitErr = errBuildFailed
 							break
@@ -587,8 +587,8 @@ var runCmd = &cobra.Command{
 				continue
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Retry:    fry run --retry --sprint %d\n", spr.Number)
-			fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --sprint %d\n", spr.Number)
+			fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
+			fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
 			fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
 			exitErr = errBuildFailed
 			break
@@ -697,7 +697,7 @@ func init() {
 	runCmd.Flags().StringVar(&runMode, "mode", "", "Execution mode: software, planning, writing")
 	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
-	runCmd.Flags().BoolVar(&runRetry, "retry", false, "Retry failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
+	runCmd.Flags().BoolVar(&runResume, "resume", false, "Resume failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
 	runCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
 	runCmd.Flags().BoolVar(&runContinue, "continue", false, "Use an LLM agent to analyze build state and resume from where it left off")
 	runCmd.Flags().BoolVar(&runNoSanityCheck, "no-sanity-check", false, "Skip the interactive project summary during auto-prepare")
@@ -824,8 +824,8 @@ func printDryRunReport(w io.Writer, projectDir, epicPath string, ep *epic.Epic, 
 	fmt.Fprintf(w, "Effort: %s\n", ep.EffortLevel)
 	if runContinue {
 		fmt.Fprintln(w, "Mode: continue (auto-detected resume point)")
-	} else if runRetry {
-		fmt.Fprintln(w, "Mode: retry (skip iterations, verify + heal only)")
+	} else if runResume {
+		fmt.Fprintln(w, "Mode: resume (skip iterations, verify + heal only)")
 	}
 	fmt.Fprintf(w, "Sprints: %d-%d of %d\n", startSprint, endSprint, ep.TotalSprints)
 	fmt.Fprintln(w, "Verification checks:")

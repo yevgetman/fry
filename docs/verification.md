@@ -79,7 +79,7 @@ When checks fail above the threshold, the sprint fails and the build stops (same
 | Not found | Yes | Some fail, exceeds threshold | **FAIL** after heal loop exhausted |
 | Not found | No | N/A | **FAIL** (no promise after N iters) |
 
-When the heal loop is exhausted and failures exceed the threshold, Fry prints recovery commands. Use `fry run --retry` to skip iterations and re-enter the heal loop with a boosted attempt budget (2x normal, minimum 6). See [Self-Healing](self-healing.md) for details.
+When the heal loop is exhausted and failures exceed the threshold, Fry prints recovery commands. Use `fry run --resume` to skip iterations and re-enter the heal loop with a boosted attempt budget (2x normal, minimum 6). See [Self-Healing](self-healing.md) for details.
 
 ## Verification for Documents
 

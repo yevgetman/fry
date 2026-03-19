@@ -265,22 +265,22 @@ func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check,
 	}
 }
 
-// RetrySprint skips the iteration loop and goes straight to verification + healing
+// ResumeSprint skips the iteration loop and goes straight to verification + healing
 // with a boosted heal budget. It preserves existing sprint-progress.txt so the agent
 // retains full context from the previous failed attempt.
-func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
+func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	started := time.Now()
 	if cfg.Epic == nil || cfg.Sprint == nil {
-		return nil, fmt.Errorf("retry sprint: epic and sprint are required")
+		return nil, fmt.Errorf("resume sprint: epic and sprint are required")
 	}
 	if cfg.Engine == nil {
-		return nil, fmt.Errorf("retry sprint: engine is required")
+		return nil, fmt.Errorf("resume sprint: engine is required")
 	}
 
 	// DO NOT call InitSprintProgress — preserve existing progress with prior context
 	if err := AppendToSprintProgress(cfg.ProjectDir,
-		"\n--- RETRY MODE ---\nResuming from previous failed attempt. Skipping iteration loop, going straight to verification + healing.\n\n"); err != nil {
-		frylog.Log("WARNING: could not write retry marker to sprint progress: %v", err)
+		"\n--- RESUME MODE ---\nResuming from previous failed attempt. Skipping iteration loop, going straight to verification + healing.\n\n"); err != nil {
+		frylog.Log("WARNING: could not write resume marker to sprint progress: %v", err)
 	}
 
 	checks, err := loadVerificationChecks(cfg.ProjectDir, cfg.Epic.VerificationFile)
@@ -290,18 +290,18 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 
 	buildLogsDir := filepath.Join(cfg.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
-		return nil, fmt.Errorf("retry sprint: create build logs dir: %w", err)
+		return nil, fmt.Errorf("resume sprint: create build logs dir: %w", err)
 	}
 	sprintLogPath := filepath.Join(buildLogsDir,
-		fmt.Sprintf("sprint%d_retry_%s.log", cfg.Sprint.Number, time.Now().Format("20060102_150405")))
+		fmt.Sprintf("sprint%d_resume_%s.log", cfg.Sprint.Number, time.Now().Format("20060102_150405")))
 
 	frylog.Log("=========================================")
-	frylog.Log("RETRYING SPRINT %d: %s", cfg.Sprint.Number, cfg.Sprint.Name)
+	frylog.Log("RESUMING SPRINT %d: %s", cfg.Sprint.Number, cfg.Sprint.Name)
 	frylog.Log("Skipping iterations — going straight to verification + heal")
 	frylog.Log("=========================================")
 
 	if len(checks) == 0 {
-		frylog.Log("  No verification checks defined — nothing to retry.")
+		frylog.Log("  No verification checks defined — nothing to resume.")
 		elapsed := time.Since(started)
 		return &SprintResult{
 			Number:   cfg.Sprint.Number,
@@ -325,7 +325,7 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		}, nil
 	}
 
-	// Calculate boosted heal attempts for retry using effort-level-aware base
+	// Calculate boosted heal attempts for resume using effort-level-aware base
 	maxAttempts := cfg.Epic.MaxHealAttempts
 	if cfg.Sprint.MaxHealAttempts != nil {
 		maxAttempts = *cfg.Sprint.MaxHealAttempts
@@ -336,14 +336,14 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	if maxAttempts <= 0 {
 		maxAttempts = config.DefaultMaxHealAttempts
 	}
-	boostedAttempts := maxAttempts * config.RetryHealMultiplier
-	if boostedAttempts < config.RetryMinHealAttempts {
-		boostedAttempts = config.RetryMinHealAttempts
+	boostedAttempts := maxAttempts * config.ResumeHealMultiplier
+	if boostedAttempts < config.ResumeMinHealAttempts {
+		boostedAttempts = config.ResumeMinHealAttempts
 	}
-	frylog.Log("  Entering heal loop with %d attempts (retry mode, was %d)...", boostedAttempts, maxAttempts)
+	frylog.Log("  Entering heal loop with %d attempts (resume mode, was %d)...", boostedAttempts, maxAttempts)
 
 	if err := AppendToSprintProgress(cfg.ProjectDir,
-		fmt.Sprintf("Verification failed: %d/%d checks passing. Starting retry heal with %d attempts.\n\n",
+		fmt.Sprintf("Verification failed: %d/%d checks passing. Starting resume heal with %d attempts.\n\n",
 			passCount, totalCount, boostedAttempts)); err != nil {
 		frylog.Log("WARNING: could not write verification status to sprint progress: %v", err)
 	}
@@ -391,7 +391,7 @@ func RetrySprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	}
 
 	elapsed := time.Since(started)
-	frylog.Log("SPRINT %d RETRY %s (%s)", cfg.Sprint.Number, status, elapsed.Round(time.Second))
+	frylog.Log("SPRINT %d RESUME %s (%s)", cfg.Sprint.Number, status, elapsed.Round(time.Second))
 
 	return &SprintResult{
 		Number:           cfg.Sprint.Number,

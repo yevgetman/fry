@@ -36,7 +36,7 @@ func init() {
 	rootCmd.Flags().StringVar(&runMode, "mode", "", "Execution mode: software, planning, writing")
 	rootCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 	rootCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
-	rootCmd.Flags().BoolVar(&runRetry, "retry", false, "Retry failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
+	rootCmd.Flags().BoolVar(&runResume, "resume", false, "Resume failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
 	rootCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
 	rootCmd.Flags().BoolVar(&runContinue, "continue", false, "Use an LLM agent to analyze build state and resume from where it left off")
 	rootCmd.Flags().BoolVar(&runNoSanityCheck, "no-sanity-check", false, "Skip the interactive project summary during auto-prepare")
