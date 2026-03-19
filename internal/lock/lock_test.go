@@ -96,6 +96,34 @@ func TestAcquire_CorruptedLockFile(t *testing.T) {
 	require.NoError(t, Release(projectDir))
 }
 
+func TestIsLockedNoFile(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, IsLocked(t.TempDir()))
+}
+
+func TestIsLockedStalePID(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	lockPath := filepath.Join(projectDir, config.LockFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(lockPath), 0o755))
+	require.NoError(t, os.WriteFile(lockPath, []byte("999999999"), 0o644))
+
+	assert.False(t, IsLocked(projectDir))
+}
+
+func TestIsLockedActivePID(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	lockPath := filepath.Join(projectDir, config.LockFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(lockPath), 0o755))
+	require.NoError(t, os.WriteFile(lockPath, []byte(strconv.Itoa(os.Getpid())), 0o644))
+
+	assert.True(t, IsLocked(projectDir))
+}
+
 // P3: concurrent lock contention
 func TestAcquire_ConcurrentContention(t *testing.T) {
 	t.Parallel()

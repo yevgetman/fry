@@ -172,6 +172,40 @@ fry replan <deviation_spec> [flags]
 
 ---
 
+## `fry clean`
+
+Archive build artifacts from `.fry/` and root-level build outputs (`build-audit.md`, `build-summary.md`) into a timestamped folder under `.fry-archive/`.
+
+```
+fry clean [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--force` | Skip the confirmation prompt |
+| `--project-dir <path>` | Project directory to operate on (default: current directory) |
+
+### Behavior
+
+1. Checks if a build is currently running (lock file active) and warns if so.
+2. Prompts for confirmation unless `--force` is passed.
+3. Moves `.fry/` into `.fry-archive/.fry--build--YYYYMMDD-HHMMSS`.
+4. Moves `build-audit.md` and `build-summary.md` from the project root into the same archive folder (skips silently if they don't exist).
+
+Auto-archiving also happens automatically after a successful full build (all sprints from 1 to the last). The `fry clean` command is for manual archiving between builds.
+
+### Examples
+
+```bash
+fry clean                              # Archive with confirmation prompt
+fry clean --force                      # Archive without confirmation
+fry clean --project-dir /path/to/proj  # Archive a different project
+```
+
+---
+
 ## `fry version`
 
 Print the Fry version string.

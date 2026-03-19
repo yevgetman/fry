@@ -92,6 +92,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop (CRITICAL/HIGH block the build; MODERATE is advisory)
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
+- **Build archiving** -- on successful full builds, `.fry/` and root-level outputs are auto-archived to `.fry-archive/`; run `fry clean` to archive manually
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
 - **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
@@ -131,6 +132,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry run` | Execute sprints from an epic file (default command) |
 | `fry prepare` | Generate `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan |
 | `fry replan` | Replan an epic after a deviation |
+| `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
 | `fry version` | Print fry version |
 
 ```bash
@@ -141,6 +143,8 @@ fry --effort max --engine claude       # Maximum rigor: extended prompts, thorou
 fry run epic.md 3 5                    # Run sprints 3-5
 fry run --resume --sprint 4             # Resume failed sprint 4 (skip iterations, heal only)
 fry run --continue                     # Auto-detect and resume from where you left off
+fry clean                              # Archive .fry/ and build outputs (interactive)
+fry clean --force                      # Archive without confirmation prompt
 fry --mode planning                    # Planning mode (documents, not code) — claude for both stages
 fry --mode writing --user-prompt "..."  # Writing mode (books, guides) — claude for both stages
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive

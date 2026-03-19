@@ -23,7 +23,7 @@ func InitGit(projectDir string) error {
 	if err := ensureLocalIdentity(projectDir); err != nil {
 		return err
 	}
-	if err := ensureGitignoreEntries(projectDir, []string{".fry/", ".env", ".DS_Store"}); err != nil {
+	if err := ensureGitignoreEntries(projectDir, []string{".fry/", ".fry-archive/", ".env", ".DS_Store"}); err != nil {
 		return err
 	}
 

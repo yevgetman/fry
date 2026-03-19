@@ -69,6 +69,20 @@ func AcquireIfNotDryRun(projectDir string, dryRun bool) error {
 	return Acquire(projectDir)
 }
 
+// IsLocked returns true if a lock file exists and the owning process is alive.
+func IsLocked(projectDir string) bool {
+	lockPath := filepath.Join(projectDir, config.LockFile)
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 0 {
+		return false
+	}
+	return processAlive(pid)
+}
+
 func processAlive(pid int) bool {
 	// On Unix, os.FindProcess always succeeds, so we skip it and go
 	// straight to the signal-0 liveness check.

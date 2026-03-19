@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"github.com/yevgetman/fry/internal/archive"
 	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/continuerun"
@@ -681,6 +682,16 @@ var runCmd = &cobra.Command{
 		}
 
 		releaseLock()
+
+		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints {
+			archivePath, archiveErr := archive.Archive(projectPath)
+			if archiveErr != nil {
+				fmt.Fprintf(os.Stderr, "fry: warning: auto-archive failed: %v\n", archiveErr)
+			} else {
+				frlog.Log("  ARCHIVE  build artifacts archived to %s", archivePath)
+			}
+		}
+
 		return exitErr
 	},
 }

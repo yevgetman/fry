@@ -4,8 +4,10 @@ bin/
 .claude/
 *.log
 .fry/
+.fry-archive/
 plans/
 output/
 build-docs/
 fry
-audit.md
+build-audit.md
+build-summary.md

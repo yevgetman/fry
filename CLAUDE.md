@@ -264,7 +264,9 @@ func TestFunctionName(t *testing.T) {
 - `plans/` directory (user-specific)
 - `build-docs/` directory
 - Build output (`bin/`, the `fry` binary at root)
-- `audit.md` (generated)
+- `build-audit.md` (generated)
+- `build-summary.md` (generated)
+- `.fry-archive/` directory (archived builds)
 - These are all in `.gitignore` — respect it
 
 ### Branching

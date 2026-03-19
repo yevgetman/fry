@@ -4,7 +4,10 @@
 
 ```
 your-project/
-  .gitignore                             # Auto-updated with .fry/ entry
+  .gitignore                             # Auto-updated with .fry/ and .fry-archive/ entries
+  .fry-archive/                          # Archived builds (gitignored, created by fry clean or auto-archive)
+    .fry--build--20260319-120000/        #   Timestamped archive of .fry/ + root build outputs
+    .fry--build--20260318-090000/        #   Each entry is a self-contained snapshot
   plans/                                 # YOUR INPUT (committed to your repo)
     plan.md                              #   Detailed build plan
     executive.md                         #   Executive context (optional)
@@ -81,7 +84,8 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 | `.fry/continue-decision.txt` | LLM agent's resume decision (verdict, sprint, reason) (transient) | `fry run --continue` |
 | `.fry/continue-report.md` | Programmatic build state report (transient) | `fry run --continue` |
 | `build-summary.md` | Build summary report (persisted in project root) | `fry run` at runtime |
-| `audit.md` | Build audit report (persisted in project root) | `fry run` at runtime |
+| `build-audit.md` | Build audit report (persisted in project root) | `fry run` at runtime |
+| `.fry-archive/` | Archived builds (timestamped snapshots of `.fry/` + root outputs) | `fry clean` or auto-archive after successful full build |
 | `.fry/build-logs/` | Per-iteration, per-sprint, resume, audit, and continue logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 
@@ -97,7 +101,7 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 
 Fry automatically:
 - Initializes a git repository if one doesn't exist
-- Adds `.fry/`, `.env`, and `.DS_Store` to `.gitignore`
+- Adds `.fry/`, `.fry-archive/`, `.env`, and `.DS_Store` to `.gitignore`
 - Sets a local git identity (`fry` / `fry@automated`) if none is configured
 - Creates git checkpoints after each sprint with descriptive commit messages
 

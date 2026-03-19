@@ -44,6 +44,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(prepareCmd)
 	rootCmd.AddCommand(replanCmd)
+	rootCmd.AddCommand(cleanCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 

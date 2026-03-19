@@ -15,7 +15,7 @@ All sprints complete successfully
        |
        +-- Audit entire codebase
        +-- Classify findings by severity
-       +-- Report to audit.md
+       +-- Report to build-audit.md
        +-- If clean (no issues or all LOW) --> stop
        +-- If issues remain --> remediate, then re-audit
        |       (loop up to 12 iterations at high, 20 at max effort)
@@ -32,7 +32,7 @@ Unlike the sprint audit (which uses separate audit and fix agents), the build au
 
 1. **Audit** -- read the entire codebase and evaluate against six criteria
 2. **Classify** -- assign severity to each finding
-3. **Report** -- write findings to `audit.md` in the project root
+3. **Report** -- write findings to `build-audit.md` in the project root
 4. **Evaluate** -- if all issues are LOW or none exist, stop
 5. **Remediate** -- fix all issues (including LOW), then re-audit
 
@@ -146,7 +146,7 @@ No additional directives are needed -- the build audit runs automatically when t
 
 ## Output
 
-The build audit agent writes its report to `audit.md` in the project root. This file persists after the build and is committed in the git checkpoint.
+The build audit agent writes its report to `build-audit.md` in the project root. This file persists after the build and is committed in the git checkpoint.
 
 The report includes:
 - Location, description, severity, and recommended fix for each finding
@@ -157,13 +157,13 @@ The report includes:
 
 ```
 [2026-03-10 13:00:00] > BUILD AUDIT  running final holistic audit for "My Project"
-[2026-03-10 13:15:00]   BUILD AUDIT: report written to audit.md
+[2026-03-10 13:15:00]   BUILD AUDIT: report written to build-audit.md
 ```
 
 If the agent fails to produce the report:
 
 ```
-[2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce audit.md
+[2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce build-audit.md
 ```
 
 ## Build Logs
@@ -188,7 +188,7 @@ build_audit_20060102_150405.log
 | Agent design | Two agents (audit + fix) | Single agent (audit + fix in one session) |
 | Iterations | Up to `@max_audit_iterations` (default: 3) | Up to 12 (high) or 20 (max) |
 | Blocking | CRITICAL/HIGH block the sprint | Non-blocking (advisory) |
-| Output file | `.fry/sprint-audit.txt` (transient) | `audit.md` (persisted) |
+| Output file | `.fry/sprint-audit.txt` (transient) | `build-audit.md` (persisted) |
 | Context | Sprint diff + sprint progress | Full codebase + plan artifacts |
 
 Both audits use the same six criteria (mode-dependent) and four severity levels. The sprint audit catches issues incrementally during the build; the build audit catches cross-cutting issues that only become visible when viewing the completed project as a whole.

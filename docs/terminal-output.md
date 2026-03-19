@@ -227,14 +227,14 @@ After all sprints complete successfully, a final holistic audit runs on the enti
 
 ```
 [2026-03-10 13:00:00] ▶ BUILD AUDIT  running holistic audit across all 8 sprints...  engine=claude  model=sonnet
-[2026-03-10 13:15:00]   BUILD AUDIT: complete — report written to audit.md
+[2026-03-10 13:15:00]   BUILD AUDIT: complete — report written to build-audit.md
 [2026-03-10 13:15:01]   GIT: checkpoint — build-audit
 ```
 
 If the agent does not produce a report:
 
 ```
-[2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce audit.md
+[2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce build-audit.md
 ```
 
 ## Sprint Review and Replan
@@ -262,6 +262,27 @@ When `@compact_with_agent` is enabled:
 
 ```
 [2026-03-10 12:18:01] Compacting sprint progress with agent...
+```
+
+## Build Archiving
+
+After a successful full build (all sprints from 1 to the last), Fry auto-archives `.fry/` and root-level build outputs:
+
+```
+[2026-03-10 13:20:00]   ARCHIVE  build artifacts archived to /path/to/project/.fry-archive/.fry--build--20260310-132000
+```
+
+If archiving fails (non-fatal):
+
+```
+fry: warning: auto-archive failed: archive: .fry does not exist
+```
+
+Manual archiving with `fry clean`:
+
+```
+Archive .fry/ and build outputs? [y/N] y
+Archived to /path/to/project/.fry-archive/.fry--build--20260310-140000
 ```
 
 ## Build Summary

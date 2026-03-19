@@ -20,11 +20,12 @@ Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex or Claude Code) t
 fry/
 ├── cmd/fry/main.go              # Entry point — calls cli.Execute()
 ├── internal/
-│   ├── cli/                     # Cobra commands: root, run, prepare, replan, version
+│   ├── cli/                     # Cobra commands: root, run, prepare, replan, clean, version
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose, --engine, etc.)
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
 │   │   ├── prepare.go           # Generate .fry/ artifacts from plans
 │   │   ├── replan.go            # Mid-build replanning
+│   │   ├── clean.go             # Archive .fry/ and build outputs to .fry-archive/
 │   │   └── version.go           # Version subcommand
 │   ├── config/config.go         # All constants: paths, defaults, invocation prompts
 │   ├── engine/
@@ -65,7 +66,8 @@ fry/
 │   ├── git/git.go               # Git init, checkpoints, diff capture
 │   ├── docker/docker.go         # Docker Compose lifecycle, health checks
 │   ├── preflight/preflight.go   # Pre-build tool/command validation
-│   ├── lock/lock.go             # File-based build concurrency lock
+│   ├── archive/archive.go       # Build archiving (.fry/ → .fry-archive/)
+│   ├── lock/lock.go             # File-based build concurrency lock + IsLocked check
 │   ├── log/log.go               # Verbose logging, agent banners
 │   ├── media/media.go           # Binary asset scanning (images, PDFs, fonts)
 │   ├── assets/assets.go         # Text asset scanning + prompt injection
@@ -229,7 +231,7 @@ For each sprint (startSprint → endSprint):
      │  ├─ Review agent: CONTINUE or DEVIATE
      │  └─ If DEVIATE: replan affected sprints
 
-Final: build summary → build audit (if full epic completed)
+Final: build summary → build audit (if full epic completed) → auto-archive (if full epic succeeded)
 ```
 
 ### Prompt Layering (8 layers, assembled in `sprint/prompt.go`)
@@ -253,6 +255,7 @@ Final: build summary → build audit (if full epic completed)
 fry [run] [epic.md] [start] [end]   # Execute sprints (run is default)
 fry prepare [epic_filename]          # Generate .fry/ artifacts from plans
 fry replan                           # Replan after deviation
+fry clean                            # Archive .fry/ + build outputs to .fry-archive/
 fry version                          # Print version
 
 Key flags:
@@ -305,6 +308,8 @@ Key flags:
 | `ResumeHealMultiplier` | `2` | Heal iteration multiplier on resume |
 | `ResumeMinHealAttempts` | `6` | Minimum heal attempts on resume |
 | `BuildModeFile` | `.fry/build-mode.txt` | Persisted build mode for `--continue` |
+| `ArchiveDir` | `.fry-archive` | Directory for archived builds |
+| `ArchivePrefix` | `.fry--build--` | Prefix for archive folder names |
 
 ---
 

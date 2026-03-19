@@ -90,7 +90,7 @@ This is not optional. When you add, modify, or remove a feature:
 
 - `cmd/fry/main.go` — Entry point only. Calls `cli.Execute()` and nothing else.
 - `internal/cli/` — Cobra command definitions. All user-facing CLI logic goes here.
-- `internal/<feature>/` — One package per feature domain (e.g., `epic`, `sprint`, `verify`, `heal`, `audit`, `review`, `engine`, `prepare`, `git`, `docker`, `preflight`, `lock`, `log`, `media`, `assets`, `summary`, `shellhook`, `textutil`).
+- `internal/<feature>/` — One package per feature domain (e.g., `epic`, `sprint`, `verify`, `heal`, `audit`, `review`, `engine`, `prepare`, `git`, `docker`, `preflight`, `lock`, `log`, `media`, `assets`, `summary`, `shellhook`, `textutil`, `continuerun`, `archive`).
 - `internal/config/` — Constants only. No logic, no functions.
 - `templates/` — Embedded markdown templates (compiled into binary via `//go:embed`).
 
@@ -263,7 +263,9 @@ func TestFunctionName(t *testing.T) {
 - `plans/` directory (user-specific)
 - `build-docs/` directory
 - Build output (`bin/`, the `fry` binary at root)
-- `audit.md` (generated)
+- `build-audit.md` (generated)
+- `build-summary.md` (generated)
+- `.fry-archive/` directory (archived builds)
 - These are all in `.gitignore` — respect it
 
 ### Branching
@@ -431,7 +433,7 @@ if ep.MyDirective == "" {
 | `README.md` | User-facing project documentation |
 | `README.LLM.md` | AI agent codebase map (architecture, types, flow) |
 | `AGENTS.md` | This file — LLM coding instructions |
-| `docs/*.md` | Feature-specific documentation (20 files) |
+| `docs/*.md` | Feature-specific documentation (21 files) |
 | `internal/config/config.go` | All constants and defaults |
 | `templates/*.md` | Embedded prompt/example templates |
 | `.gitignore` | Tracks what should not be committed |
