@@ -6,6 +6,8 @@ bin/
 .fry/
 .fry-archive/
 plans/
+assets/
+media/
 output/
 build-docs/
 fry
