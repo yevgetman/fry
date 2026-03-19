@@ -171,7 +171,7 @@ type Engine interface {
 }
 ```
 
-Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → default (codex for software build, claude for prepare/planning/writing).
+Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → default (claude for all modes and stages).
 
 ### Effort Levels (`internal/epic/types.go`)
 
@@ -283,7 +283,7 @@ Key flags:
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `DefaultEngine` | `codex` | Default build engine |
+| `DefaultEngine` | `claude` | Default build engine |
 | `DefaultPrepareEngine` | `claude` | Default prepare engine |
 | `DefaultPlanningEngine` | `claude` | Default planning-mode engine |
 | `DefaultWritingEngine` | `claude` | Default writing-mode engine |

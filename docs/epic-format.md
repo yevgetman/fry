@@ -30,7 +30,7 @@ Placed before any `@sprint` block:
 | Directive | Description |
 |---|---|
 | `@epic <name>` | Display name for logs and summaries |
-| `@engine <codex\|claude>` | AI engine (default: codex for software mode, claude for planning/writing). See [AI Engines](engines.md). |
+| `@engine <codex\|claude>` | AI engine (default: claude). See [AI Engines](engines.md). |
 | `@effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `@docker_from_sprint <N>` | Start docker-compose from sprint N |
 | `@docker_ready_cmd <cmd>` | Custom health check after docker-compose up |

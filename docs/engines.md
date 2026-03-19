@@ -47,23 +47,29 @@ The AI engine is resolved with this precedence (highest wins):
 
 | Mode | Prepare Stage | Build Stage |
 |---|---|---|
-| **Software** (default) | Claude | Codex |
+| **Software** (default) | Claude | Claude |
 | **Planning** (`--mode planning`) | Claude | Claude |
 | **Writing** (`--mode writing`) | Claude | Claude |
 
-In software mode, Claude is used for artifact generation (prepare) and Codex is used for sprint execution (build). In planning and writing modes, Claude is used for both stages.
+Claude is the default engine for all modes and stages. Use `--engine codex` or `--prepare-engine codex` to explicitly select Codex for any stage.
 
 These defaults apply only when no explicit engine is specified via CLI flag, epic directive, or environment variable.
 
 ## Mixing Engines
 
-You can override the defaults for any stage. For example, use Codex for both preparation and build:
+CLI flags take absolute precedence over all other engine settings. For example, use Codex for sprint execution while keeping Claude for preparation:
+
+```bash
+fry --engine codex
+```
+
+Or use Codex for both stages:
 
 ```bash
 fry --prepare-engine codex --engine codex
 ```
 
-The `--prepare-engine` flag controls which engine is used during `fry prepare` (artifact generation), while `--engine` controls which engine executes the sprints.
+The `--prepare-engine` flag controls which engine is used during `fry prepare` (artifact generation), while `--engine` controls which engine executes the sprints. These flags override `@engine` directives in the epic, the `FRY_ENGINE` environment variable, and the default.
 
 ### Review Engine
 

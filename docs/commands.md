@@ -44,7 +44,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
-| `--engine <codex\|claude>` | AI engine to use (default: codex for software mode, claude for planning/writing mode) |
+| `--engine <codex\|claude>` | AI engine to use (default: claude) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). `planning` generates structured documents; `writing` generates human-language content (books, guides, reports). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic (defaults to `--engine`, `FRY_ENGINE`, or claude) |

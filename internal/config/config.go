@@ -4,7 +4,7 @@ const (
 	FryDir                    = ".fry"
 	PlansDir                  = "plans"
 	BuildLogsDir              = ".fry/build-logs"
-	DefaultEngine             = "codex"
+	DefaultEngine             = "claude"
 	DefaultPrepareEngine      = "claude"
 	DefaultPlanningEngine     = "claude"
 	DefaultWritingEngine      = "claude"

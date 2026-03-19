@@ -24,7 +24,7 @@ func TestResolveEngine(t *testing.T) {
 
 	name, err = ResolveEngine("", "", "", "")
 	require.NoError(t, err)
-	assert.Equal(t, "codex", name)
+	assert.Equal(t, "claude", name)
 }
 
 func TestResolveEngineCustomDefault(t *testing.T) {

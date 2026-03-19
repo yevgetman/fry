@@ -132,7 +132,7 @@ The exit criteria should match the verification checklist.
 
 Based on the plan, determine:
 - `@epic`: A descriptive name
-- `@engine`: Which AI engine to use (`codex` or `claude`, default: `codex`)
+- `@engine`: Which AI engine to use (`codex` or `claude`, default: `claude`)
 - `@docker_from_sprint`: Which sprint first needs Docker (usually 2)
 - `@docker_ready_cmd`: Health check for the primary DB service
 - `@require_tool`: All CLI tools the project needs (language runtime, docker, etc.)
@@ -213,9 +213,9 @@ The full workflow from plan to running build:
    └── ./fry.sh epic.md --dry-run
 
 6. Run
-   └── ./fry.sh epic.md                        (default: codex)
-   └── ./fry.sh epic.md --engine claude         (use Claude Code)
-   └── FRY_ENGINE=claude ./fry.sh epic.md       (via env var)
+   └── ./fry.sh epic.md                        (default: claude)
+   └── ./fry.sh epic.md --engine codex          (use OpenAI Codex)
+   └── FRY_ENGINE=codex ./fry.sh epic.md        (via env var)
 ```
 
 Step 5 is important — always review the generated epic. The LLM will get the

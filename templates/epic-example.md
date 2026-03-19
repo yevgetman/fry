@@ -71,8 +71,8 @@
 
 @epic [Project Name] [Phase Name] — [Brief Description]
 @effort high
-@engine codex
-# @engine claude
+@engine claude
+# @engine codex
 @docker_from_sprint [N]
 @docker_ready_cmd [custom health check command, e.g.: docker compose exec -T postgres pg_isready -U myapp]
 @docker_ready_timeout [seconds, default 30]
@@ -86,7 +86,7 @@
 #
 # @epic <name>                    Display name for logs/summaries
 # @effort <low|medium|high|max>  Effort level — controls sprint count and density
-# @engine <codex|claude>          AI engine to use (default: codex)
+# @engine <codex|claude>          AI engine to use (default: claude)
 # @docker_from_sprint <N>         Start Docker from sprint N (omit if no Docker)
 # @docker_ready_cmd <cmd>         Health check after docker-compose up
 # @docker_ready_timeout <secs>    How long to wait for Docker (default: 30)

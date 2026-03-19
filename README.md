@@ -97,6 +97,16 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Dynamic sprint review** -- optional mid-build review with replanning
 - **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
 
+## Requirements
+
+- **Go 1.22+** — to build fry from source
+- **git** — for automatic sprint checkpointing
+- **bash** — used by AI engine CLIs and verification commands
+- At least one AI engine CLI:
+  - [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code): `npm i -g @anthropic-ai/claude-code` (default engine)
+  - [OpenAI Codex CLI](https://www.npmjs.com/package/@openai/codex): `npm i -g @openai/codex`
+- **Docker** (optional) — only needed if your project uses `@docker_from_sprint`
+
 ## Quick Start
 
 ```bash
@@ -136,10 +146,10 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry version` | Print fry version |
 
 ```bash
-fry                                    # Run all sprints (prepare: claude, build: codex)
-fry --engine claude                    # Use Claude Code for build stage
+fry                                    # Run all sprints (prepare: claude, build: claude)
+fry --engine codex                     # Use OpenAI Codex for build stage
 fry --effort low                       # Simple task: 1-2 sprints, minimal overhead
-fry --effort max --engine claude       # Maximum rigor: extended prompts, thorough reviews
+fry --effort max                       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
 fry run --resume --sprint 4             # Resume failed sprint 4 (skip iterations, heal only)
 fry run --continue                     # Auto-detect and resume from where you left off

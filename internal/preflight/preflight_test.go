@@ -94,7 +94,7 @@ func TestPreflightDefaultEngine(t *testing.T) {
 		ProjectDir: projectDir,
 		Engine:     "", // Should default to config.DefaultEngine
 	})
-	// Will likely fail since default engine (codex) isn't on PATH in test env,
+	// Will likely fail since default engine (claude) isn't on PATH in test env,
 	// but the error should reference the default engine name
 	if err != nil {
 		assert.Contains(t, err.Error(), config.DefaultEngine)

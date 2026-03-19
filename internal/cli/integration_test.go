@@ -96,7 +96,7 @@ func TestEngineResolution(t *testing.T) {
 	t.Setenv("FRY_ENGINE", "")
 	name, err = engine.ResolveEngine("", "", "", "")
 	require.NoError(t, err)
-	require.Equal(t, "codex", name)
+	require.Equal(t, "claude", name)
 }
 
 func TestBuildSucceeds(t *testing.T) {
