@@ -111,8 +111,8 @@ When `--continue` is used, Fry collects build state, runs an LLM analysis agent,
 [2026-03-10 11:55:00] ▶ CONTINUE  collecting build state...
 [2026-03-10 11:55:00] ▶ CONTINUE  auto-detected mode: software
 [2026-03-10 11:55:01] ▶ CONTINUE  analyzing with engine=claude  model=haiku...
-[2026-03-10 11:55:10] ▶ CONTINUE  decision: RESUME_RETRY sprint 4 — "verification failed on 2 checks; code exists"
-Decision: RESUME_RETRY (sprint 4)
+[2026-03-10 11:55:10] ▶ CONTINUE  decision: RESUME sprint 4 — "verification failed on 2 checks; code exists"
+Decision: RESUME (sprint 4)
 Reason: verification failed on 2 checks; code exists
 ```
 
