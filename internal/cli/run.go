@@ -136,7 +136,7 @@ var runCmd = &cobra.Command{
 				}
 			} else {
 				var err error
-				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, effortLevel, mode)
+				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, effortLevel, mode, os.Stdin, cmd.OutOrStdout())
 				if err != nil {
 					return err
 				}
@@ -1050,7 +1050,7 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 // runTriageGate classifies task complexity and takes the appropriate execution path.
 // For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it runs an
 // abbreviated single-LLM-call prepare. For COMPLEX, it falls through to full prepare.
-func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode) (*triage.TriageDecision, error) {
+func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer) (*triage.TriageDecision, error) {
 	// Read available inputs.
 	planPath := filepath.Join(projectPath, config.PlanFile)
 	executivePath := filepath.Join(projectPath, config.ExecutiveFile)
@@ -1129,8 +1129,8 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			SkipSanityCheck: runNoSanityCheck || runDryRun,
 			Mode:            mode,
 			EffortLevel:     effortLevel,
-			Stdin:           os.Stdin,
-			Stdout:          os.Stdout,
+			Stdin:           stdin,
+			Stdout:          stdout,
 		}); err != nil {
 			return nil, err
 		}

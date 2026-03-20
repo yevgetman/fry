@@ -76,7 +76,7 @@ func WriteEpicFile(path string, ep *epic.Epic) error {
 	}
 	if ep.MaxHealAttempts > 0 {
 		fmt.Fprintf(&b, "@max_heal_attempts %d\n", ep.MaxHealAttempts)
-	} else if ep.MaxHealAttempts == 0 && ep.EffortLevel == epic.EffortLow {
+	} else if ep.MaxHealAttempts == 0 {
 		b.WriteString("@max_heal_attempts 0\n")
 	}
 	if ep.MaxFailPercent > 0 && ep.MaxFailPercent != config.DefaultMaxFailPercent {
@@ -180,7 +180,14 @@ func RunAbbreviatedPrepare(ctx context.Context, opts AbbreviatedPrepareOpts) err
 func buildAbbreviatedPrompt(opts AbbreviatedPrepareOpts, generateEpicTemplate, epicExample string) string {
 	var b strings.Builder
 
-	b.WriteString("You are a senior software architect generating a concise epic.md for a MODERATE-complexity task.\n\n")
+	switch opts.Mode {
+	case prepare.ModePlanning:
+		b.WriteString("You are a strategic planner generating a concise epic.md for a MODERATE-complexity planning task.\n\n")
+	case prepare.ModeWriting:
+		b.WriteString("You are a senior content strategist generating a concise epic.md for a MODERATE-complexity writing task.\n\n")
+	default:
+		b.WriteString("You are a senior software architect generating a concise epic.md for a MODERATE-complexity task.\n\n")
+	}
 	b.WriteString("## Constraints\n\n")
 	b.WriteString("- Generate AT MOST 2 sprints. Prefer 1 sprint if the task can reasonably fit.\n")
 	b.WriteString("- Each sprint prompt must be self-contained and actionable.\n")

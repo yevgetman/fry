@@ -434,4 +434,9 @@ func TestTruncateReason(t *testing.T) {
 	assert.Equal(t, "short", truncateReason("short", 80))
 	assert.Equal(t, "hello wo...", truncateReason("hello world!", 11))
 	assert.Equal(t, "", truncateReason("", 80))
+	// Verify rune-safe truncation: multi-byte characters should not be split.
+	assert.Equal(t, "ab...", truncateReason("abcdef", 5))
+	assert.Equal(t, "hello", truncateReason("hello", 6))
+	// Multi-byte runes: 4 runes "abcd" in 4-byte chars, maxLen=5 runes truncates to 2 runes + "..."
+	assert.Equal(t, "ab...", truncateReason("abcdefgh", 5))
 }

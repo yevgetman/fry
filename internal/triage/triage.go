@@ -29,8 +29,8 @@ type TriageOpts struct {
 }
 
 var (
-	complexityRe = regexp.MustCompile(`<complexity>(SIMPLE|MODERATE|COMPLEX)</complexity>`)
-	sprintsRe    = regexp.MustCompile(`<sprints>(\d+)</sprints>`)
+	complexityRe   = regexp.MustCompile(`<complexity>(SIMPLE|MODERATE|COMPLEX)</complexity>`)
+	sprintsRe      = regexp.MustCompile(`<sprints>(\d+)</sprints>`)
 	triageReasonRe = regexp.MustCompile(`(?s)<reason>(.*?)</reason>`)
 )
 
@@ -73,6 +73,11 @@ func Classify(ctx context.Context, opts TriageOpts) *TriageDecision {
 		runOpts.Stderr = logFile
 	}
 
+	// Remove stale decision file from a prior run so it doesn't get read back
+	// if the current engine invocation writes output elsewhere.
+	decisionPath := filepath.Join(opts.ProjectDir, config.TriageDecisionFile)
+	os.Remove(decisionPath)
+
 	frylog.Log("▶ TRIAGE  classifying task complexity...  engine=%s  model=%s", opts.Engine.Name(), opts.Model)
 
 	output, _, runErr := opts.Engine.Run(ctx, config.TriageInvocationPrompt, runOpts)
@@ -85,7 +90,6 @@ func Classify(ctx context.Context, opts TriageOpts) *TriageDecision {
 	}
 
 	// Check if the agent wrote a decision file (may exist even if engine returned non-zero exit).
-	decisionPath := filepath.Join(opts.ProjectDir, config.TriageDecisionFile)
 	if data, err := os.ReadFile(decisionPath); err == nil {
 		output = string(data)
 	}
@@ -218,8 +222,9 @@ func buildTriagePrompt(opts TriageOpts) string {
 }
 
 func truncateReason(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }
