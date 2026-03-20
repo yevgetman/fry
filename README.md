@@ -28,9 +28,19 @@ Any of the above can be something you write yourself or have an LLM write for yo
 
 In short, Fry will do its best to use whatever info you provide to generate a `plan.md` file, if one was not explicitly provided.
 
+### Triage
+
+Before doing any of the heavy lifting, Fry runs a [triage gate](docs/triage.md) — a single cheap LLM call that classifies the task as **simple**, **moderate**, or **complex**. This determines how much preparation is needed:
+
+- **Simple** tasks (fix a typo, add a config flag) skip preparation entirely — Fry builds a 1-sprint epic programmatically and gets straight to work. Zero LLM calls wasted on planning.
+- **Moderate** tasks (add an endpoint with tests, build a small tool) get an abbreviated prepare — one LLM call generates a focused 1-2 sprint epic.
+- **Complex** tasks (multi-subsystem features, architectural changes) get the full preparation pipeline described below.
+
+The classifier is intentionally biased toward over-classification — it's better to over-prepare a simple task than to under-prepare a complex one. Use `--full-prepare` to bypass triage and force the full pipeline.
+
 ### Preparation
 
-However it comes about, Fry will then:
+For complex tasks (or when `--full-prepare` is used), Fry will:
 
 1. Generate an `AGENTS.md` file (if one was not provided) establishing best practices for the agents
 2. Decompose `plan.md` into an [epic](docs/epic-format.md), delimited by sprints with each sprint broken up by specific tasks
@@ -62,8 +72,15 @@ media/                 Optional binary assets (images, PDFs, fonts) referenced i
 assets/                Optional text documents (specs, schemas) read during plan generation
         |
         v
+  fry run               Triage gate: cheap LLM classifies task complexity
+                           SIMPLE   → builds epic directly (0 prep calls)
+                           MODERATE → abbreviated prepare (1 LLM call)
+                           COMPLEX  → full prepare (below)
+                         (--full-prepare skips triage)
+        |
+        v
   fry prepare           Step 0 (if needed): AI generates plans/plan.md from executive.md
-                         Steps 1-3: AI generates .fry/AGENTS.md + .fry/epic.md + .fry/verification.md
+  (complex tasks)        Steps 1-3: AI generates .fry/AGENTS.md + .fry/epic.md + .fry/verification.md
   (pass --mode planning for documents, --mode writing for books/guides)
         |
         v
