@@ -28,7 +28,7 @@
 - **Severity:** Medium
 - **Description:** Both `runAgentWithDualLogs()` functions write iteration bytes to `sprintLog` without calling `Sync()`. If the process crashes between `Write()` and the deferred `Close()`, the sprint log will be truncated or corrupted. The code comments claim writes are unbuffered, but Go's `os.File.Write()` does not guarantee durability without an explicit `fsync`.
 - **Fix:** Add `sprintLog.Sync()` after each `sprintLog.Write(iterBytes)` call. Also verify that `len(written) == len(iterBytes)` to catch partial writes.
-- **Status:** [ ]
+- **Status:** [x] Completed 2026-03-19. Added partial-write detection (`n != len(iterBytes)`) and `sprintLog.Sync()` after each Write in both `internal/sprint/runner.go` and `internal/heal/heal.go`. Also removed the inaccurate "Go file writes are unbuffered" comment.
 
 ### A3. Unchecked error on lock release in signal handler
 
@@ -44,7 +44,7 @@
 - **Severity:** Low
 - **Description:** `sprintLog.Write(iterBytes)` checks `err != nil` but does not verify that the number of bytes written equals `len(iterBytes)`. A partial write returns `nil` error but fewer bytes, causing silent log truncation.
 - **Fix:** Check `n, err := sprintLog.Write(iterBytes)` and verify `n == len(iterBytes)`.
-- **Status:** [ ]
+- **Status:** [x] Completed 2026-03-19 (fixed as part of A2).
 
 ### A5. Sprint index bounds validation gap
 
@@ -94,7 +94,7 @@
 | `sprintProgressMentionsSprint` | ~9 | File content scanning |
 
 - **Fix:** Add a `collector_helpers_test.go` with table-driven tests for each function, covering happy paths, edge cases (empty input, malformed strings), and error paths.
-- **Status:** [ ]
+- **Status:** [x] Completed 2026-03-19. Added `collector_helpers_test.go` with table-driven tests for `sevRank` (9 cases), `extractMaxSeverity` edge cases (9 cases), `countDeviations` (4 cases), `sprintProgressMentionsSprint` (5 cases), and `checkRequiredTools` (4 cases). Skipped `checkDockerAvailable` since it calls `docker info` and would be flaky in environments without Docker.
 
 ### B3. Expand error path coverage in engine tests
 

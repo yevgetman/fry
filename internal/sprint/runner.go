@@ -460,13 +460,19 @@ func runAgentWithDualLogs(ctx context.Context, cfg RunConfig, prompt, iterPath, 
 	opts.Stdout = iterLog
 	opts.Stderr = iterLog
 	output, _, runErr := cfg.Engine.Run(ctx, prompt, opts)
-	// iterLog is flushed (Go file writes are unbuffered); defer handles close.
 	iterBytes, err := os.ReadFile(iterPath)
 	if err != nil {
 		return output, fmt.Errorf("read iteration log: %w", err)
 	}
-	if _, err := sprintLog.Write(iterBytes); err != nil {
+	n, err := sprintLog.Write(iterBytes)
+	if err != nil {
 		return output, fmt.Errorf("append iteration log to sprint log: %w", err)
+	}
+	if n != len(iterBytes) {
+		return output, fmt.Errorf("append iteration log to sprint log: short write (%d/%d bytes)", n, len(iterBytes))
+	}
+	if err := sprintLog.Sync(); err != nil {
+		return output, fmt.Errorf("sync sprint log: %w", err)
 	}
 	if runErr != nil && ctx.Err() == nil {
 		frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
