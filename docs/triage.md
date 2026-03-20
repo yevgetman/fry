@@ -65,21 +65,25 @@ After classification, Fry displays the triage decision and asks the user to conf
 ── Triage classification ───────────────────────────────────────
 Difficulty:  MODERATE
 Effort:      medium
+Git:         branch
 Reason:      REST endpoint with tests across 6 files.
 Action:      Build 2-sprint epic programmatically (no LLM prepare)
 ─────────────────────────────────────────────────────────────────
 Accept this classification? [Y/n/a] (a = adjust)
 ```
 
+The **Git:** line shows the resolved [git strategy](git-strategy.md) (`branch`, `worktree`, or `current`). When `--git-strategy auto` (the default), the strategy is derived from the triage classification: COMPLEX -> `worktree`, SIMPLE/MODERATE -> `branch`.
+
 - **Y / Enter** — accept the classification and continue
 - **n** — decline and abort the build
 - **a** — adjust difficulty and/or effort before continuing
 
-When adjusting, you can change either or both values:
+When adjusting, you can change difficulty, effort, and/or git strategy:
 
 ```
 Difficulty [MODERATE] (simple/moderate/complex, or Enter to keep):
 Effort [medium] (low/medium/high, or Enter to keep):
+Git strategy [branch] (auto/current/branch/worktree, or Enter to keep):
 ```
 
 Changing difficulty to COMPLEX causes the full prepare pipeline to run. Effort `max` is only allowed when difficulty is COMPLEX — typing it on SIMPLE or MODERATE triggers a warning and keeps the previous value. If you downgrade difficulty from COMPLEX to SIMPLE/MODERATE but keep `max` effort (by pressing Enter), Fry automatically downgrades the effort to `high` with a warning.

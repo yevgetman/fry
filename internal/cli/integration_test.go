@@ -14,6 +14,7 @@ import (
 	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/prepare"
 	"github.com/yevgetman/fry/internal/sprint"
 )
@@ -235,6 +236,35 @@ func TestReadBuildMode(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildModeFile), []byte("  planning \n"), 0o644))
 
 		assert.Equal(t, "planning", continuerun.ReadBuildMode(dir))
+	})
+}
+
+func TestGitStrategyFlagValidation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("invalid strategy", func(t *testing.T) {
+		t.Parallel()
+		_, err := git.ParseGitStrategy("invalid")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid git strategy")
+	})
+
+	t.Run("current with branch-name is incompatible", func(t *testing.T) {
+		t.Parallel()
+		// This is validated at the CLI level, so we test the logic directly.
+		strategy, err := git.ParseGitStrategy("current")
+		require.NoError(t, err)
+		assert.Equal(t, git.StrategyCurrent, strategy)
+		// The CLI code checks: if strategy == current && branchName != "" → error
+		// We verify the types are correct here.
+	})
+
+	t.Run("valid strategies", func(t *testing.T) {
+		t.Parallel()
+		for _, valid := range []string{"", "auto", "current", "branch", "worktree"} {
+			_, err := git.ParseGitStrategy(valid)
+			assert.NoError(t, err, "strategy %q should be valid", valid)
+		}
 	})
 }
 

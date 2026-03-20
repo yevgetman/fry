@@ -322,6 +322,103 @@ func TestConfirmDecisionWarnings(t *testing.T) {
 	})
 }
 
+func TestConfirmDecisionGitStrategy(t *testing.T) {
+	t.Parallel()
+
+	t.Run("adjust git strategy to worktree", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		result, err := ConfirmDecision(ConfirmOpts{
+			Decision: baseDecision(),
+			Stdin:    strings.NewReader("a\n\n\nworktree\n"),
+			Stdout:   &stdout,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "worktree", result.GitStrategy)
+	})
+
+	t.Run("adjust git strategy to current", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		result, err := ConfirmDecision(ConfirmOpts{
+			Decision: baseDecision(),
+			Stdin:    strings.NewReader("a\n\n\ncurrent\n"),
+			Stdout:   &stdout,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "current", result.GitStrategy)
+	})
+
+	t.Run("keep default git strategy", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		result, err := ConfirmDecision(ConfirmOpts{
+			Decision: baseDecision(),
+			Stdin:    strings.NewReader("a\n\n\n\n"),
+			Stdout:   &stdout,
+		})
+		require.NoError(t, err)
+		assert.Empty(t, result.GitStrategy)
+	})
+
+	t.Run("invalid git strategy shows warning", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		result, err := ConfirmDecision(ConfirmOpts{
+			Decision: baseDecision(),
+			Stdin:    strings.NewReader("a\n\n\ninvalid\n"),
+			Stdout:   &stdout,
+		})
+		require.NoError(t, err)
+		assert.Empty(t, result.GitStrategy)
+		assert.Contains(t, stdout.String(), "Invalid git strategy")
+	})
+
+	t.Run("accept preserves empty git strategy", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		result, err := ConfirmDecision(ConfirmOpts{
+			Decision: baseDecision(),
+			Stdin:    strings.NewReader("Y\n"),
+			Stdout:   &stdout,
+		})
+		require.NoError(t, err)
+		assert.Empty(t, result.GitStrategy)
+	})
+}
+
+func TestDisplayTriageSummaryShowsGitStrategy(t *testing.T) {
+	t.Parallel()
+
+	t.Run("moderate shows branch", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		_, _ = ConfirmDecision(ConfirmOpts{
+			Decision: baseDecision(),
+			Stdin:    strings.NewReader("Y\n"),
+			Stdout:   &stdout,
+		})
+		assert.Contains(t, stdout.String(), "Git:")
+		assert.Contains(t, stdout.String(), "branch")
+	})
+
+	t.Run("complex shows worktree", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		_, _ = ConfirmDecision(ConfirmOpts{
+			Decision: &TriageDecision{
+				Complexity:  ComplexityComplex,
+				EffortLevel: epic.EffortHigh,
+				Reason:      "Multi-service architecture.",
+			},
+			Stdin:  strings.NewReader("Y\n"),
+			Stdout: &stdout,
+		})
+		assert.Contains(t, stdout.String(), "Git:")
+		assert.Contains(t, stdout.String(), "worktree")
+	})
+}
+
 func TestParseComplexityInput(t *testing.T) {
 	t.Parallel()
 

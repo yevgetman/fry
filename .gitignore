@@ -5,6 +5,7 @@ bin/
 *.log
 .fry/
 .fry-archive/
+.fry-worktrees/
 plans/
 assets/
 media/

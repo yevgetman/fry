@@ -68,7 +68,10 @@ fry/
 │   │   ├── software.go          # Software-mode prompt builders
 │   │   ├── planning.go          # Planning-mode prompt builders
 │   │   └── writing.go           # Writing-mode prompt builders
-│   ├── git/git.go               # Git init, checkpoints, diff capture
+│   ├── git/
+│   │   ├── git.go               # Git init, checkpoints, diff capture
+│   │   ├── types.go             # GitStrategy type, StrategySetup, ParseGitStrategy
+│   │   └── strategy.go          # SetupStrategy, ResolveAutoStrategy, GenerateBranchName, worktree/branch helpers
 │   ├── docker/docker.go         # Docker Compose lifecycle, health checks
 │   ├── preflight/preflight.go   # Pre-build tool/command validation
 │   ├── archive/archive.go       # Build archiving (.fry/ → .fry-archive/)
@@ -97,6 +100,7 @@ fry/
 ├── output/                      # Planning/writing mode deliverables (--mode planning|writing)
 ├── Makefile                     # build, test, lint, clean, install
 ├── go.mod / go.sum
+├── .fry-worktrees/              # Git worktrees for worktree strategy (gitignored)
 ├── .env.example                 # FRY_ENGINE=codex|claude
 └── .gitignore
 ```
@@ -125,6 +129,7 @@ fry/
 | `continue-report.md` | Programmatic build state report (input to analysis) |
 | `triage-prompt.md` | Classifier prompt for triage gate |
 | `triage-decision.txt` | Triage classifier output (complexity, effort, sprints, reason) |
+| `git-strategy.txt` | Persisted git strategy for `--continue`/`--resume` reattachment |
 | `.fry.lock` | Concurrency lock |
 
 ---
@@ -214,7 +219,8 @@ media/                ──┘    MODERATE → programmatic epic + auto-verific
 Before sprint loop:
   1. Preflight checks (required tools + custom commands)
   2. Git init (if needed)
-  3. --continue: collect build state + LLM analysis (auto-detect resume point)
+  3. Git strategy setup (branch/worktree creation, artifact copy; persisted to .fry/git-strategy.txt)
+  4. --continue: collect build state + LLM analysis (auto-detect resume point, reattach to persisted strategy)
 
 For each sprint (startSprint → endSprint):
   4. Docker up (if @docker_from_sprint <= current sprint)
@@ -280,6 +286,8 @@ Key flags:
   --sprint N                         # Start from sprint N
   --resume                           # Skip iterations, verify + heal with boosted attempts
   --continue                         # LLM-assisted auto-resume from where build left off
+  --git-strategy auto|current|branch|worktree  # Git isolation strategy (default: auto)
+  --branch-name name                 # Explicit branch name (overrides auto-generated)
   --full-prepare                     # Skip triage, run full prepare pipeline
   --no-sanity-check                  # Skip interactive confirmations (triage + project summary)
   --no-review                        # Skip mid-build sprint review
@@ -323,6 +331,10 @@ Key flags:
 | `ArchivePrefix` | `.fry--build--` | Prefix for archive folder names |
 | `TriagePromptFile` | `.fry/triage-prompt.md` | Classifier prompt for triage gate |
 | `TriageDecisionFile` | `.fry/triage-decision.txt` | Classifier output (complexity, effort, sprints, reason) |
+| `DefaultGitStrategy` | `auto` | Default git isolation strategy |
+| `GitWorktreeDir` | `.fry-worktrees` | Parent directory for worktree checkouts |
+| `GitStrategyFile` | `.fry/git-strategy.txt` | Persisted strategy for continue/resume |
+| `GitBranchPrefix` | `fry/` | Prefix for auto-generated branch names |
 
 ---
 
@@ -381,6 +393,7 @@ make clean     # rm -rf bin/
 | `project-structure.md` | Directory layout, file reference |
 | `terminal-output.md` | Output format, logging |
 | `architecture.md` | Internal package structure, data flow |
+| `git-strategy.md` | Branch/worktree isolation strategies |
 
 ---
 

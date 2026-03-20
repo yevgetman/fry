@@ -51,6 +51,8 @@ var (
 	runContinue       bool
 	runNoSanityCheck  bool
 	runFullPrepare    bool
+	runGitStrategy    string
+	runBranchName     string
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -81,6 +83,14 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		gitStrategy, err := git.ParseGitStrategy(runGitStrategy)
+		if err != nil {
+			return err
+		}
+		if gitStrategy == git.StrategyCurrent && runBranchName != "" {
+			return fmt.Errorf("--branch-name cannot be used with --git-strategy current")
+		}
+
 		// When --continue is used and no explicit --mode was given,
 		// auto-detect mode from the persisted build-mode.txt file.
 		userSetMode := strings.TrimSpace(runMode) != "" || runPlanning
@@ -90,6 +100,29 @@ var runCmd = &cobra.Command{
 				if parseErr == nil && parsedMode != mode {
 					mode = parsedMode
 					frlog.Log("▶ CONTINUE  auto-detected mode: %s", mode)
+				}
+			}
+		}
+
+		// For --continue/--resume, detect if a prior run used a worktree and redirect
+		// projectPath before any file reads (epic, user-prompt, etc.)
+		var strategySetup *git.StrategySetup
+		originalProjectPath := projectPath
+		if runContinue || runResume {
+			if persisted, readErr := git.ReadPersistedStrategy(projectPath); readErr == nil && persisted != nil {
+				if persisted.IsWorktree && git.IsInsideGitRepo(persisted.WorkDir) {
+					projectPath = persisted.WorkDir
+					strategySetup = persisted
+					frlog.Log("▶ CONTINUE  reattaching to worktree: %s", persisted.WorkDir)
+				} else if persisted.Strategy == git.StrategyBranch && persisted.BranchName != "" {
+					// Checkout the branch if we're not already on it.
+					if git.CurrentBranch(projectPath) != persisted.BranchName {
+						if coErr := git.CheckoutBranch(projectPath, persisted.BranchName); coErr != nil {
+							frlog.Log("WARNING: could not checkout branch %s: %v", persisted.BranchName, coErr)
+						}
+					}
+					strategySetup = persisted
+					frlog.Log("▶ CONTINUE  reattaching to branch: %s", persisted.BranchName)
 				}
 			}
 		}
@@ -267,12 +300,73 @@ var runCmd = &cobra.Command{
 			return printDryRunReport(cmd.OutOrStdout(), projectPath, epicPath, ep, engineName, startSprint, endSprint)
 		}
 
-		if err := lock.AcquireIfNotDryRun(projectPath, runDryRun); err != nil {
+		// --- Git strategy setup ---
+		if strategySetup == nil && gitStrategy != git.StrategyCurrent {
+			// Resolve "auto" strategy
+			if gitStrategy == git.StrategyAuto {
+				if triageDecision != nil {
+					if triageDecision.GitStrategyOverride != "" {
+						// User explicitly chose a strategy during triage confirmation
+						parsed, gsErr := git.ParseGitStrategy(triageDecision.GitStrategyOverride)
+						if gsErr == nil {
+							gitStrategy = parsed
+						}
+					}
+					if gitStrategy == git.StrategyAuto {
+						gitStrategy = git.ResolveAutoStrategy(string(triageDecision.Complexity))
+					}
+				} else {
+					// No triage decision (epic already existed). Default to current for backwards compat.
+					gitStrategy = git.StrategyCurrent
+					if runBranchName != "" {
+						frlog.Log("WARNING: --branch-name ignored because git strategy resolved to current (epic already exists; use --git-strategy branch to force)")
+					}
+				}
+			}
+
+			if gitStrategy != git.StrategyCurrent {
+				branchName := runBranchName
+				if branchName == "" {
+					branchName = git.GenerateBranchName(ep.Name)
+				}
+
+				var setupErr error
+				strategySetup, setupErr = git.SetupStrategy(git.StrategyOpts{
+					ProjectDir: projectPath,
+					Strategy:   gitStrategy,
+					BranchName: branchName,
+					EpicName:   ep.Name,
+					ForceReuse: runContinue || runResume,
+				})
+				if setupErr != nil {
+					return fmt.Errorf("git strategy setup: %w", setupErr)
+				}
+
+				projectPath = strategySetup.WorkDir
+				originalProjectPath = strategySetup.OriginalDir
+
+				// Re-resolve epicPath relative to redirected projectPath
+				epicPath = filepath.Join(projectPath, epicArg)
+
+				defer strategySetup.Cleanup()
+
+				if persistErr := git.PersistStrategy(originalProjectPath, strategySetup); persistErr != nil {
+					frlog.Log("WARNING: could not persist git strategy: %v", persistErr)
+				}
+
+				frlog.Log("  GIT: strategy=%s  branch=%s  workdir=%s", strategySetup.Strategy, strategySetup.BranchName, strategySetup.WorkDir)
+			}
+		} else if strategySetup != nil {
+			// Already set up from --continue detection
+			defer strategySetup.Cleanup()
+		}
+
+		if err := lock.AcquireIfNotDryRun(originalProjectPath, runDryRun); err != nil {
 			return err
 		}
 		var lockOnce sync.Once
 		releaseLock := func() {
-			lockOnce.Do(func() { _ = lock.Release(projectPath) })
+			lockOnce.Do(func() { _ = lock.Release(originalProjectPath) })
 		}
 		defer releaseLock()
 
@@ -780,6 +874,8 @@ func init() {
 	runCmd.Flags().BoolVar(&runContinue, "continue", false, "Use an LLM agent to analyze build state and resume from where it left off")
 	runCmd.Flags().BoolVar(&runNoSanityCheck, "no-sanity-check", false, "Skip interactive confirmations (triage classification and project summary)")
 	runCmd.Flags().BoolVar(&runFullPrepare, "full-prepare", false, "Skip triage and run full prepare pipeline when no epic exists")
+	runCmd.Flags().StringVar(&runGitStrategy, "git-strategy", "", "Git branching strategy: auto, current, branch, worktree (default: auto)")
+	runCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -1097,6 +1193,9 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		decision.Complexity = result.Complexity
 		if result.EffortLevel != "" {
 			decision.EffortLevel = result.EffortLevel
+		}
+		if result.GitStrategy != "" {
+			decision.GitStrategyOverride = result.GitStrategy
 		}
 	}
 

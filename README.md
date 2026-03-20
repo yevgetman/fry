@@ -114,6 +114,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
 - **Build archiving** -- on successful full builds, `.fry/` and root-level outputs are auto-archived to `.fry-archive/`; run `fry clean` to archive manually
+- **Git strategy** -- `--git-strategy auto|current|branch|worktree` controls build isolation. Auto mode lets triage decide: complex tasks get an isolated worktree, simpler tasks get a new branch. Use `current` for the previous behavior (work on the current branch). See [Git Strategy](docs/git-strategy.md).
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
 - **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
@@ -181,6 +182,8 @@ fry --mode writing --user-prompt "..."  # Writing mode (books, guides) — claud
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive
 fry --user-prompt "build a todo app"  # Start from just a prompt (no plan files needed)
 fry --user-prompt-file ./prompt.txt   # Load a longer prompt from a file
+fry --git-strategy worktree            # Force worktree isolation for the build
+fry --git-strategy branch --branch-name feat/api  # Build on a named branch
 fry prepare --effort medium            # Generate artifacts with medium effort sizing
 ```
 
@@ -211,6 +214,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Project Structure](docs/project-structure.md) | Directory layout, generated artifacts, file reference |
 | [Terminal Output](docs/terminal-output.md) | Status banners, verbose mode, log format |
 | [Triage](docs/triage.md) | Complexity classification with interactive confirmation — controls whether full prepare runs |
+| [Git Strategy](docs/git-strategy.md) | Branch and worktree isolation strategies for builds |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
 
 ## License

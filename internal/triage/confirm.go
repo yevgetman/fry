@@ -23,6 +23,7 @@ type ConfirmOpts struct {
 type ConfirmResult struct {
 	Complexity  Complexity
 	EffortLevel epic.EffortLevel
+	GitStrategy string // "current", "branch", "worktree", or "" (no override)
 }
 
 // ConfirmDecision displays the triage classification and asks the user to
@@ -105,9 +106,29 @@ func adjustDecision(scanner *bufio.Scanner, stdout io.Writer, d *TriageDecision)
 		effortLevel = epic.EffortHigh
 	}
 
+	// Prompt for git strategy adjustment.
+	recommended := "branch"
+	if complexity == ComplexityComplex {
+		recommended = "worktree"
+	}
+	fmt.Fprintf(stdout, "Git strategy [%s] (current/branch/worktree, or Enter to keep): ", recommended)
+	var gitStrategy string
+	if scanner.Scan() {
+		gsInput := strings.TrimSpace(strings.ToLower(scanner.Text()))
+		if gsInput != "" {
+			switch gsInput {
+			case "current", "branch", "worktree":
+				gitStrategy = gsInput
+			default:
+				fmt.Fprintf(stdout, "Invalid git strategy %q — keeping %s.\n", gsInput, recommended)
+			}
+		}
+	}
+
 	return &ConfirmResult{
 		Complexity:  complexity,
 		EffortLevel: effortLevel,
+		GitStrategy: gitStrategy,
 	}, nil
 }
 
@@ -116,9 +137,17 @@ func displayTriageSummary(w io.Writer, d *TriageDecision) {
 	fmt.Fprintln(w, "── Triage classification ───────────────────────────────────────")
 	fmt.Fprintf(w, "Difficulty:  %s\n", d.Complexity)
 	fmt.Fprintf(w, "Effort:      %s\n", d.EffortLevel.String())
+	fmt.Fprintf(w, "Git:         %s\n", gitStrategyLabel(d.Complexity))
 	fmt.Fprintf(w, "Reason:      %s\n", d.Reason)
 	fmt.Fprintf(w, "Action:      %s\n", actionDescription(d.Complexity, d.SprintCount))
 	fmt.Fprintln(w, "─────────────────────────────────────────────────────────────────")
+}
+
+func gitStrategyLabel(c Complexity) string {
+	if c == ComplexityComplex {
+		return "worktree (isolated working copy)"
+	}
+	return "branch (new branch for this build)"
 }
 
 func actionDescription(c Complexity, sprintCount int) string {

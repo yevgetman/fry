@@ -86,4 +86,10 @@ const (
 	TriagePromptFile         = ".fry/triage-prompt.md"
 	TriageDecisionFile       = ".fry/triage-decision.txt"
 	TriageInvocationPrompt   = "Read and execute ALL instructions in .fry/triage-prompt.md. You are a task complexity classifier. Write your classification to .fry/triage-decision.txt. Do NOT modify any source code."
+
+	// Git strategy constants
+	DefaultGitStrategy = "auto"
+	GitBranchPrefix    = "fry/"
+	GitWorktreeDir     = ".fry-worktrees"
+	GitStrategyFile    = ".fry/git-strategy.txt"
 )
