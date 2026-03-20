@@ -52,7 +52,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
-| `--no-sanity-check` | Skip the interactive project summary confirmation during auto-prepare |
+| `--no-sanity-check` | Skip interactive confirmations (triage classification and project summary) |
 | `--no-audit` | Disable sprint and build audits for this run |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |

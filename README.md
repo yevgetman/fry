@@ -36,6 +36,8 @@ Before doing any of the heavy lifting, Fry runs a [triage gate](docs/triage.md) 
 - **Moderate** tasks (add an endpoint with tests, build a small tool) also skip LLM-based preparation — Fry builds a programmatic 1-2 sprint epic with auto-generated verification checks. Zero LLM calls for planning.
 - **Complex** tasks (multi-subsystem features, architectural changes) get the full preparation pipeline described below.
 
+After classification, Fry shows you the triage decision (difficulty, effort, reason) and asks you to confirm, decline, or adjust before the build begins. You can override both difficulty and effort at this step. Use `--no-sanity-check` to skip the confirmation prompt.
+
 Both simple and moderate tasks respect the effort level (suggested by triage or overridden with `--effort`), which controls iteration budgets, healing, and audit depth. Max effort is reserved for complex tasks. The classifier is intentionally biased toward over-classification — it's better to over-prepare a simple task than to under-prepare a complex one. Use `--full-prepare` to bypass triage and force the full pipeline.
 
 ### Preparation

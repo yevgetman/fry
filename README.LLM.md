@@ -54,6 +54,7 @@ fry/
 │   ├── triage/
 │   │   ├── types.go             # Complexity, TriageDecision types
 │   │   ├── triage.go            # Classify (single LLM call), ParseClassification, prompt builder
+│   │   ├── confirm.go           # ConfirmDecision (interactive triage confirmation/adjustment)
 │   │   └── builder.go           # BuildSimpleEpic, BuildModerateEpic, WriteEpicFile, GenerateVerificationChecks, WriteVerificationFile
 │   ├── review/
 │   │   ├── reviewer.go          # Sprint review (CONTINUE vs DEVIATE verdict)
@@ -201,9 +202,10 @@ User Input                          Generated Artifacts
 ─────────────────────               ────────────────────
 plans/plan.md         ──┐
 plans/executive.md    ──┤  Triage Gate (1 cheap LLM call)
---user-prompt "..."   ──┤    SIMPLE   → programmatic epic (0 LLM calls)
-assets/               ──┤    MODERATE → programmatic epic + auto-verification (0 LLM calls)
-media/                ──┘    COMPLEX  → full prepare (3-4 LLM calls):
+--user-prompt "..."   ──┤    ↓ Interactive confirmation [Y/n/a] (skipped with --no-sanity-check)
+assets/               ──┤    SIMPLE   → programmatic epic (0 LLM calls)
+media/                ──┘    MODERATE → programmatic epic + auto-verification (0 LLM calls)
+                               COMPLEX  → full prepare (3-4 LLM calls):
                                (manifest only)   .fry/AGENTS.md, .fry/epic.md, .fry/verification.md
                              (--full-prepare bypasses triage → always full prepare)
 

@@ -136,7 +136,7 @@ var runCmd = &cobra.Command{
 				}
 			} else {
 				var err error
-				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, effortLevel, mode, os.Stdin, cmd.OutOrStdout())
+				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoSanityCheck || runDryRun)
 				if err != nil {
 					return err
 				}
@@ -778,7 +778,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runResume, "resume", false, "Resume failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
 	runCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
 	runCmd.Flags().BoolVar(&runContinue, "continue", false, "Use an LLM agent to analyze build state and resume from where it left off")
-	runCmd.Flags().BoolVar(&runNoSanityCheck, "no-sanity-check", false, "Skip the interactive project summary during auto-prepare")
+	runCmd.Flags().BoolVar(&runNoSanityCheck, "no-sanity-check", false, "Skip interactive confirmations (triage classification and project summary)")
 	runCmd.Flags().BoolVar(&runFullPrepare, "full-prepare", false, "Skip triage and run full prepare pipeline when no epic exists")
 }
 
@@ -1049,7 +1049,7 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 // For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it builds
 // a programmatic epic with auto-generated verification. For COMPLEX, it falls
 // through to full prepare.
-func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer) (*triage.TriageDecision, error) {
+func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool) (*triage.TriageDecision, error) {
 	// Read available inputs.
 	planPath := filepath.Join(projectPath, config.PlanFile)
 	executivePath := filepath.Join(projectPath, config.ExecutiveFile)
@@ -1083,6 +1083,22 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		Mode:        mode,
 		Verbose:     frlog.Verbose,
 	})
+
+	// Interactive confirmation (unless skipped).
+	if !skipConfirm {
+		result, confirmErr := triage.ConfirmDecision(triage.ConfirmOpts{
+			Decision: decision,
+			Stdin:    stdin,
+			Stdout:   stdout,
+		})
+		if confirmErr != nil {
+			return nil, confirmErr
+		}
+		decision.Complexity = result.Complexity
+		if result.EffortLevel != "" {
+			decision.EffortLevel = result.EffortLevel
+		}
+	}
 
 	// Resolve effort: CLI flag > triage suggestion > default per difficulty.
 	resolvedEffort := effortLevel

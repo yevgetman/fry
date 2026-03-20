@@ -10,7 +10,8 @@ When you run `fry run` and no `.fry/epic.md` exists:
 
 1. **Collect inputs** — reads `plans/plan.md`, `plans/executive.md`, and `--user-prompt` (same prerequisites as prepare)
 2. **Classify** — sends a single LLM call to a cheap model (haiku/gpt-5.4-mini) with the task description
-3. **Route** — based on the classification:
+3. **Confirm** — displays the classification and asks the user to accept, decline, or adjust (see [Interactive Confirmation](#interactive-confirmation)). Skipped with `--no-sanity-check` or `--dry-run`.
+4. **Route** — based on the (possibly adjusted) classification:
 
 | Classification | Execution path | LLM calls | Output |
 |---|---|---|---|
@@ -54,6 +55,35 @@ Simple and moderate tasks are **capped at high** — `--effort max` is automatic
 ### Complex — unchanged, all effort levels including max
 
 See [Effort Levels](effort-levels.md) for full complex task behavior.
+
+## Interactive Confirmation
+
+After classification, Fry displays the triage decision and asks the user to confirm before proceeding:
+
+```
+── Triage classification ───────────────────────────────────────
+Difficulty:  MODERATE
+Effort:      medium
+Reason:      REST endpoint with tests across 6 files.
+Action:      Build 2-sprint epic programmatically (no LLM prepare)
+─────────────────────────────────────────────────────────────────
+Accept this classification? [Y/n/a] (a = adjust)
+```
+
+- **Y / Enter** — accept the classification and continue
+- **n** — decline and abort the build
+- **a** — adjust difficulty and/or effort before continuing
+
+When adjusting, you can change either or both values:
+
+```
+Difficulty [MODERATE] (simple/moderate/complex, or Enter to keep):
+Effort [medium] (low/medium/high, or Enter to keep):
+```
+
+Changing difficulty to COMPLEX causes the full prepare pipeline to run. Effort `max` is only allowed when difficulty is COMPLEX — selecting it on SIMPLE or MODERATE triggers a warning and keeps the previous value.
+
+The confirmation is skipped when `--no-sanity-check` or `--dry-run` is passed.
 
 ## Bias Toward Complex
 
@@ -123,6 +153,6 @@ The classifier adjusts its criteria based on `--mode`:
 
 - `--effort`: takes precedence over triage suggestion. Capped to `high` for simple/moderate tasks (max reserved for complex).
 - `--continue` / `--resume`: require an existing epic — triage never runs.
-- `--dry-run`: triage runs, classification is logged, then dry-run proceeds.
+- `--dry-run`: skips the interactive triage confirmation. Triage runs, classification is logged, then dry-run proceeds.
 - `--no-audit`: disables the triage-path build audit too.
-- `--no-sanity-check`: passed through to full prepare on the complex path.
+- `--no-sanity-check`: skips the interactive triage confirmation and the prepare sanity check on the complex path.
