@@ -99,6 +99,18 @@ Auto-detection watches for common over-engineering signals:
 - Adding schema/migration sprints for projects with no database
 - Creating separate "wiring" sprints for simple, flat architectures
 
+## Triage Effort Integration
+
+When the [triage gate](triage.md) classifies a task, it also suggests an effort level. The effort resolution order is:
+
+1. `--effort` CLI flag (if set by the user)
+2. Triage classifier suggestion
+3. Default per difficulty: `low` for simple, `medium` for moderate
+
+**Simple and moderate tasks are capped at `high`** — if `--effort max` is passed or the triage classifier suggests max, it is automatically reduced to `high` with a log warning. Max effort is reserved for complex tasks that go through the full prepare pipeline.
+
+This means effort level now affects behavior within each difficulty grade. For example, a simple task at medium effort gets sprint auditing (1 audit+fix pass), while a simple task at low effort skips auditing entirely. See [Triage — Difficulty × Effort Matrices](triage.md#difficulty--effort-matrices) for the full matrix.
+
 ## Model Selection
 
 Effort level directly affects which AI model is used for each session type. Higher effort levels use more capable (and more expensive) models. See [AI Engines — Automatic Model Selection](engines.md#automatic-model-selection-tier-system) for the full session × effort rules matrix.

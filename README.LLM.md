@@ -54,7 +54,7 @@ fry/
 │   ├── triage/
 │   │   ├── types.go             # Complexity, TriageDecision types
 │   │   ├── triage.go            # Classify (single LLM call), ParseClassification, prompt builder
-│   │   └── builder.go           # BuildSimpleEpic, WriteEpicFile, RunAbbreviatedPrepare
+│   │   └── builder.go           # BuildSimpleEpic, BuildModerateEpic, WriteEpicFile, GenerateVerificationChecks, WriteVerificationFile
 │   ├── review/
 │   │   ├── reviewer.go          # Sprint review (CONTINUE vs DEVIATE verdict)
 │   │   ├── replanner.go         # Dynamic epic modification
@@ -123,7 +123,7 @@ fry/
 | `continue-decision.txt` | LLM agent's resume decision (verdict, sprint, reason) |
 | `continue-report.md` | Programmatic build state report (input to analysis) |
 | `triage-prompt.md` | Classifier prompt for triage gate |
-| `triage-decision.txt` | Triage classifier output (complexity, sprints, reason) |
+| `triage-decision.txt` | Triage classifier output (complexity, effort, sprints, reason) |
 | `.fry.lock` | Concurrency lock |
 
 ---
@@ -202,7 +202,7 @@ User Input                          Generated Artifacts
 plans/plan.md         ──┐
 plans/executive.md    ──┤  Triage Gate (1 cheap LLM call)
 --user-prompt "..."   ──┤    SIMPLE   → programmatic epic (0 LLM calls)
-assets/               ──┤    MODERATE → abbreviated prepare (1 LLM call) → .fry/epic.md
+assets/               ──┤    MODERATE → programmatic epic + auto-verification (0 LLM calls)
 media/                ──┘    COMPLEX  → full prepare (3-4 LLM calls):
                                (manifest only)   .fry/AGENTS.md, .fry/epic.md, .fry/verification.md
                              (--full-prepare bypasses triage → always full prepare)
@@ -320,7 +320,7 @@ Key flags:
 | `ArchiveDir` | `.fry-archive` | Directory for archived builds |
 | `ArchivePrefix` | `.fry--build--` | Prefix for archive folder names |
 | `TriagePromptFile` | `.fry/triage-prompt.md` | Classifier prompt for triage gate |
-| `TriageDecisionFile` | `.fry/triage-decision.txt` | Classifier output (complexity, sprints, reason) |
+| `TriageDecisionFile` | `.fry/triage-decision.txt` | Classifier output (complexity, effort, sprints, reason) |
 
 ---
 

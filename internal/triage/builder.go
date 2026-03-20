@@ -1,20 +1,14 @@
 package triage
 
 import (
-	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/yevgetman/fry/internal/config"
-	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
-	frylog "github.com/yevgetman/fry/internal/log"
-	"github.com/yevgetman/fry/internal/prepare"
-	"github.com/yevgetman/fry/internal/textutil"
-	"github.com/yevgetman/fry/templates"
+	"github.com/yevgetman/fry/internal/verify"
 )
 
 // SimpleEpicOpts configures the programmatic epic builder for simple tasks.
@@ -24,11 +18,19 @@ type SimpleEpicOpts struct {
 	PlanContent string
 	ExecContent string
 	EngineName  string
-	Mode        prepare.Mode
+	EffortLevel epic.EffortLevel
 }
 
 // BuildSimpleEpic constructs a minimal Epic struct for simple tasks.
 // No LLM call — purely programmatic.
+//
+// Effort matrix for simple tasks:
+//
+//	Low:    standard model, 12 iter, no healing, no sprint audit, no build audit
+//	Medium: standard model, 20 iter, no healing, 1 audit+fix pass, single build audit
+//	High:   frontier model, 25 iter, no healing, 1 audit+fix pass, single build audit
+//
+// Max effort is capped to high for simple tasks.
 func BuildSimpleEpic(opts SimpleEpicOpts) (*epic.Epic, error) {
 	prompt := opts.PlanContent
 	if prompt == "" {
@@ -41,25 +43,224 @@ func BuildSimpleEpic(opts SimpleEpicOpts) (*epic.Epic, error) {
 		return nil, fmt.Errorf("build simple epic: no content available for sprint prompt")
 	}
 
+	effort := opts.EffortLevel
+	if effort == "" || effort == epic.EffortMax {
+		effort = epic.EffortLow
+	}
+
+	auditAfterSprint := effort == epic.EffortMedium || effort == epic.EffortHigh
+
 	ep := &epic.Epic{
-		Name:                 "Simple Task",
-		Engine:               opts.EngineName,
-		EffortLevel:          epic.EffortLow,
-		MaxHealAttempts:      0,
-		MaxFailPercent:       config.DefaultMaxFailPercent,
-		VerificationFile:     config.DefaultVerificationFile,
-		AuditAfterSprint:     false,
-		ReviewBetweenSprints: false,
-		TotalSprints:         1,
+		Name:                  "Simple Task",
+		Engine:                opts.EngineName,
+		EffortLevel:           effort,
+		MaxHealAttempts:       0,
+		MaxFailPercent:        config.DefaultMaxFailPercent,
+		VerificationFile:      config.DefaultVerificationFile,
+		AuditAfterSprint:      auditAfterSprint,
+		MaxAuditIterations:    1,
+		MaxAuditIterationsSet: auditAfterSprint,
+		ReviewBetweenSprints:  false,
+		TotalSprints:          1,
 		Sprints: []epic.Sprint{{
 			Number:        1,
 			Name:          "Execute task",
-			MaxIterations: epic.EffortLow.DefaultMaxIterations(),
+			MaxIterations: effort.DefaultMaxIterations(),
 			Promise:       "SIMPLE_TASK_COMPLETE",
 			Prompt:        prompt,
 		}},
 	}
 	return ep, nil
+}
+
+// ModerateEpicOpts configures the programmatic epic builder for moderate tasks.
+type ModerateEpicOpts struct {
+	ProjectDir  string
+	UserPrompt  string
+	PlanContent string
+	ExecContent string
+	EngineName  string
+	EffortLevel epic.EffortLevel
+	SprintCount int // 1 or 2; 0 defaults to 1
+}
+
+// BuildModerateEpic constructs an Epic struct for moderate tasks.
+// No LLM call — purely programmatic, like BuildSimpleEpic.
+//
+// Effort matrix for moderate tasks:
+//
+//	Low:    standard model, 12 iter, no healing, no sprint audit, single build audit, 1 sprint
+//	Medium: standard model, 20 iter, 3 heal attempts, default audit (3 outer, 3 inner), single build audit, 1-2 sprints
+//	High:   frontier model, 25 iter, 10 heal + progress detection, full audit (12 outer, 7 inner), full build audit, 1-2 sprints
+//
+// Max effort is capped to high for moderate tasks.
+func BuildModerateEpic(opts ModerateEpicOpts) (*epic.Epic, error) {
+	prompt := opts.PlanContent
+	if prompt == "" {
+		prompt = opts.ExecContent
+	}
+	if prompt == "" {
+		prompt = opts.UserPrompt
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return nil, fmt.Errorf("build moderate epic: no content available for sprint prompt")
+	}
+
+	effort := opts.EffortLevel
+	if effort == "" {
+		effort = epic.EffortMedium
+	}
+	if effort == epic.EffortMax {
+		effort = epic.EffortHigh
+	}
+
+	sprintCount := opts.SprintCount
+	if sprintCount <= 0 {
+		sprintCount = 1
+	}
+	if sprintCount > 2 {
+		sprintCount = 2
+	}
+	// Low effort forces 1 sprint.
+	if effort == epic.EffortLow {
+		sprintCount = 1
+	}
+
+	var healAttempts int
+	var auditAfterSprint bool
+	switch effort {
+	case epic.EffortLow:
+		healAttempts = 0
+		auditAfterSprint = false
+	case epic.EffortMedium:
+		healAttempts = config.DefaultMaxHealAttempts
+		auditAfterSprint = true
+	case epic.EffortHigh:
+		healAttempts = config.HealAttemptsHigh
+		auditAfterSprint = true
+	}
+
+	ep := &epic.Epic{
+		Name:                 "Moderate Task",
+		Engine:               opts.EngineName,
+		EffortLevel:          effort,
+		MaxHealAttempts:      healAttempts,
+		MaxFailPercent:       config.DefaultMaxFailPercent,
+		VerificationFile:     config.DefaultVerificationFile,
+		AuditAfterSprint:     auditAfterSprint,
+		ReviewBetweenSprints: false,
+		TotalSprints:         sprintCount,
+	}
+
+	if sprintCount == 1 {
+		ep.Sprints = []epic.Sprint{{
+			Number:        1,
+			Name:          "Execute task",
+			MaxIterations: effort.DefaultMaxIterations(),
+			Promise:       "MODERATE_TASK_COMPLETE",
+			Prompt:        prompt,
+		}}
+	} else {
+		ep.Sprints = []epic.Sprint{
+			{
+				Number:        1,
+				Name:          "Implement core changes",
+				MaxIterations: effort.DefaultMaxIterations(),
+				Promise:       "CORE_CHANGES_COMPLETE",
+				Prompt:        prompt,
+			},
+			{
+				Number:        2,
+				Name:          "Polish, test, and finalize",
+				MaxIterations: effort.DefaultMaxIterations(),
+				Promise:       "MODERATE_TASK_COMPLETE",
+				Prompt:        "Continue the work from sprint 1. Polish the implementation, ensure all tests pass, handle edge cases, and finalize the deliverable.",
+			},
+		}
+	}
+
+	return ep, nil
+}
+
+// GenerateVerificationChecks produces heuristic verification checks based on
+// recognized build systems in the project directory. No LLM call.
+// Checks are duplicated for each sprint number up to sprintCount.
+func GenerateVerificationChecks(projectDir string, sprintCount int) []verify.Check {
+	type buildSystem struct {
+		marker  string
+		command string
+	}
+
+	systems := []buildSystem{
+		{"go.mod", "go build ./... && go test ./..."},
+		{"package.json", "npm run build --if-present && npm test --if-present"},
+		{"Cargo.toml", "cargo build && cargo test"},
+		{"Makefile", "make build 2>/dev/null || make 2>/dev/null || true"},
+	}
+
+	// pyproject.toml and setup.py share the same command.
+	pyFiles := []string{"pyproject.toml", "setup.py"}
+
+	var commands []string
+
+	for _, sys := range systems {
+		if _, err := os.Stat(filepath.Join(projectDir, sys.marker)); err == nil {
+			commands = append(commands, sys.command)
+		}
+	}
+	for _, pf := range pyFiles {
+		if _, err := os.Stat(filepath.Join(projectDir, pf)); err == nil {
+			commands = append(commands, "python -m pytest --tb=short 2>/dev/null || true")
+			break
+		}
+	}
+
+	if len(commands) == 0 {
+		return nil
+	}
+
+	var checks []verify.Check
+	for sprint := 1; sprint <= sprintCount; sprint++ {
+		for _, cmd := range commands {
+			checks = append(checks, verify.Check{
+				Sprint:  sprint,
+				Type:    verify.CheckCmd,
+				Command: cmd,
+			})
+		}
+	}
+	return checks
+}
+
+// WriteVerificationFile serializes verification checks to the @sprint/@check_cmd
+// format readable by verify.ParseVerification. Skips file creation if checks is empty.
+func WriteVerificationFile(path string, checks []verify.Check) error {
+	if len(checks) == 0 {
+		return nil
+	}
+
+	var b strings.Builder
+	b.WriteString("# Auto-generated verification checks\n\n")
+
+	currentSprint := 0
+	for _, c := range checks {
+		if c.Sprint != currentSprint {
+			if currentSprint > 0 {
+				b.WriteString("\n")
+			}
+			fmt.Fprintf(&b, "@sprint %d\n", c.Sprint)
+			currentSprint = c.Sprint
+		}
+		fmt.Fprintf(&b, "@check_cmd %s\n", c.Command)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("write verification file: create dir: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write verification file: %w", err)
+	}
+	return nil
 }
 
 // WriteEpicFile serializes an Epic struct into the @epic/@sprint file format
@@ -81,6 +282,9 @@ func WriteEpicFile(path string, ep *epic.Epic) error {
 	}
 	if ep.MaxFailPercent > 0 && ep.MaxFailPercent != config.DefaultMaxFailPercent {
 		fmt.Fprintf(&b, "@max_fail_percent %d\n", ep.MaxFailPercent)
+	}
+	if ep.AuditAfterSprint && ep.MaxAuditIterationsSet && ep.MaxAuditIterations > 0 {
+		fmt.Fprintf(&b, "@max_audit_iterations %d\n", ep.MaxAuditIterations)
 	}
 	if !ep.AuditAfterSprint {
 		b.WriteString("@no_audit\n")
@@ -107,129 +311,4 @@ func WriteEpicFile(path string, ep *epic.Epic) error {
 		return fmt.Errorf("write epic file: %w", err)
 	}
 	return nil
-}
-
-// AbbreviatedPrepareOpts configures the single-LLM-call prepare for moderate tasks.
-type AbbreviatedPrepareOpts struct {
-	ProjectDir   string
-	EpicFilename string
-	Engine       engine.Engine
-	Model        string
-	UserPrompt   string
-	PlanContent  string
-	ExecContent  string
-	EffortLevel  epic.EffortLevel
-	Mode         prepare.Mode
-}
-
-// RunAbbreviatedPrepare runs a single LLM call to generate a 1-2 sprint epic.
-// Skips AGENTS.md and verification.md generation.
-func RunAbbreviatedPrepare(ctx context.Context, opts AbbreviatedPrepareOpts) error {
-	epicFilename := opts.EpicFilename
-	if strings.TrimSpace(epicFilename) == "" {
-		epicFilename = "epic.md"
-	}
-	if !strings.Contains(epicFilename, string(filepath.Separator)) {
-		epicFilename = filepath.Join(config.FryDir, epicFilename)
-	}
-	epicPath := filepath.Join(opts.ProjectDir, epicFilename)
-
-	// Load the GENERATE_EPIC.md template for format reference.
-	generateEpicContent, err := fs.ReadFile(templates.TemplateFS, "GENERATE_EPIC.md")
-	if err != nil {
-		return fmt.Errorf("abbreviated prepare: read GENERATE_EPIC template: %w", err)
-	}
-	epicExampleContent, err := fs.ReadFile(templates.TemplateFS, "epic-example.md")
-	if err != nil {
-		return fmt.Errorf("abbreviated prepare: read epic-example template: %w", err)
-	}
-
-	prompt := buildAbbreviatedPrompt(opts, string(generateEpicContent), string(epicExampleContent))
-
-	frylog.Log("▶ TRIAGE  running abbreviated prepare (1 LLM call)...  engine=%s  model=%s", opts.Engine.Name(), opts.Model)
-
-	beforeMod := textutil.FileModTime(epicPath)
-	output, _, runErr := opts.Engine.Run(ctx, prompt, engine.RunOpts{
-		WorkDir: opts.ProjectDir,
-		Model:   opts.Model,
-	})
-	if runErr != nil && strings.TrimSpace(output) == "" {
-		return fmt.Errorf("abbreviated prepare: engine error: %w", runErr)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(epicPath), 0o755); err != nil {
-		return fmt.Errorf("abbreviated prepare: create dir: %w", err)
-	}
-	if err := textutil.ResolveArtifact(epicPath, beforeMod, output); err != nil {
-		return fmt.Errorf("abbreviated prepare: write epic: %w", err)
-	}
-
-	// Validate the generated epic.
-	ep, parseErr := epic.ParseEpic(epicPath)
-	if parseErr != nil {
-		return fmt.Errorf("abbreviated prepare: generated epic is invalid: %w", parseErr)
-	}
-	if valErr := epic.ValidateEpic(ep); valErr != nil {
-		return fmt.Errorf("abbreviated prepare: generated epic failed validation: %w", valErr)
-	}
-
-	frylog.Log("  Generated %s (%d sprint(s)).", epicFilename, len(ep.Sprints))
-	return nil
-}
-
-func buildAbbreviatedPrompt(opts AbbreviatedPrepareOpts, generateEpicTemplate, epicExample string) string {
-	var b strings.Builder
-
-	switch opts.Mode {
-	case prepare.ModePlanning:
-		b.WriteString("You are a strategic planner generating a concise epic.md for a MODERATE-complexity planning task.\n\n")
-	case prepare.ModeWriting:
-		b.WriteString("You are a senior content strategist generating a concise epic.md for a MODERATE-complexity writing task.\n\n")
-	default:
-		b.WriteString("You are a senior software architect generating a concise epic.md for a MODERATE-complexity task.\n\n")
-	}
-	b.WriteString("## Constraints\n\n")
-	b.WriteString("- Generate AT MOST 2 sprints. Prefer 1 sprint if the task can reasonably fit.\n")
-	b.WriteString("- Each sprint prompt must be self-contained and actionable.\n")
-	b.WriteString("- Use @effort medium unless the user specifies otherwise.\n")
-	b.WriteString("- Follow the epic format EXACTLY as shown in the reference below.\n\n")
-
-	if opts.EffortLevel != "" {
-		fmt.Fprintf(&b, "- Use @effort %s as specified by the user.\n\n", opts.EffortLevel)
-	}
-
-	b.WriteString("## Epic Format Reference\n\n")
-	b.WriteString("```\n")
-	b.WriteString(epicExample)
-	b.WriteString("\n```\n\n")
-
-	b.WriteString("## Generation Instructions (from GENERATE_EPIC.md)\n\n")
-	b.WriteString(generateEpicTemplate)
-	b.WriteString("\n\n")
-
-	b.WriteString("## Project Inputs\n\n")
-
-	if strings.TrimSpace(opts.PlanContent) != "" {
-		b.WriteString("### Build Plan (plans/plan.md)\n\n")
-		b.WriteString(opts.PlanContent)
-		b.WriteString("\n\n")
-	}
-	if strings.TrimSpace(opts.ExecContent) != "" {
-		b.WriteString("### Executive Context (plans/executive.md)\n\n")
-		b.WriteString(opts.ExecContent)
-		b.WriteString("\n\n")
-	}
-	if strings.TrimSpace(opts.UserPrompt) != "" {
-		b.WriteString("### User Directive\n\n")
-		b.WriteString(opts.UserPrompt)
-		b.WriteString("\n\n")
-	}
-
-	b.WriteString("## Output\n\n")
-	b.WriteString("Write the epic.md file to ")
-	b.WriteString(config.FryDir)
-	b.WriteString("/epic.md. The file must be a valid epic that can be parsed by fry's epic parser.\n")
-	b.WriteString("Remember: AT MOST 2 sprints. Keep it focused and actionable.\n")
-
-	return b.String()
 }

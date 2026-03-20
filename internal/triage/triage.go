@@ -12,6 +12,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
+	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/prepare"
 )
@@ -32,6 +33,7 @@ var (
 	complexityRe   = regexp.MustCompile(`<complexity>(SIMPLE|MODERATE|COMPLEX)</complexity>`)
 	sprintsRe      = regexp.MustCompile(`<sprints>(\d+)</sprints>`)
 	triageReasonRe = regexp.MustCompile(`(?s)<reason>(.*?)</reason>`)
+	effortRe       = regexp.MustCompile(`<effort>(low|medium|high)</effort>`)
 )
 
 // Classify runs a single cheap LLM call to classify task complexity.
@@ -102,7 +104,11 @@ func Classify(ctx context.Context, opts TriageOpts) *TriageDecision {
 
 	decision := ParseClassification(output)
 
-	frylog.Log("▶ TRIAGE  result: %s (sprints: %d) — %s", decision.Complexity, decision.SprintCount, truncateReason(decision.Reason, 80))
+	effortStr := "auto"
+	if decision.EffortLevel != "" {
+		effortStr = string(decision.EffortLevel)
+	}
+	frylog.Log("▶ TRIAGE  result: %s  effort=%s  sprints=%d — %s", decision.Complexity, effortStr, decision.SprintCount, truncateReason(decision.Reason, 80))
 
 	return decision
 }
@@ -131,6 +137,12 @@ func ParseClassification(output string) *TriageDecision {
 	if m := sprintsRe.FindStringSubmatch(output); len(m) > 1 {
 		if n, err := strconv.Atoi(m[1]); err == nil && n >= 0 {
 			decision.SprintCount = n
+		}
+	}
+
+	if m := effortRe.FindStringSubmatch(output); len(m) > 1 {
+		if lvl, err := epic.ParseEffortLevel(m[1]); err == nil {
+			decision.EffortLevel = lvl
 		}
 	}
 
@@ -185,6 +197,18 @@ func buildTriagePrompt(opts TriageOpts) string {
 	b.WriteString("- Refactoring that spans multiple subsystems\n")
 	b.WriteString("- The task mentions \"architecture\" or \"design\"\n\n")
 
+	b.WriteString("## Effort Level Guidelines\n\n")
+	b.WriteString("In addition to complexity, suggest an effort level for the task.\n")
+	b.WriteString("Valid effort levels for SIMPLE and MODERATE tasks are: low, medium, high.\n")
+	b.WriteString("(\"max\" is reserved for COMPLEX tasks only.)\n\n")
+	b.WriteString("| Effort | When to use |\n")
+	b.WriteString("|--------|-------------|\n")
+	b.WriteString("| low    | Minimal scope: a typo fix, config tweak, single-file change with no tests needed. |\n")
+	b.WriteString("| medium | Standard scope: multi-file change, tests expected, moderate integration. |\n")
+	b.WriteString("| high   | Demanding scope: many files, thorough testing, edge cases matter, quality is critical. |\n\n")
+	b.WriteString("When in doubt, prefer medium. Only suggest low for truly trivial tasks. Suggest high when\n")
+	b.WriteString("quality and thoroughness are explicitly important or the task is near the boundary of COMPLEX.\n\n")
+
 	b.WriteString("## Project Inputs\n\n")
 
 	hasInput := false
@@ -214,6 +238,7 @@ func buildTriagePrompt(opts TriageOpts) string {
 	b.WriteString("Write your classification to .fry/triage-decision.txt in EXACTLY this format — no other text:\n\n")
 	b.WriteString("```\n")
 	b.WriteString("<complexity>SIMPLE|MODERATE|COMPLEX</complexity>\n")
+	b.WriteString("<effort>low|medium|high</effort>\n")
 	b.WriteString("<sprints>N</sprints>\n")
 	b.WriteString("<reason>1-2 sentence justification</reason>\n")
 	b.WriteString("```\n")

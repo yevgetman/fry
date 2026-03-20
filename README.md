@@ -30,13 +30,13 @@ In short, Fry will do its best to use whatever info you provide to generate a `p
 
 ### Triage
 
-Before doing any of the heavy lifting, Fry runs a [triage gate](docs/triage.md) — a single cheap LLM call that classifies the task as **simple**, **moderate**, or **complex**. This determines how much preparation is needed:
+Before doing any of the heavy lifting, Fry runs a [triage gate](docs/triage.md) — a single cheap LLM call that classifies the task as **simple**, **moderate**, or **complex** and suggests an effort level. This determines how much preparation is needed:
 
 - **Simple** tasks (fix a typo, add a config flag) skip preparation entirely — Fry builds a 1-sprint epic programmatically and gets straight to work. Zero LLM calls wasted on planning.
-- **Moderate** tasks (add an endpoint with tests, build a small tool) get an abbreviated prepare — one LLM call generates a focused 1-2 sprint epic.
+- **Moderate** tasks (add an endpoint with tests, build a small tool) also skip LLM-based preparation — Fry builds a programmatic 1-2 sprint epic with auto-generated verification checks. Zero LLM calls for planning.
 - **Complex** tasks (multi-subsystem features, architectural changes) get the full preparation pipeline described below.
 
-The classifier is intentionally biased toward over-classification — it's better to over-prepare a simple task than to under-prepare a complex one. Use `--full-prepare` to bypass triage and force the full pipeline.
+Both simple and moderate tasks respect the effort level (suggested by triage or overridden with `--effort`), which controls iteration budgets, healing, and audit depth. Max effort is reserved for complex tasks. The classifier is intentionally biased toward over-classification — it's better to over-prepare a simple task than to under-prepare a complex one. Use `--full-prepare` to bypass triage and force the full pipeline.
 
 ### Preparation
 
@@ -72,9 +72,9 @@ media/                 Optional binary assets (images, PDFs, fonts) referenced i
 assets/                Optional text documents (specs, schemas) read during plan generation
         |
         v
-  fry run               Triage gate: cheap LLM classifies task complexity
-                           SIMPLE   → builds epic directly (0 prep calls)
-                           MODERATE → abbreviated prepare (1 LLM call)
+  fry run               Triage gate: cheap LLM classifies complexity + effort
+                           SIMPLE   → programmatic epic (0 prep calls)
+                           MODERATE → programmatic epic + auto-verification (0 prep calls)
                            COMPLEX  → full prepare (below)
                          (--full-prepare skips triage)
         |
@@ -97,7 +97,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 
 **Key mechanisms:**
 
-- **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex`. Simple tasks skip prepare entirely (zero LLM calls for planning); moderate tasks get an abbreviated single-call prepare; complex tasks get the full pipeline. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
+- **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, healing, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
 - **Sanity check** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (skippable with `--no-sanity-check`)
 - **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds

@@ -692,17 +692,15 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		// Run a single-pass build audit for simple-triaged tasks.
-		// Simple tasks skip sprint audits (AuditAfterSprint: false, EffortLow) but
-		// still get one final holistic check.
-		if exitErr == nil && buildAuditResult == nil && !runNoAudit &&
-			triageDecision != nil && triageDecision.Complexity == triage.ComplexitySimple {
+		// Run a single-pass build audit for triaged tasks that skipped the main
+		// build audit gate (e.g. simple+low, moderate+low where AuditAfterSprint=false).
+		if exitErr == nil && buildAuditResult == nil && !runNoAudit && triageDecision != nil {
 			auditEngine, auditEngErr := engine.NewEngine(engineName)
 			if auditEngErr != nil {
-				frlog.Log("WARNING: could not create engine for simple build audit: %v", auditEngErr)
+				frlog.Log("WARNING: could not create engine for triage build audit: %v", auditEngErr)
 			} else {
 				buildAuditModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionBuildAudit)
-				frlog.Log("▶ BUILD AUDIT  single-pass audit for simple task...  engine=%s  model=%s", engineName, buildAuditModel)
+				frlog.Log("▶ BUILD AUDIT  single-pass audit for triaged task...  engine=%s  model=%s", engineName, buildAuditModel)
 				result, auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
 					ProjectDir: projectPath,
 					Epic:       ep,
@@ -713,7 +711,7 @@ var runCmd = &cobra.Command{
 					Mode:       string(mode),
 				})
 				if auditErr != nil {
-					frlog.Log("WARNING: simple build audit failed: %v", auditErr)
+					frlog.Log("WARNING: triage build audit failed: %v", auditErr)
 				} else {
 					buildAuditResult = result
 					if result.Passed {
@@ -1048,8 +1046,9 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 }
 
 // runTriageGate classifies task complexity and takes the appropriate execution path.
-// For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it runs an
-// abbreviated single-LLM-call prepare. For COMPLEX, it falls through to full prepare.
+// For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it builds
+// a programmatic epic with auto-generated verification. For COMPLEX, it falls
+// through to full prepare.
 func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer) (*triage.TriageDecision, error) {
 	// Read available inputs.
 	planPath := filepath.Join(projectPath, config.PlanFile)
@@ -1085,15 +1084,30 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		Verbose:     frlog.Verbose,
 	})
 
+	// Resolve effort: CLI flag > triage suggestion > default per difficulty.
+	resolvedEffort := effortLevel
+	if resolvedEffort == "" {
+		resolvedEffort = decision.EffortLevel
+	}
+
 	switch decision.Complexity {
 	case triage.ComplexitySimple:
+		// Cap max → high for simple tasks.
+		if resolvedEffort == epic.EffortMax {
+			frlog.Log("  TRIAGE: --effort max capped to high for simple task")
+			resolvedEffort = epic.EffortHigh
+		}
+		if resolvedEffort == "" {
+			resolvedEffort = epic.EffortLow
+		}
+
 		ep, buildErr := triage.BuildSimpleEpic(triage.SimpleEpicOpts{
 			ProjectDir:  projectPath,
 			UserPrompt:  userPrompt,
 			PlanContent: planContent,
 			ExecContent: execContent,
 			EngineName:  engName,
-			Mode:        mode,
+			EffortLevel: resolvedEffort,
 		})
 		if buildErr != nil {
 			return nil, fmt.Errorf("triage simple path: %w", buildErr)
@@ -1101,23 +1115,42 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		if err := triage.WriteEpicFile(epicPath, ep); err != nil {
 			return nil, fmt.Errorf("triage simple path: %w", err)
 		}
-		frlog.Log("  TRIAGE: built 1-sprint epic programmatically (no LLM prepare)")
+		frlog.Log("  TRIAGE: built 1-sprint epic programmatically (no LLM prepare)  effort=%s", resolvedEffort)
 
 	case triage.ComplexityModerate:
-		prepModel := engine.ResolveModelForSession(engName, string(effortLevel), engine.SessionPrepare)
-		if err := triage.RunAbbreviatedPrepare(ctx, triage.AbbreviatedPrepareOpts{
-			ProjectDir:   projectPath,
-			EpicFilename: filepath.Base(epicPath),
-			Engine:       eng,
-			Model:        prepModel,
-			UserPrompt:   userPrompt,
-			PlanContent:  planContent,
-			ExecContent:  execContent,
-			EffortLevel:  effortLevel,
-			Mode:         mode,
-		}); err != nil {
+		// Cap max → high for moderate tasks.
+		if resolvedEffort == epic.EffortMax {
+			frlog.Log("  TRIAGE: --effort max capped to high for moderate task")
+			resolvedEffort = epic.EffortHigh
+		}
+		if resolvedEffort == "" {
+			resolvedEffort = epic.EffortMedium
+		}
+
+		ep, buildErr := triage.BuildModerateEpic(triage.ModerateEpicOpts{
+			ProjectDir:  projectPath,
+			UserPrompt:  userPrompt,
+			PlanContent: planContent,
+			ExecContent: execContent,
+			EngineName:  engName,
+			EffortLevel: resolvedEffort,
+			SprintCount: decision.SprintCount,
+		})
+		if buildErr != nil {
+			return nil, fmt.Errorf("triage moderate path: %w", buildErr)
+		}
+		if err := triage.WriteEpicFile(epicPath, ep); err != nil {
 			return nil, fmt.Errorf("triage moderate path: %w", err)
 		}
+
+		// Generate heuristic verification checks.
+		verifyPath := filepath.Join(projectPath, config.DefaultVerificationFile)
+		checks := triage.GenerateVerificationChecks(projectPath, ep.TotalSprints)
+		if err := triage.WriteVerificationFile(verifyPath, checks); err != nil {
+			frlog.Log("WARNING: triage moderate path: could not write verification file: %v", err)
+		}
+
+		frlog.Log("  TRIAGE: built %d-sprint moderate epic programmatically (no LLM prepare)  effort=%s", ep.TotalSprints, resolvedEffort)
 
 	case triage.ComplexityComplex:
 		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
