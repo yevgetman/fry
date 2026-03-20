@@ -2,6 +2,7 @@ package prepare
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -10,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
-	frylog "github.com/yevgetman/fry/internal/log"
 )
 
 type fakeEngine struct {
@@ -124,20 +124,15 @@ func TestPreparePrerequisites(t *testing.T) {
 }
 
 func TestBootstrapExecutive_UserApproves(t *testing.T) {
-	// Not parallel: mutates package-level newEngine variable
+	t.Parallel()
+
 	dir := t.TempDir()
 	executivePath := dir + "/plans/executive.md"
 
 	stdin := strings.NewReader("y\n")
 	var stdout strings.Builder
 
-	oldNewEngine := newEngine
-	newEngine = func(name string) (engine.Engine, error) {
-		return &fakeEngine{output: "# My Project\n\nGenerated executive content."}, nil
-	}
-	defer func() { newEngine = oldNewEngine }()
-
-	eng, _ := newEngine("fake")
+	eng := &fakeEngine{output: "# My Project\n\nGenerated executive content."}
 	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
 		ProjectDir: dir,
 		UserPrompt: "build a todo app",
@@ -274,20 +269,15 @@ func TestEffortSizingGuidanceWriting_Auto(t *testing.T) {
 }
 
 func TestBootstrapExecutive_UserDeclines(t *testing.T) {
-	// Not parallel: mutates package-level newEngine variable
+	t.Parallel()
+
 	dir := t.TempDir()
 	executivePath := dir + "/plans/executive.md"
 
 	stdin := strings.NewReader("n\n")
 	var stdout strings.Builder
 
-	oldNewEngine := newEngine
-	newEngine = func(name string) (engine.Engine, error) {
-		return &fakeEngine{output: "# My Project\n\nGenerated content."}, nil
-	}
-	defer func() { newEngine = oldNewEngine }()
-
-	eng, _ := newEngine("fake")
+	eng := &fakeEngine{output: "# My Project\n\nGenerated content."}
 	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
 		ProjectDir: dir,
 		UserPrompt: "build a todo app",
@@ -300,68 +290,66 @@ func TestBootstrapExecutive_UserDeclines(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr), "executive.md should not be created when user declines")
 }
 
-func TestBootstrapExecutive_LogsAssetsAndMedia(t *testing.T) {
-	// Not parallel: mutates package-level newEngine variable
-	dir := t.TempDir()
-	executivePath := dir + "/plans/executive.md"
-
-	stdin := strings.NewReader("y\n")
-	var stdout strings.Builder
-	var logBuf strings.Builder
-	frylog.SetLogFile(&logBuf)
-	defer frylog.SetLogFile(nil)
-
-	oldNewEngine := newEngine
-	newEngine = func(name string) (engine.Engine, error) {
-		return &fakeEngine{output: "# My Project\n\n" + strings.Repeat("word ", 100)}, nil
+func testLogFunc(buf *strings.Builder) func(string, ...interface{}) {
+	return func(format string, args ...interface{}) {
+		fmt.Fprintf(buf, format+"\n", args...)
 	}
-	defer func() { newEngine = oldNewEngine }()
-
-	eng, _ := newEngine("fake")
-	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
-		ProjectDir: dir,
-		UserPrompt: "build a todo app",
-		Stdin:      stdin,
-		Stdout:     &stdout,
-	}, executivePath, "media manifest content", "assets section content")
-
-	require.NoError(t, err)
-	logOutput := logBuf.String()
-	assert.Contains(t, logOutput, "user prompt")
-	assert.Contains(t, logOutput, "assets/ assets")
-	assert.Contains(t, logOutput, "media/ manifest")
 }
 
-func TestBootstrapExecutive_LogsPromptOnlyWhenNoExtras(t *testing.T) {
-	// Not parallel: mutates package-level newEngine variable
-	dir := t.TempDir()
-	executivePath := dir + "/plans/executive.md"
+func TestBootstrapExecutive_Logging(t *testing.T) {
+	t.Parallel()
 
-	stdin := strings.NewReader("y\n")
-	var stdout strings.Builder
-	var logBuf strings.Builder
-	frylog.SetLogFile(&logBuf)
-	defer frylog.SetLogFile(nil)
+	t.Run("logs assets and media", func(t *testing.T) {
+		t.Parallel()
 
-	oldNewEngine := newEngine
-	newEngine = func(name string) (engine.Engine, error) {
-		return &fakeEngine{output: "# My Project\n\n" + strings.Repeat("word ", 100)}, nil
-	}
-	defer func() { newEngine = oldNewEngine }()
+		dir := t.TempDir()
+		executivePath := dir + "/plans/executive.md"
 
-	eng, _ := newEngine("fake")
-	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
-		ProjectDir: dir,
-		UserPrompt: "build a todo app",
-		Stdin:      stdin,
-		Stdout:     &stdout,
-	}, executivePath, "", "")
+		stdin := strings.NewReader("y\n")
+		var stdout strings.Builder
+		var logBuf strings.Builder
 
-	require.NoError(t, err)
-	logOutput := logBuf.String()
-	assert.Contains(t, logOutput, "from user prompt (engine: fake, model:")
-	assert.NotContains(t, logOutput, "assets/")
-	assert.NotContains(t, logOutput, "media/")
+		eng := &fakeEngine{output: "# My Project\n\n" + strings.Repeat("word ", 100)}
+		err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+			ProjectDir: dir,
+			UserPrompt: "build a todo app",
+			Stdin:      stdin,
+			Stdout:     &stdout,
+			LogFunc:    testLogFunc(&logBuf),
+		}, executivePath, "media manifest content", "assets section content")
+
+		require.NoError(t, err)
+		logOutput := logBuf.String()
+		assert.Contains(t, logOutput, "user prompt")
+		assert.Contains(t, logOutput, "assets/ assets")
+		assert.Contains(t, logOutput, "media/ manifest")
+	})
+
+	t.Run("logs prompt only when no extras", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		executivePath := dir + "/plans/executive.md"
+
+		stdin := strings.NewReader("y\n")
+		var stdout strings.Builder
+		var logBuf strings.Builder
+
+		eng := &fakeEngine{output: "# My Project\n\n" + strings.Repeat("word ", 100)}
+		err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+			ProjectDir: dir,
+			UserPrompt: "build a todo app",
+			Stdin:      stdin,
+			Stdout:     &stdout,
+			LogFunc:    testLogFunc(&logBuf),
+		}, executivePath, "", "")
+
+		require.NoError(t, err)
+		logOutput := logBuf.String()
+		assert.Contains(t, logOutput, "from user prompt (engine: fake, model:")
+		assert.NotContains(t, logOutput, "assets/")
+		assert.NotContains(t, logOutput, "media/")
+	})
 }
 
 func TestParseSanitySummary(t *testing.T) {
@@ -579,133 +567,121 @@ func TestWritingSanityCheckPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "senior author and content strategist")
 }
 
-func TestRunPrepare_SanityCheckSkipped(t *testing.T) {
-	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
-	dir := t.TempDir()
+func TestRunPrepare_Logging(t *testing.T) {
+	t.Parallel()
 
-	require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
-	require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
-
-	var logBuf strings.Builder
-	frylog.SetLogFile(&logBuf)
-	defer frylog.SetLogFile(nil)
-
-	oldNewEngine := newEngine
-	newEngine = func(name string) (engine.Engine, error) {
+	fakeFactory := func(name string) (engine.Engine, error) {
 		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
 	}
-	defer func() { newEngine = oldNewEngine }()
 
-	err := RunPrepare(context.Background(), PrepareOpts{
-		ProjectDir:      dir,
-		Engine:          "claude",
-		SkipSanityCheck: true,
+	t.Run("sanity check skipped", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+
+		require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+		require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+
+		var logBuf strings.Builder
+
+		err := RunPrepare(context.Background(), PrepareOpts{
+			ProjectDir:      dir,
+			Engine:          "claude",
+			SkipSanityCheck: true,
+			EngineFactory:   fakeFactory,
+			LogFunc:         testLogFunc(&logBuf),
+		})
+
+		require.NoError(t, err)
+		logOutput := logBuf.String()
+		assert.NotContains(t, logOutput, "Sanity check")
 	})
 
-	require.NoError(t, err)
-	logOutput := logBuf.String()
-	assert.NotContains(t, logOutput, "Sanity check")
-}
+	t.Run("plan exists without executive", func(t *testing.T) {
+		t.Parallel()
 
-func TestRunPrepare_PlanExistsWithoutExecutive(t *testing.T) {
-	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
-	dir := t.TempDir()
+		dir := t.TempDir()
 
-	// Create plan but NOT executive.
-	require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
-	require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+		// Create plan but NOT executive.
+		require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+		require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
 
-	var logBuf strings.Builder
-	frylog.SetLogFile(&logBuf)
-	defer frylog.SetLogFile(nil)
+		var logBuf strings.Builder
 
-	oldNewEngine := newEngine
-	newEngine = func(name string) (engine.Engine, error) {
-		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
-	}
-	defer func() { newEngine = oldNewEngine }()
+		err := RunPrepare(context.Background(), PrepareOpts{
+			ProjectDir:      dir,
+			Engine:          "claude",
+			SkipSanityCheck: true,
+			EngineFactory:   fakeFactory,
+			LogFunc:         testLogFunc(&logBuf),
+		})
 
-	err := RunPrepare(context.Background(), PrepareOpts{
-		ProjectDir:      dir,
-		Engine:          "claude",
-		SkipSanityCheck: true,
+		require.NoError(t, err)
+		logOutput := logBuf.String()
+		// Executive doesn't exist — should not be mentioned.
+		assert.NotContains(t, logOutput, "Using existing plans/executive.md")
+		assert.Contains(t, logOutput, "Using existing plans/plan.md")
+		// Step 1 should list only plan.md (no executive).
+		assert.Contains(t, logOutput, "Step 1: Generating .fry/AGENTS.md from plans/plan.md (engine: claude, model:")
 	})
 
-	require.NoError(t, err)
-	logOutput := logBuf.String()
-	// Executive doesn't exist — should not be mentioned.
-	assert.NotContains(t, logOutput, "Using existing plans/executive.md")
-	assert.Contains(t, logOutput, "Using existing plans/plan.md")
-	// Step 1 should list only plan.md (no executive).
-	assert.Contains(t, logOutput, "Step 1: Generating .fry/AGENTS.md from plans/plan.md (engine: claude, model:")
-}
+	t.Run("logs existing files", func(t *testing.T) {
+		t.Parallel()
 
-func TestRunPrepare_LogsExistingFiles(t *testing.T) {
-	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
-	dir := t.TempDir()
+		dir := t.TempDir()
 
-	// Create existing plan and executive files.
-	require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
-	require.NoError(t, os.WriteFile(dir+"/plans/executive.md", []byte("exec content"), 0o644))
-	require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+		// Create existing plan and executive files.
+		require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+		require.NoError(t, os.WriteFile(dir+"/plans/executive.md", []byte("exec content"), 0o644))
+		require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
 
-	var logBuf strings.Builder
-	frylog.SetLogFile(&logBuf)
-	defer frylog.SetLogFile(nil)
+		var logBuf strings.Builder
 
-	oldNewEngine := newEngine
-	newEngine = func(name string) (engine.Engine, error) {
-		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
-	}
-	defer func() { newEngine = oldNewEngine }()
+		err := RunPrepare(context.Background(), PrepareOpts{
+			ProjectDir:      dir,
+			Engine:          "claude",
+			SkipSanityCheck: true,
+			EngineFactory:   fakeFactory,
+			LogFunc:         testLogFunc(&logBuf),
+		})
 
-	err := RunPrepare(context.Background(), PrepareOpts{
-		ProjectDir:      dir,
-		Engine:          "claude",
-		SkipSanityCheck: true,
+		require.NoError(t, err)
+		logOutput := logBuf.String()
+		assert.Contains(t, logOutput, "Using existing plans/executive.md")
+		assert.Contains(t, logOutput, "Using existing plans/plan.md")
 	})
 
-	require.NoError(t, err)
-	logOutput := logBuf.String()
-	assert.Contains(t, logOutput, "Using existing plans/executive.md")
-	assert.Contains(t, logOutput, "Using existing plans/plan.md")
-}
+	t.Run("logs user prompt and assets", func(t *testing.T) {
+		t.Parallel()
 
-func TestRunPrepare_LogsUserPromptAndAssets(t *testing.T) {
-	// Not parallel: mutates package-level newEngine and frylog.SetLogFile
-	dir := t.TempDir()
+		dir := t.TempDir()
 
-	// Create existing plan and executive files.
-	require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
-	require.NoError(t, os.WriteFile(dir+"/plans/executive.md", []byte("exec content"), 0o644))
-	require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+		// Create existing plan and executive files.
+		require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+		require.NoError(t, os.WriteFile(dir+"/plans/executive.md", []byte("exec content"), 0o644))
+		require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
 
-	// Create an assets directory with a file.
-	require.NoError(t, os.MkdirAll(dir+"/assets", 0o755))
-	require.NoError(t, os.WriteFile(dir+"/assets/spec.yaml", []byte("openapi: 3.0.0"), 0o644))
+		// Create an assets directory with a file.
+		require.NoError(t, os.MkdirAll(dir+"/assets", 0o755))
+		require.NoError(t, os.WriteFile(dir+"/assets/spec.yaml", []byte("openapi: 3.0.0"), 0o644))
 
-	var logBuf strings.Builder
-	frylog.SetLogFile(&logBuf)
-	defer frylog.SetLogFile(nil)
+		var logBuf strings.Builder
 
-	oldNewEngine := newEngine
-	newEngine = func(name string) (engine.Engine, error) {
-		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
-	}
-	defer func() { newEngine = oldNewEngine }()
+		err := RunPrepare(context.Background(), PrepareOpts{
+			ProjectDir:      dir,
+			Engine:          "claude",
+			UserPrompt:      "focus on backend",
+			SkipSanityCheck: true,
+			EngineFactory:   fakeFactory,
+			LogFunc:         testLogFunc(&logBuf),
+		})
 
-	err := RunPrepare(context.Background(), PrepareOpts{
-		ProjectDir:      dir,
-		Engine:          "claude",
-		UserPrompt:      "focus on backend",
-		SkipSanityCheck: true,
+		require.NoError(t, err)
+		logOutput := logBuf.String()
+		assert.Contains(t, logOutput, "User prompt detected")
+		assert.Contains(t, logOutput, "Supplementary assets detected (1 file(s) in assets/)")
+		assert.Contains(t, logOutput, "Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md, user prompt, assets/ assets")
 	})
-
-	require.NoError(t, err)
-	logOutput := logBuf.String()
-	assert.Contains(t, logOutput, "User prompt detected")
-	assert.Contains(t, logOutput, "Supplementary assets detected (1 file(s) in assets/)")
-	assert.Contains(t, logOutput, "Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md, user prompt, assets/ assets")
 }
 
 func TestRunSanityCheck_AdjustAddsUserPrompt(t *testing.T) {

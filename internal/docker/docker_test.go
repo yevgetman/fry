@@ -12,86 +12,74 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Note: tests that mutate package-level vars (lookPath, execCommandContext)
-// cannot use t.Parallel() — they share global state via function pointers.
-
 func TestDetectComposeCommand(t *testing.T) {
-	origLookPath := lookPath
-	origExec := execCommandContext
-	t.Cleanup(func() {
-		lookPath = origLookPath
-		execCommandContext = origExec
-	})
+	t.Parallel()
 
-	lookPath = func(file string) (string, error) {
-		switch file {
-		case "docker":
-			return "/usr/bin/docker", nil
-		case "docker-compose":
-			return "", errors.New("missing")
-		default:
-			return "", errors.New("missing")
-		}
-	}
-	execCommandContext = func(_ context.Context, name string, args ...string) *exec.Cmd {
-		return exec.Command("bash", "-c", "exit 0")
+	deps := dockerDeps{
+		lookPath: func(file string) (string, error) {
+			switch file {
+			case "docker":
+				return "/usr/bin/docker", nil
+			case "docker-compose":
+				return "", errors.New("missing")
+			default:
+				return "", errors.New("missing")
+			}
+		},
+		execCommandContext: func(_ context.Context, name string, args ...string) *exec.Cmd {
+			return exec.Command("bash", "-c", "exit 0")
+		},
 	}
 
-	cmd, err := DetectComposeCommand(context.Background())
+	cmd, err := detectComposeCommand(context.Background(), deps)
 	require.NoError(t, err)
 	assert.Equal(t, "docker compose", cmd)
 }
 
 func TestDetectComposeCommand_FallbackToDockerCompose(t *testing.T) {
-	origLookPath := lookPath
-	origExec := execCommandContext
-	t.Cleanup(func() {
-		lookPath = origLookPath
-		execCommandContext = origExec
-	})
+	t.Parallel()
 
 	callCount := 0
-	lookPath = func(file string) (string, error) {
-		switch file {
-		case "docker":
-			return "/usr/bin/docker", nil
-		case "docker-compose":
-			return "/usr/local/bin/docker-compose", nil
-		default:
-			return "", errors.New("missing")
-		}
-	}
-	execCommandContext = func(_ context.Context, name string, args ...string) *exec.Cmd {
-		callCount++
-		if callCount == 1 {
-			// "docker compose version" fails
-			return exec.Command("bash", "-c", "exit 1")
-		}
-		// "docker-compose version" succeeds
-		return exec.Command("bash", "-c", "exit 0")
+	deps := dockerDeps{
+		lookPath: func(file string) (string, error) {
+			switch file {
+			case "docker":
+				return "/usr/bin/docker", nil
+			case "docker-compose":
+				return "/usr/local/bin/docker-compose", nil
+			default:
+				return "", errors.New("missing")
+			}
+		},
+		execCommandContext: func(_ context.Context, name string, args ...string) *exec.Cmd {
+			callCount++
+			if callCount == 1 {
+				// "docker compose version" fails
+				return exec.Command("bash", "-c", "exit 1")
+			}
+			// "docker-compose version" succeeds
+			return exec.Command("bash", "-c", "exit 0")
+		},
 	}
 
-	cmd, err := DetectComposeCommand(context.Background())
+	cmd, err := detectComposeCommand(context.Background(), deps)
 	require.NoError(t, err)
 	assert.Equal(t, "docker-compose", cmd)
 }
 
 func TestDetectComposeCommand_NeitherAvailable(t *testing.T) {
-	origLookPath := lookPath
-	origExec := execCommandContext
-	t.Cleanup(func() {
-		lookPath = origLookPath
-		execCommandContext = origExec
-	})
+	t.Parallel()
 
-	lookPath = func(file string) (string, error) {
-		return "", errors.New("not found")
-	}
-	execCommandContext = func(_ context.Context, name string, args ...string) *exec.Cmd {
-		return exec.Command("bash", "-c", "exit 1")
+	deps := dockerDeps{
+		lookPath: func(file string) (string, error) {
+			return "", errors.New("not found")
+		},
+		execCommandContext: func(_ context.Context, name string, args ...string) *exec.Cmd {
+			return exec.Command("bash", "-c", "exit 1")
+		},
 	}
 
-	_, err := DetectComposeCommand(context.Background())
+	_, err := detectComposeCommand(context.Background(), deps)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "docker compose not found")
 }

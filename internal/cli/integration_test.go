@@ -78,22 +78,24 @@ func TestEpicPathResolution(t *testing.T) {
 }
 
 func TestEngineResolution(t *testing.T) {
-	// Not parallel: uses t.Setenv which is incompatible with t.Parallel()
-	t.Setenv("FRY_ENGINE", "claude")
+	t.Parallel()
 
-	name, err := engine.ResolveEngine("codex", "claude", "", "")
+	// CLI flag takes highest priority
+	name, err := engine.ResolveEngine("codex", "claude", "claude", "")
 	require.NoError(t, err)
 	require.Equal(t, "codex", name)
 
-	name, err = engine.ResolveEngine("", "codex", "", "")
+	// Epic directive is next
+	name, err = engine.ResolveEngine("", "codex", "claude", "")
 	require.NoError(t, err)
 	require.Equal(t, "codex", name)
 
-	name, err = engine.ResolveEngine("", "", "", "")
+	// Env var is next (passed explicitly via envVar parameter)
+	name, err = engine.ResolveEngine("", "", "claude", "")
 	require.NoError(t, err)
 	require.Equal(t, "claude", name)
 
-	t.Setenv("FRY_ENGINE", "")
+	// Default engine when nothing else provided
 	name, err = engine.ResolveEngine("", "", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "claude", name)

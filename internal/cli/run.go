@@ -277,25 +277,25 @@ var runCmd = &cobra.Command{
 		signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
 		defer signal.Stop(signalCh)
 
+		interrupted := make(chan struct{})
 		go func() {
 			select {
 			case <-ctx.Done():
 				return
 			case <-signalCh:
 			}
+			close(interrupted)
 			cancel()
-			mu.Lock()
-			activeSprint := currentSprint
-			name := epicName
-			summaryCopy := append([]sprint.SprintResult(nil), results...)
-			mu.Unlock()
-			if activeSprint > 0 {
-				_ = git.CommitPartialWork(projectPath, name, activeSprint)
-			}
-			printBuildSummary(cmd.OutOrStdout(), summaryCopy)
-			releaseLock()
-			os.Exit(130)
 		}()
+
+		wasInterrupted := func() bool {
+			select {
+			case <-interrupted:
+				return true
+			default:
+				return false
+			}
+		}
 
 		if err := preflight.RunPreflight(preflight.PreflightConfig{
 			ProjectDir:       projectPath,
@@ -386,6 +386,17 @@ var runCmd = &cobra.Command{
 				})
 			}
 			if err != nil {
+				if wasInterrupted() {
+					mu.Lock()
+					activeSprint := currentSprint
+					name := epicName
+					mu.Unlock()
+					if activeSprint > 0 {
+						_ = git.CommitPartialWork(projectPath, name, activeSprint)
+					}
+					exitErr = fmt.Errorf("interrupted by signal")
+					break
+				}
 				return err
 			}
 

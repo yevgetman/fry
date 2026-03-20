@@ -8,15 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Note: these tests mutate the package-level logFile variable via SetLogFile,
-// so they cannot use t.Parallel() with each other.
-
 func TestSetLogFile(t *testing.T) {
-	var buf strings.Builder
-	SetLogFile(&buf)
-	defer SetLogFile(nil)
+	t.Parallel()
 
-	Log("test message %d", 42)
+	var buf strings.Builder
+	l := NewLogger(&buf)
+
+	l.Log("test message %d", 42)
 
 	output := buf.String()
 	assert.Contains(t, output, "test message 42")
@@ -24,19 +22,22 @@ func TestSetLogFile(t *testing.T) {
 }
 
 func TestLog_NilLogFile(t *testing.T) {
-	SetLogFile(nil)
+	t.Parallel()
+
+	l := NewLogger(nil)
 
 	require.NotPanics(t, func() {
-		Log("safe message")
+		l.Log("safe message")
 	})
 }
 
 func TestAgentBanner_DefaultModel(t *testing.T) {
-	var buf strings.Builder
-	SetLogFile(&buf)
-	defer SetLogFile(nil)
+	t.Parallel()
 
-	AgentBanner(2, 5, "Auth", 1, 3, "claude", "")
+	var buf strings.Builder
+	l := NewLogger(&buf)
+
+	l.AgentBanner(2, 5, "Auth", 1, 3, "claude", "")
 
 	output := buf.String()
 	assert.Contains(t, output, "AGENT")
@@ -48,11 +49,12 @@ func TestAgentBanner_DefaultModel(t *testing.T) {
 }
 
 func TestAgentBanner_CustomModel(t *testing.T) {
-	var buf strings.Builder
-	SetLogFile(&buf)
-	defer SetLogFile(nil)
+	t.Parallel()
 
-	AgentBanner(1, 1, "Solo", 1, 1, "codex", "gpt-5.4")
+	var buf strings.Builder
+	l := NewLogger(&buf)
+
+	l.AgentBanner(1, 1, "Solo", 1, 1, "codex", "gpt-5.4")
 
 	output := buf.String()
 	assert.Contains(t, output, "model=gpt-5.4")

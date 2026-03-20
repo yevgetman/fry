@@ -28,19 +28,29 @@ type PrepareOpts struct {
 	UserPrompt      string
 	ValidateOnly    bool
 	SkipSanityCheck bool
+	EngineFactory   func(string) (engine.Engine, error)       // optional; defaults to engine.NewEngine
+	LogFunc         func(format string, args ...interface{})   // optional; defaults to frylog.Log
 	Mode            Mode
 	EffortLevel     epic.EffortLevel
 	Stdin           io.Reader // for interactive confirmation (defaults to os.Stdin)
 	Stdout          io.Writer // for displaying generated content (defaults to os.Stdout)
 }
 
-var newEngine = engine.NewEngine
 var numberedRulePattern = regexp.MustCompile(`(?m)^[0-9]+\.`)
 
 // ErrUserDeclined is returned when the user declines the generated executive context.
 var ErrUserDeclined = fmt.Errorf("user declined generated executive context")
 
+func resolveLogFunc(opts PrepareOpts) func(string, ...interface{}) {
+	if opts.LogFunc != nil {
+		return opts.LogFunc
+	}
+	return frylog.Log
+}
+
 func RunPrepare(ctx context.Context, opts PrepareOpts) error {
+	logf := resolveLogFunc(opts)
+
 	projectDir := opts.ProjectDir
 	if projectDir == "" {
 		projectDir = "."
@@ -57,7 +67,11 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if err != nil {
 		return fmt.Errorf("run prepare: %w", err)
 	}
-	eng, err := newEngine(engName)
+	engineFactory := opts.EngineFactory
+	if engineFactory == nil {
+		engineFactory = engine.NewEngine
+	}
+	eng, err := engineFactory(engName)
 	if err != nil {
 		return fmt.Errorf("run prepare: %w", err)
 	}
@@ -95,23 +109,23 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	// Scan media directory for available assets (optional).
 	mediaAssets, mediaTruncated, mediaErr := media.Scan(projectDir)
 	if mediaErr != nil {
-		frylog.Log("WARNING: could not scan media directory: %v", mediaErr)
+		logf("WARNING: could not scan media directory: %v", mediaErr)
 	}
 	if mediaTruncated {
-		frylog.Log("WARNING: media directory has more than %d files — scan truncated", media.MaxAssets)
+		logf("WARNING: media directory has more than %d files — scan truncated", media.MaxAssets)
 	}
 	mediaManifest := media.BuildManifest(mediaAssets)
 
 	// Scan assets directory for supplementary documents (optional).
 	assetsResult, assetsErr := assets.Scan(projectDir)
 	if assetsErr != nil {
-		frylog.Log("WARNING: could not scan assets directory: %v", assetsErr)
+		logf("WARNING: could not scan assets directory: %v", assetsErr)
 	}
 	for _, w := range assetsResult.Warnings {
-		frylog.Log("WARNING: assets: %s", w)
+		logf("WARNING: assets: %s", w)
 	}
 	if assetsResult.Truncated {
-		frylog.Log("WARNING: assets directory scan truncated — some files skipped")
+		logf("WARNING: assets directory scan truncated — some files skipped")
 	}
 	assetsSection := assets.BuildSection(assetsResult)
 
@@ -128,13 +142,13 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	// Log detected inputs for visibility.
 	if hasUserPrompt {
-		frylog.Log("User prompt detected — will be included in generation.")
+		logf("User prompt detected — will be included in generation.")
 	}
 	if hasAssets {
-		frylog.Log("Supplementary assets detected (%d file(s) in %s/) — will be included in generation.", len(assetsResult.Assets), config.AssetsDir)
+		logf("Supplementary assets detected (%d file(s) in %s/) — will be included in generation.", len(assetsResult.Assets), config.AssetsDir)
 	}
 	if hasMedia {
-		frylog.Log("Media assets detected (%d file(s) in %s/) — manifest will be included in generation.", len(mediaAssets), config.MediaDir)
+		logf("Media assets detected (%d file(s) in %s/) — manifest will be included in generation.", len(mediaAssets), config.MediaDir)
 	}
 
 	// Bootstrap: generate executive.md from user prompt if neither plan nor executive exists.
@@ -143,7 +157,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 			return err
 		}
 	} else if !execMissing {
-		frylog.Log("Using existing %s.", config.ExecutiveFile)
+		logf("Using existing %s.", config.ExecutiveFile)
 	}
 
 	if _, err := os.Stat(planPath); os.IsNotExist(err) {
@@ -155,7 +169,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if hasMedia {
 			step0Inputs = append(step0Inputs, fmt.Sprintf("%s/ manifest", config.MediaDir))
 		}
-		frylog.Log("Step 0: Generating %s from %s (engine: %s, model: %s)...", config.PlanFile, strings.Join(step0Inputs, ", "), engName, prepModel)
+		logf("Step 0: Generating %s from %s (engine: %s, model: %s)...", config.PlanFile, strings.Join(step0Inputs, ", "), engName, prepModel)
 		executiveContent, err := os.ReadFile(executivePath)
 		if err != nil {
 			return fmt.Errorf("run prepare: read executive: %w", err)
@@ -175,9 +189,9 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if err := validateStep0(planPath); err != nil {
 			return err
 		}
-		frylog.Log("Generated %s.", config.PlanFile)
+		logf("Generated %s.", config.PlanFile)
 	} else {
-		frylog.Log("Using existing %s.", config.PlanFile)
+		logf("Using existing %s.", config.PlanFile)
 	}
 
 	planContentBytes, err := os.ReadFile(planPath)
@@ -210,7 +224,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step1Inputs = append(step1Inputs, config.MediaDir+"/ manifest")
 	}
-	frylog.Log("Step 1: Generating %s from %s (engine: %s, model: %s)...", config.AgentsFile, strings.Join(step1Inputs, ", "), engName, prepModel)
+	logf("Step 1: Generating %s from %s (engine: %s, model: %s)...", config.AgentsFile, strings.Join(step1Inputs, ", "), engName, prepModel)
 	prompt := step1Prompt(opts.Mode, planContent, executiveContent, mediaManifest)
 	beforeMod := textutil.FileModTime(agentsPath)
 	output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
@@ -223,7 +237,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if err := validateStep1(agentsPath); err != nil {
 		return err
 	}
-	frylog.Log("Generated %s.", config.AgentsFile)
+	logf("Generated %s.", config.AgentsFile)
 
 	agentsContentBytes, err := os.ReadFile(agentsPath)
 	if err != nil {
@@ -251,7 +265,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step2Inputs = append(step2Inputs, config.MediaDir+"/ manifest")
 	}
-	frylog.Log("Step 2: Generating %s from %s (engine: %s, model: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName, prepModel)
+	logf("Step 2: Generating %s from %s (engine: %s, model: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName, prepModel)
 	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
 	beforeMod = textutil.FileModTime(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
@@ -264,7 +278,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if err := validateStep2(epicPath); err != nil {
 		return err
 	}
-	frylog.Log("Generated %s.", epicFilename)
+	logf("Generated %s.", epicFilename)
 
 	epicContentBytes, err := os.ReadFile(epicPath)
 	if err != nil {
@@ -279,7 +293,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step3Inputs = append(step3Inputs, config.MediaDir+"/ manifest")
 	}
-	frylog.Log("Step 3: Generating %s from %s (engine: %s, model: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), engName, prepModel)
+	logf("Step 3: Generating %s from %s (engine: %s, model: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), engName, prepModel)
 	prompt = step3Prompt(opts.Mode, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest)
 	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	beforeMod = textutil.FileModTime(verificationPath)
@@ -291,10 +305,10 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		return fmt.Errorf("run prepare: write verification: %w", err)
 	}
 	if err := validateStep3(verificationPath); err != nil {
-		frylog.Log("WARNING: %s has no @check_* directives. Continuing without verification.", config.DefaultVerificationFile)
+		logf("WARNING: %s has no @check_* directives. Continuing without verification.", config.DefaultVerificationFile)
 		return nil
 	}
-	frylog.Log("Generated %s.", config.DefaultVerificationFile)
+	logf("Generated %s.", config.DefaultVerificationFile)
 
 	return nil
 }
@@ -315,6 +329,8 @@ func validatePreparePrerequisites(projectDir, userPrompt string) error {
 }
 
 func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, opts PrepareOpts, executivePath, mediaManifest, assetsSection string) error {
+	logf := resolveLogFunc(opts)
+
 	// UserPrompt is guaranteed non-empty by the caller (validatePreparePrerequisites passed).
 	var bootstrapInputs []string
 	bootstrapInputs = append(bootstrapInputs, "user prompt")
@@ -325,7 +341,7 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 		bootstrapInputs = append(bootstrapInputs, config.MediaDir+"/ manifest")
 	}
 	prepModel := engine.ResolveModelForSession(engName, string(opts.EffortLevel), engine.SessionPrepare)
-	frylog.Log("Generating %s from %s (engine: %s, model: %s)...", config.ExecutiveFile, strings.Join(bootstrapInputs, ", "), engName, prepModel)
+	logf("Generating %s from %s (engine: %s, model: %s)...", config.ExecutiveFile, strings.Join(bootstrapInputs, ", "), engName, prepModel)
 
 	prompt := executiveFromUserPromptPrompt(opts.Mode, opts.UserPrompt, mediaManifest, assetsSection)
 	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: prepModel})
@@ -365,7 +381,7 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 	if err := os.WriteFile(executivePath, []byte(output), 0o644); err != nil {
 		return fmt.Errorf("run prepare: write executive: %w", err)
 	}
-	frylog.Log("Saved %s.", config.ExecutiveFile)
+	logf("Saved %s.", config.ExecutiveFile)
 	return nil
 }
 

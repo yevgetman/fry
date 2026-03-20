@@ -12,23 +12,34 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 )
 
-var (
-	execCommandContext = exec.CommandContext
-	lookPath           = exec.LookPath
-	sleep              = time.Sleep
-	now                = time.Now
-)
+type dockerDeps struct {
+	execCommandContext func(ctx context.Context, name string, args ...string) *exec.Cmd
+	lookPath           func(file string) (string, error)
+	sleep              func(d time.Duration)
+	now                func() time.Time
+}
+
+var defaultDeps = dockerDeps{
+	execCommandContext: exec.CommandContext,
+	lookPath:           exec.LookPath,
+	sleep:              time.Sleep,
+	now:                time.Now,
+}
 
 func DetectComposeCommand(ctx context.Context) (string, error) {
-	if _, err := lookPath("docker"); err == nil {
-		cmd := execCommandContext(ctx, "bash", "-c", "docker compose version")
+	return detectComposeCommand(ctx, defaultDeps)
+}
+
+func detectComposeCommand(ctx context.Context, deps dockerDeps) (string, error) {
+	if _, err := deps.lookPath("docker"); err == nil {
+		cmd := deps.execCommandContext(ctx, "bash", "-c", "docker compose version")
 		if cmd.Run() == nil {
 			return "docker compose", nil
 		}
 	}
 
-	if _, err := lookPath("docker-compose"); err == nil {
-		cmd := execCommandContext(ctx, "bash", "-c", "docker-compose version")
+	if _, err := deps.lookPath("docker-compose"); err == nil {
+		cmd := deps.execCommandContext(ctx, "bash", "-c", "docker-compose version")
 		if cmd.Run() == nil {
 			return "docker-compose", nil
 		}
@@ -47,21 +58,25 @@ func ComposeFileExists(projectDir string) bool {
 }
 
 func EnsureDockerUp(ctx context.Context, projectDir string, readyCmd string, timeout int) error {
+	return ensureDockerUp(ctx, projectDir, readyCmd, timeout, defaultDeps)
+}
+
+func ensureDockerUp(ctx context.Context, projectDir string, readyCmd string, timeout int, deps dockerDeps) error {
 	if !ComposeFileExists(projectDir) {
 		return nil
 	}
 
-	composeCmd, err := DetectComposeCommand(ctx)
+	composeCmd, err := detectComposeCommand(ctx, deps)
 	if err != nil {
 		return err
 	}
 
-	psOutput, err := runCompose(ctx, projectDir, composeCmd+" ps")
+	psOutput, err := runCompose(ctx, projectDir, composeCmd+" ps", deps)
 	if err == nil && containersAlreadyRunning(psOutput) {
 		return nil
 	}
 
-	if _, err := runCompose(ctx, projectDir, composeCmd+" up -d"); err != nil {
+	if _, err := runCompose(ctx, projectDir, composeCmd+" up -d", deps); err != nil {
 		return fmt.Errorf("docker up: %w", err)
 	}
 
@@ -69,21 +84,21 @@ func EnsureDockerUp(ctx context.Context, projectDir string, readyCmd string, tim
 	if waitSeconds <= 0 {
 		waitSeconds = config.DefaultDockerReadyTimeout
 	}
-	deadline := now().Add(time.Duration(waitSeconds) * time.Second)
+	deadline := deps.now().Add(time.Duration(waitSeconds) * time.Second)
 
 	for {
 		if strings.TrimSpace(readyCmd) != "" {
-			if err := runReadyCommand(ctx, projectDir, readyCmd); err == nil {
+			if err := runReadyCommand(ctx, projectDir, readyCmd, deps); err == nil {
 				return nil
 			}
 		} else {
-			output, err := runCompose(ctx, projectDir, composeCmd+" ps")
+			output, err := runCompose(ctx, projectDir, composeCmd+" ps", deps)
 			if err == nil && composeHealthy(output) {
 				return nil
 			}
 		}
 
-		if now().After(deadline) {
+		if deps.now().After(deadline) {
 			return fmt.Errorf("docker readiness timeout after %d seconds", waitSeconds)
 		}
 		select {
@@ -94,8 +109,8 @@ func EnsureDockerUp(ctx context.Context, projectDir string, readyCmd string, tim
 	}
 }
 
-func runCompose(ctx context.Context, projectDir, cmd string) (string, error) {
-	command := execCommandContext(ctx, "bash", "-c", cmd)
+func runCompose(ctx context.Context, projectDir, cmd string, deps dockerDeps) (string, error) {
+	command := deps.execCommandContext(ctx, "bash", "-c", cmd)
 	command.Dir = projectDir
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -104,8 +119,8 @@ func runCompose(ctx context.Context, projectDir, cmd string) (string, error) {
 	return string(output), nil
 }
 
-func runReadyCommand(ctx context.Context, projectDir, readyCmd string) error {
-	command := execCommandContext(ctx, "bash", "-c", readyCmd)
+func runReadyCommand(ctx context.Context, projectDir, readyCmd string, deps dockerDeps) error {
+	command := deps.execCommandContext(ctx, "bash", "-c", readyCmd)
 	command.Dir = projectDir
 	return command.Run()
 }
