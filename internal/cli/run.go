@@ -30,6 +30,7 @@ import (
 	"github.com/yevgetman/fry/internal/review"
 	"github.com/yevgetman/fry/internal/sprint"
 	"github.com/yevgetman/fry/internal/summary"
+	"github.com/yevgetman/fry/internal/triage"
 	"github.com/yevgetman/fry/internal/verify"
 )
 
@@ -49,6 +50,7 @@ var (
 	runSprint         int
 	runContinue       bool
 	runNoSanityCheck  bool
+	runFullPrepare    bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -109,6 +111,7 @@ var runCmd = &cobra.Command{
 
 		printMigrationHintIfNeeded(cmd.OutOrStdout(), projectPath, epicArg)
 
+		var triageDecision *triage.TriageDecision
 		if !epicExists {
 			if runResume {
 				return fmt.Errorf("--resume requires existing build artifacts; epic file not found at %s", epicArg)
@@ -117,18 +120,26 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("--continue requires existing build artifacts; epic file not found at %s", epicArg)
 			}
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
-			if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-				ProjectDir:      projectPath,
-				EpicFilename:    filepath.Base(epicPath),
-				Engine:          prepareEngineName,
-				UserPrompt:      userPrompt,
-				SkipSanityCheck: runNoSanityCheck || runDryRun,
-				Mode:            mode,
-				EffortLevel:     effortLevel,
-				Stdin:           os.Stdin,
-				Stdout:          cmd.OutOrStdout(),
-			}); err != nil {
-				return err
+			if runFullPrepare {
+				if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
+					ProjectDir:      projectPath,
+					EpicFilename:    filepath.Base(epicPath),
+					Engine:          prepareEngineName,
+					UserPrompt:      userPrompt,
+					SkipSanityCheck: runNoSanityCheck || runDryRun,
+					Mode:            mode,
+					EffortLevel:     effortLevel,
+					Stdin:           os.Stdin,
+					Stdout:          cmd.OutOrStdout(),
+				}); err != nil {
+					return err
+				}
+			} else {
+				var err error
+				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, effortLevel, mode)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -681,6 +692,42 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Run a single-pass build audit for simple-triaged tasks.
+		// Simple tasks skip sprint audits (AuditAfterSprint: false, EffortLow) but
+		// still get one final holistic check.
+		if exitErr == nil && buildAuditResult == nil && !runNoAudit &&
+			triageDecision != nil && triageDecision.Complexity == triage.ComplexitySimple {
+			auditEngine, auditEngErr := engine.NewEngine(engineName)
+			if auditEngErr != nil {
+				frlog.Log("WARNING: could not create engine for simple build audit: %v", auditEngErr)
+			} else {
+				buildAuditModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionBuildAudit)
+				frlog.Log("▶ BUILD AUDIT  single-pass audit for simple task...  engine=%s  model=%s", engineName, buildAuditModel)
+				result, auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
+					ProjectDir: projectPath,
+					Epic:       ep,
+					Engine:     auditEngine,
+					Results:    summaryCopy,
+					Verbose:    frlog.Verbose,
+					Model:      buildAuditModel,
+					Mode:       string(mode),
+				})
+				if auditErr != nil {
+					frlog.Log("WARNING: simple build audit failed: %v", auditErr)
+				} else {
+					buildAuditResult = result
+					if result.Passed {
+						frlog.Log("  BUILD AUDIT: PASS (%s)", audit.FormatCounts(result.SeverityCounts))
+					} else {
+						frlog.Log("  BUILD AUDIT: %s (advisory)", audit.FormatCounts(result.SeverityCounts))
+					}
+					if gitErr := git.GitCheckpoint(projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
+						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
+					}
+				}
+			}
+		}
+
 		// Generate build summary document (after build audit so results can be included)
 		summaryEngine, err := engine.NewEngine(engineName)
 		if err != nil {
@@ -734,6 +781,7 @@ func init() {
 	runCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
 	runCmd.Flags().BoolVar(&runContinue, "continue", false, "Use an LLM agent to analyze build state and resume from where it left off")
 	runCmd.Flags().BoolVar(&runNoSanityCheck, "no-sanity-check", false, "Skip the interactive project summary during auto-prepare")
+	runCmd.Flags().BoolVar(&runFullPrepare, "full-prepare", false, "Skip triage and run full prepare pipeline when no epic exists")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -997,4 +1045,104 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 		return prepare.ModePlanning, nil
 	}
 	return prepare.ParseMode(modeFlag)
+}
+
+// runTriageGate classifies task complexity and takes the appropriate execution path.
+// For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it runs an
+// abbreviated single-LLM-call prepare. For COMPLEX, it falls through to full prepare.
+func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode) (*triage.TriageDecision, error) {
+	// Read available inputs.
+	planPath := filepath.Join(projectPath, config.PlanFile)
+	executivePath := filepath.Join(projectPath, config.ExecutiveFile)
+
+	planContent, _ := readOptionalFile(planPath)
+	execContent, _ := readOptionalFile(executivePath)
+
+	// Validate that we have at least some input.
+	if strings.TrimSpace(planContent) == "" && strings.TrimSpace(execContent) == "" && strings.TrimSpace(userPrompt) == "" {
+		return nil, fmt.Errorf("prepare requires %s, %s, or --user-prompt", config.PlanFile, config.ExecutiveFile)
+	}
+
+	// Resolve engine for triage.
+	engName, err := engine.ResolveEngine(prepareEngineName, "", "", config.DefaultPrepareEngine)
+	if err != nil {
+		return nil, fmt.Errorf("triage: resolve engine: %w", err)
+	}
+	eng, err := engine.NewEngine(engName)
+	if err != nil {
+		return nil, fmt.Errorf("triage: create engine: %w", err)
+	}
+	triageModel := engine.ResolveModelForSession(engName, string(effortLevel), engine.SessionTriage)
+
+	decision := triage.Classify(ctx, triage.TriageOpts{
+		ProjectDir:  projectPath,
+		UserPrompt:  userPrompt,
+		PlanContent: planContent,
+		ExecContent: execContent,
+		Engine:      eng,
+		Model:       triageModel,
+		Mode:        mode,
+		Verbose:     frlog.Verbose,
+	})
+
+	switch decision.Complexity {
+	case triage.ComplexitySimple:
+		ep, buildErr := triage.BuildSimpleEpic(triage.SimpleEpicOpts{
+			ProjectDir:  projectPath,
+			UserPrompt:  userPrompt,
+			PlanContent: planContent,
+			ExecContent: execContent,
+			EngineName:  engName,
+			Mode:        mode,
+		})
+		if buildErr != nil {
+			return nil, fmt.Errorf("triage simple path: %w", buildErr)
+		}
+		if err := triage.WriteEpicFile(epicPath, ep); err != nil {
+			return nil, fmt.Errorf("triage simple path: %w", err)
+		}
+		frlog.Log("  TRIAGE: built 1-sprint epic programmatically (no LLM prepare)")
+
+	case triage.ComplexityModerate:
+		prepModel := engine.ResolveModelForSession(engName, string(effortLevel), engine.SessionPrepare)
+		if err := triage.RunAbbreviatedPrepare(ctx, triage.AbbreviatedPrepareOpts{
+			ProjectDir:   projectPath,
+			EpicFilename: filepath.Base(epicPath),
+			Engine:       eng,
+			Model:        prepModel,
+			UserPrompt:   userPrompt,
+			PlanContent:  planContent,
+			ExecContent:  execContent,
+			EffortLevel:  effortLevel,
+			Mode:         mode,
+		}); err != nil {
+			return nil, fmt.Errorf("triage moderate path: %w", err)
+		}
+
+	case triage.ComplexityComplex:
+		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
+		if err := prepare.RunPrepare(ctx, prepare.PrepareOpts{
+			ProjectDir:      projectPath,
+			EpicFilename:    filepath.Base(epicPath),
+			Engine:          prepareEngineName,
+			UserPrompt:      userPrompt,
+			SkipSanityCheck: runNoSanityCheck || runDryRun,
+			Mode:            mode,
+			EffortLevel:     effortLevel,
+			Stdin:           os.Stdin,
+			Stdout:          os.Stdout,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	return decision, nil
+}
+
+func readOptionalFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

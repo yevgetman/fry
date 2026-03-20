@@ -51,6 +51,10 @@ fry/
 │   ├── audit/
 │   │   ├── audit.go             # Per-sprint two-level audit: outer audit cycles + inner fix loops
 │   │   └── build_audit.go       # Final holistic codebase audit
+│   ├── triage/
+│   │   ├── types.go             # Complexity, TriageDecision types
+│   │   ├── triage.go            # Classify (single LLM call), ParseClassification, prompt builder
+│   │   └── builder.go           # BuildSimpleEpic, WriteEpicFile, RunAbbreviatedPrepare
 │   ├── review/
 │   │   ├── reviewer.go          # Sprint review (CONTINUE vs DEVIATE verdict)
 │   │   ├── replanner.go         # Dynamic epic modification
@@ -118,6 +122,8 @@ fry/
 | `continue-prompt.md` | Assembled prompt for --continue analysis agent |
 | `continue-decision.txt` | LLM agent's resume decision (verdict, sprint, reason) |
 | `continue-report.md` | Programmatic build state report (input to analysis) |
+| `triage-prompt.md` | Classifier prompt for triage gate |
+| `triage-decision.txt` | Triage classifier output (complexity, sprints, reason) |
 | `.fry.lock` | Concurrency lock |
 
 ---
@@ -194,10 +200,12 @@ Four check primitives: `@check_file` (file exists), `@check_file_contains` (rege
 User Input                          Generated Artifacts
 ─────────────────────               ────────────────────
 plans/plan.md         ──┐
-plans/executive.md    ──┤  fry prepare        →  .fry/AGENTS.md
---user-prompt "..."   ──┤  (Sanity Check +    →  .fry/epic.md
-assets/               ──┘   Steps 0-3)        →  .fry/verification.md
-media/                ──(manifest only)
+plans/executive.md    ──┤  Triage Gate (1 cheap LLM call)
+--user-prompt "..."   ──┤    SIMPLE   → programmatic epic (0 LLM calls)
+assets/               ──┤    MODERATE → abbreviated prepare (1 LLM call) → .fry/epic.md
+media/                ──┘    COMPLEX  → full prepare (3-4 LLM calls):
+                               (manifest only)   .fry/AGENTS.md, .fry/epic.md, .fry/verification.md
+                             (--full-prepare bypasses triage → always full prepare)
 
                         fry run
                         ───────
@@ -270,6 +278,7 @@ Key flags:
   --sprint N                         # Start from sprint N
   --resume                           # Skip iterations, verify + heal with boosted attempts
   --continue                         # LLM-assisted auto-resume from where build left off
+  --full-prepare                     # Skip triage, run full prepare pipeline
   --no-sanity-check                  # Skip interactive project summary
   --no-review                        # Skip mid-build sprint review
   --no-audit                         # Skip audits
@@ -310,6 +319,8 @@ Key flags:
 | `BuildModeFile` | `.fry/build-mode.txt` | Persisted build mode for `--continue` |
 | `ArchiveDir` | `.fry-archive` | Directory for archived builds |
 | `ArchivePrefix` | `.fry--build--` | Prefix for archive folder names |
+| `TriagePromptFile` | `.fry/triage-prompt.md` | Classifier prompt for triage gate |
+| `TriageDecisionFile` | `.fry/triage-decision.txt` | Classifier output (complexity, sprints, reason) |
 
 ---
 

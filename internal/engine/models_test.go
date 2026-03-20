@@ -234,6 +234,11 @@ func TestTierForSession(t *testing.T) {
 		{"prepare-claude-low", "claude", "low", SessionPrepare, TierStandard},
 		{"prepare-claude-max", "claude", "max", SessionPrepare, TierStandard},
 		{"prepare-codex-high", "codex", "high", SessionPrepare, TierStandard},
+
+		// Triage: Mini always
+		{"triage-claude-low", "claude", "low", SessionTriage, TierMini},
+		{"triage-claude-max", "claude", "max", SessionTriage, TierMini},
+		{"triage-codex-high", "codex", "high", SessionTriage, TierMini},
 	}
 
 	for _, tc := range tests {

@@ -81,4 +81,9 @@ const (
 	ContinueDecisionFile      = ".fry/continue-decision.txt"
 	ContinueReportFile        = ".fry/continue-report.md"
 	ContinueInvocationPrompt  = "Read and execute ALL instructions in .fry/continue-prompt.md. You are a build analyst. Review the build state report and output your decision to .fry/continue-decision.txt. Do NOT modify any source code."
+
+	// Triage constants
+	TriagePromptFile         = ".fry/triage-prompt.md"
+	TriageDecisionFile       = ".fry/triage-decision.txt"
+	TriageInvocationPrompt   = "Read and execute ALL instructions in .fry/triage-prompt.md. You are a task complexity classifier. Write your classification to .fry/triage-decision.txt. Do NOT modify any source code."
 )

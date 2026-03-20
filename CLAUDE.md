@@ -60,6 +60,7 @@ This is not optional. When you add, modify, or remove a feature:
    - Review/replan → `docs/sprint-review.md`
    - Docker → `docs/docker.md`
    - Preflight → `docs/preflight.md`
+   - Triage gate → `docs/triage.md`
    - Planning mode → `docs/planning-mode.md`
    - Writing mode → `docs/writing-mode.md`
    - Media assets → `docs/media-assets.md`

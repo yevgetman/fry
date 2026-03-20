@@ -42,6 +42,7 @@ const (
 	SessionContinue     SessionType = "continue"
 	SessionSanityCheck  SessionType = "sanity-check"
 	SessionPrepare      SessionType = "prepare"
+	SessionTriage       SessionType = "triage"
 )
 
 // Tier-to-model mapping tables.
@@ -187,6 +188,9 @@ func TierForSession(engineName, effort string, session SessionType) ModelTier {
 
 	case SessionPrepare:
 		return TierStandard
+
+	case SessionTriage:
+		return TierMini
 
 	default:
 		return TierStandard
