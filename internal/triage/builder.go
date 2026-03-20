@@ -24,13 +24,15 @@ type SimpleEpicOpts struct {
 // BuildSimpleEpic constructs a minimal Epic struct for simple tasks.
 // No LLM call — purely programmatic.
 //
-// Effort matrix for simple tasks:
+// Effort matrix for simple tasks (sprint-level settings only;
+// build audit is controlled by the CLI layer):
 //
-//	Low:    standard model, 12 iter, no healing, no sprint audit, no build audit
-//	Medium: standard model, 20 iter, no healing, 1 audit+fix pass, single build audit
-//	High:   frontier model, 25 iter, no healing, 1 audit+fix pass, single build audit
+//	Low:    standard model, 12 iter, no healing, no sprint audit
+//	Medium: standard model, 20 iter, no healing, 1 audit+fix pass
+//	High:   frontier model, 25 iter, no healing, 1 audit+fix pass
 //
-// Max effort is capped to high for simple tasks.
+// Empty or max effort defaults to low within this function.
+// The CLI layer caps max→high before calling this function.
 func BuildSimpleEpic(opts SimpleEpicOpts) (*epic.Epic, error) {
 	prompt := opts.PlanContent
 	if prompt == "" {
@@ -87,13 +89,14 @@ type ModerateEpicOpts struct {
 // BuildModerateEpic constructs an Epic struct for moderate tasks.
 // No LLM call — purely programmatic, like BuildSimpleEpic.
 //
-// Effort matrix for moderate tasks:
+// Effort matrix for moderate tasks (sprint-level settings only;
+// build audit is controlled by the CLI layer):
 //
-//	Low:    standard model, 12 iter, no healing, no sprint audit, single build audit, 1 sprint
-//	Medium: standard model, 20 iter, 3 heal attempts, default audit (3 outer, 3 inner), single build audit, 1-2 sprints
-//	High:   frontier model, 25 iter, 10 heal + progress detection, full audit (12 outer, 7 inner), full build audit, 1-2 sprints
+//	Low:    standard model, 12 iter, no healing, no sprint audit, 1 sprint
+//	Medium: standard model, 20 iter, 3 heal attempts, default audit (3 outer, 3 inner), 1-2 sprints
+//	High:   frontier model, 25 iter, 10 heal + progress detection, full audit (12 outer, 7 inner), 1-2 sprints
 //
-// Max effort is capped to high for moderate tasks.
+// Empty effort defaults to medium. Max effort is capped to high.
 func BuildModerateEpic(opts ModerateEpicOpts) (*epic.Epic, error) {
 	prompt := opts.PlanContent
 	if prompt == "" {

@@ -19,7 +19,7 @@ For simple, well-bounded work: a single page, a config change, a small utility, 
 - Skips scaffolding as a separate sprint — folds it into Sprint 1
 - Sprint prompts omit REFERENCES and STUCK HINT sections for brevity
 - Sprint reviews are skipped entirely, even if `@review_between_sprints` is enabled
-- Sprint and build audits are skipped entirely (regardless of audit settings)
+- Sprint and build audits are skipped entirely for tasks going through the full prepare pipeline. Triaged tasks (simple/moderate) still receive a fallback build audit — see [Triage](triage.md) for the full matrix
 - Focus is on core deliverables only; exhaustive edge cases are omitted
 
 ```bash
