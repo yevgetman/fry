@@ -53,6 +53,7 @@ var (
 	runFullPrepare    bool
 	runGitStrategy    string
 	runBranchName     string
+	runAlwaysVerify   bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -188,6 +189,26 @@ var runCmd = &cobra.Command{
 		}
 		if err := epic.ValidateEpic(ep); err != nil {
 			return err
+		}
+
+		// --always-verify: force verification, healing, and audit regardless of effort/complexity.
+		if runAlwaysVerify {
+			ep.AuditAfterSprint = true
+			if ep.MaxHealAttempts == 0 {
+				ep.MaxHealAttempts = config.DefaultMaxHealAttempts
+			}
+			// Generate verification checks if none exist (simple tasks skip this).
+			verifyPath := filepath.Join(projectPath, config.DefaultVerificationFile)
+			if _, statErr := os.Stat(verifyPath); os.IsNotExist(statErr) {
+				checks := triage.GenerateVerificationChecks(projectPath, ep.TotalSprints)
+				if len(checks) > 0 {
+					if writeErr := triage.WriteVerificationFile(verifyPath, checks); writeErr != nil {
+						frlog.Log("WARNING: --always-verify: could not write verification file: %v", writeErr)
+					} else {
+						frlog.Log("  VERIFY: generated heuristic verification checks (--always-verify)")
+					}
+				}
+			}
 		}
 
 		buildDefault := config.DefaultEngine
@@ -522,7 +543,7 @@ var runCmd = &cobra.Command{
 
 			if isPassStatus(result.Status) {
 				// Sprint audit
-				if ep.AuditAfterSprint && !runNoAudit && ep.EffortLevel != epic.EffortLow {
+				if ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
 					auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
 					if err != nil {
 						return err
@@ -732,7 +753,7 @@ var runCmd = &cobra.Command{
 		// Run final build audit once the entire epic has completed successfully.
 		// This runs BEFORE the build summary so that audit results can be included in the summary.
 		var buildAuditResult *audit.AuditResult
-		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && ep.EffortLevel != epic.EffortLow {
+		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
 			deferredContent := readDeferredFailuresArtifact(projectPath)
 			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
 			if err != nil {
@@ -876,6 +897,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runFullPrepare, "full-prepare", false, "Skip triage and run full prepare pipeline when no epic exists")
 	runCmd.Flags().StringVar(&runGitStrategy, "git-strategy", "", "Git branching strategy: auto, current, branch, worktree (default: auto)")
 	runCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
+	runCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force verification, healing, and audit to run regardless of effort level or triage complexity")
 }
 
 func resolveProjectDir(dir string) (string, error) {

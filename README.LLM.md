@@ -288,6 +288,7 @@ Key flags:
   --continue                         # LLM-assisted auto-resume from where build left off
   --git-strategy auto|current|branch|worktree  # Git isolation strategy (default: auto)
   --branch-name name                 # Explicit branch name (overrides auto-generated)
+  --always-verify                    # Force verification, healing, and audit regardless of effort/complexity
   --full-prepare                     # Skip triage, run full prepare pipeline
   --no-sanity-check                  # Skip interactive confirmations (triage + project summary)
   --no-review                        # Skip mid-build sprint review

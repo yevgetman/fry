@@ -184,6 +184,7 @@ fry --user-prompt "build a todo app"  # Start from just a prompt (no plan files 
 fry --user-prompt-file ./prompt.txt   # Load a longer prompt from a file
 fry --git-strategy worktree            # Force worktree isolation for the build
 fry --git-strategy branch --branch-name feat/api  # Build on a named branch
+fry --always-verify                    # Force verification+audit on all tasks
 fry prepare --effort medium            # Generate artifacts with medium effort sizing
 ```
 

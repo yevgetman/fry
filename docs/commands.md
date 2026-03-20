@@ -62,6 +62,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--full-prepare` | Skip triage and run the full prepare pipeline when no epic exists. Equivalent to the pre-triage behavior. See [Triage](triage.md). |
 | `--git-strategy <auto\|current\|branch\|worktree>` | Git isolation strategy (default: `auto`). `auto` lets triage decide (complex -> worktree, simple/moderate -> branch). `current` works on the current branch (previous behavior). See [Git Strategy](git-strategy.md). |
 | `--branch-name <name>` | Explicit branch name for `branch` or `worktree` strategies. Overrides the auto-generated `fry/<slug>` name. |
+| `--always-verify` | Force verification checks, healing, and audit to run regardless of effort level or triage complexity. Generates heuristic verification checks if none exist. Useful for CI/CD and automated builds. |
 | `--dry-run` | Parse epic and show plan without running anything |
 
 ### Examples
@@ -95,6 +96,7 @@ fry --no-sanity-check                             # Skip triage confirmation and
 fry --git-strategy worktree                       # Force worktree isolation
 fry --git-strategy branch --branch-name feat/auth # Branch with explicit name
 fry --git-strategy current                        # Work on current branch (previous behavior)
+fry --always-verify                               # Force verification+healing+audit on all tasks
 fry --project-dir /path/to/project                # Operate on a different project
 FRY_ENGINE=claude fry                             # Set engine via environment variable
 ```
