@@ -75,10 +75,11 @@ assets/                Optional text documents (specs, schemas) read during plan
         |
         v
   fry run               Triage gate: cheap LLM classifies complexity + effort
+                           ↓ Interactive confirmation [Y/n/a] (adjust difficulty/effort)
                            SIMPLE   → programmatic epic (0 prep calls)
                            MODERATE → programmatic epic + auto-verification (0 prep calls)
                            COMPLEX  → full prepare (below)
-                         (--full-prepare skips triage)
+                         (--full-prepare skips triage, --no-sanity-check skips confirmation)
         |
         v
   fry prepare           Step 0 (if needed): AI generates plans/plan.md from executive.md
@@ -99,7 +100,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 
 **Key mechanisms:**
 
-- **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, healing, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
+- **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. After classification, an interactive confirmation prompt lets you review, accept, or adjust the difficulty and effort before the build starts (`--no-sanity-check` skips this). Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, healing, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
 - **Sanity check** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (skippable with `--no-sanity-check`)
 - **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
@@ -209,7 +210,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [User Prompt](docs/user-prompt.md) | Injecting directives, prompt hierarchy, persistence |
 | [Project Structure](docs/project-structure.md) | Directory layout, generated artifacts, file reference |
 | [Terminal Output](docs/terminal-output.md) | Status banners, verbose mode, log format |
-| [Triage](docs/triage.md) | Complexity classification: simple, moderate, complex — controls whether full prepare runs |
+| [Triage](docs/triage.md) | Complexity classification with interactive confirmation — controls whether full prepare runs |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
 
 ## License

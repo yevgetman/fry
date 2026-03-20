@@ -24,8 +24,9 @@ When you run `fry run` and no `.fry/epic.md` exists:
 The triage classifier suggests an effort level (`low`, `medium`, or `high`) alongside the complexity classification. The effort resolution order is:
 
 1. `--effort` CLI flag (if set)
-2. Triage suggestion (from classifier output)
-3. Default per difficulty (low for simple, medium for moderate)
+2. User adjustment via [interactive confirmation](#interactive-confirmation) (if the user overrides effort during the `[Y/n/a]` prompt)
+3. Triage suggestion (from classifier output)
+4. Default per difficulty (low for simple, medium for moderate)
 
 Simple and moderate tasks are **capped at high** — `--effort max` is automatically reduced to `high` with a log warning. Max effort is reserved for complex tasks.
 
@@ -81,7 +82,7 @@ Difficulty [MODERATE] (simple/moderate/complex, or Enter to keep):
 Effort [medium] (low/medium/high, or Enter to keep):
 ```
 
-Changing difficulty to COMPLEX causes the full prepare pipeline to run. Effort `max` is only allowed when difficulty is COMPLEX — selecting it on SIMPLE or MODERATE triggers a warning and keeps the previous value.
+Changing difficulty to COMPLEX causes the full prepare pipeline to run. Effort `max` is only allowed when difficulty is COMPLEX — typing it on SIMPLE or MODERATE triggers a warning and keeps the previous value. If you downgrade difficulty from COMPLEX to SIMPLE/MODERATE but keep `max` effort (by pressing Enter), Fry automatically downgrades the effort to `high` with a warning.
 
 The confirmation is skipped when `--no-sanity-check` or `--dry-run` is passed.
 
@@ -132,6 +133,7 @@ The auto-generated verification checks are heuristic-only — they detect `go.mo
 | Flag | Description |
 |---|---|
 | `--full-prepare` | Skip triage and run full prepare pipeline (equivalent to pre-triage behavior) |
+| `--no-sanity-check` | Skip the interactive triage confirmation (and the prepare sanity check on the complex path) |
 
 ## Mode-Aware Classification
 

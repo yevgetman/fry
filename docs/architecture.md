@@ -52,6 +52,12 @@ type Engine interface {
 User Input (plans/, media/, assets/, or --user-prompt)
        │
        ▼
+   Triage gate ──► Classify complexity (1 cheap LLM call)
+               ──► Interactive confirmation [Y/n/a] (user can adjust difficulty/effort)
+               ──► SIMPLE/MODERATE: programmatic epic (no LLM prepare)
+               ──► COMPLEX or --full-prepare: full prepare (below)
+       │
+       ▼
    fry prepare ──► Bootstrap: --user-prompt → plans/executive.md (interactive review)
                ──► Sanity check: AI-generated project summary for user confirmation
                ──► Step 0: plans/executive.md → plans/plan.md

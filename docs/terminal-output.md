@@ -50,6 +50,33 @@ When assets and media are also present, the bootstrap message lists them:
 [2026-03-10 11:49:51] Generating plans/executive.md from user prompt, assets/ assets, media/ manifest (engine: claude, model: sonnet)...
 ```
 
+### Triage confirmation
+
+When no epic file exists and `--full-prepare` is not set, Fry runs the triage classifier and then shows an interactive confirmation:
+
+```
+[2026-03-10 11:49:52] ▶ TRIAGE  classifying task complexity...  engine=claude  model=haiku
+[2026-03-10 11:49:54] ▶ TRIAGE  result: MODERATE  effort=medium  sprints=2 — REST endpoint with tests across 6 files.
+
+── Triage classification ───────────────────────────────────────
+Difficulty:  MODERATE
+Effort:      medium
+Reason:      REST endpoint with tests across 6 files.
+Action:      Build 2-sprint epic programmatically (no LLM prepare)
+─────────────────────────────────────────────────────────────────
+Accept this classification? [Y/n/a] (a = adjust)
+```
+
+Press **Enter** or **Y** to accept. Press **a** to adjust difficulty and/or effort:
+
+```
+Accept this classification? [Y/n/a] (a = adjust) a
+Difficulty [MODERATE] (simple/moderate/complex, or Enter to keep): complex
+Effort [medium] (low/medium/high/max, or Enter to keep): high
+```
+
+The confirmation is skipped with `--no-sanity-check` or `--dry-run`. See [Triage — Interactive Confirmation](triage.md#interactive-confirmation) for full details.
+
 ### Sanity check
 
 After `plan.md` is available (whether user-authored or generated), Fry shows an AI-generated project summary and asks for confirmation:

@@ -104,8 +104,9 @@ Auto-detection watches for common over-engineering signals:
 When the [triage gate](triage.md) classifies a task, it also suggests an effort level. The effort resolution order is:
 
 1. `--effort` CLI flag (if set by the user)
-2. Triage classifier suggestion
-3. Default per difficulty: `low` for simple, `medium` for moderate
+2. User adjustment via [interactive confirmation](triage.md#interactive-confirmation) (if the user overrides effort during the `[Y/n/a]` prompt)
+3. Triage classifier suggestion
+4. Default per difficulty: `low` for simple, `medium` for moderate
 
 **Simple and moderate tasks are capped at `high`** — if `--effort max` is passed or the triage classifier suggests max, it is automatically reduced to `high` with a log warning. Max effort is reserved for complex tasks that go through the full prepare pipeline.
 

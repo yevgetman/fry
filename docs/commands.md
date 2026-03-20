@@ -89,7 +89,7 @@ fry --mode writing --user-prompt "Write a guide"  # Writing project (books, guid
 fry --user-prompt "focus on backend API, skip frontend"
 fry --user-prompt "build a todo app" --engine claude  # Start from just a prompt
 fry --user-prompt-file ./prompt.txt --engine claude   # Load prompt from a file
-fry --no-sanity-check                             # Skip project summary during auto-prepare
+fry --no-sanity-check                             # Skip triage confirmation and project summary
 fry --project-dir /path/to/project                # Operate on a different project
 FRY_ENGINE=claude fry                             # Set engine via environment variable
 ```

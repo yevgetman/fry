@@ -281,7 +281,7 @@ Key flags:
   --resume                           # Skip iterations, verify + heal with boosted attempts
   --continue                         # LLM-assisted auto-resume from where build left off
   --full-prepare                     # Skip triage, run full prepare pipeline
-  --no-sanity-check                  # Skip interactive project summary
+  --no-sanity-check                  # Skip interactive confirmations (triage + project summary)
   --no-review                        # Skip mid-build sprint review
   --no-audit                         # Skip audits
   --verbose                          # Verbose logging
