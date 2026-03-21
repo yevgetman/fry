@@ -104,6 +104,7 @@ func TestClaudeCommandConstruction(t *testing.T) {
 }
 
 func TestCodexRunBinaryNotFound(t *testing.T) {
+	// t.Parallel() intentionally omitted: t.Setenv panics after t.Parallel() (Go 1.17+).
 	t.Setenv("PATH", t.TempDir())
 	eng := &CodexEngine{}
 	_, exitCode, err := eng.Run(context.Background(), "hello", RunOpts{})
@@ -112,6 +113,7 @@ func TestCodexRunBinaryNotFound(t *testing.T) {
 }
 
 func TestClaudeRunBinaryNotFound(t *testing.T) {
+	// t.Parallel() intentionally omitted: t.Setenv panics after t.Parallel() (Go 1.17+).
 	t.Setenv("PATH", t.TempDir())
 	eng := &ClaudeEngine{}
 	_, exitCode, err := eng.Run(context.Background(), "hello", RunOpts{})
