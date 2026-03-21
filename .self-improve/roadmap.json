@@ -111,10 +111,10 @@
       ],
       "description": "Currently users must use @check_cmd with raw shell commands to run tests. A dedicated @check_test primitive would understand test frameworks (Go, npm/jest, pytest), parse pass/fail/skip counts, and report structured results.",
       "fix": "Add CheckTest to the check type enum in internal/verify/types.go. Add parsing for @check_test in internal/verify/parser.go. Add execution logic in internal/verify/runner.go — run command, parse output for test counts. Detect framework from command prefix. Update docs/verification.md and templates/verification-example.md. Add tests.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 2
+      "attempted_count": 3
     },
     {
       "id": "C4",
@@ -127,10 +127,10 @@
       ],
       "description": "There's currently no visibility into how many tokens each sprint, heal attempt, or audit cycle consumes. Adding token tracking would help users optimize effort levels and model selection.",
       "fix": "Create internal/metrics/tokens.go with TokenUsage struct (input, output, total). Parse token counts from engine output/logs (Claude and Codex both emit usage stats). Aggregate per-sprint, per-heal, per-audit. Include in JSON build report (C2) and terminal summary. Add --show-tokens flag. Update docs/commands.md and docs/terminal-output.md. Add tests.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 0
+      "attempted_count": 1
     },
     {
       "id": "D2",
@@ -144,10 +144,10 @@
       ],
       "description": "The current --continue mode invokes an LLM to analyze build state and decide where to resume. For simple cases (resume from first failed sprint), this is expensive overkill. A --continue --heuristic flag would use deterministic rules instead.",
       "fix": "Add --heuristic flag to the continue flow in internal/cli/run.go. Add HeuristicAnalyze() function in internal/continuerun/analyzer.go. Rules: find first sprint without a completion marker, resume from there. Skip LLM call entirely when --heuristic is set. Update docs/commands.md. Add tests.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 0
+      "attempted_count": 1
     },
     {
       "id": "D3",
