@@ -376,7 +376,7 @@ func TestCappedBuffer_ExceedsCap(t *testing.T) {
 	// Write more than remaining — truncated to remaining (10 bytes)
 	n, err := buf.Write([]byte("0123456789extra"))
 	require.NoError(t, err)
-	assert.Equal(t, 10, n) // only 10 remaining bytes accepted
+	assert.Equal(t, 15, n) // reports full input length per io.Writer contract
 	assert.Equal(t, maxCheckOutput, buf.Len())
 }
 
