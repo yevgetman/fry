@@ -44,10 +44,10 @@ func ResolveEngine(cliFlag, epicDirective, envVar, defaultEngine string) (string
 	}
 
 	switch name {
-	case "codex", "claude":
+	case "codex", "claude", "ollama":
 		return name, nil
 	default:
-		return "", fmt.Errorf("unsupported engine: %s", name)
+		return "", fmt.Errorf("unsupported engine %q; valid: codex, claude, ollama", name)
 	}
 }
 
@@ -57,6 +57,8 @@ func NewEngine(name string) (Engine, error) {
 		return &CodexEngine{}, nil
 	case "claude":
 		return &ClaudeEngine{}, nil
+	case "ollama":
+		return &OllamaEngine{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported engine: %s", name)
 	}

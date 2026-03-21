@@ -5,6 +5,7 @@ const (
 	PlansDir                  = "plans"
 	BuildLogsDir              = ".fry/build-logs"
 	DefaultEngine             = "claude"
+	DefaultOllamaModel        = "llama3"
 	DefaultPrepareEngine      = "claude"
 	DefaultPlanningEngine     = "claude"
 	DefaultWritingEngine      = "claude"

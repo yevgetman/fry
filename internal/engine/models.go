@@ -63,6 +63,13 @@ var codexTierModels = map[ModelTier]string{
 	TierLabor:    "gpt-5-codex-mini",
 }
 
+var ollamaTierModels = map[ModelTier]string{
+	TierFrontier: "llama3",
+	TierStandard: "llama3",
+	TierMini:     "llama3",
+	TierLabor:    "llama3",
+}
+
 // ClaudeModels lists valid model identifiers for the Claude engine, ordered by capability.
 var ClaudeModels = []Model{
 	// Rank 1 — Frontier (opus-class, current generation)
@@ -124,10 +131,22 @@ var CodexModels = []Model{
 	{ID: "gpt-5-codex-mini", Rank: 12},
 }
 
-// claudeModelSet and codexModelSet are lookup maps for validation.
+// OllamaModels lists well-known model identifiers for the Ollama engine.
+// Ollama accepts any locally pulled model name; this list is not exhaustive.
+var OllamaModels = []Model{
+	{ID: "llama3", Rank: 1},
+	{ID: "llama3:70b", Rank: 1},
+	{ID: "mistral", Rank: 2},
+	{ID: "codellama", Rank: 2},
+	{ID: "phi3", Rank: 3},
+	{ID: "gemma", Rank: 3},
+}
+
+// claudeModelSet, codexModelSet, and ollamaModelSet are lookup maps for validation.
 var (
 	claudeModelSet = buildModelSet(ClaudeModels)
 	codexModelSet  = buildModelSet(CodexModels)
+	ollamaModelSet = buildModelSet(OllamaModels)
 )
 
 func buildModelSet(models []Model) map[string]int {
@@ -145,6 +164,8 @@ func TierModel(engineName string, tier ModelTier) string {
 		return claudeTierModels[tier]
 	case "codex":
 		return codexTierModels[tier]
+	case "ollama":
+		return ollamaTierModels[tier]
 	default:
 		return ""
 	}
@@ -247,6 +268,8 @@ func ModelsForEngine(engineName string) ([]Model, error) {
 		return ClaudeModels, nil
 	case "codex":
 		return CodexModels, nil
+	case "ollama":
+		return OllamaModels, nil
 	default:
 		return nil, fmt.Errorf("unsupported engine: %s", engineName)
 	}
@@ -260,6 +283,8 @@ func ModelRank(engineName, model string) int {
 		return claudeModelSet[model]
 	case "codex":
 		return codexModelSet[model]
+	case "ollama":
+		return ollamaModelSet[model]
 	default:
 		return 0
 	}
@@ -280,6 +305,10 @@ func ValidateModel(engineName, model string) error {
 		if _, ok := codexModelSet[model]; !ok {
 			return fmt.Errorf("invalid model %q for engine %s; valid models: %s", model, engineName, modelIDs(CodexModels))
 		}
+	case "ollama":
+		// Ollama accepts any model name — locally pulled models are user-defined.
+		// Skip static validation; runtime will error if the model is unavailable.
+		return nil
 	default:
 		return fmt.Errorf("unsupported engine: %s", engineName)
 	}
