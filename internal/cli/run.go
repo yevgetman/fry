@@ -387,7 +387,11 @@ var runCmd = &cobra.Command{
 		}
 		var lockOnce sync.Once
 		releaseLock := func() {
-			lockOnce.Do(func() { _ = lock.Release(originalProjectPath) })
+			lockOnce.Do(func() {
+				if err := lock.Release(originalProjectPath); err != nil {
+					fmt.Fprintf(os.Stderr, "fry: warning: %v\n", err)
+				}
+			})
 		}
 		defer releaseLock()
 
