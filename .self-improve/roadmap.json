@@ -77,10 +77,10 @@
       ],
       "description": "Fry currently only supports Claude and Codex. Adding Ollama would allow users to run builds with local open-source models (Llama, Mistral, CodeLlama, etc.) without any API keys or cloud dependencies.",
       "fix": "Create internal/engine/ollama.go implementing the Engine interface. Shell out to 'ollama run <model>' with the prompt via stdin or temp file. Add 'ollama' case to NewEngine() and ResolveEngine(). Add Ollama model tier mappings in models.go. Update docs/engines.md, README.md, README.LLM.md. Add tests in internal/engine/ollama_test.go.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 0
+      "attempted_count": 1
     },
     {
       "id": "C2",
@@ -93,10 +93,10 @@
       ],
       "description": "All build output is currently unstructured terminal text. A --json-report flag would emit a build-report.json containing sprint results, verification outcomes, heal attempt counts, audit findings, and timing data. The data already exists scattered across .fry/ files.",
       "fix": "Create internal/report/report.go with BuildReport struct. Define nested types: SprintResult, VerificationResult, HealSummary, AuditSummary. Aggregate data at the end of executeRun() in internal/cli/run.go. Marshal to JSON and write to build-report.json. Add --json-report flag to runCmd. Add build-report.json to .gitignore. Update docs/commands.md. Add tests.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 0
+      "attempted_count": 1
     },
     {
       "id": "C3",
@@ -111,10 +111,10 @@
       ],
       "description": "Currently users must use @check_cmd with raw shell commands to run tests. A dedicated @check_test primitive would understand test frameworks (Go, npm/jest, pytest), parse pass/fail/skip counts, and report structured results.",
       "fix": "Add CheckTest to the check type enum in internal/verify/types.go. Add parsing for @check_test in internal/verify/parser.go. Add execution logic in internal/verify/runner.go — run command, parse output for test counts. Detect framework from command prefix. Update docs/verification.md and templates/verification-example.md. Add tests.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 0
+      "attempted_count": 1
     },
     {
       "id": "C4",
