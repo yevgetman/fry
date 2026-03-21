@@ -1,6 +1,9 @@
 package engine
 
 import (
+	"bytes"
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -98,4 +101,65 @@ func TestClaudeCommandConstruction(t *testing.T) {
 		"--model", "sonnet",
 		"--output-format", "json",
 	}, args)
+}
+
+func TestCodexRunBinaryNotFound(t *testing.T) {
+	// t.Parallel() intentionally omitted: t.Setenv panics after t.Parallel() (Go 1.17+).
+	t.Setenv("PATH", t.TempDir())
+	eng := &CodexEngine{}
+	_, exitCode, err := eng.Run(context.Background(), "hello", RunOpts{})
+	require.Error(t, err)
+	assert.Equal(t, -1, exitCode)
+}
+
+func TestClaudeRunBinaryNotFound(t *testing.T) {
+	// t.Parallel() intentionally omitted: t.Setenv panics after t.Parallel() (Go 1.17+).
+	t.Setenv("PATH", t.TempDir())
+	eng := &ClaudeEngine{}
+	_, exitCode, err := eng.Run(context.Background(), "hello", RunOpts{})
+	require.Error(t, err)
+	assert.Equal(t, -1, exitCode)
+}
+
+func TestExitCodeFromError_Nil(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 0, exitCodeFromError(nil))
+}
+
+func TestExitCodeFromError_NonExitError(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, -1, exitCodeFromError(fmt.Errorf("something")))
+}
+
+func TestCodexRunContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	eng := &CodexEngine{}
+	_, _, err := eng.Run(ctx, "hello", RunOpts{})
+	require.Error(t, err)
+}
+
+func TestClaudeRunContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	eng := &ClaudeEngine{}
+	_, _, err := eng.Run(ctx, "hello", RunOpts{})
+	require.Error(t, err)
+}
+
+func TestCombinedWriter(t *testing.T) {
+	t.Parallel()
+
+	var bufA, bufB bytes.Buffer
+	w := combinedWriter(&bufA, &bufB)
+	_, err := w.Write([]byte("test-data"))
+	require.NoError(t, err)
+	assert.Equal(t, "test-data", bufA.String())
+	assert.Equal(t, "test-data", bufB.String())
 }

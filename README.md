@@ -50,7 +50,7 @@ For complex tasks (or when `--full-prepare` is used), Fry will:
 
 ### The Build
 
-Fry deploys agents using either [OpenAI Codex or Claude Code](docs/engines.md) — the specific models used vary by task and user-defined [effort level](docs/effort-levels.md).
+Fry deploys agents using [OpenAI Codex, Claude Code, or Ollama](docs/engines.md) — the specific models used vary by task and user-defined [effort level](docs/effort-levels.md).
 
 A single agent carries out the work to complete a sprint (although there is a parallel mode to run multiple agents at once).
 
@@ -127,6 +127,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - At least one AI engine CLI:
   - [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code): `npm i -g @anthropic-ai/claude-code` (default engine)
   - [OpenAI Codex CLI](https://www.npmjs.com/package/@openai/codex): `npm i -g @openai/codex`
+  - [Ollama](https://ollama.com): `brew install ollama` — local models, no API key required (required only when using `--engine ollama`)
 - **Docker** (optional) — only needed if your project uses `@docker_from_sprint`
 
 ## Quick Start
@@ -170,6 +171,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 ```bash
 fry                                    # Run all sprints (prepare: claude, build: claude)
 fry --engine codex                     # Use OpenAI Codex for build stage
+fry --engine ollama                    # Use local Ollama models (no API key)
 fry --effort low                       # Simple task: 1-2 sprints, minimal overhead
 fry --effort max                       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
@@ -198,7 +200,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Commands](docs/commands.md) | Full CLI reference: `run`, `prepare`, `replan`, `version` |
 | [Effort Levels](docs/effort-levels.md) | Effort triage: `low`, `medium`, `high`, `max` -- controls sprint count, density, and review rigor |
 | [Epic Format](docs/epic-format.md) | Epic file syntax: global directives, sprint blocks, validation rules, sizing guidelines |
-| [AI Engines](docs/engines.md) | Codex and Claude engine configuration, mixing engines, model overrides |
+| [AI Engines](docs/engines.md) | Codex, Claude, and Ollama engine configuration, mixing engines, model overrides |
 | [Sprint Execution](docs/sprint-execution.md) | Agent iteration loop, prompt assembly, progress tracking, promise tokens |
 | [Verification](docs/verification.md) | Check primitives, file format, outcome matrix, graceful degradation |
 | [Self-Healing](docs/self-healing.md) | Heal loop mechanics, configuration, diagnostics |
