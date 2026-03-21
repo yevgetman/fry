@@ -12,11 +12,8 @@ import (
 type OllamaEngine struct{}
 
 func (e *OllamaEngine) Run(ctx context.Context, prompt string, opts RunOpts) (string, int, error) {
-	model := opts.Model
-	if model == "" {
-		model = config.DefaultOllamaModel
-	}
-	cmd := exec.CommandContext(ctx, "ollama", append([]string{"run", model}, opts.ExtraFlags...)...)
+	args := ollamaArgs(opts)
+	cmd := exec.CommandContext(ctx, "ollama", args...)
 	cmd.Dir = opts.WorkDir
 	cmd.Stdin = strings.NewReader(prompt)
 

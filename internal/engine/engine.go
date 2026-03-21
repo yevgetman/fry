@@ -60,6 +60,6 @@ func NewEngine(name string) (Engine, error) {
 	case "ollama":
 		return &OllamaEngine{}, nil
 	default:
-		return nil, fmt.Errorf("unsupported engine: %s", name)
+		return nil, fmt.Errorf("unsupported engine %q", name)
 	}
 }

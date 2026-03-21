@@ -51,8 +51,9 @@ func TestOllamaRunContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	eng := &OllamaEngine{}
-	_, _, err := eng.Run(ctx, "hello", RunOpts{})
+	_, exitCode, err := eng.Run(ctx, "hello", RunOpts{})
 	require.Error(t, err)
+	assert.Equal(t, -1, exitCode)
 }
 
 func TestNewEngine_Ollama(t *testing.T) {
