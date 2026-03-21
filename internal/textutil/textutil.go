@@ -35,6 +35,16 @@ func FileModTime(path string) time.Time {
 	return info.ModTime()
 }
 
+// FileSize returns the size in bytes of a file, or -1 if the file does not
+// exist or cannot be stat'd.
+func FileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return -1
+	}
+	return info.Size()
+}
+
 // ShellQuote returns a single-quoted shell string, escaping any embedded
 // single quotes. Suitable for embedding user strings in bash -c commands.
 func ShellQuote(s string) string {
@@ -55,12 +65,12 @@ func TruncateUTF8(s string, maxBytes int) string {
 }
 
 // ResolveArtifact checks whether the engine wrote the target file during its
-// run (by comparing modification times). If the file was written by the
-// engine, its on-disk content is authoritative and we leave it in place.
+// run (by comparing file sizes). If the file size changed, the engine wrote
+// it and its on-disk content is authoritative — we leave it in place.
 // Otherwise we fall back to writing the captured engine output (stripped of
 // markdown fences) ourselves.
-func ResolveArtifact(targetPath string, beforeMod time.Time, engineOutput string) error {
-	if FileModTime(targetPath).After(beforeMod) {
+func ResolveArtifact(targetPath string, beforeSize int64, engineOutput string) error {
+	if FileSize(targetPath) != beforeSize {
 		return nil
 	}
 	return os.WriteFile(targetPath, []byte(StripMarkdownFences(engineOutput)), 0o644)
