@@ -4,7 +4,7 @@
 
 ## What Is Fry
 
-Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex or Claude Code) to autonomously build software or generate documents. It decomposes a human-authored plan into sequential "sprints," executes each sprint through an iterative AI agent loop, verifies outputs with machine-executable checks, self-heals on failure, audits quality, and git-checkpoints every sprint.
+Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex, Claude Code, or Ollama) to autonomously build software or generate documents. It decomposes a human-authored plan into sequential "sprints," executes each sprint through an iterative AI agent loop, verifies outputs with machine-executable checks, self-heals on failure, audits quality, and git-checkpoints every sprint.
 
 **Version:** 0.1.0
 **Language:** Go 1.22
@@ -32,7 +32,8 @@ fry/
 │   │   ├── engine.go            # Engine interface + ResolveEngine + NewEngine
 │   │   ├── models.go            # Tier-based model selection, validation, session types
 │   │   ├── codex.go             # Codex CLI wrapper
-│   │   └── claude.go            # Claude Code CLI wrapper
+│   │   ├── claude.go            # Claude Code CLI wrapper
+│   │   └── ollama.go            # Ollama engine — shells out to `ollama run <model>`, reads prompt via stdin
 │   ├── epic/
 │   │   ├── types.go             # Epic, Sprint, EffortLevel types
 │   │   ├── parser.go            # State-machine .md parser for epic files
@@ -275,7 +276,7 @@ fry clean                            # Archive .fry/ + build outputs to .fry-arc
 fry version                          # Print version
 
 Key flags:
-  --engine codex|claude              # AI engine for build
+  --engine codex|claude|ollama       # AI engine for build
   --prepare-engine codex|claude      # AI engine for prepare phase
   --effort low|medium|high|max       # Effort level (auto-detect if omitted)
   --mode software|planning|writing   # Execution mode (default: software)
@@ -377,7 +378,7 @@ make clean     # rm -rf bin/
 | `commands.md` | Full CLI reference |
 | `effort-levels.md` | Effort triage and sprint sizing |
 | `epic-format.md` | Epic syntax, directives, validation |
-| `engines.md` | Codex/Claude config, mixing, model overrides |
+| `engines.md` | Codex/Claude/Ollama config, mixing, model overrides |
 | `sprint-execution.md` | Agent loop, prompt assembly, progress |
 | `verification.md` | Check primitives, format, outcome matrix |
 | `self-healing.md` | Heal loop mechanics |

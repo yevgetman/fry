@@ -1,6 +1,6 @@
 # AI Engines
 
-Fry supports two interchangeable AI engines: **OpenAI Codex** and **Claude Code**. The engine determines which CLI tool is invoked to execute prompts.
+Fry supports three interchangeable AI engines: **OpenAI Codex**, **Claude Code**, and **Ollama**. The engine determines which CLI tool is invoked to execute prompts.
 
 ## Supported Engines
 
@@ -33,6 +33,34 @@ echo PROMPT | claude -p --dangerously-skip-permissions [--model MODEL] [FLAGS]
 ```
 
 The prompt is passed via stdin.
+
+### Ollama (Local Models)
+
+Fry supports Ollama for running builds with locally hosted open-source models (Llama 3, Mistral, CodeLlama, Phi-3, Gemma, etc.) without any API keys or cloud dependencies.
+
+**Prerequisites:** Install [Ollama](https://ollama.com) and pull at least one model:
+
+```bash
+brew install ollama
+ollama pull llama3
+```
+
+**Invocation:**
+```
+echo PROMPT | ollama run <model>
+```
+
+The prompt is passed via stdin. The model name is the first positional argument. Use the `@model` directive or `--model` flag to specify the Ollama model name.
+
+**Usage:**
+```bash
+fry --engine ollama
+fry --engine ollama --model codellama
+```
+
+**Model validation:** Fry accepts any Ollama model name without static validation. If the model is not locally available, Ollama will error at runtime.
+
+**Tier mapping:** All tiers (frontier, standard, mini, labor) default to `llama3`. Override per-sprint with `@model <model-name>` or globally with `--model`.
 
 ## Engine Resolution
 
@@ -84,12 +112,12 @@ When [dynamic sprint review](sprint-review.md) is enabled, the reviewer session 
 
 Fry automatically selects the best model for each agent session based on the **engine**, **effort level**, and **session type**. Models are organized into four tiers:
 
-| Tier | Purpose | Claude | Codex |
-|------|---------|--------|-------|
-| **Frontier** | Most capable, highest cost | `opus[1m]` | `gpt-5.4` |
-| **Standard** | Strong all-rounder | `sonnet` | `gpt-5.3-codex` |
-| **Mini** | Fast, cost-efficient | `haiku` | `gpt-5.4-mini` |
-| **Labor** | Cheapest, no reasoning needed | `haiku` | `gpt-5-codex-mini` |
+| Tier | Purpose | Claude | Codex | Ollama |
+|------|---------|--------|-------|--------|
+| **Frontier** | Most capable, highest cost | `opus[1m]` | `gpt-5.4` | `llama3` |
+| **Standard** | Strong all-rounder | `sonnet` | `gpt-5.3-codex` | `llama3` |
+| **Mini** | Fast, cost-efficient | `haiku` | `gpt-5.4-mini` | `llama3` |
+| **Labor** | Cheapest, no reasoning needed | `haiku` | `gpt-5-codex-mini` | `llama3` |
 
 To update models when new ones release, change only the tier mapping table in `internal/engine/models.go`.
 
@@ -136,7 +164,7 @@ These flags are appended to the engine invocation command.
 
 ## Engine Interface
 
-Internally, both engines implement the same interface:
+Internally, all three engines implement the same interface:
 
 ```go
 type Engine interface {
