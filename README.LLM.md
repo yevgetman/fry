@@ -86,6 +86,8 @@ fry/
 │   │   ├── report.go            # BuildState → human-readable markdown report
 │   │   └── analyzer.go          # LLM analysis agent for resume decisions
 │   ├── summary/summary.go       # AI-generated build summary
+│   ├── metrics/tokens.go        # Token usage parsing for Claude and Codex engines
+│   ├── report/report.go         # BuildReport types and JSON serialisation (--json-report)
 │   ├── shellhook/shellhook.go   # Pre-sprint/iteration shell commands
 │   └── textutil/textutil.go     # Shell quoting, file timestamps, artifact resolution
 ├── templates/

@@ -12,8 +12,10 @@ import (
 	"sync"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
+
 	"github.com/yevgetman/fry/internal/archive"
 	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/config"
@@ -23,11 +25,13 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/lock"
-	"github.com/yevgetman/fry/internal/shellhook"
 	frlog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/metrics"
 	"github.com/yevgetman/fry/internal/preflight"
 	"github.com/yevgetman/fry/internal/prepare"
+	"github.com/yevgetman/fry/internal/report"
 	"github.com/yevgetman/fry/internal/review"
+	"github.com/yevgetman/fry/internal/shellhook"
 	"github.com/yevgetman/fry/internal/sprint"
 	"github.com/yevgetman/fry/internal/summary"
 	"github.com/yevgetman/fry/internal/triage"
@@ -55,6 +59,9 @@ var (
 	runBranchName     string
 	runAlwaysVerify   bool
 	runHeuristic      bool
+	runSARIF          bool
+	runJSONReport     bool
+	runShowTokens     bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -411,6 +418,14 @@ var runCmd = &cobra.Command{
 		currentSprint := 0
 		epicName := ep.Name // guarded by mu; updated after replan
 
+		buildStart := time.Now()
+		buildReport := report.BuildReport{
+			EpicName:  ep.Name,
+			StartTime: buildStart,
+		}
+		sprintReportResults := make([]report.SprintResult, 0, endSprint-startSprint+1)
+		sprintTokens := make([]metrics.SprintTokens, 0, endSprint-startSprint+1)
+
 		signalCh := make(chan os.Signal, 1)
 		signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
 		defer signal.Stop(signalCh)
@@ -495,6 +510,7 @@ var runCmd = &cobra.Command{
 
 			// In resume mode, the first sprint skips iterations and goes straight
 			// to verification + healing with a boosted attempt budget.
+			sprintStart := time.Now()
 			var result *sprint.SprintResult
 			if runResume && sprintNum == startSprint {
 				result, err = sprint.ResumeSprint(ctx, sprint.RunConfig{
@@ -541,6 +557,43 @@ var runCmd = &cobra.Command{
 			mu.Lock()
 			results[sprintNum-startSprint] = *result
 			mu.Unlock()
+
+			// Collect per-sprint data for the build report and token summary.
+			sprintEnd := time.Now()
+			sprintPassed := isPassStatus(result.Status)
+			sprintVerify := &report.VerificationResult{
+				TotalChecks:  result.VerificationTotalCount,
+				PassedChecks: result.VerificationPassCount,
+				FailedChecks: result.VerificationTotalCount - result.VerificationPassCount,
+			}
+			if result.VerificationTotalCount == 0 {
+				sprintVerify = nil
+			}
+			var sprintTokenUsage *metrics.TokenUsage
+			if result.SprintLogPath != "" {
+				if logData, readErr := os.ReadFile(result.SprintLogPath); readErr == nil {
+					u := metrics.ParseTokens(engineName, string(logData))
+					if u.Total > 0 {
+						sprintTokenUsage = &u
+					}
+				}
+			}
+			reportSprint := report.SprintResult{
+				SprintNum:    spr.Number,
+				Name:         spr.Name,
+				StartTime:    sprintStart,
+				EndTime:      sprintEnd,
+				Passed:       sprintPassed,
+				Verification: sprintVerify,
+				TokenUsage:   sprintTokenUsage,
+			}
+			sprintReportResults = append(sprintReportResults, reportSprint)
+			if sprintTokenUsage != nil {
+				sprintTokens = append(sprintTokens, metrics.SprintTokens{
+					SprintNum: spr.Number,
+					Usage:     *sprintTokenUsage,
+				})
+			}
 
 			if len(result.DeferredFailures) > 0 {
 				allDeferredFailures = append(allDeferredFailures, deferredEntry{
@@ -877,6 +930,50 @@ var runCmd = &cobra.Command{
 
 		releaseLock()
 
+		// Write JSON build report if --json-report flag is set.
+		if runJSONReport {
+			buildEnd := time.Now()
+			buildReport.EndTime = buildEnd
+			buildReport.Duration = buildEnd.Sub(buildStart)
+			buildReport.Sprints = sprintReportResults
+			reportPath := filepath.Join(projectPath, "build-report.json")
+			if writeErr := report.Write(reportPath, buildReport); writeErr != nil {
+				frlog.Log("WARNING: could not write JSON build report: %v", writeErr)
+			} else {
+				frlog.Log("  BUILD REPORT: written to build-report.json")
+			}
+		}
+
+		// Write SARIF report if --sarif flag is set and a build audit was run.
+		if runSARIF && buildAuditResult != nil {
+			sarifData, sarifErr := audit.ConvertToSARIF(buildAuditResult.UnresolvedFindings)
+			if sarifErr != nil {
+				frlog.Log("WARNING: could not generate SARIF report: %v", sarifErr)
+			} else {
+				sarifPath := filepath.Join(projectPath, "build-audit.sarif")
+				if writeErr := os.WriteFile(sarifPath, sarifData, 0o644); writeErr != nil {
+					frlog.Log("WARNING: could not write SARIF report: %v", writeErr)
+				} else {
+					frlog.Log("  SARIF: build-audit.sarif written (%d findings)", len(buildAuditResult.UnresolvedFindings))
+				}
+			}
+		}
+
+		// Print per-sprint token summary to stderr if --show-tokens is set.
+		if runShowTokens && len(sprintTokens) > 0 {
+			tw := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(tw, "Sprint\tInput Tokens\tOutput Tokens\tTotal")
+			fmt.Fprintln(tw, "------\t------------\t-------------\t-----")
+			var totalIn, totalOut int
+			for _, st := range sprintTokens {
+				fmt.Fprintf(tw, "%d\t%d\t%d\t%d\n", st.SprintNum, st.Usage.Input, st.Usage.Output, st.Usage.Total)
+				totalIn += st.Usage.Input
+				totalOut += st.Usage.Output
+			}
+			fmt.Fprintf(tw, "TOTAL\t%d\t%d\t%d\n", totalIn, totalOut, totalIn+totalOut)
+			_ = tw.Flush()
+		}
+
 		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints {
 			archivePath, archiveErr := archive.Archive(projectPath)
 			if archiveErr != nil {
@@ -911,6 +1008,9 @@ func init() {
 	runCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
 	runCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force verification, healing, and audit to run regardless of effort level or triage complexity")
 	runCmd.Flags().BoolVar(&runHeuristic, "heuristic", false, "With --continue: skip LLM analysis and use heuristic to find first incomplete sprint")
+	runCmd.Flags().BoolVar(&runSARIF, "sarif", false, "Write build-audit.sarif in SARIF 2.1.0 format alongside build-audit.md")
+	runCmd.Flags().BoolVar(&runJSONReport, "json-report", false, "Write build-report.json with structured sprint results")
+	runCmd.Flags().BoolVar(&runShowTokens, "show-tokens", false, "Print per-sprint token usage summary to stderr after the run")
 }
 
 func resolveProjectDir(dir string) (string, error) {

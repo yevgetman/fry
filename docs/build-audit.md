@@ -156,6 +156,25 @@ The report includes:
 - A verdict indicating whether the codebase passed or issues remain
 - If the agent exhausted all iterations, an explanation of why issues persist
 
+### SARIF export (`--sarif`)
+
+Pass `--sarif` to `fry run` to write a machine-readable `build-audit.sarif` alongside `build-audit.md`. The file conforms to [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) and can be uploaded to GitHub Advanced Security, VS Code's SARIF viewer, or any compatible tool.
+
+```bash
+fry run --sarif
+```
+
+SARIF severity mapping:
+
+| Audit severity | SARIF level |
+|---|---|
+| CRITICAL | `error` |
+| HIGH | `error` |
+| MODERATE | `warning` |
+| LOW | `note` |
+
+`build-audit.sarif` is listed in `.gitignore` and is not committed. It is only written when the build audit runs (i.e., the full epic completes with auditing enabled) and `--sarif` is set.
+
 ## Terminal Output
 
 ### Successful audit (pass):

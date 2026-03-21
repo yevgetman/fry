@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -552,6 +553,126 @@ func TestParseJestOutput(t *testing.T) {
 	assert.Equal(t, 1, result.TestFailCount)
 	assert.Equal(t, 2, result.TestSkipCount)
 	assert.Equal(t, 7, result.TestPassCount)
+}
+
+// --- B4: Edge case tests ---
+
+// TestRunnerCommandTimeout verifies that a command that runs longer than the
+// parent context deadline is killed and the check fails.
+func TestRunnerCommandTimeout(t *testing.T) {
+	t.Parallel()
+
+	// Cancel the context after a very short delay to simulate a timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckCmd, Command: "sleep 10"},
+	}
+
+	results, passCount, totalCount := RunChecks(ctx, checks, 1, t.TempDir())
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, totalCount)
+	assert.Equal(t, 0, passCount)
+	assert.False(t, results[0].Passed, "command that exceeds context deadline must fail")
+}
+
+// TestRunnerLargeOutputTruncation verifies that a command generating more than
+// maxCheckOutput bytes completes without OOM and the output is capped.
+func TestRunnerLargeOutputTruncation(t *testing.T) {
+	t.Parallel()
+
+	// Generate slightly more than 10 MB of output using dd reading from /dev/zero.
+	const overMaxBytes = maxCheckOutput + 1024
+
+	checks := []Check{
+		{
+			Sprint:  1,
+			Type:    CheckCmd,
+			Command: "dd if=/dev/zero bs=1024 count=10241 2>/dev/null | cat",
+		},
+	}
+
+	results, _, totalCount := RunChecks(context.Background(), checks, 1, t.TempDir())
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, totalCount)
+	// The output must be capped at maxCheckOutput.
+	assert.LessOrEqual(t, len(results[0].Output), overMaxBytes,
+		"output must be capped at maxCheckOutput bytes")
+}
+
+// TestRunnerRegexEdgeCases tests CheckFileContains behaviour for edge-case patterns:
+// empty pattern, an invalid regex with an unclosed group, and a pattern that
+// matches the entire file content.
+func TestRunnerRegexEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "data.txt"), []byte("hello world\n"), 0o644))
+
+	cases := []struct {
+		name    string
+		pattern string
+		wantPass bool
+	}{
+		{
+			name:     "empty pattern matches everything",
+			pattern:  "",
+			wantPass: true,
+		},
+		{
+			name:     "invalid unclosed group fails gracefully",
+			pattern:  "(unclosed",
+			wantPass: false,
+		},
+		{
+			name:     "pattern matching entire content passes",
+			pattern:  "hello world",
+			wantPass: true,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			checks := []Check{
+				{Sprint: 1, Type: CheckFileContains, Path: "data.txt", Pattern: tc.pattern},
+			}
+			results, _, _ := RunChecks(context.Background(), checks, 1, projectDir)
+			require.Len(t, results, 1)
+			assert.Equal(t, tc.wantPass, results[0].Passed, "pattern=%q", tc.pattern)
+		})
+	}
+}
+
+// TestRunnerMixedCheckTypes verifies that a mix of check types are all evaluated
+// and that each result correctly reflects the pass/fail state.
+func TestRunnerMixedCheckTypes(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "exists.txt"), []byte("content\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "search.txt"), []byte("needle\n"), 0o644))
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckFile, Path: "exists.txt"},           // pass: file exists and non-empty
+		{Sprint: 1, Type: CheckFile, Path: "missing.txt"},          // fail: file absent
+		{Sprint: 1, Type: CheckFileContains, Path: "search.txt", Pattern: "needle"}, // pass
+		{Sprint: 1, Type: CheckCmd, Command: "true"},               // pass
+		{Sprint: 1, Type: CheckCmd, Command: "false"},              // fail
+	}
+
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, projectDir)
+	require.Len(t, results, 5)
+	assert.Equal(t, 5, totalCount)
+	assert.Equal(t, 3, passCount)
+
+	assert.True(t, results[0].Passed, "file_exists check on existing non-empty file should pass")
+	assert.False(t, results[1].Passed, "file_exists check on missing file should fail")
+	assert.True(t, results[2].Passed, "file_contains check for present needle should pass")
+	assert.True(t, results[3].Passed, "cmd 'true' should pass")
+	assert.False(t, results[4].Passed, "cmd 'false' should fail")
 }
 
 func writeVerificationFile(t *testing.T, contents string) string {

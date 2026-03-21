@@ -34,12 +34,15 @@ const (
 )
 
 type SprintResult struct {
-	Number           int
-	Name             string
-	Status           string
-	Duration         time.Duration
-	AuditWarning     string               // non-empty when MODERATE audit issues remain (advisory)
-	DeferredFailures []verify.CheckResult  // verification failures below threshold
+	Number                 int
+	Name                   string
+	Status                 string
+	Duration               time.Duration
+	AuditWarning           string               // non-empty when MODERATE audit issues remain (advisory)
+	DeferredFailures       []verify.CheckResult  // verification failures below threshold
+	VerificationPassCount  int                  // pass count from final verification run
+	VerificationTotalCount int                  // total checks from final verification run
+	SprintLogPath          string               // path to combined sprint log file
 }
 
 type RunConfig struct {
@@ -202,11 +205,14 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	frylog.Log("SPRINT %d %s (%s)", cfg.Sprint.Number, status, elapsed.Round(time.Second))
 
 	return &SprintResult{
-		Number:           cfg.Sprint.Number,
-		Name:             cfg.Sprint.Name,
-		Status:           status,
-		Duration:         elapsed,
-		DeferredFailures: deferred,
+		Number:                 cfg.Sprint.Number,
+		Name:                   cfg.Sprint.Name,
+		Status:                 status,
+		Duration:               elapsed,
+		DeferredFailures:       deferred,
+		VerificationPassCount:  passCount,
+		VerificationTotalCount: totalCount,
+		SprintLogPath:          sprintLogPath,
 	}, nil
 }
 
@@ -304,10 +310,11 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		frylog.Log("  No verification checks defined — nothing to resume.")
 		elapsed := time.Since(started)
 		return &SprintResult{
-			Number:   cfg.Sprint.Number,
-			Name:     cfg.Sprint.Name,
-			Status:   StatusPass,
-			Duration: elapsed,
+			Number:        cfg.Sprint.Number,
+			Name:          cfg.Sprint.Name,
+			Status:        StatusPass,
+			Duration:      elapsed,
+			SprintLogPath: sprintLogPath,
 		}, nil
 	}
 
@@ -318,10 +325,13 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		frylog.Log("  All checks pass — no healing needed.")
 		elapsed := time.Since(started)
 		return &SprintResult{
-			Number:   cfg.Sprint.Number,
-			Name:     cfg.Sprint.Name,
-			Status:   StatusPass,
-			Duration: elapsed,
+			Number:                 cfg.Sprint.Number,
+			Name:                   cfg.Sprint.Name,
+			Status:                 StatusPass,
+			Duration:               elapsed,
+			VerificationPassCount:  passCount,
+			VerificationTotalCount: totalCount,
+			SprintLogPath:          sprintLogPath,
 		}, nil
 	}
 
@@ -394,11 +404,14 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	frylog.Log("SPRINT %d RESUME %s (%s)", cfg.Sprint.Number, status, elapsed.Round(time.Second))
 
 	return &SprintResult{
-		Number:           cfg.Sprint.Number,
-		Name:             cfg.Sprint.Name,
-		Status:           status,
-		Duration:         elapsed,
-		DeferredFailures: deferred,
+		Number:                 cfg.Sprint.Number,
+		Name:                   cfg.Sprint.Name,
+		Status:                 status,
+		Duration:               elapsed,
+		DeferredFailures:       deferred,
+		VerificationPassCount:  hr.PassCount,
+		VerificationTotalCount: hr.TotalCount,
+		SprintLogPath:          sprintLogPath,
 	}, nil
 }
 

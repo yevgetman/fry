@@ -1,0 +1,88 @@
+package metrics
+
+import (
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// TokenUsage holds token counts for a single engine invocation.
+type TokenUsage struct {
+	Input  int
+	Output int
+	Total  int
+}
+
+// SprintTokens aggregates token usage across all agent calls for one sprint.
+type SprintTokens struct {
+	SprintNum int
+	Usage     TokenUsage
+}
+
+// claudeInputRe matches Claude CLI usage lines like:
+//   input_tokens: 1234
+//   Input tokens: 1234
+var claudeInputRe = regexp.MustCompile(`(?i)input[_\s]tokens?[:\s]+(\d+)`)
+
+// claudeOutputRe matches Claude CLI usage lines like:
+//   output_tokens: 567
+//   Output tokens: 567
+var claudeOutputRe = regexp.MustCompile(`(?i)output[_\s]tokens?[:\s]+(\d+)`)
+
+// ParseClaudeTokens parses token usage from Claude engine output.
+// It sums all occurrences of input/output token counts found in the output.
+// Returns a zero TokenUsage if no usage lines are found.
+func ParseClaudeTokens(output string) TokenUsage {
+	var u TokenUsage
+	for _, m := range claudeInputRe.FindAllStringSubmatch(output, -1) {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			u.Input += n
+		}
+	}
+	for _, m := range claudeOutputRe.FindAllStringSubmatch(output, -1) {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			u.Output += n
+		}
+	}
+	u.Total = u.Input + u.Output
+	return u
+}
+
+// codexInputRe matches OpenAI/Codex usage lines like:
+//   prompt_tokens: 1234
+//   "prompt_tokens": 1234
+var codexInputRe = regexp.MustCompile(`(?i)"?prompt[_\s]tokens"?[:\s]+(\d+)`)
+
+// codexOutputRe matches OpenAI/Codex usage lines like:
+//   completion_tokens: 567
+//   "completion_tokens": 567
+var codexOutputRe = regexp.MustCompile(`(?i)"?completion[_\s]tokens"?[:\s]+(\d+)`)
+
+// ParseCodexTokens parses token usage from Codex/OpenAI engine output.
+// It sums all occurrences of prompt/completion token counts found in the output.
+// Returns a zero TokenUsage if no usage lines are found.
+func ParseCodexTokens(output string) TokenUsage {
+	var u TokenUsage
+	for _, m := range codexInputRe.FindAllStringSubmatch(output, -1) {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			u.Input += n
+		}
+	}
+	for _, m := range codexOutputRe.FindAllStringSubmatch(output, -1) {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			u.Output += n
+		}
+	}
+	u.Total = u.Input + u.Output
+	return u
+}
+
+// ParseTokens dispatches to the correct parser based on engine name.
+func ParseTokens(engineName, output string) TokenUsage {
+	switch strings.ToLower(engineName) {
+	case "codex":
+		return ParseCodexTokens(output)
+	default:
+		return ParseClaudeTokens(output)
+	}
+}

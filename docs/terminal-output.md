@@ -362,6 +362,73 @@ SPRINT  NAME                  STATUS        DURATION
 [2026-03-10 13:02:00]   BUILD SUMMARY: complete
 ```
 
+## JSON Build Report (`--json-report`)
+
+When `--json-report` is passed, Fry writes `build-report.json` to the project root after all sprints complete. The file contains structured sprint-level results:
+
+```json
+{
+  "epic_name": "My Epic",
+  "start_time": "2026-03-21T10:00:00Z",
+  "end_time": "2026-03-21T10:45:00Z",
+  "duration_ns": 2700000000000,
+  "sprints": [
+    {
+      "sprint_num": 1,
+      "name": "Setup",
+      "start_time": "...",
+      "end_time": "...",
+      "passed": true,
+      "heal_attempts": 0,
+      "verification": {
+        "total_checks": 4,
+        "passed_checks": 4,
+        "failed_checks": 0
+      },
+      "token_usage": {
+        "Input": 1250,
+        "Output": 487,
+        "Total": 1737
+      }
+    }
+  ]
+}
+```
+
+Terminal banner when the report is written:
+
+```
+[2026-03-21 10:45:00]   BUILD REPORT: written to build-report.json
+```
+
+`build-report.json` is listed in `.gitignore` and is never committed.
+
+## Token Summary (`--show-tokens`)
+
+When `--show-tokens` is passed, Fry prints a per-sprint token usage table to **stderr** at the end of the run. Token counts are parsed from the sprint log files (best-effort; zero if the engine doesn't emit usage lines).
+
+```
+Sprint  Input Tokens  Output Tokens  Total
+------  ------------  -------------  -----
+1       1250          487            1737
+2       2100          830            2930
+TOTAL   3350          1317           4667
+```
+
+Token usage is also included in `build-report.json` when `--json-report` is also set.
+
+## SARIF Export (`--sarif`)
+
+When `--sarif` is passed, Fry writes `build-audit.sarif` alongside `build-audit.md` after the build audit completes. The file conforms to SARIF 2.1.0 and can be imported into GitHub Advanced Security or compatible tooling.
+
+Terminal banner when the SARIF file is written:
+
+```
+[2026-03-21 10:45:00]   SARIF: build-audit.sarif written (3 findings)
+```
+
+`build-audit.sarif` is listed in `.gitignore` and is never committed.
+
 ## Log Format
 
 All log lines follow the format:
