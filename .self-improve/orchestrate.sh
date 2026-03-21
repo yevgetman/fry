@@ -181,13 +181,24 @@ run_planning_phase() {
         return 0
     fi
 
-    # Process findings
-    local findings_file="$REPO_DIR/output/new-findings.json"
-    if [ ! -f "$findings_file" ]; then
-        log "No findings file produced"
-        rm -rf "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
+    # Process findings — check multiple possible locations
+    local findings_file=""
+    for candidate in \
+        "$REPO_DIR/output/new-findings.json" \
+        "$REPO_DIR/new-findings.json" \
+        "$REPO_DIR/output/findings.json" \
+        "$REPO_DIR/.fry/new-findings.json"; do
+        if [ -f "$candidate" ]; then
+            findings_file="$candidate"
+            break
+        fi
+    done
+    if [ -z "$findings_file" ]; then
+        log "No findings file produced (checked output/new-findings.json and alternates)"
+        rm -rf "$REPO_DIR/.fry" "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
         return 0
     fi
+    log "Found findings at: $findings_file"
 
     if ! jq -e 'type == "array"' "$findings_file" >/dev/null 2>&1; then
         log "WARNING: Invalid JSON in findings file — skipping"
@@ -349,6 +360,7 @@ run_build_phase() {
     if ! fry run \
         --user-prompt-file "$INJECTED_PROMPT" \
         --always-verify \
+        --full-prepare \
         --no-sanity-check \
         --git-strategy current \
         --project-dir "$WORKTREE_DIR" 2>&1 | tee -a "$LOG_FILE"; then
