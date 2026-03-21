@@ -1290,6 +1290,15 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		frlog.Log("  TRIAGE: built %d-sprint moderate epic programmatically (no LLM prepare)  effort=%s", ep.TotalSprints, resolvedEffort)
 
 	case triage.ComplexityComplex:
+		// Complex tasks default to high effort for thorough audit cycles.
+		// Only auto-elevate when user didn't explicitly set --effort.
+		complexEffort := resolvedEffort
+		if effortLevel == "" && (complexEffort == "" || complexEffort == epic.EffortLow || complexEffort == epic.EffortMedium) {
+			complexEffort = epic.EffortHigh
+			frlog.Log("  TRIAGE: complex task auto-elevated to effort=high")
+		}
+		resolvedEffort = complexEffort
+
 		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
 		if err := prepare.RunPrepare(ctx, prepare.PrepareOpts{
 			ProjectDir:      projectPath,
@@ -1298,7 +1307,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			UserPrompt:      userPrompt,
 			SkipSanityCheck: runNoSanityCheck || runDryRun,
 			Mode:            mode,
-			EffortLevel:     effortLevel,
+			EffortLevel:     complexEffort,
 			Stdin:           stdin,
 			Stdout:          stdout,
 		}); err != nil {

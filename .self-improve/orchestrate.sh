@@ -385,33 +385,40 @@ run_build_phase() {
     fi
 }
 
-# Select 2-3 open items from the highest-priority category
-# Skips items that have failed too many times
+# Select 2-3 open items: 1 bigger item (feature/improvement) + 2 smaller items
+# (bug, testing, sunset, refactor, security, ui_ux, documentation).
+# Falls back to whatever is available if one pool is empty.
+# Skips items that have failed too many times.
 select_items() {
-    jq --argjson max "$MAX_BUILD_ITEMS" --argjson max_attempts "$MAX_ATTEMPTS" '
-        # Priority sort order: high=0, medium=1, low=2
+    jq --argjson max_attempts "$MAX_ATTEMPTS" '
         def priority_rank:
             if . == "high" then 0
             elif . == "medium" then 1
             else 2
             end;
 
+        def is_big: .category == "feature" or .category == "improvement";
+
         # Filter: open, not exceeded max attempts
         [.items[] | select(.status == "open" and .attempted_count < $max_attempts)]
+        | sort_by(.priority | priority_rank) as $eligible
 
-        # Group by category
-        | group_by(.category)
+        # Split into big (feature/improvement) and small (everything else)
+        | [$eligible[] | select(is_big)] as $big
+        | [$eligible[] | select(is_big | not)] as $small
 
-        # Pick the category with the highest-priority items
-        | map({
-            category: .[0].category,
-            items: (sort_by(.priority | priority_rank)),
-            best_priority: ([.[].priority | priority_rank] | min)
-          })
-        | sort_by(.best_priority)
-
-        # Take items from the best category, up to max
-        | if length > 0 then .[0].items[:$max] else [] end
+        # Pick 1 big + up to 2 small. Fall back if a pool is empty.
+        | if ($big | length) > 0 and ($small | length) >= 2 then
+            [$big[0]] + $small[:2]
+          elif ($big | length) > 0 and ($small | length) == 1 then
+            [$big[0]] + $small[:1]
+          elif ($big | length) > 0 then
+            $big[:3]
+          elif ($small | length) > 0 then
+            $small[:3]
+          else
+            []
+          end
     ' "$ROADMAP"
 }
 
