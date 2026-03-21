@@ -360,7 +360,6 @@ run_build_phase() {
     if ! fry run \
         --user-prompt-file "$INJECTED_PROMPT" \
         --always-verify \
-        --full-prepare \
         --no-sanity-check \
         --git-strategy current \
         --project-dir "$WORKTREE_DIR" 2>&1 | tee -a "$LOG_FILE"; then

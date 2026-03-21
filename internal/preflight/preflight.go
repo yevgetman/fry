@@ -55,11 +55,10 @@ func RunPreflight(cfg PreflightConfig) error {
 	}
 
 	agentsPath := filepath.Join(cfg.ProjectDir, config.AgentsFile)
-	if !exists(agentsPath) {
-		return fmt.Errorf("preflight: missing %s", config.AgentsFile)
-	}
-	if err := validateAgentsFile(agentsPath); err != nil {
-		return err
+	if exists(agentsPath) {
+		if err := validateAgentsFile(agentsPath); err != nil {
+			return err
+		}
 	}
 
 	if cfg.DockerFromSprint > 0 && cfg.CurrentSprint >= cfg.DockerFromSprint {

@@ -165,15 +165,13 @@ func TestPreflightMissingAgentsFile(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, config.PlansDir), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, config.FryDir), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(projectDir, config.PlanFile), []byte("plan\n"), 0o644))
-	// No agents file
+	// No agents file — should pass (AGENTS.md is optional)
 
 	err := RunPreflight(PreflightConfig{
 		ProjectDir: projectDir,
 		Engine:     "bash",
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing")
-	assert.Contains(t, err.Error(), config.AgentsFile)
+	require.NoError(t, err)
 }
 
 // P2: Preflight command failure
