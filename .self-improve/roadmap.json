@@ -127,7 +127,7 @@
       ],
       "description": "There's currently no visibility into how many tokens each sprint, heal attempt, or audit cycle consumes. Adding token tracking would help users optimize effort levels and model selection.",
       "fix": "Create internal/metrics/tokens.go with TokenUsage struct (input, output, total). Parse token counts from engine output/logs (Claude and Codex both emit usage stats). Aggregate per-sprint, per-heal, per-audit. Include in JSON build report (C2) and terminal summary. Add --show-tokens flag. Update docs/commands.md and docs/terminal-output.md. Add tests.",
-      "status": "open",
+      "status": "in_progress",
       "discovered": "2026-03-19",
       "pr_url": null,
       "attempted_count": 1
@@ -192,7 +192,7 @@
       ],
       "description": "The CheckFileContains case in runCheck() (runner.go:51-54) runs exec.CommandContext(ctx, \"bash\", \"-c\", \"grep -qE ...\") using the parent context directly, without wrapping in context.WithTimeout(ctx, defaultCheckTimeout). All other command-type checks — CheckCmd (lines 56-57), CheckCmdOutput (lines 67-68), and CheckTest (lines 94-95) — create a dedicated sub-context with a 120-second timeout. If the parent context has no deadline (normal sprint execution), a hung grep on a named pipe, NFS-mounted file, or slow FUSE filesystem will block indefinitely, stalling the entire verification run and the build.",
       "fix": "Add context.WithTimeout wrapping identical to the other command-type checks: `checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout); defer checkCancel()` before the exec.CommandContext call at runner.go:53. After fixing, update docs/verification.md Safety Limits section (line 143) to list @check_file_contains alongside @check_cmd, @check_cmd_output, and @check_test as having the 120-second timeout.",
-      "status": "open",
+      "status": "in_progress",
       "discovered": "2026-03-21",
       "pr_url": null,
       "attempted_count": 0
@@ -257,7 +257,7 @@
       ],
       "description": "ResolveArtifact() (textutil.go:62-63) uses FileModTime(targetPath).After(beforeMod) to decide whether the engine wrote the target file. On filesystems with 1-second mtime resolution (FAT32, ext2, some NFS/FUSE mounts), if the engine writes the file within the same second that beforeMod was captured, .After() returns false even though the engine did write the file. Fry then overwrites the engine's correct on-disk content with the raw engine output stripped of markdown fences — silently discarding the agent's work without any warning.",
       "fix": "Change the detection strategy from mtime comparison to file-size comparison or a sentinel approach. Option A (robust): compare file sizes before and after — if the file size changed the engine wrote it (capture beforeSize := os.Stat(targetPath).Size() before the run, compare to after). Option B (simpler): check if the file is non-empty and was written within a wider window (e.g., if the engine run took > 0ms, any modification in the last N seconds is from the engine). The simplest correct fix is Option A: record beforeSize before invoking the engine, pass it to ResolveArtifact, and treat a size change as a write signal instead of (or in addition to) the mtime signal.",
-      "status": "open",
+      "status": "in_progress",
       "discovered": "2026-03-21",
       "pr_url": null,
       "attempted_count": 0
