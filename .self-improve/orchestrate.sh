@@ -165,7 +165,7 @@ run_planning_phase() {
         return 0
     fi
 
-    # Run Fry
+    # Run Fry — medium effort for planning (analysis-only, no production code)
     log "Running Fry planning scan..."
     if ! fry run \
         --user-prompt-file "$PLANNING_PROMPT" \
@@ -173,6 +173,7 @@ run_planning_phase() {
         --no-sanity-check \
         --git-strategy current \
         --mode planning \
+        --effort medium \
         --project-dir "$REPO_DIR" 2>&1 | tee -a "$LOG_FILE"; then
         log "WARNING: Planning run failed — skipping new findings"
         rm -rf "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
