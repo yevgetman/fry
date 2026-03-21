@@ -29,7 +29,9 @@ var claudeInputRe = regexp.MustCompile(`(?i)\binput[_\s]tokens?[:\s]+(\d+)`)
 // claudeOutputRe matches Claude CLI usage lines like:
 //   output_tokens: 567
 //   Output tokens: 567
-var claudeOutputRe = regexp.MustCompile(`(?i)output[_\s]tokens?[:\s]+(\d+)`)
+// It uses a word boundary to avoid matching hypothetical cache_*_output_tokens
+// fields, parallel to the fix applied to claudeInputRe.
+var claudeOutputRe = regexp.MustCompile(`(?i)\boutput[_\s]tokens?[:\s]+(\d+)`)
 
 // ParseClaudeTokens parses token usage from Claude engine output.
 // It sums all occurrences of input/output token counts found in the output.
@@ -53,12 +55,16 @@ func ParseClaudeTokens(output string) TokenUsage {
 // codexInputRe matches OpenAI/Codex usage lines like:
 //   prompt_tokens: 1234
 //   "prompt_tokens": 1234
-var codexInputRe = regexp.MustCompile(`(?i)"?prompt[_\s]tokens"?[:\s]+(\d+)`)
+// It uses a word boundary to avoid matching hypothetical prefixed fields
+// like partial_prompt_tokens.
+var codexInputRe = regexp.MustCompile(`(?i)\b"?prompt[_\s]tokens"?[:\s]+(\d+)`)
 
 // codexOutputRe matches OpenAI/Codex usage lines like:
 //   completion_tokens: 567
 //   "completion_tokens": 567
-var codexOutputRe = regexp.MustCompile(`(?i)"?completion[_\s]tokens"?[:\s]+(\d+)`)
+// It uses a word boundary to avoid matching hypothetical prefixed fields
+// like partial_completion_tokens.
+var codexOutputRe = regexp.MustCompile(`(?i)\b"?completion[_\s]tokens"?[:\s]+(\d+)`)
 
 // ParseCodexTokens parses token usage from Codex/OpenAI engine output.
 // It sums all occurrences of prompt/completion token counts found in the output.

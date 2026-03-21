@@ -584,6 +584,7 @@ var runCmd = &cobra.Command{
 				StartTime:    sprintStart,
 				EndTime:      sprintEnd,
 				Passed:       sprintPassed,
+				HealAttempts: result.HealAttempts,
 				Verification: sprintVerify,
 				TokenUsage:   sprintTokenUsage,
 			}

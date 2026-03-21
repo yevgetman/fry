@@ -37,6 +37,7 @@ type HealResult struct {
 	Healed           bool                 // all checks passed
 	WithinThreshold  bool                 // fail percent within allowed threshold
 	DeferredFailures []verify.CheckResult // checks that failed but within threshold
+	Attempts         int                  // number of heal agent invocations
 	PassCount        int
 	TotalCount       int
 }
@@ -189,11 +190,12 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 	}
 	lastResults, lastPass, lastTotal := verify.RunChecks(ctx, initialChecks, opts.Sprint.Number, opts.ProjectDir)
 	if lastTotal == lastPass {
-		return &HealResult{Healed: true, PassCount: lastPass, TotalCount: lastTotal}, nil
+		return &HealResult{Healed: true, Attempts: 0, PassCount: lastPass, TotalCount: lastTotal}, nil
 	}
 
 	prevFailCount := lastTotal - lastPass
 	stuckCount := 0
+	var healAgentRuns int
 	resolvedModel := engine.ResolveModel(opts.Epic.AgentModel, opts.Engine.Name(), string(opts.EffortLevel), engine.SessionHeal)
 
 	// Targeted healing state: track resolved severity groups and stall.
@@ -216,7 +218,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 		results, passCount, totalCount := verify.RunChecks(ctx, checks, opts.Sprint.Number, opts.ProjectDir)
 		if totalCount == passCount {
-			return &HealResult{Healed: true, PassCount: passCount, TotalCount: totalCount}, nil
+			return &HealResult{Healed: true, Attempts: healAgentRuns, PassCount: passCount, TotalCount: totalCount}, nil
 		}
 
 		// Update group state and detect stall for targeted healing.
@@ -287,6 +289,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			buildLogsDir,
 			fmt.Sprintf("sprint%d_heal%d_%s.log", opts.Sprint.Number, attempt, time.Now().Format("20060102_150405")),
 		)
+		healAgentRuns++
 		if _, err := runAgentWithDualLogs(ctx, opts, config.HealInvocationPrompt, healLogPath, resolvedModel); err != nil {
 			return nil, err
 		}
@@ -307,7 +310,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 		if totalCount == passCount {
 			frylog.Log("  Heal attempt %d SUCCEEDED — all checks now pass.", attempt)
-			return &HealResult{Healed: true, PassCount: passCount, TotalCount: totalCount}, nil
+			return &HealResult{Healed: true, Attempts: healAgentRuns, PassCount: passCount, TotalCount: totalCount}, nil
 		}
 
 		currentFailCount := totalCount - passCount
@@ -342,6 +345,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 				return &HealResult{
 					WithinThreshold:  true,
 					DeferredFailures: outcome.DeferredFailures,
+					Attempts:         healAgentRuns,
 					PassCount:        passCount,
 					TotalCount:       totalCount,
 				}, nil
@@ -373,12 +377,13 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		return &HealResult{
 			WithinThreshold:  true,
 			DeferredFailures: outcome.DeferredFailures,
+			Attempts:         healAgentRuns,
 			PassCount:        lastPass,
 			TotalCount:       lastTotal,
 		}, nil
 	}
 
-	return &HealResult{PassCount: lastPass, TotalCount: lastTotal}, nil
+	return &HealResult{Attempts: healAgentRuns, PassCount: lastPass, TotalCount: lastTotal}, nil
 }
 
 // reloadChecks re-parses the verification file from disk when VerificationFile

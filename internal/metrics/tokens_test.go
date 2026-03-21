@@ -81,6 +81,40 @@ func TestParseCodexTokensNoUsageReturnsZero(t *testing.T) {
 	assert.Equal(t, 0, u.Total)
 }
 
+func TestParseClaudeTokensCacheOutputFieldsNotCounted(t *testing.T) {
+	t.Parallel()
+
+	// Hypothetical future cache_write_output_tokens field must not inflate Output count.
+	output := `Usage:
+  input_tokens: 500
+  output_tokens: 200
+  cache_write_output_tokens: 100`
+
+	u := ParseClaudeTokens(output)
+	assert.Equal(t, 500, u.Input, "Input should only count input_tokens")
+	assert.Equal(t, 200, u.Output, "Output should only count output_tokens, not cache fields")
+	assert.Equal(t, 700, u.Total)
+}
+
+func TestParseCodexTokensPrefixedFieldsNotCounted(t *testing.T) {
+	t.Parallel()
+
+	// Hypothetical prefixed fields must not inflate counts.
+	output := `{
+  "usage": {
+    "prompt_tokens": 800,
+    "completion_tokens": 320,
+    "cached_prompt_tokens": 400,
+    "partial_completion_tokens": 50
+  }
+}`
+
+	u := ParseCodexTokens(output)
+	assert.Equal(t, 800, u.Input, "Input should only count prompt_tokens, not cached_prompt_tokens")
+	assert.Equal(t, 320, u.Output, "Output should only count completion_tokens, not partial_completion_tokens")
+	assert.Equal(t, 1120, u.Total)
+}
+
 func TestParseTokensDispatchesByEngine(t *testing.T) {
 	t.Parallel()
 
