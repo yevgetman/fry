@@ -101,8 +101,8 @@ cleanup() {
         rm -f "$INJECTED_PROMPT"
     fi
 
-    # Clean up scaffolding directories (if they were created by us)
-    rm -rf "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
+    # Clean up scaffolding and build artifacts
+    rm -rf "$REPO_DIR/.fry" "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
 
     # Ensure we're back on master
     git -C "$REPO_DIR" checkout master 2>/dev/null || true
@@ -154,7 +154,8 @@ run_planning_phase() {
         return 0
     fi
 
-    # Scaffold directories
+    # Clean stale artifacts from any prior run, then scaffold
+    rm -rf "$REPO_DIR/.fry" "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
     mkdir -p "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
     cp "$EXECUTIVE" "$REPO_DIR/plans/executive.md"
     cp "$ROADMAP" "$REPO_DIR/assets/roadmap.json"
