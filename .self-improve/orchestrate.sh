@@ -165,12 +165,12 @@ run_planning_phase() {
         return 0
     fi
 
-    # Run Fry — medium effort for planning (analysis-only, no production code)
+    # Run Fry — planning is analysis-only, no verification/audit needed
     log "Running Fry planning scan..."
     if ! fry run \
         --user-prompt-file "$PLANNING_PROMPT" \
-        --always-verify \
         --no-sanity-check \
+        --no-audit \
         --git-strategy current \
         --mode planning \
         --effort medium \
