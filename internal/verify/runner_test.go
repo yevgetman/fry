@@ -577,6 +577,30 @@ func TestRunnerCommandTimeout(t *testing.T) {
 	assert.False(t, results[0].Passed, "command that exceeds context deadline must fail")
 }
 
+// TestRunnerCheckFileContainsTimeout verifies that a CheckFileContains check
+// with an already-expired context fails instead of hanging.
+func TestRunnerCheckFileContainsTimeout(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "data.txt"), []byte("hello world"), 0o644))
+
+	// Create a pre-expired context.
+	deadline := time.Now()
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckFileContains, Path: "data.txt", Pattern: "hello"},
+	}
+
+	results, passCount, totalCount := RunChecks(ctx, checks, 1, projectDir)
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, totalCount)
+	assert.Equal(t, 0, passCount)
+	assert.False(t, results[0].Passed, "CheckFileContains with expired context must fail")
+}
+
 // TestRunnerLargeOutputTruncation verifies that a command generating more than
 // maxCheckOutput bytes completes without OOM and the output is capped.
 func TestRunnerLargeOutputTruncation(t *testing.T) {

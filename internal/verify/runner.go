@@ -49,8 +49,10 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		info, err := os.Stat(filepath.Join(projectDir, check.Path))
 		result.Passed = err == nil && info.Size() > 0
 	case CheckFileContains:
+		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
+		defer checkCancel()
 		targetPath := filepath.Join(projectDir, check.Path)
-		cmd := exec.CommandContext(ctx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", textutil.ShellQuote(check.Pattern), textutil.ShellQuote(targetPath)))
+		cmd := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", textutil.ShellQuote(check.Pattern), textutil.ShellQuote(targetPath)))
 		result.Passed = cmd.Run() == nil
 	case CheckCmd:
 		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
