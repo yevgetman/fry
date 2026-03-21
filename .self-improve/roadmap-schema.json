@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yevgetman/fry/self-improve/roadmap-schema.json",
+  "title": "Fry Self-Improvement Roadmap",
+  "description": "Canonical schema for the self-improvement roadmap. Completed items are removed; git history is the archive.",
+  "type": "object",
+  "required": ["version", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Bump when the schema changes."
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    }
+  },
+  "$defs": {
+    "item": {
+      "type": "object",
+      "required": ["id", "category", "title", "priority", "files", "description", "fix", "status", "discovered"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Z]\\d+$",
+          "description": "Unique identifier. Letter prefix indicates category (A=bug, B=testing, C=feature, D=improvement), followed by a sequence number.",
+          "examples": ["A3", "B5", "C1", "D2"]
+        },
+        "category": {
+          "type": "string",
+          "enum": ["bug", "testing", "feature", "improvement"],
+          "description": "A=bug, B=testing, C=feature, D=improvement."
+        },
+        "title": {
+          "type": "string",
+          "description": "Short descriptive title of the issue or feature.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "For bugs/testing: severity. For features/improvements: impact."
+        },
+        "effort": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Estimated implementation effort. Optional for bugs/testing.",
+          "default": "medium"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "File path, optionally with line number (e.g., 'internal/cli/run.go:296')."
+          },
+          "description": "Affected source files."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the problem or opportunity.",
+          "minLength": 1
+        },
+        "fix": {
+          "type": "string",
+          "description": "Concrete implementation plan or fix description.",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "in_progress", "pr_created"],
+          "description": "Current status. Completed items are removed from the roadmap."
+        },
+        "discovered": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date when the item was first identified.",
+          "examples": ["2026-03-19"]
+        },
+        "pr_url": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "description": "GitHub pull request URL. Set when status is 'pr_created'.",
+          "default": null
+        },
+        "attempted_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of times a build was attempted for this item. Incremented on failure.",
+          "default": 0
+        }
+      }
+    }
+  }
+}
