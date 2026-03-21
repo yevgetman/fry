@@ -28,10 +28,10 @@
       ],
       "description": "The sprint loop trusts resolveSprintRange() to return valid bounds, but there's no redundant check immediately before the array access ep.Sprints[sprintNum-1]. If resolveSprintRange() has a logic error or sprints are mutated between validation and access, this panics.",
       "fix": "Add a defensive bounds check immediately before the array access, or add an assertion in resolveSprintRange() that guarantees endSprint <= len(sprints).",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 0
+      "attempted_count": 1
     },
     {
       "id": "B3",
@@ -60,10 +60,10 @@
       ],
       "description": "Current tests cover standard check types well but miss: command timeout behavior (120s limit), large output truncation (10MB cap), regex pattern edge cases (special characters, empty patterns), and interaction between check types.",
       "fix": "Add test cases for timeout expiry, output exceeding 10MB, pathological regex patterns, and multi-check verification runs with mixed pass/fail.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 0
+      "attempted_count": 1
     },
     {
       "id": "C1",
@@ -93,10 +93,10 @@
       ],
       "description": "All build output is currently unstructured terminal text. A --json-report flag would emit a build-report.json containing sprint results, verification outcomes, heal attempt counts, audit findings, and timing data. The data already exists scattered across .fry/ files.",
       "fix": "Create internal/report/report.go with BuildReport struct. Define nested types: SprintResult, VerificationResult, HealSummary, AuditSummary. Aggregate data at the end of executeRun() in internal/cli/run.go. Marshal to JSON and write to build-report.json. Add --json-report flag to runCmd. Add build-report.json to .gitignore. Update docs/commands.md. Add tests.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 1
+      "attempted_count": 2
     },
     {
       "id": "C3",
