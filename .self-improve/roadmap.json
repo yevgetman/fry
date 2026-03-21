@@ -28,10 +28,10 @@
       ],
       "description": "The sprint loop trusts resolveSprintRange() to return valid bounds, but there's no redundant check immediately before the array access ep.Sprints[sprintNum-1]. If resolveSprintRange() has a logic error or sprints are mutated between validation and access, this panics.",
       "fix": "Add a defensive bounds check immediately before the array access, or add an assertion in resolveSprintRange() that guarantees endSprint <= len(sprints).",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 2
+      "attempted_count": 3
     },
     {
       "id": "B3",
@@ -60,10 +60,10 @@
       ],
       "description": "Current tests cover standard check types well but miss: command timeout behavior (120s limit), large output truncation (10MB cap), regex pattern edge cases (special characters, empty patterns), and interaction between check types.",
       "fix": "Add test cases for timeout expiry, output exceeding 10MB, pathological regex patterns, and multi-check verification runs with mixed pass/fail.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 2
+      "attempted_count": 3
     },
     {
       "id": "C1",
@@ -111,10 +111,10 @@
       ],
       "description": "Currently users must use @check_cmd with raw shell commands to run tests. A dedicated @check_test primitive would understand test frameworks (Go, npm/jest, pytest), parse pass/fail/skip counts, and report structured results.",
       "fix": "Add CheckTest to the check type enum in internal/verify/types.go. Add parsing for @check_test in internal/verify/parser.go. Add execution logic in internal/verify/runner.go — run command, parse output for test counts. Detect framework from command prefix. Update docs/verification.md and templates/verification-example.md. Add tests.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 1
+      "attempted_count": 2
     },
     {
       "id": "C4",
