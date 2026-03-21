@@ -12,9 +12,9 @@
       ],
       "description": "The signal handler calls releaseLock() (which wraps lock.Release() via sync.Once) and silently discards any error. If the lock file can't be removed (permissions, already deleted by race), subsequent fry run invocations will think the lock is held and refuse to start.",
       "fix": "Log the error to stderr if lock.Release() fails in the signal handler. Even though we're about to exit, the user needs to know the lock file may be stale.",
-      "status": "in_progress",
+      "status": "pr_created",
       "discovered": "2026-03-19",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/1",
       "attempted_count": 0
     },
     {
@@ -44,9 +44,9 @@
       ],
       "description": "Engine tests cover model resolution and basic invocation but don't test: process timeout handling, missing binary errors, exit code extraction from different error types, or stderr capture on failure.",
       "fix": "Add test cases for: engine binary not found on PATH, process killed by signal, non-zero exit with meaningful stderr, context cancellation mid-execution.",
-      "status": "in_progress",
+      "status": "pr_created",
       "discovered": "2026-03-19",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/1",
       "attempted_count": 0
     },
     {
@@ -77,9 +77,9 @@
       ],
       "description": "Fry currently only supports Claude and Codex. Adding Ollama would allow users to run builds with local open-source models (Llama, Mistral, CodeLlama, etc.) without any API keys or cloud dependencies.",
       "fix": "Create internal/engine/ollama.go implementing the Engine interface. Shell out to 'ollama run <model>' with the prompt via stdin or temp file. Add 'ollama' case to NewEngine() and ResolveEngine(). Add Ollama model tier mappings in models.go. Update docs/engines.md, README.md, README.LLM.md. Add tests in internal/engine/ollama_test.go.",
-      "status": "in_progress",
+      "status": "pr_created",
       "discovered": "2026-03-19",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/1",
       "attempted_count": 1
     },
     {
