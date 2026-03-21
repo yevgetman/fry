@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -88,9 +90,81 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		grep := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s", textutil.ShellQuote(check.Pattern)))
 		grep.Stdin = strings.NewReader(trimmed)
 		result.Passed = grep.Run() == nil
+	case CheckTest:
+		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
+		defer checkCancel()
+		cmd := exec.CommandContext(checkCtx, "bash", "-c", check.Command)
+		cmd.Dir = projectDir
+		var combined cappedBuffer
+		cmd.Stdout = &combined
+		cmd.Stderr = &combined
+		runErr := cmd.Run()
+		result.Output = combined.String()
+		parseTestOutput(&result, check.Command, result.Output)
+		result.Passed = runErr == nil && result.TestFailCount == 0
 	}
 
 	return result
+}
+
+// parseTestOutput detects the test framework and populates test counts on result.
+func parseTestOutput(result *CheckResult, command, output string) {
+	cmd := strings.TrimSpace(command)
+	switch {
+	case strings.HasPrefix(cmd, "go test"):
+		result.TestFramework = "go"
+		parseGoTestOutput(result, output)
+	case strings.HasPrefix(cmd, "pytest"):
+		result.TestFramework = "pytest"
+		parsePytestOutput(result, output)
+	case strings.HasPrefix(cmd, "npm test") || strings.HasPrefix(cmd, "jest") || strings.Contains(cmd, "jest"):
+		result.TestFramework = "jest"
+		parseJestOutput(result, output)
+	default:
+		result.TestFramework = "unknown"
+	}
+}
+
+var (
+	goTestFailRe  = regexp.MustCompile(`(?m)^--- FAIL:`)
+	goTestPassRe  = regexp.MustCompile(`(?m)^--- PASS:`)
+)
+
+func parseGoTestOutput(result *CheckResult, output string) {
+	result.TestPassCount = len(goTestPassRe.FindAllString(output, -1))
+	result.TestFailCount = len(goTestFailRe.FindAllString(output, -1))
+}
+
+var pytestSummaryRe = regexp.MustCompile(`(\d+) passed(?:,\s*(\d+) failed)?(?:,\s*(\d+) skipped)?`)
+
+func parsePytestOutput(result *CheckResult, output string) {
+	m := pytestSummaryRe.FindStringSubmatch(output)
+	if m == nil {
+		return
+	}
+	result.TestPassCount, _ = strconv.Atoi(m[1])
+	if m[2] != "" {
+		result.TestFailCount, _ = strconv.Atoi(m[2])
+	}
+	if m[3] != "" {
+		result.TestSkipCount, _ = strconv.Atoi(m[3])
+	}
+}
+
+var jestSummaryRe = regexp.MustCompile(`Tests:\s+(?:(\d+) failed,\s*)?(?:(\d+) skipped,\s*)?(\d+) passed`)
+
+func parseJestOutput(result *CheckResult, output string) {
+	m := jestSummaryRe.FindStringSubmatch(output)
+	if m == nil {
+		return
+	}
+	if m[1] != "" {
+		result.TestFailCount, _ = strconv.Atoi(m[1])
+	}
+	if m[2] != "" {
+		result.TestSkipCount, _ = strconv.Atoi(m[2])
+	}
+	result.TestPassCount, _ = strconv.Atoi(m[3])
 }
 
 // trimOutputLines trims leading and trailing whitespace from each line of

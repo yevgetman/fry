@@ -148,6 +148,71 @@ func TestParsePreconditions(t *testing.T) {
 	}
 }
 
+func TestHeuristicAnalyze(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		state       *BuildState
+		wantVerdict ContinueVerdict
+		wantSprint  int
+	}{
+		{
+			name: "all sprints complete",
+			state: &BuildState{
+				TotalSprints: 3,
+				CompletedSprints: []CompletedSprint{
+					{Number: 1}, {Number: 2}, {Number: 3},
+				},
+			},
+			wantVerdict: VerdictAllComplete,
+			wantSprint:  3,
+		},
+		{
+			name: "no sprints complete returns sprint 1",
+			state: &BuildState{
+				TotalSprints:     3,
+				CompletedSprints: nil,
+			},
+			wantVerdict: VerdictResumeFresh,
+			wantSprint:  1,
+		},
+		{
+			name: "middle sprint missing returns that sprint",
+			state: &BuildState{
+				TotalSprints: 4,
+				CompletedSprints: []CompletedSprint{
+					{Number: 1}, {Number: 2},
+				},
+			},
+			wantVerdict: VerdictResumeFresh,
+			wantSprint:  3,
+		},
+		{
+			name:        "nil state returns blocked",
+			state:       nil,
+			wantVerdict: VerdictBlocked,
+			wantSprint:  0,
+		},
+		{
+			name:        "zero total sprints returns blocked",
+			state:       &BuildState{TotalSprints: 0},
+			wantVerdict: VerdictBlocked,
+			wantSprint:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			decision := HeuristicAnalyze(tt.state)
+			assert.Equal(t, tt.wantVerdict, decision.Verdict)
+			assert.Equal(t, tt.wantSprint, decision.StartSprint)
+		})
+	}
+}
+
 func TestBuildAnalysisPrompt(t *testing.T) {
 	t.Parallel()
 

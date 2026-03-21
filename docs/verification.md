@@ -10,6 +10,7 @@ Fry supports independent verification of each sprint's deliverables. When a `.fr
 | `@check_file_contains <path> <pattern>` | `@check_file_contains package.json "typescript"` | File contains pattern (grep -E) |
 | `@check_cmd <command>` | `@check_cmd npm run build` | Command exits 0 |
 | `@check_cmd_output <cmd> \| <pattern>` | `@check_cmd_output curl -s /health \| "ok"` | stdout matches pattern |
+| `@check_test <command>` | `@check_test go test ./...` | Command exits 0 **and** zero test failures detected |
 
 ## Verification File Format
 
@@ -39,9 +40,23 @@ The `@verification` directive in the epic file can override the default path:
 The four primitives are designed for **basic programmatic checks**, not semantic code analysis:
 
 - **`@check_file`** — use for confirming expected files were created
-- **`@check_cmd`** — use for build commands, test suites, lint passes
+- **`@check_cmd`** — use for build commands, lint passes, or any command where exit code is the only signal
+- **`@check_test`** — use for running test suites; parses pass/fail counts from `go test`, `pytest`, and `jest` output; reports pass count, fail count, and skip count in heal prompts; fails if any test fails **or** the command exits non-zero; use this instead of `@check_cmd` when you need test-count diagnostics in the heal prompt
 - **`@check_cmd_output`** — use for checking version strings, simple counts, health endpoints
 - **`@check_file_contains`** — use for **structural** patterns: config keys, import statements, table names, module declarations. **Do not** use complex regex patterns to verify code correctness semantically — that's what the [Sprint Audit](sprint-audit.md) and [Build Audit](build-audit.md) are for.
+
+### `@check_test` Framework Detection
+
+`@check_test` auto-detects the framework from the command prefix:
+
+| Command prefix | Framework | What is parsed |
+|---|---|---|
+| `go test` | Go | `--- PASS:` and `--- FAIL:` lines |
+| `pytest` | pytest | Summary line (`N passed, N failed, N skipped`) |
+| `npm test` or `jest` | Jest | `Tests:` summary line |
+| Anything else | unknown | Exit code only; counts remain 0 |
+
+When a test fails, the heal prompt includes the pass/fail/skip counts and truncated output, giving the healing agent a precise diagnosis.
 
 ## Failure Threshold
 

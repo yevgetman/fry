@@ -23,6 +23,10 @@ func CollectFailures(results []CheckResult, passCount, totalCount int) string {
 			b.WriteString(fmt.Sprintf("\n- FAILED: Command failed: %s\n  Output (truncated):\n%s", result.Check.Command, indentLines(truncateLines(result.Output, 20))))
 		case CheckCmdOutput:
 			b.WriteString(fmt.Sprintf("\n- FAILED: Command output mismatch: %s\n  Expected pattern: %s\n  Actual output (truncated):\n%s", result.Check.Command, result.Check.Pattern, indentLines(truncateLines(result.Output, 10))))
+		case CheckTest:
+			b.WriteString(fmt.Sprintf("\n- FAILED: Test command failed: %s (pass=%d fail=%d skip=%d framework=%s)\n  Output (truncated):\n%s",
+				result.Check.Command, result.TestPassCount, result.TestFailCount, result.TestSkipCount, result.TestFramework,
+				indentLines(truncateLines(result.Output, 20))))
 		}
 	}
 
@@ -71,6 +75,8 @@ func CollectDeferredSummary(deferred []CheckResult) string {
 			b.WriteString(fmt.Sprintf("- DEFERRED: Command failed: %s\n", result.Check.Command))
 		case CheckCmdOutput:
 			b.WriteString(fmt.Sprintf("- DEFERRED: Command output mismatch: %s (expected pattern: %s)\n", result.Check.Command, result.Check.Pattern))
+		case CheckTest:
+			b.WriteString(fmt.Sprintf("- DEFERRED: Test command failed: %s (pass=%d fail=%d)\n", result.Check.Command, result.TestPassCount, result.TestFailCount))
 		}
 	}
 	return b.String()

@@ -72,6 +72,15 @@ func ParseVerification(path string) ([]Check, error) {
 				return nil, fmt.Errorf("parse verification line %d: @check_cmd requires a command", lineNo)
 			}
 			checks = append(checks, Check{Sprint: currentSprint, Type: CheckCmd, Command: command})
+		case strings.HasPrefix(line, "@check_test "):
+			if currentSprint == 0 {
+				frylog.Log("WARNING: verification line %d: check before any @sprint directive (will never run)", lineNo)
+			}
+			command := strings.TrimSpace(strings.TrimPrefix(line, "@check_test "))
+			if command == "" {
+				return nil, fmt.Errorf("parse verification line %d: @check_test requires a command", lineNo)
+			}
+			checks = append(checks, Check{Sprint: currentSprint, Type: CheckTest, Command: command})
 		}
 	}
 

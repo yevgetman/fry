@@ -54,6 +54,7 @@ var (
 	runGitStrategy    string
 	runBranchName     string
 	runAlwaysVerify   bool
+	runHeuristic      bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -252,20 +253,27 @@ var runCmd = &cobra.Command{
 			fmt.Fprint(cmd.OutOrStdout(), report)
 			fmt.Fprintln(cmd.OutOrStdout())
 
-			continueOverride := ep.AuditModel
-			if continueOverride == "" {
-				continueOverride = ep.AgentModel
-			}
-			continueModel := engine.ResolveModel(continueOverride, engineName, string(ep.EffortLevel), engine.SessionContinue)
-			decision, analyzeErr := continuerun.Analyze(cmd.Context(), continuerun.AnalyzeOpts{
-				ProjectDir: projectPath,
-				State:      state,
-				Engine:     buildEngine,
-				Model:      continueModel,
-				Verbose:    frlog.Verbose,
-			})
-			if analyzeErr != nil {
-				return fmt.Errorf("continue: %w", analyzeErr)
+			var decision *continuerun.ContinueDecision
+			if runHeuristic {
+				frlog.Log("▶ CONTINUE  using heuristic analysis (--heuristic)...")
+				decision = continuerun.HeuristicAnalyze(state)
+			} else {
+				continueOverride := ep.AuditModel
+				if continueOverride == "" {
+					continueOverride = ep.AgentModel
+				}
+				continueModel := engine.ResolveModel(continueOverride, engineName, string(ep.EffortLevel), engine.SessionContinue)
+				var analyzeErr error
+				decision, analyzeErr = continuerun.Analyze(cmd.Context(), continuerun.AnalyzeOpts{
+					ProjectDir: projectPath,
+					State:      state,
+					Engine:     buildEngine,
+					Model:      continueModel,
+					Verbose:    frlog.Verbose,
+				})
+				if analyzeErr != nil {
+					return fmt.Errorf("continue: %w", analyzeErr)
+				}
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Decision: %s (sprint %d)\n", decision.Verdict, decision.StartSprint)
@@ -902,6 +910,7 @@ func init() {
 	runCmd.Flags().StringVar(&runGitStrategy, "git-strategy", "", "Git branching strategy: auto, current, branch, worktree (default: auto)")
 	runCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
 	runCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force verification, healing, and audit to run regardless of effort level or triage complexity")
+	runCmd.Flags().BoolVar(&runHeuristic, "heuristic", false, "With --continue: skip LLM analysis and use heuristic to find first incomplete sprint")
 }
 
 func resolveProjectDir(dir string) (string, error) {

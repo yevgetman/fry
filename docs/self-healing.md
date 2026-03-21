@@ -7,11 +7,36 @@ When verification checks fail after a sprint completes, Fry enters a **heal loop
 1. **Verification fails** — one or more checks return non-zero
 2. **Diagnostics collected** — all checks re-run, capturing pass/fail status and stderr/stdout (truncated to 20 lines per check)
 3. **Heal prompt assembled** — `.fry/prompt.md` is overwritten with a targeted heal prompt containing the specific failures, instructions for minimum changes, and pointers to context files
-4. **Agent re-runs** — a fresh agent session executes with the heal prompt
-5. **Pre-sprint hook re-runs** — if configured (e.g., `npm install`), runs again to pick up changes
-6. **Re-verification** — the verification file is re-read from disk (so agent edits to checks take effect), then all checks for the sprint run again
-7. **Repeat or exit** — if checks still fail, the failure report is appended to `.fry/sprint-progress.txt` and steps 2-6 repeat. Exits when all checks pass (**PASS (healed)**), max attempts exhausted, or the heal loop detects it is stuck (no progress for consecutive attempts — see effort-level behavior below)
-8. **Threshold evaluation** — after heal attempts are exhausted (or skipped), if the failure percentage is within the threshold, the sprint passes with status **PASS (deferred failures)**. Deferred failures are documented in `.fry/deferred-failures.md` and passed to the final [Build Audit](build-audit.md) for remediation. If failures exceed the threshold, the sprint **FAIL**s
+4. **Targeted failure selection** — by default, only the highest-priority failing check group is included in the prompt (see [Targeted Healing](#targeted-healing) below). After the agent cannot resolve the top group for 2 consecutive attempts, all failing checks are included (fallback mode)
+5. **Agent re-runs** — a fresh agent session executes with the heal prompt
+6. **Pre-sprint hook re-runs** — if configured (e.g., `npm install`), runs again to pick up changes
+7. **Re-verification** — the verification file is re-read from disk (so agent edits to checks take effect), then all checks for the sprint run again
+8. **Repeat or exit** — if checks still fail, the failure report is appended to `.fry/sprint-progress.txt` and steps 2-7 repeat. Exits when all checks pass (**PASS (healed)**), max attempts exhausted, or the heal loop detects it is stuck (no progress for consecutive attempts — see effort-level behavior below)
+9. **Threshold evaluation** — after heal attempts are exhausted (or skipped), if the failure percentage is within the threshold, the sprint passes with status **PASS (deferred failures)**. Deferred failures are documented in `.fry/deferred-failures.md` and passed to the final [Build Audit](build-audit.md) for remediation. If failures exceed the threshold, the sprint **FAIL**s
+
+## Targeted Healing
+
+Each heal iteration presents only the highest-priority failing check group to the agent. This reduces prompt noise and lets the agent focus on one category of failure at a time.
+
+### Severity Order
+
+| Priority | Check Type | Rationale |
+|---|---|---|
+| 1 (highest) | `@check_file` | File existence — foundational; other checks are meaningless if the file is missing |
+| 2 | `@check_file_contains` | File contents — the file exists but needs correct content |
+| 3 (lowest) | `@check_cmd`, `@check_cmd_output`, `@check_test` | Command checks — typically depend on files being correct |
+
+In each iteration, only the checks from the lowest-severity (highest-priority) failing group are included in the heal prompt.
+
+### Stall Detection and Fallback
+
+After **2 consecutive iterations** where no severity group transitions from "failing" to "passing", targeted mode is abandoned. All failing checks are included in subsequent prompts (all-at-once mode). This prevents the agent from being stuck with an artificially narrow view of the failures.
+
+```
+[12:10:30] Targeted healing stalled after 2 iterations without progress — falling back to all-at-once mode.
+```
+
+The stall threshold is independent of the effort-level stuck threshold (which measures fail count reduction, not group resolution).
 
 ## Heal Prompt Structure
 

@@ -157,6 +157,8 @@ func TestResolveSprintRange(t *testing.T) {
 		{"start too low", []string{"0"}, 5, 0, 0, "invalid sprint range"},
 		{"end exceeds total", []string{"1", "6"}, 5, 0, 0, "invalid sprint range"},
 		{"start after end", []string{"3", "2"}, 5, 0, 0, "invalid sprint range"},
+		{"start exceeds total", []string{"6"}, 5, 0, 0, "invalid sprint range"},
+		{"start equals total is valid", []string{"5"}, 5, 5, 5, ""},
 	}
 
 	for _, tt := range tests {

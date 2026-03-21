@@ -460,6 +460,100 @@ func TestRunCheck_CheckFileZeroSize(t *testing.T) {
 	assert.False(t, results[0].Passed)
 }
 
+func TestParseVerificationCheckTest(t *testing.T) {
+	t.Parallel()
+
+	path := writeVerificationFile(t, `
+@sprint 1
+@check_test go test ./...
+@check_test pytest tests/
+`)
+	checks, err := ParseVerification(path)
+	require.NoError(t, err)
+	require.Len(t, checks, 2)
+	assert.Equal(t, Check{Sprint: 1, Type: CheckTest, Command: "go test ./..."}, checks[0])
+	assert.Equal(t, Check{Sprint: 1, Type: CheckTest, Command: "pytest tests/"}, checks[1])
+}
+
+func TestCheckTestGoPassingOutput(t *testing.T) {
+	t.Parallel()
+
+	// Test that a CheckTest command exiting 0 with no FAIL lines passes.
+	// Framework detection and count parsing are tested separately in TestParseGoTestOutput.
+	checks := []Check{
+		{Sprint: 1, Type: CheckTest, Command: "true"},
+	}
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, t.TempDir())
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, passCount)
+	assert.Equal(t, 1, totalCount)
+	assert.True(t, results[0].Passed)
+	assert.Equal(t, 0, results[0].TestFailCount)
+}
+
+func TestCheckTestGoFailingOutput(t *testing.T) {
+	t.Parallel()
+
+	// Test that a CheckTest command exiting non-zero fails.
+	checks := []Check{
+		{Sprint: 1, Type: CheckTest, Command: "false"},
+	}
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, t.TempDir())
+	require.Len(t, results, 1)
+	assert.Equal(t, 0, passCount)
+	assert.Equal(t, 1, totalCount)
+	assert.False(t, results[0].Passed)
+}
+
+func TestCheckTestUnknownFramework(t *testing.T) {
+	t.Parallel()
+
+	// Unknown framework falls back to exit code only
+	checks := []Check{
+		{Sprint: 1, Type: CheckTest, Command: "true"},
+	}
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, t.TempDir())
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, passCount)
+	assert.Equal(t, 1, totalCount)
+	assert.True(t, results[0].Passed)
+	assert.Equal(t, "unknown", results[0].TestFramework)
+	assert.Equal(t, 0, results[0].TestPassCount)
+	assert.Equal(t, 0, results[0].TestFailCount)
+}
+
+func TestParseGoTestOutput(t *testing.T) {
+	t.Parallel()
+
+	output := "--- PASS: TestFoo (0.00s)\n--- PASS: TestBar (0.01s)\n--- FAIL: TestBaz (0.02s)\nFAIL\n"
+	result := CheckResult{}
+	parseGoTestOutput(&result, output)
+	assert.Equal(t, 2, result.TestPassCount)
+	assert.Equal(t, 1, result.TestFailCount)
+}
+
+func TestParsePytestOutput(t *testing.T) {
+	t.Parallel()
+
+	output := "collected 5 items\n\n5 passed, 2 failed, 1 skipped in 0.12s\n"
+	result := CheckResult{}
+	parsePytestOutput(&result, output)
+	assert.Equal(t, 5, result.TestPassCount)
+	assert.Equal(t, 2, result.TestFailCount)
+	assert.Equal(t, 1, result.TestSkipCount)
+}
+
+func TestParseJestOutput(t *testing.T) {
+	t.Parallel()
+
+	output := "Tests: 1 failed, 2 skipped, 7 passed, 10 total\n"
+	result := CheckResult{}
+	parseJestOutput(&result, output)
+	assert.Equal(t, 1, result.TestFailCount)
+	assert.Equal(t, 2, result.TestSkipCount)
+	assert.Equal(t, 7, result.TestPassCount)
+}
+
 func writeVerificationFile(t *testing.T, contents string) string {
 	t.Helper()
 

@@ -7,6 +7,7 @@ const (
 	CheckFileContains
 	CheckCmd
 	CheckCmdOutput
+	CheckTest
 )
 
 func (t CheckType) String() string {
@@ -19,6 +20,8 @@ func (t CheckType) String() string {
 		return "CMD"
 	case CheckCmdOutput:
 		return "CMD_OUTPUT"
+	case CheckTest:
+		return "TEST"
 	default:
 		return "UNKNOWN"
 	}
@@ -33,9 +36,13 @@ type Check struct {
 }
 
 type CheckResult struct {
-	Check  Check
-	Passed bool
-	Output string
+	Check         Check
+	Passed        bool
+	Output        string
+	TestPassCount int
+	TestFailCount int
+	TestSkipCount int
+	TestFramework string
 }
 
 type VerificationOutcome struct {

@@ -891,6 +891,169 @@ func (s *stubEngine) Name() string {
 	return s.name
 }
 
+// --- D3: Targeted healing unit tests ---
+
+func TestHealGroupSeverity(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 0, healGroupSeverity(verify.CheckFile))
+	assert.Equal(t, 1, healGroupSeverity(verify.CheckFileContains))
+	assert.Equal(t, 2, healGroupSeverity(verify.CheckCmd))
+	assert.Equal(t, 2, healGroupSeverity(verify.CheckCmdOutput))
+	assert.Equal(t, 2, healGroupSeverity(verify.CheckTest))
+}
+
+func TestGroupFailedChecks(t *testing.T) {
+	t.Parallel()
+
+	results := []verify.CheckResult{
+		{Check: verify.Check{Type: verify.CheckFile}, Passed: false},
+		{Check: verify.Check{Type: verify.CheckCmd}, Passed: false},
+		{Check: verify.Check{Type: verify.CheckFile}, Passed: true}, // passing — not counted
+	}
+	groups := groupFailedChecks(results)
+	assert.Len(t, groups, 2)
+	assert.Len(t, groups[0], 1, "one CheckFile failure in sev 0")
+	assert.Len(t, groups[2], 1, "one CheckCmd failure in sev 2")
+}
+
+func TestHighestPriorityGroup(t *testing.T) {
+	t.Parallel()
+
+	groups := map[int][]verify.CheckResult{
+		0: {{Check: verify.Check{Type: verify.CheckFile}}},
+		2: {{Check: verify.Check{Type: verify.CheckCmd}}},
+	}
+	group := highestPriorityGroup(groups)
+	require.Len(t, group, 1)
+	assert.Equal(t, verify.CheckFile, group[0].Check.Type)
+}
+
+func TestHighestPriorityGroupEmpty(t *testing.T) {
+	t.Parallel()
+
+	assert.Nil(t, highestPriorityGroup(nil))
+	assert.Nil(t, highestPriorityGroup(map[int][]verify.CheckResult{}))
+}
+
+func TestTargetedHealSingleGroupResolves(t *testing.T) {
+	t.Parallel()
+
+	// progressEngine creates missing.txt on first call → single-group healing succeeds
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	eng := &progressEngine{
+		projectDir:    projectDir,
+		filesToCreate: []string{"target.txt"},
+	}
+
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir: projectDir,
+		Sprint:     &epic.Sprint{Number: 1, Name: "Targeted"},
+		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 3, MaxHealAttemptsSet: true},
+		Engine:     eng,
+		SprintLogFile: sprintLog,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "target.txt"},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Healed, "single-group healing should resolve on first attempt")
+	assert.Equal(t, 1, eng.calls, "should only need one heal attempt")
+}
+
+func TestTargetedHealFallbackAfterStall(t *testing.T) {
+	t.Parallel()
+
+	// Engine never fixes anything → both severity groups stall → fallback to all-at-once.
+	// With maxAttempts=4 and stall threshold=2, fallback triggers at iteration 2.
+	// Loop continues to exhaustion (4 attempts total).
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+
+	eng := &recordingHealEngine{projectDir: projectDir}
+
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir: projectDir,
+		Sprint:     &epic.Sprint{Number: 1, Name: "Stall"},
+		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 4, MaxHealAttemptsSet: true},
+		Engine:     eng,
+		SprintLogFile: sprintLog,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
+			{Sprint: 1, Type: verify.CheckCmd, Command: "false"},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	require.Len(t, eng.prompts, 4, "all 4 attempts should run")
+
+	// First attempt: targeted — only CheckFile (sev 0) in prompt
+	assert.Contains(t, eng.prompts[0], "missing.txt", "first prompt should mention CheckFile")
+	assert.NotContains(t, eng.prompts[0], "Command failed", "first prompt should not mention CheckCmd")
+
+	// After fallback (iteration 2 onwards): all failures in prompt
+	assert.Contains(t, eng.prompts[1], "missing.txt", "post-fallback prompt should mention CheckFile")
+	assert.Contains(t, eng.prompts[1], "Command failed", "post-fallback prompt should mention CheckCmd")
+}
+
+func TestTargetedHealMixedSeverityOrder(t *testing.T) {
+	t.Parallel()
+
+	// CheckFile (sev 0) and CheckFileContains (sev 1) both failing.
+	// First 2 attempts: sev 0 targeted. After stall: fallback to all-at-once.
+	projectDir := t.TempDir()
+	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
+	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
+	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
+	// Create a file with wrong content so CheckFileContains fails
+	writeFile(t, filepath.Join(projectDir, "config.txt"), "no match here\n")
+
+	eng := &recordingHealEngine{projectDir: projectDir}
+
+	result, err := RunHealLoop(context.Background(), HealOpts{
+		ProjectDir: projectDir,
+		Sprint:     &epic.Sprint{Number: 1, Name: "Mixed"},
+		Epic:       &epic.Epic{TotalSprints: 1, MaxHealAttempts: 3, MaxHealAttemptsSet: true},
+		Engine:     eng,
+		SprintLogFile: sprintLog,
+		Checks: []verify.Check{
+			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},              // sev 0
+			{Sprint: 1, Type: verify.CheckFileContains, Path: "config.txt", Pattern: "required"}, // sev 1
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Healed)
+	require.GreaterOrEqual(t, len(eng.prompts), 1)
+
+	// First prompt must target sev 0 (CheckFile) only
+	assert.Contains(t, eng.prompts[0], "missing.txt")
+	assert.NotContains(t, eng.prompts[0], "config.txt")
+}
+
+// recordingHealEngine records the contents of .fry/prompt.md on each Run call.
+type recordingHealEngine struct {
+	projectDir string
+	prompts    []string
+}
+
+func (r *recordingHealEngine) Run(_ context.Context, _ string, opts engine.RunOpts) (string, int, error) {
+	promptPath := filepath.Join(r.projectDir, config.PromptFile)
+	data, _ := os.ReadFile(promptPath)
+	r.prompts = append(r.prompts, string(data))
+	if opts.Stdout != nil {
+		_, _ = opts.Stdout.Write([]byte("heal output\n"))
+	}
+	return "heal output\n", 0, nil
+}
+
+func (r *recordingHealEngine) Name() string { return "recording" }
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))

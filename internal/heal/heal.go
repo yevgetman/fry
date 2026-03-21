@@ -125,6 +125,46 @@ func resolveFailPercent(opts HealOpts) int {
 	return opts.MaxFailPercent
 }
 
+// healGroupSeverity returns a priority level for a check type used in targeted
+// healing. Lower values mean higher priority (addressed first).
+// Severity order: file existence (0) > file contents (1) > commands (2).
+func healGroupSeverity(ct verify.CheckType) int {
+	switch ct {
+	case verify.CheckFile:
+		return 0
+	case verify.CheckFileContains:
+		return 1
+	default: // CheckCmd, CheckCmdOutput, CheckTest
+		return 2
+	}
+}
+
+// groupFailedChecks returns failed check results keyed by severity level.
+func groupFailedChecks(results []verify.CheckResult) map[int][]verify.CheckResult {
+	groups := make(map[int][]verify.CheckResult)
+	for _, r := range results {
+		if !r.Passed {
+			sev := healGroupSeverity(r.Check.Type)
+			groups[sev] = append(groups[sev], r)
+		}
+	}
+	return groups
+}
+
+// highestPriorityGroup returns the results for the lowest-severity (highest-priority) group.
+func highestPriorityGroup(groups map[int][]verify.CheckResult) []verify.CheckResult {
+	minSev := -1
+	for sev := range groups {
+		if minSev < 0 || sev < minSev {
+			minSev = sev
+		}
+	}
+	if minSev < 0 {
+		return nil
+	}
+	return groups[minSev]
+}
+
 func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 	if opts.Epic == nil || opts.Sprint == nil {
 		return nil, fmt.Errorf("run heal loop: epic and sprint are required")
@@ -156,6 +196,12 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 	stuckCount := 0
 	resolvedModel := engine.ResolveModel(opts.Epic.AgentModel, opts.Engine.Name(), string(opts.EffortLevel), engine.SessionHeal)
 
+	// Targeted healing state: track resolved severity groups and stall.
+	targetedMode := true
+	resolvedGroups := make(map[int]bool)
+	targetedStall := 0
+	lastGroups := groupFailedChecks(lastResults)
+
 	for attempt := 1; !cfg.hardCap || attempt <= cfg.maxAttempts; attempt++ {
 		select {
 		case <-ctx.Done():
@@ -173,7 +219,41 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			return &HealResult{Healed: true, PassCount: passCount, TotalCount: totalCount}, nil
 		}
 
-		failureReport := verify.CollectFailures(results, passCount, totalCount)
+		// Update group state and detect stall for targeted healing.
+		currentGroups := groupFailedChecks(results)
+		newlyResolved := 0
+		for sev := range lastGroups {
+			if _, stillFailing := currentGroups[sev]; !stillFailing {
+				if !resolvedGroups[sev] {
+					resolvedGroups[sev] = true
+					newlyResolved++
+				}
+			}
+		}
+		if targetedMode {
+			if newlyResolved == 0 {
+				targetedStall++
+			} else {
+				targetedStall = 0
+			}
+			if targetedStall >= 2 {
+				targetedMode = false
+				frylog.Log("  Targeted healing stalled after 2 iterations without progress — falling back to all-at-once mode.")
+			}
+		}
+		lastGroups = currentGroups
+
+		// Build failure report: targeted (highest-priority unfixed group) or all-at-once.
+		var failureReport string
+		if targetedMode {
+			if group := highestPriorityGroup(currentGroups); len(group) > 0 {
+				failureReport = verify.CollectFailures(group, 0, len(group))
+			} else {
+				failureReport = verify.CollectFailures(results, passCount, totalCount)
+			}
+		} else {
+			failureReport = verify.CollectFailures(results, passCount, totalCount)
+		}
 		prompt := buildHealPrompt(opts, failureReport)
 		promptPath := filepath.Join(opts.ProjectDir, config.PromptFile)
 		if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {

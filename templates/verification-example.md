@@ -138,7 +138,7 @@
 @check_file src/models/user.ts
 @check_file src/models/post.ts
 @check_cmd npm run build
-@check_cmd npm test
+@check_test npm test
 
 # =============================================================================
 # Sprint N (Final) — Wiring, Integration & E2E
