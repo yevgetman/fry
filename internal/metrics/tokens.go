@@ -8,9 +8,9 @@ import (
 
 // TokenUsage holds token counts for a single engine invocation.
 type TokenUsage struct {
-	Input  int
-	Output int
-	Total  int
+	Input  int `json:"input"`
+	Output int `json:"output"`
+	Total  int `json:"total"`
 }
 
 // SprintTokens aggregates token usage across all agent calls for one sprint.
@@ -82,7 +82,7 @@ func ParseTokens(engineName, output string) TokenUsage {
 	switch strings.ToLower(engineName) {
 	case "codex":
 		return ParseCodexTokens(output)
-	default:
+	default: // Unrecognised engines are treated as Claude-format output.
 		return ParseClaudeTokens(output)
 	}
 }

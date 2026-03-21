@@ -78,4 +78,9 @@ func TestParseTokensDispatchesByEngine(t *testing.T) {
 	uCodex := ParseTokens("codex", codexOutput)
 	assert.Equal(t, 200, uCodex.Input)
 	assert.Equal(t, 80, uCodex.Output)
+
+	// Unknown engine falls through to Claude parser.
+	uUnknown := ParseTokens("gemini", claudeOutput)
+	assert.Equal(t, 100, uUnknown.Input)
+	assert.Equal(t, 50, uUnknown.Output)
 }

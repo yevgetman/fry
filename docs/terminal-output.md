@@ -386,9 +386,9 @@ When `--json-report` is passed, Fry writes `build-report.json` to the project ro
         "failed_checks": 0
       },
       "token_usage": {
-        "Input": 1250,
-        "Output": 487,
-        "Total": 1737
+        "input": 1250,
+        "output": 487,
+        "total": 1737
       }
     }
   ]
