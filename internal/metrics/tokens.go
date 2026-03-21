@@ -22,7 +22,9 @@ type SprintTokens struct {
 // claudeInputRe matches Claude CLI usage lines like:
 //   input_tokens: 1234
 //   Input tokens: 1234
-var claudeInputRe = regexp.MustCompile(`(?i)input[_\s]tokens?[:\s]+(\d+)`)
+// It uses a word boundary to avoid matching cache_read_input_tokens or
+// cache_creation_input_tokens.
+var claudeInputRe = regexp.MustCompile(`(?i)\binput[_\s]tokens?[:\s]+(\d+)`)
 
 // claudeOutputRe matches Claude CLI usage lines like:
 //   output_tokens: 567

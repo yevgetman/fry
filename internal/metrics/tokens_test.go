@@ -25,6 +25,22 @@ Usage:
 	assert.Equal(t, 1737, u.Total)
 }
 
+func TestParseClaudeTokensCacheFieldsNotCounted(t *testing.T) {
+	t.Parallel()
+
+	// Non-zero cache fields must not inflate Input count.
+	output := `Usage:
+  input_tokens: 500
+  output_tokens: 200
+  cache_read_input_tokens: 300
+  cache_creation_input_tokens: 150`
+
+	u := ParseClaudeTokens(output)
+	assert.Equal(t, 500, u.Input, "Input should only count input_tokens, not cache fields")
+	assert.Equal(t, 200, u.Output)
+	assert.Equal(t, 700, u.Total)
+}
+
 func TestParseClaudeTokensNoUsageReturnsZero(t *testing.T) {
 	t.Parallel()
 
