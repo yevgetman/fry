@@ -110,7 +110,7 @@ cleanup() {
     release_lock
     log "Cleanup complete"
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # --- Dependency checks ---
 check_deps() {
@@ -514,7 +514,6 @@ EOF
     # Create PR
     local pr_url
     if ! pr_url="$(gh pr create \
-        --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" \
         --base master \
         --head "$BUILD_BRANCH" \
         --title "$pr_title" \
