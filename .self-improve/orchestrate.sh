@@ -16,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 LOCK_FILE="$SCRIPT_DIR/.lock"
+LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$SCRIPT_DIR/orchestrate.log"
 ROADMAP="$SCRIPT_DIR/roadmap.json"
 EXECUTIVE="$SCRIPT_DIR/executive.md"
@@ -58,8 +59,14 @@ for arg in "$@"; do
 done
 
 # --- Logging ---
+RUN_LOG=""  # Set in main() after LOG_DIR is created
+
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+    echo "$msg" | tee -a "$LOG_FILE"
+    if [ -n "$RUN_LOG" ]; then
+        echo "$msg" >> "$RUN_LOG"
+    fi
 }
 
 die() {
@@ -702,9 +709,14 @@ cleanup_merged_items() {
 # MAIN
 # ===========================================================================
 main() {
+    # Set up per-run log file
+    mkdir -p "$LOG_DIR"
+    RUN_LOG="$LOG_DIR/${RUN_ID}.log"
+
     log ""
     log "==========================================================="
     log "  Fry Self-Improvement Orchestrator"
+    log "  Run log: $RUN_LOG"
     log "  Date: $DATE"
     log "==========================================================="
 
