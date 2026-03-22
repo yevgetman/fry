@@ -174,7 +174,7 @@ func TestHeuristicAnalyze(t *testing.T) {
 				TotalSprints:     3,
 				CompletedSprints: nil,
 			},
-			wantVerdict: VerdictResumeFresh,
+			wantVerdict: VerdictResume,
 			wantSprint:  1,
 		},
 		{
@@ -185,19 +185,19 @@ func TestHeuristicAnalyze(t *testing.T) {
 					{Number: 1}, {Number: 2},
 				},
 			},
-			wantVerdict: VerdictResumeFresh,
+			wantVerdict: VerdictResume,
 			wantSprint:  3,
 		},
 		{
-			name:        "nil state returns blocked",
+			name:        "nil state returns all complete",
 			state:       nil,
-			wantVerdict: VerdictBlocked,
+			wantVerdict: VerdictAllComplete,
 			wantSprint:  0,
 		},
 		{
-			name:        "zero total sprints returns blocked",
+			name:        "zero total sprints returns all complete",
 			state:       &BuildState{TotalSprints: 0},
-			wantVerdict: VerdictBlocked,
+			wantVerdict: VerdictAllComplete,
 			wantSprint:  0,
 		},
 	}
@@ -211,6 +211,52 @@ func TestHeuristicAnalyze(t *testing.T) {
 			assert.Equal(t, tt.wantSprint, decision.StartSprint)
 		})
 	}
+}
+
+func TestHeuristicAnalyzeResumeFromFirst(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		TotalSprints:     3,
+		CompletedSprints: nil, // none completed
+	}
+	decision := HeuristicAnalyze(state)
+	assert.Equal(t, VerdictResume, decision.Verdict)
+	assert.Equal(t, 1, decision.StartSprint)
+}
+
+func TestHeuristicAnalyzeResumeFromMiddle(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		TotalSprints: 3,
+		CompletedSprints: []CompletedSprint{
+			{Number: 1},
+		},
+	}
+	decision := HeuristicAnalyze(state)
+	assert.Equal(t, VerdictResume, decision.Verdict)
+	assert.Equal(t, 2, decision.StartSprint)
+}
+
+func TestHeuristicAnalyzeAllComplete(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		TotalSprints: 2,
+		CompletedSprints: []CompletedSprint{
+			{Number: 1}, {Number: 2},
+		},
+	}
+	decision := HeuristicAnalyze(state)
+	assert.Equal(t, VerdictAllComplete, decision.Verdict)
+}
+
+func TestHeuristicAnalyzeNoSprints(t *testing.T) {
+	t.Parallel()
+
+	decision := HeuristicAnalyze(&BuildState{TotalSprints: 0})
+	assert.Equal(t, VerdictAllComplete, decision.Verdict)
 }
 
 func TestBuildAnalysisPrompt(t *testing.T) {

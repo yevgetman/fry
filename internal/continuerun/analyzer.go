@@ -107,11 +107,13 @@ func Analyze(ctx context.Context, opts AnalyzeOpts) (*ContinueDecision, error) {
 // HeuristicAnalyze determines where to resume a build without an LLM call.
 // It scans the BuildState for sprint completion markers, finds the first sprint
 // without a completion marker, and returns that sprint as the resume point.
+// Returns VerdictAllComplete when state is nil, has no sprints, or all sprints
+// are complete.
 func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 	if state == nil || state.TotalSprints == 0 {
 		return &ContinueDecision{
-			Verdict: VerdictBlocked,
-			Reason:  "no build state available",
+			Verdict: VerdictAllComplete,
+			Reason:  "heuristic: all sprints completed",
 		}
 	}
 
@@ -123,9 +125,9 @@ func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 	for i := 1; i <= state.TotalSprints; i++ {
 		if !completed[i] {
 			return &ContinueDecision{
-				Verdict:     VerdictResumeFresh,
+				Verdict:     VerdictResume,
 				StartSprint: i,
-				Reason:      fmt.Sprintf("sprint %d has no completion marker", i),
+				Reason:      "heuristic: first incomplete sprint",
 			}
 		}
 	}
@@ -133,7 +135,7 @@ func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 	return &ContinueDecision{
 		Verdict:     VerdictAllComplete,
 		StartSprint: state.TotalSprints,
-		Reason:      fmt.Sprintf("all %d sprints are marked complete", state.TotalSprints),
+		Reason:      "heuristic: all sprints completed",
 	}
 }
 
