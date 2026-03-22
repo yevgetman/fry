@@ -247,6 +247,9 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("cannot use --continue with --resume; --continue auto-detects whether to resume")
 			}
 		}
+		if runHeuristic && !runContinue {
+			return fmt.Errorf("--heuristic requires --continue")
+		}
 
 		var startSprint, endSprint int
 		if runContinue {
@@ -483,7 +486,7 @@ var runCmd = &cobra.Command{
 		exitErr := error(nil)
 		for sprintNum := startSprint; sprintNum <= endSprint; sprintNum++ {
 			if sprintNum < 1 || sprintNum > len(ep.Sprints) {
-				return fmt.Errorf("sprint %d out of range (total: %d)", sprintNum, len(ep.Sprints))
+				return fmt.Errorf("sprint %d out of range [1, %d]", sprintNum, len(ep.Sprints))
 			}
 			spr := &ep.Sprints[sprintNum-1]
 

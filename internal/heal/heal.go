@@ -200,6 +200,11 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 	// Targeted healing state: track resolved severity groups and stall.
 	targetedMode := true
+	// resolvedGroups records which severity buckets have been resolved at least
+	// once. It is used exclusively by the stall detector to avoid counting the
+	// same bucket twice across iterations. It does NOT filter highestPriorityGroup —
+	// currentGroups already excludes resolved checks because groupFailedChecks only
+	// includes Passed==false results.
 	resolvedGroups := make(map[int]bool)
 	targetedStall := 0
 	lastGroups := groupFailedChecks(lastResults)
