@@ -383,7 +383,8 @@ EOF
     issue_url="$(gh issue create \
         --title "[${category_label}] ${title}" \
         --body "$body" \
-        --label "$labels" 2>&1)"
+        --label "$labels" \
+        --assignee "@me" 2>&1)"
 
     if [ $? -eq 0 ]; then
         local status_label="approved"
@@ -552,9 +553,69 @@ create_issues_from_findings() {
 
 # ===========================================================================
 # BUILD PHASE
+# Sync comment-based approvals: scan proposed issues for /approve comments
+# and swap labels accordingly. Runs as a fallback in case the GitHub Action
+# didn't fire or isn't configured.
+sync_comment_approvals() {
+    log "Syncing comment-based approvals..."
+
+    local proposed_issues
+    proposed_issues="$(gh issue list \
+        --label "$LABEL_SELF_IMPROVE" \
+        --label "$LABEL_STATUS_PROPOSED" \
+        --state open \
+        --limit 500 \
+        --json number -q '.[].number')"
+
+    if [ -z "$proposed_issues" ]; then
+        log "  No proposed issues to check"
+        return 0
+    fi
+
+    local synced=0
+    for num in $proposed_issues; do
+        # Check if any comment contains "approve" (case-insensitive)
+        local has_approve
+        has_approve="$(gh issue view "$num" \
+            --json comments \
+            -q '[.comments[].body | ascii_downcase | test("\\bapprove\\b")] | any' \
+            2>/dev/null || echo "false")"
+
+        if [ "$has_approve" = "true" ]; then
+            log "  #$num: found /approve comment — swapping labels"
+            gh issue edit "$num" \
+                --remove-label "$LABEL_STATUS_PROPOSED" \
+                --add-label "$LABEL_STATUS_APPROVED" \
+                2>/dev/null || log "  WARNING: failed to update labels on #$num"
+            synced=$((synced + 1))
+        fi
+
+        # Check if any comment contains "reject" (case-insensitive)
+        local has_reject
+        has_reject="$(gh issue view "$num" \
+            --json comments \
+            -q '[.comments[].body | ascii_downcase | test("\\breject\\b")] | any' \
+            2>/dev/null || echo "false")"
+
+        if [ "$has_reject" = "true" ]; then
+            log "  #$num: found /reject comment — closing issue"
+            gh issue close "$num" \
+                --reason "not planned" \
+                2>/dev/null || log "  WARNING: failed to close #$num"
+        fi
+    done
+
+    if [ "$synced" -gt 0 ]; then
+        log "  Synced $synced issue(s) from proposed to approved"
+    fi
+}
+
 # ===========================================================================
 run_build_phase() {
     log "--- Build Phase ---"
+
+    # Sync any comment-based approvals before querying
+    sync_comment_approvals
 
     # Check there are approved items to work on (excluding max-attempts)
     local approved_issues

@@ -1,0 +1,77 @@
+name: Issue Approve/Reject
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  handle-command:
+    # Only run on self-improve issues
+    if: contains(github.event.issue.labels.*.name, 'self-improve')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Check for approve command
+        if: >-
+          contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = context.payload.comment.body.trim().toLowerCase();
+            const issueNumber = context.payload.issue.number;
+            const labels = context.payload.issue.labels.map(l => l.name);
+
+            // Check for approve command
+            if (/\bapprove\b/.test(comment)) {
+              // Swap labels
+              if (labels.includes('status/proposed')) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: 'status/proposed'
+                });
+              }
+              if (!labels.includes('status/approved')) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  labels: ['status/approved']
+                });
+              }
+
+              // React to confirm
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: '+1'
+              });
+
+              console.log(`Issue #${issueNumber} approved`);
+              return;
+            }
+
+            // Check for reject command
+            if (/\breject\b/.test(comment)) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'closed',
+                state_reason: 'not_planned'
+              });
+
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: '+1'
+              });
+
+              console.log(`Issue #${issueNumber} rejected and closed`);
+              return;
+            }
