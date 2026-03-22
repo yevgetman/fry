@@ -21,17 +21,35 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCK_FILE="$SCRIPT_DIR/.lock"
 LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$SCRIPT_DIR/orchestrate.log"
+CONFIG_FILE="$SCRIPT_DIR/config"
 EXECUTIVE="$SCRIPT_DIR/executive.md"
 PLANNING_PROMPT="$SCRIPT_DIR/planning-prompt.md"
 BUILD_PROMPT="$SCRIPT_DIR/build-prompt.md"
 LAST_BUILD_STATUS="$SCRIPT_DIR/.last-build-status"
 
+# --- Defaults (overridden by config file, then by CLI flags) ---
 MAX_BUILD_ITEMS=3
-MAX_ATTEMPTS=3          # Skip items that have failed this many times
-MAX_POST_BUILD_HEALS=3  # Attempts to heal test/build failures after Fry completes
-PLANNING_THRESHOLD=15   # Skip planning if this many open issues already exist
+MAX_ATTEMPTS=3
+MAX_POST_BUILD_HEALS=3
+PLANNING_THRESHOLD=15
+AUTO_APPROVE="bug security testing documentation"
+PLANNING_ENGINE=claude
+BUILD_ENGINE=claude
+HEAL_MODEL=sonnet
 DATE="$(date +%Y-%m-%d)"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
+
+# --- Load config file (overrides defaults above) ---
+if [ -f "$CONFIG_FILE" ]; then
+    # Source only lines matching KEY=VALUE (ignore comments, blank lines)
+    while IFS='=' read -r key value; do
+        key="$(echo "$key" | xargs)"       # trim whitespace
+        # Skip comments and blank lines
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        value="$(echo "$value" | sed 's/#.*//' | xargs)"  # strip inline comments, trim
+        declare "$key=$value" 2>/dev/null || true
+    done < "$CONFIG_FILE"
+fi
 
 # Label constants
 LABEL_SELF_IMPROVE="self-improve"
@@ -39,14 +57,15 @@ LABEL_STATUS_PROPOSED="status/proposed"
 LABEL_STATUS_APPROVED="status/approved"
 LABEL_MAX_ATTEMPTS="max-attempts"
 
-# Categories that are auto-approved (safe to build without human review)
-AUTO_APPROVE_CATEGORIES=("bug" "security" "testing" "documentation")
+# Build AUTO_APPROVE_CATEGORIES array from space-separated string
+IFS=' ' read -ra AUTO_APPROVE_CATEGORIES <<< "$AUTO_APPROVE"
 
 # Flags
 SKIP_PLANNING=false
 SKIP_BUILD=false
 DRY_RUN=false
-AUTO_MERGE=false
+# AUTO_MERGE may already be set by config file; default to false if not
+AUTO_MERGE="${AUTO_MERGE:-false}"
 
 # State (used by cleanup trap)
 WORKTREE_DIR=""
@@ -298,6 +317,21 @@ create_issue_from_finding() {
     fix="$(echo "$finding" | jq -r '.fix // ""')"
     files_str="$(echo "$finding" | jq -r '(.files // []) | map("`" + . + "`") | join(", ")')"
 
+    # Map category slug to display name for issue title
+    local category_label
+    case "$category" in
+        bug)           category_label="Bug" ;;
+        testing)       category_label="Testing" ;;
+        feature)       category_label="Feature" ;;
+        improvement)   category_label="Improvement" ;;
+        sunset)        category_label="Sunset" ;;
+        refactor)      category_label="Refactor" ;;
+        security)      category_label="Security" ;;
+        ui_ux)         category_label="UI/UX" ;;
+        documentation) category_label="Documentation" ;;
+        *)             category_label="$(echo "$category" | sed 's/.*/\u&/')" ;;
+    esac
+
     # Check for duplicate — skip if an open issue with the same title exists
     local existing_count
     existing_count="$(gh issue list \
@@ -347,7 +381,7 @@ EOF
 
     local issue_url
     issue_url="$(gh issue create \
-        --title "[Fry] ${title}" \
+        --title "[${category_label}] ${title}" \
         --body "$body" \
         --label "$labels" 2>&1)"
 
@@ -449,6 +483,7 @@ run_planning_phase() {
     log "Running Fry planning scan..."
     if ! fry run \
         --user-prompt-file "$PLANNING_PROMPT" \
+        --engine "$PLANNING_ENGINE" \
         --no-sanity-check \
         --no-audit \
         --git-strategy current \
@@ -587,6 +622,7 @@ run_build_phase() {
     local build_success=true
     if ! fry run \
         --user-prompt-file "$BUILD_PROMPT" \
+        --engine "$BUILD_ENGINE" \
         --always-verify \
         --full-prepare \
         --no-sanity-check \
@@ -642,7 +678,7 @@ Instructions:
 5. Keep changes minimal — only fix what is broken.
 HEALPROMPT
 
-                if ! (cd "$WORKTREE_DIR" && claude -p --dangerously-skip-permissions --model sonnet < "$heal_prompt_file") 2>&1 | tee -a "$LOG_FILE"; then
+                if ! (cd "$WORKTREE_DIR" && claude -p --dangerously-skip-permissions --model "$HEAL_MODEL" < "$heal_prompt_file") 2>&1 | tee -a "$LOG_FILE"; then
                     log "  Heal agent failed to run"
                     rm -f "$heal_prompt_file"
                     continue

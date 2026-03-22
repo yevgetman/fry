@@ -1,0 +1,44 @@
+# Fry Self-Improvement Configuration
+#
+# Lines starting with # are comments. Blank lines are ignored.
+# Values here override script defaults. CLI flags (--auto-merge, etc.) override these.
+# Remove or comment out a line to use the script default.
+
+# --- Build Phase ---
+
+# Maximum items Fry can select per build (default: 3)
+MAX_BUILD_ITEMS=3
+
+# Skip issues after this many failed build attempts (default: 3)
+MAX_ATTEMPTS=3
+
+# Heal attempts for post-build test/build failures (default: 3)
+MAX_POST_BUILD_HEALS=3
+
+# --- Planning Phase ---
+
+# Skip planning if this many open issues already exist (default: 15)
+PLANNING_THRESHOLD=15
+
+# --- Approval ---
+
+# Categories that are auto-approved — built without human review (space-separated).
+# All other categories require human approval via GitHub Issue labels.
+# Valid categories: bug testing feature improvement sunset refactor security ui_ux documentation
+AUTO_APPROVE="bug security testing documentation"
+
+# --- Engines & Models ---
+
+# Engine for the planning phase (default: claude). Options: claude, codex
+PLANNING_ENGINE=claude
+
+# Engine for the build phase (default: claude). Options: claude, codex
+BUILD_ENGINE=claude
+
+# Model for the post-build heal agent (default: sonnet)
+HEAL_MODEL=sonnet
+
+# --- Behavior Defaults ---
+
+# Set to true to auto-merge by default (same as always passing --auto-merge)
+# AUTO_MERGE=false
