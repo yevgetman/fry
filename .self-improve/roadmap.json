@@ -15,7 +15,7 @@
       "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 3
+      "attempted_count": 0
     },
     {
       "id": "B4",
@@ -31,7 +31,7 @@
       "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 3
+      "attempted_count": 0
     },
     {
       "id": "C2",
@@ -47,7 +47,7 @@
       "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 3
+      "attempted_count": 0
     },
     {
       "id": "C3",
@@ -65,7 +65,7 @@
       "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 3
+      "attempted_count": 0
     },
     {
       "id": "D2",
@@ -82,7 +82,7 @@
       "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
-      "attempted_count": 1
+      "attempted_count": 0
     },
     {
       "id": "D3",
