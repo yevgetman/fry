@@ -975,7 +975,11 @@ var runCmd = &cobra.Command{
 				totalIn += st.Usage.Input
 				totalOut += st.Usage.Output
 			}
-			fmt.Fprintf(tw, "TOTAL\t%d\t%d\t%d\n", totalIn, totalOut, totalIn+totalOut)
+			if strings.EqualFold(engineName, "ollama") && totalIn == 0 && totalOut == 0 {
+				fmt.Fprintln(tw, "TOTAL\t-\t-\t-")
+			} else {
+				fmt.Fprintf(tw, "TOTAL\t%d\t%d\t%d\n", totalIn, totalOut, totalIn+totalOut)
+			}
 			_ = tw.Flush()
 		}
 
