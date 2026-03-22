@@ -113,20 +113,23 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
+
 		// For --continue/--resume, detect if a prior run used a worktree and redirect
 		// projectPath before any file reads (epic, user-prompt, etc.)
 		var strategySetup *git.StrategySetup
 		originalProjectPath := projectPath
 		if runContinue || runSimpleContinue || runResume {
 			if persisted, readErr := git.ReadPersistedStrategy(projectPath); readErr == nil && persisted != nil {
-				if persisted.IsWorktree && git.IsInsideGitRepo(persisted.WorkDir) {
+				if persisted.IsWorktree && git.IsInsideGitRepo(ctx, persisted.WorkDir) {
 					projectPath = persisted.WorkDir
 					strategySetup = persisted
 					frlog.Log("▶ CONTINUE  reattaching to worktree: %s", persisted.WorkDir)
 				} else if persisted.Strategy == git.StrategyBranch && persisted.BranchName != "" {
 					// Checkout the branch if we're not already on it.
-					if git.CurrentBranch(projectPath) != persisted.BranchName {
-						if coErr := git.CheckoutBranch(projectPath, persisted.BranchName); coErr != nil {
+					if git.CurrentBranch(ctx, projectPath) != persisted.BranchName {
+						if coErr := git.CheckoutBranch(ctx, projectPath, persisted.BranchName); coErr != nil {
 							frlog.Log("WARNING: could not checkout branch %s: %v", persisted.BranchName, coErr)
 						}
 					}
@@ -385,7 +388,7 @@ var runCmd = &cobra.Command{
 				}
 
 				var setupErr error
-				strategySetup, setupErr = git.SetupStrategy(git.StrategyOpts{
+				strategySetup, setupErr = git.SetupStrategy(ctx, git.StrategyOpts{
 					ProjectDir: projectPath,
 					Strategy:   gitStrategy,
 					BranchName: branchName,
@@ -427,9 +430,6 @@ var runCmd = &cobra.Command{
 			})
 		}
 		defer releaseLock()
-
-		ctx, cancel := context.WithCancel(cmd.Context())
-		defer cancel()
 
 		results := initializeSprintResults(ep, startSprint, endSprint)
 		var mu sync.Mutex
@@ -478,7 +478,7 @@ var runCmd = &cobra.Command{
 		}); err != nil {
 			return err
 		}
-		if err := git.InitGit(projectPath); err != nil {
+		if err := git.InitGit(ctx, projectPath); err != nil {
 			return err
 		}
 
@@ -564,7 +564,7 @@ var runCmd = &cobra.Command{
 					name := epicName
 					mu.Unlock()
 					if activeSprint > 0 {
-						_ = git.CommitPartialWork(projectPath, name, activeSprint)
+						_ = git.CommitPartialWork(ctx, projectPath, name, activeSprint)
 					}
 					exitErr = fmt.Errorf("interrupted by signal")
 					break
@@ -640,7 +640,7 @@ var runCmd = &cobra.Command{
 					if err != nil {
 						return err
 					}
-					gitDiff, err := git.GitDiffForAudit(projectPath)
+					gitDiff, err := git.GitDiffForAudit(ctx, projectPath)
 					if err != nil {
 						frlog.Log("WARNING: could not capture git diff for audit: %v", err)
 						gitDiff = "(git diff unavailable)"
@@ -651,7 +651,7 @@ var runCmd = &cobra.Command{
 						Epic:       ep,
 						Engine:     auditEngine,
 						GitDiff:    gitDiff,
-						DiffFn:     func() (string, error) { return git.GitDiffForAudit(projectPath) },
+						DiffFn:     func() (string, error) { return git.GitDiffForAudit(ctx, projectPath) },
 						Verbose:    frlog.Verbose,
 						Mode:       modeStr,
 					})
@@ -701,7 +701,7 @@ var runCmd = &cobra.Command{
 				}
 
 				frlog.Log("  GIT: checkpoint — sprint %d complete", spr.Number)
-				if err := git.GitCheckpoint(projectPath, ep.Name, spr.Number, "complete"); err != nil {
+				if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, "complete"); err != nil {
 					return err
 				}
 
@@ -718,7 +718,7 @@ var runCmd = &cobra.Command{
 					return err
 				}
 				frlog.Log("  GIT: checkpoint — sprint %d compacted", spr.Number)
-				if err := git.GitCheckpoint(projectPath, ep.Name, spr.Number, "compacted"); err != nil {
+				if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, "compacted"); err != nil {
 					return err
 				}
 
@@ -809,7 +809,7 @@ var runCmd = &cobra.Command{
 							return err
 						}
 						frlog.Log("  GIT: checkpoint — sprint %d reviewed-deviate", spr.Number)
-						if err := git.GitCheckpoint(projectPath, ep.Name, spr.Number, "reviewed-deviate"); err != nil {
+						if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, "reviewed-deviate"); err != nil {
 							return err
 						}
 					}
@@ -875,7 +875,7 @@ var runCmd = &cobra.Command{
 						frlog.Log("  BUILD AUDIT: %s remain (advisory)", audit.FormatCounts(result.SeverityCounts))
 					}
 					frlog.Log("  GIT: checkpoint — build-audit")
-					if gitErr := git.GitCheckpoint(projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
+					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
 					}
 				}
@@ -926,7 +926,7 @@ var runCmd = &cobra.Command{
 					} else {
 						frlog.Log("  BUILD AUDIT: %s (advisory)", audit.FormatCounts(result.SeverityCounts))
 					}
-					if gitErr := git.GitCheckpoint(projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
+					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
 					}
 				}

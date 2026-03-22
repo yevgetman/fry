@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"strings"
@@ -14,7 +15,7 @@ func TestInitGit(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 
 	info, err := os.Stat(projectDir + "/.git")
 	require.NoError(t, err)
@@ -25,9 +26,9 @@ func TestGitCheckpoint(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 	require.NoError(t, os.WriteFile(projectDir+"/file.txt", []byte("data\n"), 0o644))
-	require.NoError(t, GitCheckpoint(projectDir, "Epic Name", 2, "complete"))
+	require.NoError(t, GitCheckpoint(context.Background(), projectDir, "Epic Name", 2, "complete"))
 
 	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
 	cmd.Dir = projectDir
@@ -40,15 +41,15 @@ func TestInitGitIdempotent(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 }
 
 func TestGitDiffForAudit(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 
 	require.NoError(t, os.WriteFile(projectDir+"/existing.txt", []byte("original\n"), 0o644))
 	cmd := exec.Command("bash", "-c", "git add -A && git commit -m 'add existing'")
@@ -58,7 +59,7 @@ func TestGitDiffForAudit(t *testing.T) {
 	require.NoError(t, os.WriteFile(projectDir+"/existing.txt", []byte("modified\n"), 0o644))
 	require.NoError(t, os.WriteFile(projectDir+"/newfile.txt", []byte("new content\n"), 0o644))
 
-	diff, err := GitDiffForAudit(projectDir)
+	diff, err := GitDiffForAudit(context.Background(), projectDir)
 	require.NoError(t, err)
 
 	assert.Contains(t, diff, "existing.txt")
@@ -77,7 +78,7 @@ func TestGitDiffForAudit_PreservesExistingStagedChanges(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 
 	require.NoError(t, os.WriteFile(projectDir+"/tracked.txt", []byte("original\n"), 0o644))
 	cmd := exec.Command("bash", "-c", "git add tracked.txt && git commit -m 'add tracked'")
@@ -91,7 +92,7 @@ func TestGitDiffForAudit_PreservesExistingStagedChanges(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(projectDir+"/newfile.txt", []byte("new content\n"), 0o644))
 
-	diff, err := GitDiffForAudit(projectDir)
+	diff, err := GitDiffForAudit(context.Background(), projectDir)
 	require.NoError(t, err)
 	assert.Contains(t, diff, "tracked.txt")
 	assert.Contains(t, diff, "newfile.txt")
@@ -107,13 +108,13 @@ func TestGitDiffForAuditExcludesFryDir(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 
 	require.NoError(t, os.MkdirAll(projectDir+"/.fry", 0o755))
 	require.NoError(t, os.WriteFile(projectDir+"/.fry/sprint-progress.txt", []byte("progress\n"), 0o644))
 	require.NoError(t, os.WriteFile(projectDir+"/code.go", []byte("package main\n"), 0o644))
 
-	diff, err := GitDiffForAudit(projectDir)
+	diff, err := GitDiffForAudit(context.Background(), projectDir)
 	require.NoError(t, err)
 
 	assert.Contains(t, diff, "code.go")
@@ -126,9 +127,9 @@ func TestCommitPartialWork(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 	require.NoError(t, os.WriteFile(projectDir+"/partial.txt", []byte("wip\n"), 0o644))
-	require.NoError(t, CommitPartialWork(projectDir, "TestEpic", 3))
+	require.NoError(t, CommitPartialWork(context.Background(), projectDir, "TestEpic", 3))
 
 	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
 	cmd.Dir = projectDir
@@ -149,14 +150,14 @@ func TestEnsureLocalIdentity(t *testing.T) {
 
 	// ensureLocalIdentity should not error regardless of whether
 	// global git config provides user.name/user.email or not.
-	require.NoError(t, ensureLocalIdentity(projectDir))
+	require.NoError(t, ensureLocalIdentity(context.Background(), projectDir))
 
 	// After calling ensureLocalIdentity, at least one of local or global
 	// should provide user.name — verify git agrees.
-	nameVal := gitConfigValue(projectDir, "user.name")
+	nameVal := gitConfigValue(context.Background(), projectDir, "user.name")
 	assert.NotEmpty(t, strings.TrimSpace(nameVal))
 
-	emailVal := gitConfigValue(projectDir, "user.email")
+	emailVal := gitConfigValue(context.Background(), projectDir, "user.email")
 	assert.NotEmpty(t, strings.TrimSpace(emailVal))
 }
 
@@ -168,12 +169,12 @@ func TestEnsureLocalIdentity_PreservesExisting(t *testing.T) {
 	cmd.Dir = projectDir
 	require.NoError(t, cmd.Run())
 
-	require.NoError(t, ensureLocalIdentity(projectDir))
+	require.NoError(t, ensureLocalIdentity(context.Background(), projectDir))
 
-	name := gitConfigValue(projectDir, "user.name")
+	name := gitConfigValue(context.Background(), projectDir, "user.name")
 	assert.Equal(t, "Custom User", strings.TrimSpace(name))
 
-	email := gitConfigValue(projectDir, "user.email")
+	email := gitConfigValue(context.Background(), projectDir, "user.email")
 	assert.Equal(t, "custom@test.com", strings.TrimSpace(email))
 }
 
@@ -212,9 +213,9 @@ func TestGitDiffForAudit_NoChanges(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 
-	diff, err := GitDiffForAudit(projectDir)
+	diff, err := GitDiffForAudit(context.Background(), projectDir)
 	require.NoError(t, err)
 	assert.Empty(t, strings.TrimSpace(diff))
 }
@@ -229,7 +230,7 @@ func TestGitConfigValue_MissingKey(t *testing.T) {
 	cmd.Dir = projectDir
 	require.NoError(t, cmd.Run())
 
-	val := gitConfigValue(projectDir, "nonexistent.key")
+	val := gitConfigValue(context.Background(), projectDir, "nonexistent.key")
 	assert.Empty(t, strings.TrimSpace(val))
 }
 
@@ -243,16 +244,16 @@ func TestHasHead_EmptyRepo(t *testing.T) {
 	cmd.Dir = projectDir
 	require.NoError(t, cmd.Run())
 
-	assert.False(t, hasHead(projectDir))
+	assert.False(t, hasHead(context.Background(), projectDir))
 }
 
 func TestHasHead_AfterCommit(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 
-	assert.True(t, hasHead(projectDir))
+	assert.True(t, hasHead(context.Background(), projectDir))
 }
 
 // P1: GitCheckpoint with special characters in epic name
@@ -261,9 +262,9 @@ func TestGitCheckpoint_SpecialChars(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, InitGit(projectDir))
+	require.NoError(t, InitGit(context.Background(), projectDir))
 	require.NoError(t, os.WriteFile(projectDir+"/file.txt", []byte("data\n"), 0o644))
-	require.NoError(t, GitCheckpoint(projectDir, "Epic's \"Name\" (v2)", 1, "complete"))
+	require.NoError(t, GitCheckpoint(context.Background(), projectDir, "Epic's \"Name\" (v2)", 1, "complete"))
 
 	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
 	cmd.Dir = projectDir

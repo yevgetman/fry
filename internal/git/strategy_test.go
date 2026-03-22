@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -98,23 +99,23 @@ func TestIsInsideGitRepo(t *testing.T) {
 	t.Run("inside repo", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		require.NoError(t, InitGit(dir))
-		assert.True(t, IsInsideGitRepo(dir))
+		require.NoError(t, InitGit(context.Background(), dir))
+		assert.True(t, IsInsideGitRepo(context.Background(), dir))
 	})
 
 	t.Run("outside repo", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		assert.False(t, IsInsideGitRepo(dir))
+		assert.False(t, IsInsideGitRepo(context.Background(), dir))
 	})
 
 	t.Run("subdirectory of repo", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		require.NoError(t, InitGit(dir))
+		require.NoError(t, InitGit(context.Background(), dir))
 		sub := filepath.Join(dir, "subdir")
 		require.NoError(t, os.MkdirAll(sub, 0o755))
-		assert.True(t, IsInsideGitRepo(sub))
+		assert.True(t, IsInsideGitRepo(context.Background(), sub))
 	})
 }
 
@@ -124,15 +125,15 @@ func TestCurrentBranch(t *testing.T) {
 	t.Run("default branch", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		require.NoError(t, InitGit(dir))
-		branch := CurrentBranch(dir)
+		require.NoError(t, InitGit(context.Background(), dir))
+		branch := CurrentBranch(context.Background(), dir)
 		assert.NotEmpty(t, branch)
 	})
 
 	t.Run("not a repo", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		assert.Empty(t, CurrentBranch(dir))
+		assert.Empty(t, CurrentBranch(context.Background(), dir))
 	})
 }
 
@@ -140,7 +141,7 @@ func TestSetupStrategy_Current(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	setup, err := SetupStrategy(StrategyOpts{
+	setup, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyCurrent,
 	})
@@ -155,7 +156,7 @@ func TestSetupStrategy_Current(t *testing.T) {
 func TestSetupStrategy_Auto_Errors(t *testing.T) {
 	t.Parallel()
 
-	_, err := SetupStrategy(StrategyOpts{
+	_, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: t.TempDir(),
 		Strategy:   StrategyAuto,
 	})
@@ -167,9 +168,9 @@ func TestSetupStrategy_Branch(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	require.NoError(t, InitGit(dir))
+	require.NoError(t, InitGit(context.Background(), dir))
 
-	setup, err := SetupStrategy(StrategyOpts{
+	setup, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyBranch,
 		BranchName: "fry/test-branch",
@@ -183,17 +184,17 @@ func TestSetupStrategy_Branch(t *testing.T) {
 	assert.False(t, setup.IsWorktree)
 
 	// Verify we're on the new branch
-	assert.Equal(t, "fry/test-branch", CurrentBranch(dir))
+	assert.Equal(t, "fry/test-branch", CurrentBranch(context.Background(), dir))
 }
 
 func TestSetupStrategy_Branch_AlreadyExists(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	require.NoError(t, InitGit(dir))
+	require.NoError(t, InitGit(context.Background(), dir))
 
 	// Create branch first
-	_, err := SetupStrategy(StrategyOpts{
+	_, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyBranch,
 		BranchName: "fry/existing",
@@ -206,7 +207,7 @@ func TestSetupStrategy_Branch_AlreadyExists(t *testing.T) {
 	require.NoError(t, cmd.Run())
 
 	// Try to create same branch without ForceReuse
-	_, err = SetupStrategy(StrategyOpts{
+	_, err = SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyBranch,
 		BranchName: "fry/existing",
@@ -219,10 +220,10 @@ func TestSetupStrategy_Branch_ForceReuse(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	require.NoError(t, InitGit(dir))
+	require.NoError(t, InitGit(context.Background(), dir))
 
 	// Create branch first
-	_, err := SetupStrategy(StrategyOpts{
+	_, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyBranch,
 		BranchName: "fry/reuse-me",
@@ -235,7 +236,7 @@ func TestSetupStrategy_Branch_ForceReuse(t *testing.T) {
 	require.NoError(t, cmd.Run())
 
 	// ForceReuse should succeed
-	setup, err := SetupStrategy(StrategyOpts{
+	setup, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyBranch,
 		BranchName: "fry/reuse-me",
@@ -243,14 +244,14 @@ func TestSetupStrategy_Branch_ForceReuse(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "fry/reuse-me", setup.BranchName)
-	assert.Equal(t, "fry/reuse-me", CurrentBranch(dir))
+	assert.Equal(t, "fry/reuse-me", CurrentBranch(context.Background(), dir))
 }
 
 func TestSetupStrategy_Branch_NoGitRepo(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	_, err := SetupStrategy(StrategyOpts{
+	_, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyBranch,
 		BranchName: "fry/test",
@@ -263,14 +264,14 @@ func TestSetupStrategy_Worktree(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	require.NoError(t, InitGit(dir))
+	require.NoError(t, InitGit(context.Background(), dir))
 
 	// Create .fry/ with an artifact to verify copying
 	fryDir := filepath.Join(dir, config.FryDir)
 	require.NoError(t, os.MkdirAll(fryDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte("# Epic\n"), 0o644))
 
-	setup, err := SetupStrategy(StrategyOpts{
+	setup, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyWorktree,
 		BranchName: "fry/wt-test",
@@ -285,7 +286,7 @@ func TestSetupStrategy_Worktree(t *testing.T) {
 	assert.True(t, setup.IsWorktree)
 
 	// Verify worktree directory exists and is a git repo
-	assert.True(t, IsInsideGitRepo(setup.WorkDir))
+	assert.True(t, IsInsideGitRepo(context.Background(), setup.WorkDir))
 
 	// Verify .fry/ was copied
 	data, err := os.ReadFile(filepath.Join(setup.WorkDir, config.FryDir, "epic.md"))
@@ -300,7 +301,7 @@ func TestSetupStrategy_Worktree_NoGitRepo(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	_, err := SetupStrategy(StrategyOpts{
+	_, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyWorktree,
 		BranchName: "fry/test",
@@ -313,9 +314,9 @@ func TestSetupStrategy_BranchNameAutoGenerated(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	require.NoError(t, InitGit(dir))
+	require.NoError(t, InitGit(context.Background(), dir))
 
-	setup, err := SetupStrategy(StrategyOpts{
+	setup, err := SetupStrategy(context.Background(), StrategyOpts{
 		ProjectDir: dir,
 		Strategy:   StrategyBranch,
 		EpicName:   "My Cool Epic",
@@ -328,14 +329,14 @@ func TestDetectExistingSetup_Branch(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	require.NoError(t, InitGit(dir))
+	require.NoError(t, InitGit(context.Background(), dir))
 
 	// Create a branch
 	cmd := exec.Command("bash", "-c", "git checkout -b fry/detect-me && git checkout -")
 	cmd.Dir = dir
 	require.NoError(t, cmd.Run())
 
-	setup, err := DetectExistingSetup(dir, "fry/detect-me")
+	setup, err := DetectExistingSetup(context.Background(), dir, "fry/detect-me")
 	require.NoError(t, err)
 	require.NotNil(t, setup)
 	assert.Equal(t, StrategyBranch, setup.Strategy)
@@ -346,9 +347,9 @@ func TestDetectExistingSetup_Nothing(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	require.NoError(t, InitGit(dir))
+	require.NoError(t, InitGit(context.Background(), dir))
 
-	setup, err := DetectExistingSetup(dir, "fry/nonexistent")
+	setup, err := DetectExistingSetup(context.Background(), dir, "fry/nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, setup)
 }
