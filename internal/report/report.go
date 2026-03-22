@@ -47,18 +47,45 @@ type CheckResult struct {
 	Message string `json:"message,omitempty"`
 }
 
-// Write marshals report to indented JSON and writes it to path.
+// Write marshals report to indented JSON and writes it atomically to path.
+// The file is first written to a temp file in the same directory, then renamed
+// to path so that build-report.json is either absent or fully written — never partial.
 // The parent directory is created if it does not exist.
 func Write(path string, r BuildReport) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("report: create directory: %w", err)
 	}
 	data, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return fmt.Errorf("report: marshal: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("report: write file: %w", err)
+	tmp, err := os.CreateTemp(dir, ".build-report-*.json")
+	if err != nil {
+		return fmt.Errorf("report: create temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return fmt.Errorf("report: write temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return fmt.Errorf("report: sync temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("report: close temp file: %w", err)
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("report: chmod temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("report: rename temp file: %w", err)
 	}
 	return nil
 }

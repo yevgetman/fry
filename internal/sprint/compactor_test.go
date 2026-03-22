@@ -4,10 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yevgetman/fry/internal/config"
 )
 
 func TestMechanicalCompactionCases(t *testing.T) {
@@ -53,6 +56,21 @@ func TestMechanicalCompactionCases(t *testing.T) {
 			input:    "Some content\n## Iteration 1",
 			expected: "## Iteration 1",
 		},
+		{
+			name:     "iteration with date suffix",
+			input:    "Preamble text\n\n## Iteration 1 — 2026-01-01\nDid some work\nMore notes",
+			expected: "## Iteration 1 — 2026-01-01\nDid some work\nMore notes",
+		},
+		{
+			name:     "multiple dated iterations",
+			input:    "## Iteration 1 — 2026-01-01\nFirst\n\n## Iteration 2 — 2026-01-02\nSecond\n\n## Iteration 3 — 2026-01-03\nThird",
+			expected: "## Iteration 3 — 2026-01-03\nThird",
+		},
+		{
+			name:     "multiple heal attempts",
+			input:    "## Iteration 1 — 2026-01-01\nFirst\n\n--- Heal attempt 1\nHealing\n\n--- Heal attempt 2\nMore healing",
+			expected: "--- Heal attempt 2\nMore healing",
+		},
 	}
 
 	for _, tt := range tests {
@@ -69,25 +87,36 @@ func TestCompactSprintProgressWithIteration(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	fryDir := filepath.Join(dir, ".fry")
-	require.NoError(t, os.MkdirAll(fryDir, 0o755))
-	progressContent := "## Iteration 1\nDid some work\nResult: pass\n"
-	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "sprint-progress.txt"), []byte(progressContent), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	progressContent := "## Iteration 1 — 2026-01-01\nCompleted task A\nCompleted task B"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte(progressContent), 0o644))
 
-	result, err := CompactSprintProgress(context.Background(), dir, 1, "TestSprint", "COMPLETE", nil, false, "")
+	result, err := CompactSprintProgress(context.Background(), dir, 1, "Foundation", "PASSED", nil, false, "")
 	require.NoError(t, err)
-	assert.Contains(t, result, "## Sprint 1: TestSprint — COMPLETE")
+	assert.Contains(t, result, "## Sprint 1: Foundation — PASSED")
 	assert.Contains(t, result, "## Iteration 1")
+	assert.Contains(t, result, "Completed task A")
+}
+
+func TestCompactSprintProgressNonAgentFormatPrefix(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte("some notes"), 0o644))
+
+	result, err := CompactSprintProgress(context.Background(), dir, 3, "Finish", "SKIPPED", nil, false, "")
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(result, "## Sprint 3: Finish — SKIPPED\n\n"))
 }
 
 func TestCompactSprintProgressNoMarkers(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	fryDir := filepath.Join(dir, ".fry")
-	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
 	progressContent := "Some progress notes\nAll done\n"
-	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "sprint-progress.txt"), []byte(progressContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte(progressContent), 0o644))
 
 	result, err := CompactSprintProgress(context.Background(), dir, 1, "TestSprint", "COMPLETE", nil, false, "")
 	require.NoError(t, err)
@@ -99,7 +128,6 @@ func TestCompactSprintProgressMissingFile(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	// No .fry/sprint-progress.txt created; readFile treats missing file as empty.
 
 	result, err := CompactSprintProgress(context.Background(), dir, 1, "TestSprint", "COMPLETE", nil, false, "")
 	require.NoError(t, err)
