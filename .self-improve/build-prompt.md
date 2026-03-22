@@ -1,17 +1,17 @@
 # Self-Improvement Build Prompt
 
-Read `assets/roadmap.json` for the full list of open items. Choose 2-3 items to implement in this build, then implement them.
+Read `assets/approved-items.json` for the list of approved items. Choose 2-3 items to implement in this build, then implement them.
 
 ## Item Selection
 
-Select items from the roadmap based on effort balance. Pick one of these combinations:
+Select items from the approved list based on effort balance. Pick one of these combinations:
 
 - 1 high-effort item, or
 - 1 medium + 1 low, or
 - 2 medium, or
 - 3 low
 
-Use your judgment — prioritize items that are higher priority, have fewer prior attempts, and where you are confident in the fix plan. Avoid items where the fix description is vague or where you'd need to make architectural decisions not covered in the plan.
+Use your judgment — prioritize items that are higher priority, have fewer prior attempts, and where you are confident in the fix plan. Avoid items where the fix description is vague or where you'd need to make architectural decisions not covered in the plan. Skip items marked with `max_attempts: true`.
 
 Do not select more than 3 items. It is better to do 2 items well than 3 items poorly.
 
@@ -20,7 +20,7 @@ Do not select more than 3 items. It is better to do 2 items well than 3 items po
 1. **Read `CLAUDE.md` in full** before writing any code. Follow every convention.
 2. **Read `README.LLM.md`** for the architectural map — understand the package structure, types, and execution flow before making changes.
 3. **For each item**, read the affected files and their existing tests before modifying anything.
-4. **Implement each item as a separate commit.** One logical change per commit, imperative present tense message that references the item ID (e.g., "A7: Make report.Write() atomic with temp-file-then-rename").
+4. **Implement each item as a separate commit.** One logical change per commit, imperative present tense message that references the GitHub issue number (e.g., "#42: Make report.Write() atomic with temp-file-then-rename").
 5. **Write or update tests** for every behavioral change. Every test must call `t.Parallel()`.
 6. **Run `make test && make build`** after each item. Do not proceed to the next item if tests fail — fix the issue first.
 
@@ -50,10 +50,10 @@ This build runs with `--always-verify`. All verification checks must pass. If a 
 
 ## Manifest
 
-After completing all items, write the IDs you implemented (one per line) to `output/worked-items.txt`. Only include items you actually implemented — not items you considered but skipped. Example:
+After completing all items, write the GitHub issue numbers you implemented (one per line) to `output/worked-items.txt`. Only include items you actually implemented — not items you considered but skipped. Example:
 
 ```
-B6
-D9
-D10
+42
+55
+61
 ```

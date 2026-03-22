@@ -8,16 +8,16 @@ The Fry codebase is a Go 1.22 CLI tool that orchestrates AI agents through multi
 
 ## Why This Exists
 
-Fry should continuously improve itself — finding bugs, expanding test coverage, adding features, and refining existing functionality. A human reviews and approves all changes via pull requests. Nothing is merged automatically.
+Fry should continuously improve itself — finding bugs, expanding test coverage, adding features, and refining existing functionality. A human reviews and approves changes that affect product direction, while maintenance items (bugs, tests, docs, security) are addressed automatically.
 
 ## How the Loop Works
 
 This build is one step in a recurring cycle:
 
-1. **Planning phase** — Fry scans the codebase for issues and appends new findings to `roadmap.json` (in `assets/`). The orchestrator merges these into the canonical roadmap.
-2. **Build phase** — Fry reads the full roadmap, selects items based on effort balance, and implements them. That is this phase.
+1. **Planning phase** — Fry scans the codebase for issues. New findings become GitHub Issues with appropriate labels. Maintenance items (bugs, security, testing, docs) are auto-approved. Product items (features, improvements, refactors) require human approval.
+2. **Build phase** — Fry reads `assets/approved-items.json` containing approved GitHub Issues, selects items based on effort balance, and implements them. That is this phase.
 
-The roadmap in `assets/roadmap.json` is the source of truth for what needs to be done. It follows the schema in `.self-improve/roadmap-schema.json`. Items have categories (`bug`, `testing`, `feature`, `improvement`), priority, effort estimates, and status.
+GitHub Issues is the source of truth for what needs to be done. Each issue has labels for category, priority, effort, and approval status.
 
 ## Rules for This Build
 
@@ -38,7 +38,7 @@ The roadmap in `assets/roadmap.json` is the source of truth for what needs to be
 ### Scope discipline
 
 - Work only on the items specified in the user prompt. Do not fix unrelated issues.
-- One logical change per commit. Commit messages in imperative present tense.
+- One logical change per commit. Commit messages in imperative present tense, referencing the GitHub issue number (e.g., "#42: Fix race condition in lock acquire").
 - Do not add dependencies. Do not restructure the parser. Do not break the engine interface. (See CLAUDE.md Section 9 for all architecture invariants.)
 - Do not modify files outside the scope of the task unless the change is required for correctness (e.g., updating a caller when a function signature changes).
 

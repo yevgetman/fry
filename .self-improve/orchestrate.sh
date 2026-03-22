@@ -3,11 +3,14 @@
 # Fry Self-Improvement Orchestrator
 #
 # Drives the automated self-improvement loop:
-#   1. Planning phase — scan codebase for new issues, append to roadmap
-#   2. Build phase — implement 2-3 open items, push branch, create PR
+#   1. Planning phase — scan codebase for new issues, create GitHub Issues
+#   2. Build phase — implement 2-3 approved items, push branch, create PR or auto-merge
+#
+# The roadmap lives in GitHub Issues. Labels encode category, status, priority, and effort.
+# No local roadmap.json — GitHub Issues is the single source of truth.
 #
 # Dependencies: git, jq, fry, gh (GitHub CLI), make, go
-# Usage: .self-improve/orchestrate.sh [--skip-planning] [--skip-build] [--dry-run]
+# Usage: .self-improve/orchestrate.sh [--skip-planning] [--skip-build] [--dry-run] [--auto-merge]
 
 set -euo pipefail
 
@@ -18,8 +21,6 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCK_FILE="$SCRIPT_DIR/.lock"
 LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$SCRIPT_DIR/orchestrate.log"
-ROADMAP="$SCRIPT_DIR/roadmap.json"
-ID_COUNTER="$SCRIPT_DIR/id-counter.json"
 EXECUTIVE="$SCRIPT_DIR/executive.md"
 PLANNING_PROMPT="$SCRIPT_DIR/planning-prompt.md"
 BUILD_PROMPT="$SCRIPT_DIR/build-prompt.md"
@@ -28,9 +29,18 @@ LAST_BUILD_STATUS="$SCRIPT_DIR/.last-build-status"
 MAX_BUILD_ITEMS=3
 MAX_ATTEMPTS=3          # Skip items that have failed this many times
 MAX_POST_BUILD_HEALS=3  # Attempts to heal test/build failures after Fry completes
-PLANNING_THRESHOLD=15   # Skip planning if this many open items already exist
+PLANNING_THRESHOLD=15   # Skip planning if this many open issues already exist
 DATE="$(date +%Y-%m-%d)"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
+
+# Label constants
+LABEL_SELF_IMPROVE="self-improve"
+LABEL_STATUS_PROPOSED="status/proposed"
+LABEL_STATUS_APPROVED="status/approved"
+LABEL_MAX_ATTEMPTS="max-attempts"
+
+# Categories that are auto-approved (safe to build without human review)
+AUTO_APPROVE_CATEGORIES=("bug" "security" "testing" "documentation")
 
 # Flags
 SKIP_PLANNING=false
@@ -131,77 +141,291 @@ check_deps() {
     fi
 }
 
-# --- Validate roadmap JSON ---
-validate_roadmap() {
-    if [ ! -f "$ROADMAP" ]; then
-        die "Roadmap not found at $ROADMAP"
-    fi
-    if ! jq -e '.version == 1 and (.items | type) == "array"' "$ROADMAP" >/dev/null 2>&1; then
-        die "Invalid roadmap format at $ROADMAP"
+# --- Validate that required GitHub labels exist ---
+validate_labels() {
+    local required_labels=("$LABEL_SELF_IMPROVE" "$LABEL_STATUS_PROPOSED" "$LABEL_STATUS_APPROVED" "$LABEL_MAX_ATTEMPTS")
+    local existing
+    existing="$(gh label list --limit 100 --json name -q '.[].name')"
+
+    local missing=()
+    for label in "${required_labels[@]}"; do
+        if ! echo "$existing" | grep -qx "$label"; then
+            missing+=("$label")
+        fi
+    done
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        die "Missing GitHub labels: ${missing[*]}. Run the label setup first."
     fi
 }
 
-# --- Count open items ---
-count_open_items() {
-    jq '[.items[] | select(.status == "open")] | length' "$ROADMAP"
+# ===========================================================================
+# GITHUB ISSUES HELPERS
+# ===========================================================================
+
+# Check if a category is auto-approved (safe to build without human review)
+is_auto_approve_category() {
+    local category="$1"
+    local _aac
+    for _aac in "${AUTO_APPROVE_CATEGORIES[@]}"; do
+        if [ "$_aac" = "$category" ]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
-# --- Decide whether planning is needed ---
+# Count open issues (approved only — ready to build)
+count_approved_items() {
+    gh issue list \
+        --label "$LABEL_SELF_IMPROVE" \
+        --label "$LABEL_STATUS_APPROVED" \
+        --state open \
+        --json number \
+        -q 'length'
+}
+
+# Count all open self-improve issues (proposed + approved)
+count_all_open_items() {
+    gh issue list \
+        --label "$LABEL_SELF_IMPROVE" \
+        --state open \
+        --limit 500 \
+        --json number \
+        -q 'length'
+}
+
+# Count open issues for a specific category
+count_category_items() {
+    local category="$1"
+    gh issue list \
+        --label "$LABEL_SELF_IMPROVE" \
+        --label "category/${category}" \
+        --state open \
+        --json number \
+        -q 'length'
+}
+
+# Export all open issues to a JSON file for Fry to read.
+# Format matches what the build prompt expects.
+export_issues_json() {
+    local output_file="$1"
+    local label_filter="${2:-}"  # optional additional label filter
+
+    local args=(
+        --label "$LABEL_SELF_IMPROVE"
+        --state open
+        --limit 500
+        --json "number,title,labels,body"
+    )
+    if [ -n "$label_filter" ]; then
+        args+=(--label "$label_filter")
+    fi
+
+    local raw_issues
+    raw_issues="$(gh issue list "${args[@]}")"
+
+    # Transform GitHub Issues JSON into the format Fry expects
+    echo "$raw_issues" | jq '
+        [.[] | {
+            number: .number,
+            title: .title,
+            category: (
+                [.labels[].name | select(startswith("category/"))] |
+                if length > 0 then .[0] | ltrimstr("category/") else "unknown" end
+            ),
+            priority: (
+                [.labels[].name | select(startswith("priority/"))] |
+                if length > 0 then .[0] | ltrimstr("priority/") else "medium" end
+            ),
+            effort: (
+                [.labels[].name | select(startswith("effort/"))] |
+                if length > 0 then .[0] | ltrimstr("effort/") else "medium" end
+            ),
+            status: (
+                if ([.labels[].name] | index("status/approved")) then "approved"
+                elif ([.labels[].name] | index("status/proposed")) then "proposed"
+                else "open" end
+            ),
+            max_attempts: (
+                [.labels[].name] | index("max-attempts") | if . then true else false end
+            ),
+            description: (
+                .body |
+                if . then
+                    # Extract Problem section
+                    (capture("## Problem\n(?<desc>[\\s\\S]*?)(\n## |$)") | .desc | gsub("^\\s+|\\s+$"; "")) // .
+                else "" end
+            ),
+            fix: (
+                .body |
+                if . then
+                    # Extract Fix Plan section
+                    (capture("## Fix Plan\n(?<fix>[\\s\\S]*?)(\n## |\n---|\n_Managed|$)") | .fix | gsub("^\\s+|\\s+$"; "")) // ""
+                else "" end
+            ),
+            files: (
+                .body |
+                if . then
+                    # Extract Files line
+                    (capture("\\*\\*Files:\\*\\* (?<files>[^\n]+)") | .files | split(", ") | map(gsub("`"; ""))) // []
+                else [] end
+            )
+        }]
+    ' > "$output_file"
+}
+
+# Count how many "Build attempt failed" comments exist on an issue
+count_failed_attempts() {
+    local issue_number="$1"
+    gh issue view "$issue_number" \
+        --json comments \
+        -q '[.comments[] | select(.body | startswith("Build attempt failed"))] | length' \
+        2>/dev/null || echo "0"
+}
+
+# Create a GitHub issue from a finding JSON object
+create_issue_from_finding() {
+    local finding="$1"
+
+    local title category priority effort description fix files_str
+
+    title="$(echo "$finding" | jq -r '.title')"
+    category="$(echo "$finding" | jq -r '.category')"
+    priority="$(echo "$finding" | jq -r '.priority // "medium"')"
+    effort="$(echo "$finding" | jq -r '.effort // "medium"')"
+    description="$(echo "$finding" | jq -r '.description // ""')"
+    fix="$(echo "$finding" | jq -r '.fix // ""')"
+    files_str="$(echo "$finding" | jq -r '(.files // []) | map("`" + . + "`") | join(", ")')"
+
+    # Check for duplicate — skip if an open issue with the same title exists
+    local existing_count
+    existing_count="$(gh issue list \
+        --label "$LABEL_SELF_IMPROVE" \
+        --label "category/${category}" \
+        --state open \
+        --search "$title" \
+        --json number \
+        -q 'length' 2>/dev/null || echo "0")"
+    if [ "$existing_count" -gt 0 ]; then
+        log "  Skipping duplicate: $title"
+        return 0
+    fi
+
+    # Build labels
+    local labels="${LABEL_SELF_IMPROVE},category/${category},priority/${priority},effort/${effort}"
+
+    # Auto-approve or propose based on category
+    if is_auto_approve_category "$category"; then
+        labels="${labels},${LABEL_STATUS_APPROVED}"
+    else
+        labels="${labels},${LABEL_STATUS_PROPOSED}"
+    fi
+
+    # Build issue body
+    local body
+    body="$(cat <<EOF
+**Priority:** ${priority}
+**Effort:** ${effort}
+**Files:** ${files_str}
+
+## Problem
+${description}
+
+## Fix Plan
+${fix}
+
+---
+_Managed by [Fry Self-Improvement Pipeline](docs/self-improvement.md)_
+EOF
+)"
+
+    if [ "$DRY_RUN" = true ]; then
+        log "  [DRY RUN] Would create issue: $title (${category}, ${priority}, ${effort})"
+        return 0
+    fi
+
+    local issue_url
+    issue_url="$(gh issue create \
+        --title "[Fry] ${title}" \
+        --body "$body" \
+        --label "$labels" 2>&1)"
+
+    if [ $? -eq 0 ]; then
+        local status_label="approved"
+        is_auto_approve_category "$category" || status_label="proposed"
+        log "  Created #$(basename "$issue_url"): $title (${category}, ${status_label})"
+    else
+        log "  WARNING: Failed to create issue: $title — $issue_url"
+    fi
+}
+
+# ===========================================================================
+# PLANNING PHASE
+# ===========================================================================
+
+# Decide whether planning is needed.
 # Returns 0 (true) if planning should run, 1 (false) if not.
 should_run_planning() {
     local open_count
-    open_count="$(count_open_items)"
+    open_count="$(count_all_open_items)"
 
     # Hard ceiling — too many items already
     if [ "$open_count" -ge "$PLANNING_THRESHOLD" ]; then
-        log "Planning not needed: $open_count open items (threshold: $PLANNING_THRESHOLD)"
+        log "Planning not needed: $open_count open issues (threshold: $PLANNING_THRESHOLD)"
         return 1
     fi
 
     # Running low — always plan
     if [ "$open_count" -lt 5 ]; then
-        log "Planning needed: only $open_count open items (< 5)"
+        log "Planning needed: only $open_count open issues (< 5)"
         return 0
     fi
 
     # Check core category coverage (bug, testing, feature, improvement)
-    local empty_core
-    empty_core="$(jq '
-        ["bug", "testing", "feature", "improvement"] as $core |
-        [.items[] | select(.status == "open") | .category] | unique as $present |
-        [$core[] | select(. as $c | $present | index($c) | not)] | length
-    ' "$ROADMAP")"
+    local empty_core=0
+    for cat in bug testing feature improvement; do
+        local cat_count
+        cat_count="$(count_category_items "$cat")"
+        if [ "$cat_count" -eq 0 ]; then
+            empty_core=$((empty_core + 1))
+        fi
+    done
     if [ "$empty_core" -ge 2 ]; then
         log "Planning needed: $empty_core core categories have zero items"
         return 0
     fi
 
     # Check for imbalance — any category > 50% of all items
+    local categories
+    categories="$(gh issue list \
+        --label "$LABEL_SELF_IMPROVE" \
+        --state open \
+        --limit 500 \
+        --json labels \
+        -q '[.[].labels[].name | select(startswith("category/"))]')"
+
     local imbalanced
-    imbalanced="$(jq --argjson total "$open_count" '
-        [.items[] | select(.status == "open")] | group_by(.category) |
-        any(length > ($total / 2))
-    ' "$ROADMAP")"
+    imbalanced="$(echo "$categories" | jq --argjson total "$open_count" '
+        group_by(.) | any(length > ($total / 2))
+    ')"
     if [ "$imbalanced" = "true" ]; then
-        log "Planning needed: roadmap is imbalanced (one category > 50%)"
+        log "Planning needed: issues are imbalanced (one category > 50%)"
         return 0
     fi
 
-    log "Planning not needed: $open_count items, balanced across categories"
+    log "Planning not needed: $open_count issues, balanced across categories"
     return 1
 }
 
-# ===========================================================================
-# PLANNING PHASE
-# ===========================================================================
 run_planning_phase() {
     log "--- Planning Phase ---"
 
-    # Redundant guard (should_run_planning already checked, but safe for direct calls)
+    # Redundant guard
     local open_count
-    open_count="$(count_open_items)"
+    open_count="$(count_all_open_items)"
     if [ "$open_count" -ge "$PLANNING_THRESHOLD" ]; then
-        log "Skipping planning: $open_count open items already (threshold: $PLANNING_THRESHOLD)"
+        log "Skipping planning: $open_count open issues already (threshold: $PLANNING_THRESHOLD)"
         return 0
     fi
 
@@ -209,7 +433,11 @@ run_planning_phase() {
     rm -rf "$REPO_DIR/.fry" "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
     mkdir -p "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
     cp "$EXECUTIVE" "$REPO_DIR/plans/executive.md"
-    cp "$ROADMAP" "$REPO_DIR/assets/roadmap.json"
+
+    # Export all open issues so Fry knows what's already tracked
+    log "Exporting existing issues for deduplication..."
+    export_issues_json "$REPO_DIR/assets/existing-issues.json"
+    log "  Exported $(jq 'length' "$REPO_DIR/assets/existing-issues.json") existing issues"
 
     if [ "$DRY_RUN" = true ]; then
         log "[DRY RUN] Would run Fry planning scan"
@@ -265,77 +493,23 @@ run_planning_phase() {
         return 0
     fi
 
-    log "Found $count new item(s) — assigning IDs and appending to roadmap"
-    assign_ids_and_append "$findings_file"
+    log "Found $count new item(s) — creating GitHub Issues"
+    create_issues_from_findings "$findings_file"
 
     # Clean up scaffolding
-    rm -rf "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
-
-    # Commit and push
-    cd "$REPO_DIR"
-    git add "$ROADMAP"
-    if git diff --cached --quiet; then
-        log "No roadmap changes to commit"
-    else
-        git commit -m "Add $count new self-improvement finding(s) [$DATE]"
-        git push origin master || log "WARNING: push failed — will retry next run"
-    fi
+    rm -rf "$REPO_DIR/.fry" "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"
 }
 
-# Assign sequential IDs to new findings and append to roadmap
-assign_ids_and_append() {
+# Create GitHub Issues from a findings JSON array
+create_issues_from_findings() {
     local findings_file="$1"
 
-    # Read all findings into a temp file to avoid subshell issues with pipes
     local tmp_findings
     tmp_findings="$(mktemp)"
     jq -c '.[]' "$findings_file" > "$tmp_findings"
 
     while IFS= read -r item; do
-        local category
-        category="$(echo "$item" | jq -r '.category')"
-
-        # Map category to letter prefix
-        local prefix
-        case "$category" in
-            bug)           prefix="A" ;;
-            testing)       prefix="B" ;;
-            feature)       prefix="C" ;;
-            improvement)   prefix="D" ;;
-            sunset)        prefix="E" ;;
-            refactor)      prefix="F" ;;
-            security)      prefix="G" ;;
-            ui_ux)         prefix="H" ;;
-            documentation) prefix="I" ;;
-            *)             prefix="X" ;;
-        esac
-
-        # Get next ID from counter (never reuses IDs of removed items)
-        local current_num
-        current_num="$(jq -r --arg p "$prefix" '.[$p] // 0' "$ID_COUNTER")"
-        local next_num=$((current_num + 1))
-        local new_id="${prefix}${next_num}"
-
-        # Update counter
-        local tmp_counter
-        tmp_counter="$(mktemp)"
-        jq --arg p "$prefix" --argjson n "$next_num" '.[$p] = $n' "$ID_COUNTER" > "$tmp_counter"
-        mv "$tmp_counter" "$ID_COUNTER"
-
-        # Set the ID, discovered date, and ensure status fields
-        local updated
-        updated="$(echo "$item" | jq \
-            --arg id "$new_id" \
-            --arg date "$DATE" \
-            '.id = $id | .discovered = $date | .status = "open" | .attempted_count = (.attempted_count // 0)')"
-
-        # Append to roadmap
-        local tmp_roadmap
-        tmp_roadmap="$(mktemp)"
-        jq --argjson item "$updated" '.items += [$item]' "$ROADMAP" > "$tmp_roadmap"
-        mv "$tmp_roadmap" "$ROADMAP"
-
-        log "  Added: $new_id — $(echo "$item" | jq -r '.title')"
+        create_issue_from_finding "$item"
     done < "$tmp_findings"
 
     rm -f "$tmp_findings"
@@ -347,17 +521,34 @@ assign_ids_and_append() {
 run_build_phase() {
     log "--- Build Phase ---"
 
-    # Check there are open items to work on
-    local open_count
-    open_count="$(count_open_items)"
-    if [ "$open_count" -eq 0 ]; then
-        log "No open items in roadmap — skipping build"
+    # Check there are approved items to work on (excluding max-attempts)
+    local approved_issues
+    approved_issues="$(gh issue list \
+        --label "$LABEL_SELF_IMPROVE" \
+        --label "$LABEL_STATUS_APPROVED" \
+        --state open \
+        --limit 500 \
+        --json "number,title,labels")"
+
+    # Filter out max-attempts issues
+    local buildable_issues
+    buildable_issues="$(echo "$approved_issues" | jq '
+        [.[] | select(
+            [.labels[].name] | index("max-attempts") | not
+        )]
+    ')"
+
+    local approved_count
+    approved_count="$(echo "$buildable_issues" | jq 'length')"
+    if [ "$approved_count" -eq 0 ]; then
+        log "No approved items to build — skipping build"
         return 0
     fi
-    log "$open_count open item(s) in roadmap — Fry will choose what to work on"
+    log "$approved_count approved item(s) — Fry will choose what to work on"
 
     if [ "$DRY_RUN" = true ]; then
         log "[DRY RUN] Would run Fry build"
+        echo "$buildable_issues" | jq -r '.[] | "  #\(.number): \(.title)"'
         return 0
     fi
 
@@ -380,12 +571,17 @@ run_build_phase() {
     mkdir -p "$(dirname "$WORKTREE_DIR")"
     git -C "$REPO_DIR" worktree add "$WORKTREE_DIR" -b "$BUILD_BRANCH"
 
-    # Scaffold worktree — Fry gets the full roadmap and chooses items itself
+    # Scaffold worktree — export approved items for Fry to read
     mkdir -p "$WORKTREE_DIR/plans" "$WORKTREE_DIR/assets"
     cp "$EXECUTIVE" "$WORKTREE_DIR/plans/executive.md"
-    cp "$ROADMAP" "$WORKTREE_DIR/assets/roadmap.json"
 
-    # Run Fry build — full prepare so the LLM reads assets/roadmap.json
+    log "Exporting approved items for build..."
+    export_issues_json "$WORKTREE_DIR/assets/approved-items.json" "$LABEL_STATUS_APPROVED"
+    local exported_count
+    exported_count="$(jq 'length' "$WORKTREE_DIR/assets/approved-items.json")"
+    log "  Exported $exported_count approved items"
+
+    # Run Fry build — full prepare so the LLM reads assets/approved-items.json
     # and chooses items before building the epic
     log "Running Fry build in worktree..."
     local build_success=true
@@ -421,11 +617,11 @@ run_build_phase() {
                 local failure_output
                 failure_output="$(cd "$WORKTREE_DIR" && make test 2>&1; make build 2>&1)" || true
 
-                # Capture the diff of what changed (so the agent knows what was modified)
+                # Capture the diff of what changed
                 local diff_output
                 diff_output="$(cd "$WORKTREE_DIR" && git diff HEAD~1 --stat 2>/dev/null)" || true
 
-                # Write the heal prompt to a temp file to avoid argument length limits
+                # Write the heal prompt to a temp file
                 local heal_prompt_file
                 heal_prompt_file="$(mktemp)"
                 cat > "$heal_prompt_file" <<HEALPROMPT
@@ -456,7 +652,6 @@ HEALPROMPT
                 # Re-verify
                 if (cd "$WORKTREE_DIR" && make test && make build) 2>&1 | tee -a "$LOG_FILE"; then
                     log "Post-build heal attempt $heal_attempt SUCCEEDED"
-                    # Commit the heal fixes
                     (cd "$WORKTREE_DIR" && git add -A && git commit -m "Fix post-build test/build failures [automated heal]") 2>&1 | tee -a "$LOG_FILE"
                     healed=true
                     break
@@ -473,28 +668,29 @@ HEALPROMPT
     fi
 
     # Determine which items Fry worked on.
-    # Primary: read output/worked-items.txt manifest written by Fry.
-    # Fallback: parse sprint names from log (less accurate — picks up mentioned IDs).
-    local worked_ids=""
+    # Primary: read output/worked-items.txt manifest written by Fry (issue numbers).
+    # Fallback: parse sprint names from log for issue numbers.
+    local worked_numbers=""
     local manifest="$WORKTREE_DIR/output/worked-items.txt"
     if [ -f "$manifest" ]; then
-        worked_ids="$(grep -oE '^[A-Z][0-9]+$' "$manifest" | sort -u | tr '\n' ' ')"
-        log "Items from manifest: ${worked_ids:-none}"
+        worked_numbers="$(grep -oE '^[0-9]+$' "$manifest" | sort -u | tr '\n' ' ')"
+        log "Items from manifest: ${worked_numbers:-none}"
     else
         log "No manifest file — falling back to sprint name parsing"
-        worked_ids="$(grep "STARTING SPRINT" "$LOG_FILE" 2>/dev/null \
-            | grep -oE '[A-Z][0-9]+' \
+        worked_numbers="$(grep "STARTING SPRINT" "$LOG_FILE" 2>/dev/null \
+            | grep -oE '#[0-9]+' \
+            | tr -d '#' \
             | sort -u \
             | tr '\n' ' ')"
-        log "Items from sprint names (approximate): ${worked_ids:-none}"
+        log "Items from sprint names (approximate): ${worked_numbers:-none}"
     fi
 
     # Handle result and persist status for next run
     if [ "$build_success" = true ]; then
-        handle_build_success "$worked_ids"
+        handle_build_success "$worked_numbers"
         echo "success" > "$LAST_BUILD_STATUS"
     else
-        handle_build_failure "$worked_ids"
+        handle_build_failure "$worked_numbers"
         echo "failure" > "$LAST_BUILD_STATUS"
     fi
 
@@ -503,67 +699,57 @@ HEALPROMPT
     git -C "$REPO_DIR" worktree remove "$WORKTREE_DIR" --force 2>/dev/null || true
     WORKTREE_DIR=""
 
-    # Push roadmap updates to master
+    # Ensure we're back on master
     cd "$REPO_DIR"
     git checkout master 2>/dev/null || true
-    git add "$ROADMAP"
-    if ! git diff --cached --quiet; then
-        git commit -m "Update roadmap after build [$DATE]"
-        git push origin master || log "WARNING: roadmap push failed"
-    fi
 }
 
 # Handle successful build: either merge directly or create a PR
 handle_build_success() {
-    local worked_ids="$1"
+    local worked_numbers="$1"
 
     if [ "$AUTO_MERGE" = true ]; then
-        handle_build_auto_merge "$worked_ids"
+        handle_build_auto_merge "$worked_numbers"
     else
-        handle_build_create_pr "$worked_ids"
+        handle_build_create_pr "$worked_numbers"
     fi
 }
 
 # Auto-merge: merge worktree branch into master locally and push
 handle_build_auto_merge() {
-    local worked_ids="$1"
-    local id_list
-    id_list="$(echo "$worked_ids" | xargs | sed 's/ /, /g')"
+    local worked_numbers="$1"
+    local num_list
+    num_list="$(echo "$worked_numbers" | xargs | sed 's/ /, #/g; s/^/#/')"
 
-    log "Build succeeded — auto-merging into master (${id_list})"
+    log "Build succeeded — auto-merging into master (${num_list})"
 
     # Switch to master in the main repo and merge the build branch
     cd "$REPO_DIR"
     git checkout master 2>/dev/null || true
 
-    if ! git merge "$BUILD_BRANCH" --no-edit -m "Self-improve: ${id_list} [auto-merged]" 2>&1 | tee -a "$LOG_FILE"; then
+    if ! git merge "$BUILD_BRANCH" --no-edit -m "Self-improve: ${num_list} [auto-merged]" 2>&1 | tee -a "$LOG_FILE"; then
         log "WARNING: Auto-merge failed (conflict) — falling back to PR"
         git merge --abort 2>/dev/null || true
-        handle_build_create_pr "$worked_ids"
+        handle_build_create_pr "$worked_numbers"
         return
     fi
 
     # Push to remote
     if ! git push origin master 2>&1 | tee -a "$LOG_FILE"; then
         log "WARNING: Push failed after auto-merge"
-        handle_build_failure "$worked_ids"
+        handle_build_failure "$worked_numbers"
         return
     fi
 
-    log "Auto-merged and pushed: ${id_list}"
+    log "Auto-merged and pushed: ${num_list}"
     PR_CREATED=true  # Prevents cleanup from deleting the branch prematurely
 
-    # Remove worked items from roadmap (they're done — no PR to track)
-    for id in $worked_ids; do
-        local exists
-        exists="$(jq --arg id "$id" '[.items[] | select(.id == $id)] | length' "$ROADMAP")"
-        if [ "$exists" -gt 0 ]; then
-            local tmp
-            tmp="$(mktemp)"
-            jq --arg id "$id" '.items = [.items[] | select(.id != $id)]' "$ROADMAP" > "$tmp"
-            mv "$tmp" "$ROADMAP"
-            log "  $id: removed from roadmap (merged)"
-        fi
+    # Close worked issues
+    for num in $worked_numbers; do
+        gh issue close "$num" \
+            --comment "Implemented and auto-merged to master. [Fry Self-Improvement]" \
+            2>/dev/null || log "  WARNING: Failed to close issue #$num"
+        log "  #$num: closed (merged)"
     done
 
     # Rebuild binary with merged changes
@@ -573,64 +759,72 @@ handle_build_auto_merge() {
 
 # Create PR: push branch and open a pull request for review
 handle_build_create_pr() {
-    local worked_ids="$1"
+    local worked_numbers="$1"
 
     log "Build succeeded — pushing branch and creating PR"
 
     # Push the branch from the worktree
     if ! git -C "$WORKTREE_DIR" push origin "$BUILD_BRANCH" 2>&1 | tee -a "$LOG_FILE"; then
         log "WARNING: Failed to push branch $BUILD_BRANCH"
-        handle_build_failure "$worked_ids"
+        handle_build_failure "$worked_numbers"
         return
     fi
 
-    # Build PR title from worked item IDs
-    local id_list
-    id_list="$(echo "$worked_ids" | xargs | sed 's/ /, /g')"
-    local pr_title="Self-improve: ${id_list}"
+    # Build PR title
+    local num_list
+    num_list="$(echo "$worked_numbers" | xargs | sed 's/ /, #/g; s/^/#/')"
+    local pr_title="Self-improve: ${num_list}"
     pr_title="${pr_title:0:70}"
 
-    # Build PR body with details for each worked item
+    # Build PR body with details for each worked issue
     local item_details=""
-    for id in $worked_ids; do
-        local detail
-        detail="$(jq -r --arg id "$id" '
-            .items[] | select(.id == $id) |
-            "### \(.id): \(.title)\n\n" +
-            "| | |\n|---|---|\n" +
-            "| **Category** | \(.category) |\n" +
-            "| **Priority** | \(.priority) |\n" +
-            "| **Effort** | \(.effort) |\n" +
-            "| **Files** | \(.files | join(", ")) |\n\n" +
-            "**Problem:** \(.description)\n\n" +
-            "**Fix:** \(.fix)\n"
-        ' "$ROADMAP" 2>/dev/null)"
-        if [ -n "$detail" ]; then
-            item_details="${item_details}${detail}\n"
-        fi
+    local closes_clause=""
+    for num in $worked_numbers; do
+        local issue_info
+        issue_info="$(gh issue view "$num" --json title,labels,body 2>/dev/null)" || continue
+
+        local title category priority effort description fix
+        title="$(echo "$issue_info" | jq -r '.title')"
+        category="$(echo "$issue_info" | jq -r '
+            [.labels[].name | select(startswith("category/"))] |
+            if length > 0 then .[0] | ltrimstr("category/") else "unknown" end
+        ')"
+        priority="$(echo "$issue_info" | jq -r '
+            [.labels[].name | select(startswith("priority/"))] |
+            if length > 0 then .[0] | ltrimstr("priority/") else "medium" end
+        ')"
+        effort="$(echo "$issue_info" | jq -r '
+            [.labels[].name | select(startswith("effort/"))] |
+            if length > 0 then .[0] | ltrimstr("effort/") else "medium" end
+        ')"
+
+        item_details="${item_details}### #${num}: ${title}\n\n"
+        item_details="${item_details}| | |\n|---|---|\n"
+        item_details="${item_details}| **Category** | ${category} |\n"
+        item_details="${item_details}| **Priority** | ${priority} |\n"
+        item_details="${item_details}| **Effort** | ${effort} |\n\n"
+
+        closes_clause="${closes_clause}Closes #${num}\n"
     done
 
     local pr_body
     pr_body="$(cat <<EOF
 ## Summary
 
-Automated self-improvement build addressing ${id_list}.
+Automated self-improvement build addressing ${num_list}.
 
 ## Items
 
 $(echo -e "$item_details")
 
-## Notes
-
-These changes were generated by the Fry self-improvement loop. Each item has its own commit for cherry-pick flexibility.
+$(echo -e "$closes_clause")
 
 ## Test plan
 
 - [ ] \`make test\` passes
 - [ ] \`make build\` produces a working binary
-- [ ] Changes match the fix descriptions in the roadmap
 
-🤖 Generated by [Fry Self-Improvement Loop](https://github.com/yevgetman/fry)
+Generated by [Fry Self-Improvement Loop](https://github.com/yevgetman/fry)
 EOF
 )"
 
@@ -642,115 +836,37 @@ EOF
         --title "$pr_title" \
         --body "$pr_body" 2>&1)"; then
         log "WARNING: Failed to create PR: $pr_url"
-        handle_build_failure "$worked_ids"
+        handle_build_failure "$worked_numbers"
         return
     fi
 
     log "PR created: $pr_url"
     PR_CREATED=true
-
-    # Update roadmap: mark worked items as pr_created
-    cd "$REPO_DIR"
-    for id in $worked_ids; do
-        local tmp
-        tmp="$(mktemp)"
-        jq --arg id "$id" --arg url "$pr_url" \
-            '(.items[] | select(.id == $id)) |= (.status = "pr_created" | .pr_url = $url)' \
-            "$ROADMAP" > "$tmp"
-        mv "$tmp" "$ROADMAP"
-    done
 }
 
-# Handle failed build: only increment attempted_count for items whose sprints ran
+# Handle failed build: comment on issues and potentially add max-attempts label
 handle_build_failure() {
-    local worked_ids="$1"
+    local worked_numbers="$1"
 
-    log "Build failed — updating attempted items"
+    log "Build failed — commenting on worked issues"
 
-    cd "$REPO_DIR"
-    for id in $worked_ids; do
-        # Only increment if the item exists in the roadmap
-        local exists
-        exists="$(jq --arg id "$id" '[.items[] | select(.id == $id)] | length' "$ROADMAP")"
-        if [ "$exists" -gt 0 ]; then
-            log "  $id: sprint ran — incrementing attempted_count"
-            local tmp
-            tmp="$(mktemp)"
-            jq --arg id "$id" \
-                '(.items[] | select(.id == $id)) |= (.status = "open" | .attempted_count += 1)' \
-                "$ROADMAP" > "$tmp"
-            mv "$tmp" "$ROADMAP"
+    for num in $worked_numbers; do
+        # Add failure comment
+        gh issue comment "$num" \
+            --body "Build attempt failed on ${DATE} (run ${RUN_ID}). The orchestrator will retry on the next run." \
+            2>/dev/null || log "  WARNING: Failed to comment on issue #$num"
+
+        # Check if we've hit max attempts
+        local attempt_count
+        attempt_count="$(count_failed_attempts "$num")"
+        if [ "$attempt_count" -ge "$MAX_ATTEMPTS" ]; then
+            log "  #$num: $attempt_count failed attempts — adding max-attempts label"
+            gh issue edit "$num" --add-label "$LABEL_MAX_ATTEMPTS" 2>/dev/null \
+                || log "  WARNING: Failed to add max-attempts label to #$num"
+        else
+            log "  #$num: attempt $attempt_count/$MAX_ATTEMPTS"
         fi
     done
-}
-
-# ===========================================================================
-# HOUSEKEEPING
-# ===========================================================================
-
-# Remove items whose PRs have been merged. Runs at startup before planning/build.
-cleanup_merged_items() {
-    log "Checking for merged PRs to clean from roadmap..."
-
-    # Get all items with status pr_created and a pr_url
-    local pr_items
-    pr_items="$(jq -c '[.items[] | select(.status == "pr_created" and .pr_url != null)]' "$ROADMAP")"
-
-    local count
-    count="$(echo "$pr_items" | jq 'length')"
-    if [ "$count" -eq 0 ]; then
-        log "No pr_created items to check"
-        return 0
-    fi
-
-    local removed=0
-    local tmp_pr_items
-    tmp_pr_items="$(mktemp)"
-    echo "$pr_items" | jq -c '.[]' > "$tmp_pr_items"
-    while IFS= read -r item; do
-        local id pr_url
-        id="$(echo "$item" | jq -r '.id')"
-        pr_url="$(echo "$item" | jq -r '.pr_url')"
-
-        # Extract PR number from URL (e.g., https://github.com/owner/repo/pull/123 → 123)
-        local pr_number
-        pr_number="$(echo "$pr_url" | grep -oE '[0-9]+$')"
-        if [ -z "$pr_number" ]; then
-            log "  $id: could not parse PR number from $pr_url — skipping"
-            continue
-        fi
-
-        # Check if PR is merged via gh CLI
-        local pr_state
-        pr_state="$(gh pr view "$pr_number" --json state -q .state 2>/dev/null || echo "UNKNOWN")"
-
-        if [ "$pr_state" = "MERGED" ]; then
-            log "  $id: PR #$pr_number merged — removing from roadmap"
-            local tmp
-            tmp="$(mktemp)"
-            jq --arg id "$id" '.items = [.items[] | select(.id != $id)]' "$ROADMAP" > "$tmp"
-            mv "$tmp" "$ROADMAP"
-            removed=$((removed + 1))
-        elif [ "$pr_state" = "CLOSED" ]; then
-            # PR was closed without merging — reset to open so it can be retried
-            log "  $id: PR #$pr_number closed without merge — resetting to open"
-            local tmp
-            tmp="$(mktemp)"
-            jq --arg id "$id" '(.items[] | select(.id == $id)) |= (.status = "open" | .pr_url = null)' "$ROADMAP" > "$tmp"
-            mv "$tmp" "$ROADMAP"
-        else
-            log "  $id: PR #$pr_number state=$pr_state — keeping"
-        fi
-    done < "$tmp_pr_items"
-    rm -f "$tmp_pr_items"
-
-    # Commit if roadmap changed
-    cd "$REPO_DIR"
-    git add "$ROADMAP"
-    if ! git diff --cached --quiet; then
-        git commit -m "Remove merged items from roadmap [$DATE]"
-        git push origin master || log "WARNING: push of roadmap cleanup failed"
-    fi
 }
 
 # ===========================================================================
@@ -770,16 +886,13 @@ main() {
 
     check_deps
     acquire_lock
-    validate_roadmap
+    validate_labels
 
     cd "$REPO_DIR"
 
     # Pull latest
     log "Pulling latest from origin..."
     git pull origin master --ff-only || die "git pull failed — resolve conflicts manually"
-
-    # Clean up merged PRs from roadmap
-    cleanup_merged_items
 
     # Build latest fry
     log "Building latest fry..."

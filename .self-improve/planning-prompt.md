@@ -1,6 +1,6 @@
 # Self-Improvement Planning Prompt
 
-Scan the Fry codebase and identify actionable improvements. Output only NEW findings as valid JSON conforming to the schema in `.self-improve/roadmap-schema.json`.
+Scan the Fry codebase and identify actionable improvements. Output NEW findings as valid JSON.
 
 ## Context
 
@@ -8,7 +8,7 @@ Fry is a Go 1.22 CLI tool that orchestrates AI agents through multi-sprint build
 
 - `README.LLM.md` — architectural map: package structure, types, execution flow, CLI flags, constants
 - `CLAUDE.md` — coding conventions, architecture invariants, testing standards
-- `assets/roadmap.json` — existing roadmap items (do NOT re-discover these)
+- `assets/existing-issues.json` — existing tracked issues (do NOT re-discover these)
 
 Then read the source files relevant to each category below.
 
@@ -45,7 +45,7 @@ Check that documentation in `docs/`, `README.md`, `README.LLM.md`, and `CLAUDE.m
 
 ## Rules
 
-1. **Read `assets/roadmap.json` first.** Do not re-discover items that are already tracked there. If you find a variation of an existing item, skip it.
+1. **Read `assets/existing-issues.json` first.** Do not re-discover items that are already tracked there. If you find a variation of an existing item, skip it.
 2. **Be specific.** Every finding must reference actual file paths and line numbers. Vague findings like "improve error handling" are not acceptable — say exactly where and what.
 3. **Verify line numbers.** Read the actual current source files before citing line numbers. They shift between runs.
 4. **Aim for 1-3 items per category, max 15 items total.** Quality over quantity. One well-described, actionable finding is worth more than five vague ones.
@@ -54,23 +54,18 @@ Check that documentation in `docs/`, `README.md`, `README.LLM.md`, and `CLAUDE.m
 
 ## Output Format
 
-Write a JSON file to `output/new-findings.json` containing an array of new items. Each item must conform to the schema in `.self-improve/roadmap-schema.json`. Leave `id` as an empty string — the orchestrator assigns IDs.
+Write a JSON file to `output/new-findings.json` containing an array of new items. Do NOT include an `id` field — the orchestrator assigns IDs via GitHub Issues.
 
 ```json
 [
   {
-    "id": "",
     "category": "bug",
     "title": "Short descriptive title",
     "priority": "high",
     "effort": "low",
     "files": ["internal/cli/run.go:296"],
     "description": "Detailed description of the problem...",
-    "fix": "Concrete implementation plan...",
-    "status": "open",
-    "discovered": "2026-03-20",
-    "pr_url": null,
-    "attempted_count": 0
+    "fix": "Concrete implementation plan..."
   }
 ]
 ```
