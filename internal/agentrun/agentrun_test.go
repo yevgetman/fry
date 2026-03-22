@@ -136,6 +136,73 @@ func TestRunWithDualLogs_VerboseNormal(t *testing.T) {
 	assert.Equal(t, "verbose output", string(sprintBytes))
 }
 
+// TestRunWithDualLogsWritesBothFiles verifies that both iterPath and
+// sprintLogPath contain the engine output after a successful call.
+func TestRunWithDualLogsWritesBothFiles(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	iterPath := filepath.Join(dir, "iter.log")
+	sprintLogPath := filepath.Join(dir, "sprint.log")
+
+	eng := &mockEngine{output: "dual log output"}
+	opts := DualLogOpts{Engine: eng, WorkDir: dir, Verbose: false}
+
+	output, err := RunWithDualLogs(context.Background(), "prompt", iterPath, sprintLogPath, opts)
+	require.NoError(t, err)
+	assert.Equal(t, "dual log output", output)
+
+	iterBytes, err := os.ReadFile(iterPath)
+	require.NoError(t, err)
+	assert.Equal(t, "dual log output", string(iterBytes))
+
+	sprintBytes, err := os.ReadFile(sprintLogPath)
+	require.NoError(t, err)
+	assert.Equal(t, "dual log output", string(sprintBytes))
+}
+
+// TestRunWithDualLogsAppendsSprintLog verifies that the sprint log is appended
+// across two calls (contains both outputs concatenated).
+func TestRunWithDualLogsAppendsSprintLog(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sprintLogPath := filepath.Join(dir, "sprint.log")
+
+	opts := DualLogOpts{WorkDir: dir, Verbose: false}
+
+	opts.Engine = &mockEngine{output: "first"}
+	_, err := RunWithDualLogs(context.Background(), "p1", filepath.Join(dir, "iter1.log"), sprintLogPath, opts)
+	require.NoError(t, err)
+
+	opts.Engine = &mockEngine{output: "second"}
+	_, err = RunWithDualLogs(context.Background(), "p2", filepath.Join(dir, "iter2.log"), sprintLogPath, opts)
+	require.NoError(t, err)
+
+	sprintBytes, err := os.ReadFile(sprintLogPath)
+	require.NoError(t, err)
+	combined := string(sprintBytes)
+	assert.Contains(t, combined, "first")
+	assert.Contains(t, combined, "second")
+}
+
+// TestRunWithDualLogsEngineError verifies that when the engine returns a
+// context error, RunWithDualLogs returns that error.
+func TestRunWithDualLogsEngineError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel so the mock engine returns context.Canceled
+
+	eng := &mockEngine{output: ""}
+	opts := DualLogOpts{Engine: eng, WorkDir: dir, Verbose: false}
+
+	_, err := RunWithDualLogs(ctx, "prompt", filepath.Join(dir, "iter.log"), filepath.Join(dir, "sprint.log"), opts)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 // Test 5: missing iterPath directory — returns a non-nil error.
 func TestRunWithDualLogs_MissingIterDir(t *testing.T) {
 	t.Parallel()
