@@ -576,21 +576,38 @@ EOF
     done
 }
 
-# Handle failed build: reset status to open, increment attempted_count
+# Handle failed build: reset status to open.
+# Only increment attempted_count for items whose sprints actually ran.
+# Determines this by grepping the build log for "STARTING SPRINT" lines
+# that contain the item ID.
 handle_build_failure() {
     local selected="$1"
 
-    log "Build failed — resetting item status to open"
+    log "Build failed — determining which items were actually attempted"
 
     cd "$REPO_DIR"
     local ids
     ids="$(echo "$selected" | jq -r '.[].id')"
     for id in $ids; do
+        # Check if a sprint for this item actually started
+        local was_attempted=false
+        if grep -q "STARTING SPRINT.*${id}" "$LOG_FILE" 2>/dev/null; then
+            was_attempted=true
+        fi
+
         local tmp
         tmp="$(mktemp)"
-        jq --arg id "$id" \
-            '(.items[] | select(.id == $id)) |= (.status = "open" | .attempted_count += 1)' \
-            "$ROADMAP" > "$tmp"
+        if [ "$was_attempted" = true ]; then
+            log "  $id: sprint ran — incrementing attempted_count"
+            jq --arg id "$id" \
+                '(.items[] | select(.id == $id)) |= (.status = "open" | .attempted_count += 1)' \
+                "$ROADMAP" > "$tmp"
+        else
+            log "  $id: sprint never started — resetting to open (no count increment)"
+            jq --arg id "$id" \
+                '(.items[] | select(.id == $id)).status = "open"' \
+                "$ROADMAP" > "$tmp"
+        fi
         mv "$tmp" "$ROADMAP"
     done
 }
