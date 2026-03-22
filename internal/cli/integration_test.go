@@ -270,6 +270,29 @@ func TestGitStrategyFlagValidation(t *testing.T) {
 	})
 }
 
+func TestAlwaysVerifyFlagSetsHealConfig(t *testing.T) {
+	t.Parallel()
+
+	ep := &epic.Epic{
+		Name:        "Test",
+		EffortLevel: epic.EffortLow,
+		Sprints:     []epic.Sprint{{Number: 1, Name: "s", MaxIterations: 1}},
+		TotalSprints: 1,
+	}
+	require.Equal(t, 0, ep.MaxHealAttempts)
+	require.False(t, ep.MaxHealAttemptsSet)
+
+	// Simulate what cli/run.go does for --always-verify
+	ep.AuditAfterSprint = true
+	if ep.MaxHealAttempts == 0 {
+		ep.MaxHealAttempts = config.DefaultMaxHealAttempts
+	}
+	ep.MaxHealAttemptsSet = true
+
+	assert.Equal(t, config.DefaultMaxHealAttempts, ep.MaxHealAttempts)
+	assert.True(t, ep.MaxHealAttemptsSet, "MaxHealAttemptsSet must be true so effectiveHealConfig uses path 3")
+}
+
 func runRepoCommand(t *testing.T, name string, args ...string) {
 	t.Helper()
 

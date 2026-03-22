@@ -814,6 +814,23 @@ func TestEffectiveHealConfig(t *testing.T) {
 			wantStuck:       3,
 			wantFailPercent: 30,
 		},
+		{
+			name: "always-verify with low effort uses explicit directive path",
+			opts: HealOpts{
+				Sprint: &epic.Sprint{Number: 1, Name: "s"},
+				Epic: &epic.Epic{
+					TotalSprints:       1,
+					MaxHealAttempts:    config.DefaultMaxHealAttempts, // 3, set by --always-verify
+					MaxHealAttemptsSet: true,                          // also set by --always-verify (post-fix)
+				},
+				EffortLevel: epic.EffortLow,
+			},
+			wantMax:         config.DefaultMaxHealAttempts, // 3
+			wantHardCap:     true,
+			wantProgress:    false,
+			wantStuck:       0,
+			wantFailPercent: 20,
+		},
 	}
 
 	for _, tt := range tests {
