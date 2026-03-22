@@ -959,7 +959,7 @@ var runCmd = &cobra.Command{
 			if sarifErr != nil {
 				frlog.Log("WARNING: could not generate SARIF report: %v", sarifErr)
 			} else {
-				sarifPath := filepath.Join(projectPath, "build-audit.sarif")
+				sarifPath := filepath.Join(projectPath, config.BuildAuditSARIFFile)
 				if writeErr := os.WriteFile(sarifPath, sarifData, 0o644); writeErr != nil {
 					frlog.Log("WARNING: could not write SARIF report: %v", writeErr)
 				} else {

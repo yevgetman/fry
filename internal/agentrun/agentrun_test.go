@@ -186,9 +186,9 @@ func TestRunWithDualLogsAppendsSprintLog(t *testing.T) {
 	assert.Contains(t, combined, "second")
 }
 
-// TestRunWithDualLogsEngineError verifies that when the engine returns a
-// context error, RunWithDualLogs returns that error.
-func TestRunWithDualLogsEngineError(t *testing.T) {
+// TestRunWithDualLogsContextCanceled verifies that when the context is already
+// cancelled, RunWithDualLogs returns context.Canceled.
+func TestRunWithDualLogsContextCanceled(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -201,6 +201,19 @@ func TestRunWithDualLogsEngineError(t *testing.T) {
 	_, err := RunWithDualLogs(ctx, "prompt", filepath.Join(dir, "iter.log"), filepath.Join(dir, "sprint.log"), opts)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
+}
+
+// TestRunWithDualLogsEngineError verifies that a non-context engine error is
+// treated as non-fatal: RunWithDualLogs logs a warning and returns nil.
+func TestRunWithDualLogsEngineError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	eng := &mockEngine{output: "partial output", err: errors.New("engine failure")}
+	opts := DualLogOpts{Engine: eng, WorkDir: dir, Verbose: false}
+
+	_, err := RunWithDualLogs(context.Background(), "prompt", filepath.Join(dir, "iter.log"), filepath.Join(dir, "sprint.log"), opts)
+	require.NoError(t, err)
 }
 
 // Test 5: missing iterPath directory — returns a non-nil error.

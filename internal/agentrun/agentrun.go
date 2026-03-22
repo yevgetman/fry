@@ -45,6 +45,12 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 		runOpts.Stdout = writer
 		runOpts.Stderr = writer
 		output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
+		if err := iterLog.Sync(); err != nil {
+			return output, fmt.Errorf("sync iter log: %w", err)
+		}
+		if err := sprintLog.Sync(); err != nil {
+			return output, fmt.Errorf("sync sprint log: %w", err)
+		}
 		if runErr != nil && ctx.Err() == nil {
 			fmt.Fprintf(os.Stderr, "fry: warning: agent exited with error (non-fatal): %v\n", runErr)
 			return output, nil
@@ -55,6 +61,9 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 	runOpts.Stdout = iterLog
 	runOpts.Stderr = iterLog
 	output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
+	if err := iterLog.Sync(); err != nil {
+		return output, fmt.Errorf("sync iter log: %w", err)
+	}
 	iterBytes, err := os.ReadFile(iterPath)
 	if err != nil {
 		return output, fmt.Errorf("read iter log: %w", err)

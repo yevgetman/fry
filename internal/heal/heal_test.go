@@ -939,8 +939,21 @@ func TestHighestPriorityGroupEmpty(t *testing.T) {
 func TestHighestPriorityGroupAllResolved(t *testing.T) {
 	t.Parallel()
 
-	// When all groups are empty (nil map), highestPriorityGroup returns nil.
-	assert.Nil(t, highestPriorityGroup(map[int][]verify.CheckResult{}))
+	// Simulate the "all groups resolved" path: start with a failing check that
+	// produces a non-empty groups map, then re-run groupFailedChecks after the
+	// check passes — the resulting map is empty and highestPriorityGroup returns nil.
+	initially := []verify.CheckResult{
+		{Check: verify.Check{Type: verify.CheckFile}, Passed: false},
+	}
+	groups := groupFailedChecks(initially)
+	require.NotEmpty(t, groups, "precondition: initial failing check should produce non-empty groups")
+
+	// After healing, the same check now passes.
+	afterHeal := []verify.CheckResult{
+		{Check: verify.Check{Type: verify.CheckFile}, Passed: true},
+	}
+	resolvedGroups := groupFailedChecks(afterHeal)
+	assert.Nil(t, highestPriorityGroup(resolvedGroups))
 }
 
 func TestTargetedHealSingleGroupResolves(t *testing.T) {
