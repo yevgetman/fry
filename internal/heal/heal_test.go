@@ -936,6 +936,13 @@ func TestHighestPriorityGroupEmpty(t *testing.T) {
 	assert.Nil(t, highestPriorityGroup(map[int][]verify.CheckResult{}))
 }
 
+func TestHighestPriorityGroupAllResolved(t *testing.T) {
+	t.Parallel()
+
+	// When all groups are empty (nil map), highestPriorityGroup returns nil.
+	assert.Nil(t, highestPriorityGroup(map[int][]verify.CheckResult{}))
+}
+
 func TestTargetedHealSingleGroupResolves(t *testing.T) {
 	t.Parallel()
 
