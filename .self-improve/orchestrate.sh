@@ -293,49 +293,29 @@ assign_ids_and_append() {
 run_build_phase() {
     log "--- Build Phase ---"
 
-    # Select items
-    local selected
-    selected="$(select_items)"
-
-    local count
-    count="$(echo "$selected" | jq 'length')"
-    if [ "$count" -eq 0 ]; then
-        log "No eligible items to work on"
+    # Check there are open items to work on
+    local open_count
+    open_count="$(count_open_items)"
+    if [ "$open_count" -eq 0 ]; then
+        log "No open items in roadmap — skipping build"
         return 0
     fi
-
-    log "Selected $count item(s) for build:"
-    echo "$selected" | jq -r '.[] | "  \(.id): \(.title) [priority=\(.priority), effort=\(.effort)]"' | tee -a "$LOG_FILE"
+    log "$open_count open item(s) in roadmap — Fry will choose what to work on"
 
     if [ "$DRY_RUN" = true ]; then
-        log "[DRY RUN] Would build these items"
+        log "[DRY RUN] Would run Fry build"
         return 0
     fi
 
-    # Mark items as in_progress
-    mark_items_status "$selected" "in_progress"
+    # Create branch and worktree
+    BUILD_BRANCH="self-improve/${RUN_ID}"
 
-    # Commit status change
-    cd "$REPO_DIR"
-    git add "$ROADMAP"
-    if ! git diff --cached --quiet; then
-        git commit -m "Mark items as in_progress for build [$DATE]"
-        git push origin master || log "WARNING: push of in_progress status failed"
-    fi
-
-    # Determine branch name from category and date
-    local category
-    category="$(echo "$selected" | jq -r '.[0].category')"
-    BUILD_BRANCH="self-improve/${RUN_ID}-${category}"
-
-    # Clean up any prior branch with this name
     if git -C "$REPO_DIR" rev-parse --verify "refs/heads/$BUILD_BRANCH" &>/dev/null; then
         log "Branch $BUILD_BRANCH already exists — deleting"
         git -C "$REPO_DIR" branch -D "$BUILD_BRANCH"
     fi
 
-    # Create worktree
-    WORKTREE_DIR="$REPO_DIR/.fry-worktrees/build-${RUN_ID}-${category}"
+    WORKTREE_DIR="$REPO_DIR/.fry-worktrees/build-${RUN_ID}"
     if [ -d "$WORKTREE_DIR" ]; then
         log "Worktree dir already exists — removing"
         git -C "$REPO_DIR" worktree remove "$WORKTREE_DIR" --force 2>/dev/null || rm -rf "$WORKTREE_DIR"
@@ -346,20 +326,16 @@ run_build_phase() {
     mkdir -p "$(dirname "$WORKTREE_DIR")"
     git -C "$REPO_DIR" worktree add "$WORKTREE_DIR" -b "$BUILD_BRANCH"
 
-    # Scaffold worktree
+    # Scaffold worktree — Fry gets the full roadmap and chooses items itself
     mkdir -p "$WORKTREE_DIR/plans" "$WORKTREE_DIR/assets"
     cp "$EXECUTIVE" "$WORKTREE_DIR/plans/executive.md"
     cp "$ROADMAP" "$WORKTREE_DIR/assets/roadmap.json"
 
-    # Create build prompt with injected items
-    INJECTED_PROMPT="$(mktemp)"
-    inject_items_into_prompt "$selected" "$INJECTED_PROMPT"
-
-    # Run Fry build
+    # Run Fry build — build prompt instructs Fry to select items from the roadmap
     log "Running Fry build in worktree..."
     local build_success=true
     if ! fry run \
-        --user-prompt-file "$INJECTED_PROMPT" \
+        --user-prompt-file "$BUILD_PROMPT" \
         --always-verify \
         --no-sanity-check \
         --git-strategy current \
@@ -377,12 +353,20 @@ run_build_phase() {
         fi
     fi
 
+    # Determine which items Fry worked on by parsing sprint names from the log
+    local worked_ids
+    worked_ids="$(grep "STARTING SPRINT" "$LOG_FILE" 2>/dev/null \
+        | grep -oE '[A-Z][0-9]+' \
+        | sort -u \
+        | tr '\n' ' ')"
+    log "Items found in sprint names: ${worked_ids:-none}"
+
     # Handle result and persist status for next run
     if [ "$build_success" = true ]; then
-        handle_build_success "$selected"
+        handle_build_success "$worked_ids"
         echo "success" > "$LAST_BUILD_STATUS"
     else
-        handle_build_failure "$selected"
+        handle_build_failure "$worked_ids"
         echo "failure" > "$LAST_BUILD_STATUS"
     fi
 
@@ -401,140 +385,54 @@ run_build_phase() {
     fi
 }
 
-# Select 2-3 open items: 1 bigger item (feature/improvement) + 2 smaller items
-# (bug, testing, sunset, refactor, security, ui_ux, documentation).
-# Falls back to whatever is available if one pool is empty.
-# Skips items that have failed too many times.
-select_items() {
-    jq --argjson max_attempts "$MAX_ATTEMPTS" '
-        def priority_rank:
-            if . == "high" then 0
-            elif . == "medium" then 1
-            else 2
-            end;
-
-        def is_big: .category == "feature" or .category == "improvement";
-
-        # Filter: open, not exceeded max attempts
-        [.items[] | select(.status == "open" and .attempted_count < $max_attempts)]
-        | sort_by(.priority | priority_rank) as $eligible
-
-        # Split into big (feature/improvement) and small (everything else)
-        | [$eligible[] | select(is_big)] as $big
-        | [$eligible[] | select(is_big | not)] as $small
-
-        # Pick 1 big + up to 2 small. Fall back if a pool is empty.
-        | if ($big | length) > 0 and ($small | length) >= 2 then
-            [$big[0]] + $small[:2]
-          elif ($big | length) > 0 and ($small | length) == 1 then
-            [$big[0]] + $small[:1]
-          elif ($big | length) > 0 then
-            $big[:3]
-          elif ($small | length) > 0 then
-            $small[:3]
-          else
-            []
-          end
-    ' "$ROADMAP"
-}
-
-# Inject selected items into the build prompt, replacing the placeholder
-inject_items_into_prompt() {
-    local selected="$1"
-    local output_file="$2"
-
-    # Format items as markdown and write to a temp file.
-    # Using a file avoids awk -v backslash interpretation issues
-    # when descriptions contain \t, \n, or other escape sequences.
-    local items_file
-    items_file="$(mktemp)"
-    echo "$selected" | jq -r '.[] |
-        "### \(.id). \(.title)",
-        "- **Category:** \(.category)",
-        "- **Priority:** \(.priority)",
-        "- **Files:** \(.files | join(", "))",
-        "- **Description:** \(.description)",
-        "- **Fix:** \(.fix)",
-        ""
-    ' > "$items_file"
-
-    # Replace the placeholder line with the items file content
-    awk -v items_file="$items_file" '
-        /<!-- ORCHESTRATOR:/ {
-            while ((getline line < items_file) > 0) print line
-            close(items_file)
-            next
-        }
-        { print }
-    ' "$BUILD_PROMPT" > "$output_file"
-
-    rm -f "$items_file"
-}
-
-# Update status for selected items in roadmap
-mark_items_status() {
-    local selected="$1"
-    local new_status="$2"
-
-    local ids
-    ids="$(echo "$selected" | jq -r '.[].id')"
-    for id in $ids; do
-        local tmp
-        tmp="$(mktemp)"
-        jq --arg id "$id" --arg status "$new_status" \
-            '(.items[] | select(.id == $id)).status = $status' \
-            "$ROADMAP" > "$tmp"
-        mv "$tmp" "$ROADMAP"
-    done
-}
-
 # Handle successful build: push branch, create PR, update roadmap
 handle_build_success() {
-    local selected="$1"
+    local worked_ids="$1"
 
     log "Build succeeded — pushing branch and creating PR"
 
     # Push the branch from the worktree
     if ! git -C "$WORKTREE_DIR" push origin "$BUILD_BRANCH" 2>&1 | tee -a "$LOG_FILE"; then
         log "WARNING: Failed to push branch $BUILD_BRANCH"
-        handle_build_failure "$selected"
+        handle_build_failure "$worked_ids"
         return
     fi
 
-    # Build PR title and body
-    local item_ids
-    item_ids="$(echo "$selected" | jq -r '[.[].id] | join(", ")')"
-    local category
-    category="$(echo "$selected" | jq -r '.[0].category')"
-    local pr_title="Self-improve: ${category} fixes (${item_ids})"
+    # Build PR title from worked item IDs
+    local id_list
+    id_list="$(echo "$worked_ids" | xargs | sed 's/ /, /g')"
+    local pr_title="Self-improve: ${id_list}"
     pr_title="${pr_title:0:70}"
 
-    local item_details
-    item_details="$(echo "$selected" | jq -r '.[] |
-        "### \(.id): \(.title)",
-        "",
-        "| | |",
-        "|---|---|",
-        "| **Category** | \(.category) |",
-        "| **Priority** | \(.priority) |",
-        "| **Effort** | \(.effort) |",
-        "| **Files** | \(.files | join(", ")) |",
-        "",
-        "**Problem:** \(.description)",
-        "",
-        "**Fix:** \(.fix)",
-        ""
-    ')"
+    # Build PR body with details for each worked item
+    local item_details=""
+    for id in $worked_ids; do
+        local detail
+        detail="$(jq -r --arg id "$id" '
+            .items[] | select(.id == $id) |
+            "### \(.id): \(.title)\n\n" +
+            "| | |\n|---|---|\n" +
+            "| **Category** | \(.category) |\n" +
+            "| **Priority** | \(.priority) |\n" +
+            "| **Effort** | \(.effort) |\n" +
+            "| **Files** | \(.files | join(", ")) |\n\n" +
+            "**Problem:** \(.description)\n\n" +
+            "**Fix:** \(.fix)\n"
+        ' "$ROADMAP" 2>/dev/null)"
+        if [ -n "$detail" ]; then
+            item_details="${item_details}${detail}\n"
+        fi
+    done
 
     local pr_body
     pr_body="$(cat <<EOF
 ## Summary
 
-Automated self-improvement build addressing ${item_ids}.
+Automated self-improvement build addressing ${id_list}.
 
 ## Items
 
-${item_details}
+$(echo -e "$item_details")
 
 ## Notes
 
@@ -558,18 +456,16 @@ EOF
         --title "$pr_title" \
         --body "$pr_body" 2>&1)"; then
         log "WARNING: Failed to create PR: $pr_url"
-        handle_build_failure "$selected"
+        handle_build_failure "$worked_ids"
         return
     fi
 
     log "PR created: $pr_url"
     PR_CREATED=true
 
-    # Update roadmap: status → pr_created, set pr_url
+    # Update roadmap: mark worked items as pr_created
     cd "$REPO_DIR"
-    local ids
-    ids="$(echo "$selected" | jq -r '.[].id')"
-    for id in $ids; do
+    for id in $worked_ids; do
         local tmp
         tmp="$(mktemp)"
         jq --arg id "$id" --arg url "$pr_url" \
@@ -579,39 +475,26 @@ EOF
     done
 }
 
-# Handle failed build: reset status to open.
-# Only increment attempted_count for items whose sprints actually ran.
-# Determines this by grepping the build log for "STARTING SPRINT" lines
-# that contain the item ID.
+# Handle failed build: only increment attempted_count for items whose sprints ran
 handle_build_failure() {
-    local selected="$1"
+    local worked_ids="$1"
 
-    log "Build failed — determining which items were actually attempted"
+    log "Build failed — updating attempted items"
 
     cd "$REPO_DIR"
-    local ids
-    ids="$(echo "$selected" | jq -r '.[].id')"
-    for id in $ids; do
-        # Check if a sprint for this item actually started
-        local was_attempted=false
-        if grep -q "STARTING SPRINT.*${id}" "$LOG_FILE" 2>/dev/null; then
-            was_attempted=true
-        fi
-
-        local tmp
-        tmp="$(mktemp)"
-        if [ "$was_attempted" = true ]; then
+    for id in $worked_ids; do
+        # Only increment if the item exists in the roadmap
+        local exists
+        exists="$(jq --arg id "$id" '[.items[] | select(.id == $id)] | length' "$ROADMAP")"
+        if [ "$exists" -gt 0 ]; then
             log "  $id: sprint ran — incrementing attempted_count"
+            local tmp
+            tmp="$(mktemp)"
             jq --arg id "$id" \
                 '(.items[] | select(.id == $id)) |= (.status = "open" | .attempted_count += 1)' \
                 "$ROADMAP" > "$tmp"
-        else
-            log "  $id: sprint never started — resetting to open (no count increment)"
-            jq --arg id "$id" \
-                '(.items[] | select(.id == $id)).status = "open"' \
-                "$ROADMAP" > "$tmp"
+            mv "$tmp" "$ROADMAP"
         fi
-        mv "$tmp" "$ROADMAP"
     done
 }
 

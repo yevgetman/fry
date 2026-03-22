@@ -50,6 +50,7 @@ Check that documentation in `docs/`, `README.md`, `README.LLM.md`, and `CLAUDE.m
 3. **Verify line numbers.** Read the actual current source files before citing line numbers. They shift between runs.
 4. **Aim for 1-3 items per category, max 15 items total.** Quality over quantity. One well-described, actionable finding is worth more than five vague ones.
 5. **Do not modify any source code.** This is an analysis-only run.
+6. **Effort reflects implementation scope:** `low` = contained to 1-2 files with no API changes, `medium` = touches several files or changes function signatures, `high` = cross-cutting refactor across multiple packages. When in doubt, round up.
 
 ## Output Format
 
