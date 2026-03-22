@@ -25,14 +25,14 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[A-Z]\\d+$",
-          "description": "Unique identifier. Letter prefix indicates category (A=bug, B=testing, C=feature, D=improvement), followed by a sequence number.",
-          "examples": ["A3", "B5", "C1", "D2"]
+          "pattern": "^([A-Z]\\d+)?$",
+          "description": "Unique identifier. Letter prefix indicates category, followed by a sequence number. Empty string allowed for new findings (orchestrator assigns IDs).",
+          "examples": ["A3", "B5", "C1", "D2", ""]
         },
         "category": {
           "type": "string",
-          "enum": ["bug", "testing", "feature", "improvement"],
-          "description": "A=bug, B=testing, C=feature, D=improvement."
+          "enum": ["bug", "testing", "feature", "improvement", "sunset", "refactor", "security", "ui_ux", "documentation"],
+          "description": "A=bug, B=testing, C=feature, D=improvement, E=sunset, F=refactor, G=security, H=ui_ux, I=documentation."
         },
         "title": {
           "type": "string",

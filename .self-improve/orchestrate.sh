@@ -19,6 +19,7 @@ LOCK_FILE="$SCRIPT_DIR/.lock"
 LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$SCRIPT_DIR/orchestrate.log"
 ROADMAP="$SCRIPT_DIR/roadmap.json"
+ID_COUNTER="$SCRIPT_DIR/id-counter.json"
 EXECUTIVE="$SCRIPT_DIR/executive.md"
 PLANNING_PROMPT="$SCRIPT_DIR/planning-prompt.md"
 BUILD_PROMPT="$SCRIPT_DIR/build-prompt.md"
@@ -41,7 +42,6 @@ AUTO_MERGE=false
 WORKTREE_DIR=""
 BUILD_BRANCH=""
 PR_CREATED=false
-INJECTED_PROMPT=""
 
 # --- Argument parsing ---
 for arg in "$@"; do
@@ -105,11 +105,6 @@ cleanup() {
     # Delete build branch if PR was not created
     if [ -n "$BUILD_BRANCH" ] && [ "$PR_CREATED" != "true" ]; then
         git -C "$REPO_DIR" branch -D "$BUILD_BRANCH" 2>/dev/null || true
-    fi
-
-    # Remove temporary injected prompt
-    if [ -n "$INJECTED_PROMPT" ] && [ -f "$INJECTED_PROMPT" ]; then
-        rm -f "$INJECTED_PROMPT"
     fi
 
     # Clean up scaffolding and build artifacts
@@ -315,13 +310,17 @@ assign_ids_and_append() {
             *)             prefix="X" ;;
         esac
 
-        # Find next available number for this prefix
-        local max_num
-        max_num="$(jq -r --arg p "$prefix" \
-            '[.items[] | select(.id | startswith($p)) | .id | ltrimstr($p) | tonumber] | max // 0' \
-            "$ROADMAP")"
-        local next_num=$((max_num + 1))
+        # Get next ID from counter (never reuses IDs of removed items)
+        local current_num
+        current_num="$(jq -r --arg p "$prefix" '.[$p] // 0' "$ID_COUNTER")"
+        local next_num=$((current_num + 1))
         local new_id="${prefix}${next_num}"
+
+        # Update counter
+        local tmp_counter
+        tmp_counter="$(mktemp)"
+        jq --arg p "$prefix" --argjson n "$next_num" '.[$p] = $n' "$ID_COUNTER" > "$tmp_counter"
+        mv "$tmp_counter" "$ID_COUNTER"
 
         # Set the ID, discovered date, and ensure status fields
         local updated
@@ -705,7 +704,10 @@ cleanup_merged_items() {
     fi
 
     local removed=0
-    echo "$pr_items" | jq -c '.[]' | while IFS= read -r item; do
+    local tmp_pr_items
+    tmp_pr_items="$(mktemp)"
+    echo "$pr_items" | jq -c '.[]' > "$tmp_pr_items"
+    while IFS= read -r item; do
         local id pr_url
         id="$(echo "$item" | jq -r '.id')"
         pr_url="$(echo "$item" | jq -r '.pr_url')"
@@ -739,7 +741,8 @@ cleanup_merged_items() {
         else
             log "  $id: PR #$pr_number state=$pr_state — keeping"
         fi
-    done
+    done < "$tmp_pr_items"
+    rm -f "$tmp_pr_items"
 
     # Commit if roadmap changed
     cd "$REPO_DIR"

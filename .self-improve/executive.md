@@ -15,7 +15,7 @@ Fry should continuously improve itself — finding bugs, expanding test coverage
 This build is one step in a recurring cycle:
 
 1. **Planning phase** — Fry scans the codebase for issues and appends new findings to `roadmap.json` (in `assets/`). The orchestrator merges these into the canonical roadmap.
-2. **Build phase** — The orchestrator selects open items from the roadmap and runs Fry to implement them. That is this phase.
+2. **Build phase** — Fry reads the full roadmap, selects items based on effort balance, and implements them. That is this phase.
 
 The roadmap in `assets/roadmap.json` is the source of truth for what needs to be done. It follows the schema in `.self-improve/roadmap-schema.json`. Items have categories (`bug`, `testing`, `feature`, `improvement`), priority, effort estimates, and status.
 
