@@ -116,6 +116,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	if checkErr != nil {
 		return nil, checkErr
 	}
+	warnOutOfRangeChecks(checks, cfg.Epic.TotalSprints)
 
 	sprintCheckCount := countChecksForSprint(checks, cfg.Sprint.Number)
 
@@ -470,4 +471,17 @@ func countChecksForSprint(checks []verify.Check, sprintNum int) int {
 		}
 	}
 	return count
+}
+
+func warnOutOfRangeChecks(checks []verify.Check, totalSprints int) {
+	if totalSprints <= 0 {
+		return
+	}
+	seen := make(map[int]bool)
+	for _, c := range checks {
+		if c.Sprint > totalSprints && !seen[c.Sprint] {
+			frylog.Log("WARNING: verification file defines checks for sprint %d but epic only has %d sprints — these checks will never run", c.Sprint, totalSprints)
+			seen[c.Sprint] = true
+		}
+	}
 }

@@ -994,6 +994,29 @@ func TestRunSprintContextCancellation(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestWarnOutOfRangeChecks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		checks       []verify.Check
+		totalSprints int
+	}{
+		{"no checks", nil, 2},
+		{"all in range", []verify.Check{{Sprint: 1}, {Sprint: 2}}, 2},
+		{"one out of range", []verify.Check{{Sprint: 3}}, 2},
+		{"multiple out of range same sprint", []verify.Check{{Sprint: 5}, {Sprint: 5}}, 2},
+		{"zero totalSprints skips check", []verify.Check{{Sprint: 99}}, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			warnOutOfRangeChecks(tt.checks, tt.totalSprints)
+		})
+	}
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
