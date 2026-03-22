@@ -113,7 +113,7 @@ func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 	if state == nil || state.TotalSprints == 0 {
 		return &ContinueDecision{
 			Verdict: VerdictAllComplete,
-			Reason:  "heuristic: all sprints completed",
+			Reason:  "heuristic continue: all sprints completed",
 		}
 	}
 
@@ -127,7 +127,7 @@ func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 			return &ContinueDecision{
 				Verdict:     VerdictResume,
 				StartSprint: i,
-				Reason:      "heuristic: first incomplete sprint",
+				Reason:      "heuristic continue: first incomplete sprint",
 			}
 		}
 	}
@@ -135,7 +135,7 @@ func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 	return &ContinueDecision{
 		Verdict:     VerdictAllComplete,
 		StartSprint: state.TotalSprints,
-		Reason:      "heuristic: all sprints completed",
+		Reason:      "heuristic continue: all sprints completed",
 	}
 }
 

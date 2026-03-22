@@ -58,7 +58,7 @@ var (
 	runGitStrategy    string
 	runBranchName     string
 	runAlwaysVerify   bool
-	runHeuristic      bool
+	runSimpleContinue      bool
 	runSARIF          bool
 	runJSONReport     bool
 	runShowTokens     bool
@@ -247,8 +247,8 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("cannot use --continue with --resume; --continue auto-detects whether to resume")
 			}
 		}
-		if runHeuristic && !runContinue {
-			return fmt.Errorf("--heuristic requires --continue")
+		if runSimpleContinue && !runContinue {
+			return fmt.Errorf("--simple-continue requires --continue")
 		}
 
 		var startSprint, endSprint int
@@ -264,8 +264,8 @@ var runCmd = &cobra.Command{
 			fmt.Fprintln(cmd.OutOrStdout())
 
 			var decision *continuerun.ContinueDecision
-			if runHeuristic {
-				frlog.Log("▶ CONTINUE  using heuristic analysis (--heuristic)...")
+			if runSimpleContinue {
+				frlog.Log("▶ CONTINUE  using heuristic continue (--simple-continue)...")
 				decision = continuerun.HeuristicAnalyze(state)
 			} else {
 				continueOverride := ep.AuditModel
@@ -1027,7 +1027,7 @@ func init() {
 	runCmd.Flags().StringVar(&runGitStrategy, "git-strategy", "", "Git branching strategy: auto, current, branch, worktree (default: auto)")
 	runCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
 	runCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force verification, healing, and audit to run regardless of effort level or triage complexity")
-	runCmd.Flags().BoolVar(&runHeuristic, "heuristic", false, "With --continue: skip LLM analysis and use heuristic to find first incomplete sprint")
+	runCmd.Flags().BoolVar(&runSimpleContinue, "simple-continue", false, "With --continue: skip LLM analysis and use heuristic to find first incomplete sprint")
 	runCmd.Flags().BoolVar(&runSARIF, "sarif", false, "Write build-audit.sarif in SARIF 2.1.0 format alongside build-audit.md")
 	runCmd.Flags().BoolVar(&runJSONReport, "json-report", false, "Write build-report.json with structured sprint results")
 	runCmd.Flags().BoolVar(&runShowTokens, "show-tokens", false, "Print per-sprint token usage summary to stderr after the run")

@@ -44,7 +44,7 @@ func init() {
 	rootCmd.Flags().StringVar(&runGitStrategy, "git-strategy", "", "Git branching strategy: auto, current, branch, worktree (default: auto)")
 	rootCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
 	rootCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force verification, healing, and audit to run regardless of effort level or triage complexity")
-	rootCmd.Flags().BoolVar(&runHeuristic, "heuristic", false, "With --continue: skip LLM analysis and use heuristic to find first incomplete sprint")
+	rootCmd.Flags().BoolVar(&runSimpleContinue, "simple-continue", false, "With --continue: skip LLM analysis and use heuristic to find first incomplete sprint")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(prepareCmd)
