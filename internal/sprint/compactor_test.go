@@ -1,6 +1,7 @@
 package sprint
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,7 @@ func TestCompactSprintProgressNonAgentMode(t *testing.T) {
 	progressContent := "## Iteration 1 — 2026-01-01\nCompleted task A\nCompleted task B"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte(progressContent), 0o644))
 
-	result, err := CompactSprintProgress(t.Context(), dir, 1, "Foundation", "PASSED", nil, false, "")
+	result, err := CompactSprintProgress(context.Background(), dir, 1, "Foundation", "PASSED", nil, false, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, result, "## Sprint 1: Foundation — PASSED")
@@ -86,7 +87,7 @@ func TestCompactSprintProgressNonAgentFormatPrefix(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte("some notes"), 0o644))
 
-	result, err := CompactSprintProgress(t.Context(), dir, 3, "Finish", "SKIPPED", nil, false, "")
+	result, err := CompactSprintProgress(context.Background(), dir, 3, "Finish", "SKIPPED", nil, false, "")
 	require.NoError(t, err)
 
 	assert.True(t, strings.HasPrefix(result, "## Sprint 3: Finish — SKIPPED\n\n"))
