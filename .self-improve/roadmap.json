@@ -44,7 +44,7 @@
       ],
       "description": "All build output is currently unstructured terminal text. A --json-report flag would emit a build-report.json containing sprint results, verification outcomes, heal attempt counts, audit findings, and timing data. The data already exists scattered across .fry/ files.",
       "fix": "Create internal/report/report.go with BuildReport struct. Define nested types: SprintResult, VerificationResult, HealSummary, AuditSummary. Aggregate data at the end of executeRun() in internal/cli/run.go. Marshal to JSON and write to build-report.json. Add --json-report flag to runCmd. Add build-report.json to .gitignore. Update docs/commands.md. Add tests.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-19",
       "pr_url": null,
       "attempted_count": 1
@@ -227,10 +227,10 @@
       ],
       "description": "All git subprocess calls in internal/git/git.go use the package-level `execCommand = exec.Command` variable (line 14), which does not accept a context. Functions InitGit, GitCheckpoint, CommitPartialWork, GitDiffForAudit, and the helpers they call (runBash, runGit, gitConfigValue, hasHead, listUntrackedPaths) cannot be cancelled or timed out. If git blocks — e.g., waiting on a pre-commit hook that prompts for input, a credential prompt for a remote, or stale network socket — the entire build hangs indefinitely with no recourse other than SIGKILL. By contrast, gitDiffStat in sprint/runner.go correctly uses exec.CommandContext. The inconsistency exists because git.go predates the context threading in the rest of the codebase.",
       "fix": "Thread a context.Context through InitGit, GitCheckpoint, CommitPartialWork, and GitDiffForAudit. Update runBash, runGit, gitConfigValue, hasHead, and listUntrackedPaths to accept ctx and use exec.CommandContext(ctx, ...). The package-level execCommand variable (used for test injection) should be changed to a context-aware variant, or the approach replaced with interface injection. All callers in internal/cli/run.go already hold a context. Add a timeout (e.g., 60s) for git init and git config calls specifically, since those are one-off operations.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-21",
       "pr_url": null,
-      "attempted_count": 1
+      "attempted_count": 2
     },
     {
       "id": "B6",
@@ -243,7 +243,7 @@
       ],
       "description": "The compactor.go file contains two functions — mechanicalCompaction and CompactSprintProgress — with no unit tests. mechanicalCompaction implements a backwards-scan to find the last '## Iteration' or '--- Heal attempt' line in a sprint progress file, then returns everything from that point forward. This determines what context is preserved across sprint boundaries and fed to the agent in subsequent sprints. A bug (e.g., off-by-one, wrong prefix match) would silently cause context loss across all sprints without any indication. No compactor_test.go file exists in internal/sprint/; only prompt_test.go and runner_test.go are present.",
       "fix": "Create internal/sprint/compactor_test.go with table-driven tests for mechanicalCompaction: (1) progress file with no iteration/heal entries — returns full trimmed content; (2) file with one Iteration entry — returns from that entry onward; (3) multiple Iteration and Heal entries — returns from the LAST one; (4) empty string input; (5) last entry is a Heal attempt. Also test CompactSprintProgress in non-agent mode (useAgent=false) to verify the returned string format matches '## Sprint N: Name — Status\\n\\n<compacted>\\n'. Call t.Parallel() on every test function.",
-      "status": "in_progress",
+      "status": "open",
       "discovered": "2026-03-21",
       "pr_url": null,
       "attempted_count": 0
