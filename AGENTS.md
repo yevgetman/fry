@@ -38,6 +38,16 @@ make lint
 
 If `golangci-lint` is not installed, at minimum ensure `go vet ./...` passes.
 
+### Run orchestrator tests after orchestrator changes
+
+If you modify any file in `.self-improve/` (orchestrator, config, prompts), run the orchestrator test suite:
+
+```bash
+bash .self-improve/test-orchestrator.sh
+```
+
+This tests config loading, category classification, label mapping, and syntax validation. All tests must pass before committing orchestrator changes.
+
 ---
 
 ## 3. Documentation Requirements
@@ -427,6 +437,7 @@ if ep.MyDirective == "" {
 | Run specific test | `go test -race -run TestName ./internal/package/` |
 | Check compilation | `go build ./...` |
 | Vet | `go vet ./...` |
+| Test orchestrator | `bash .self-improve/test-orchestrator.sh` |
 
 | File | Purpose |
 |------|---------|
