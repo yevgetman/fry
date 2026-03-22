@@ -25,6 +25,7 @@ LAST_BUILD_STATUS="$SCRIPT_DIR/.last-build-status"
 
 MAX_BUILD_ITEMS=3
 MAX_ATTEMPTS=3          # Skip items that have failed this many times
+MAX_POST_BUILD_HEALS=3  # Attempts to heal test/build failures after Fry completes
 PLANNING_THRESHOLD=20   # Skip planning if this many open items already exist
 DATE="$(date +%Y-%m-%d)"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
@@ -348,12 +349,56 @@ run_build_phase() {
         build_success=false
     fi
 
-    # Post-build verification (belt and suspenders)
+    # Post-build verification with healing loop
     if [ "$build_success" = true ]; then
         log "Running post-build verification (make test && make build)..."
-        if ! (cd "$WORKTREE_DIR" && make test && make build) 2>&1 | tee -a "$LOG_FILE"; then
-            log "WARNING: Post-build verification failed"
-            build_success=false
+        local test_output
+        test_output="$(cd "$WORKTREE_DIR" && make test 2>&1 && make build 2>&1)" || true
+
+        if (cd "$WORKTREE_DIR" && make test && make build) >/dev/null 2>&1; then
+            log "Post-build verification passed"
+        else
+            log "Post-build verification failed — entering heal loop"
+            local heal_attempt=0
+            local healed=false
+
+            while [ "$heal_attempt" -lt "$MAX_POST_BUILD_HEALS" ]; do
+                heal_attempt=$((heal_attempt + 1))
+                log "Post-build heal attempt $heal_attempt/$MAX_POST_BUILD_HEALS..."
+
+                # Capture current failure output
+                local failure_output
+                failure_output="$(cd "$WORKTREE_DIR" && make test 2>&1; make build 2>&1)" || true
+
+                # Run claude to fix the failures
+                local heal_prompt
+                heal_prompt="The code changes in this repository cause test or build failures. Fix them. Do not remove or weaken tests — fix the underlying code. Run 'make test && make build' to verify your fix.
+
+Here is the failure output:
+
+${failure_output}"
+
+                if ! (cd "$WORKTREE_DIR" && claude -p "$heal_prompt" --dangerously-skip-permissions) 2>&1 | tee -a "$LOG_FILE"; then
+                    log "  Heal agent failed to run"
+                    continue
+                fi
+
+                # Re-verify
+                if (cd "$WORKTREE_DIR" && make test && make build) 2>&1 | tee -a "$LOG_FILE"; then
+                    log "Post-build heal attempt $heal_attempt SUCCEEDED"
+                    # Commit the heal fixes
+                    (cd "$WORKTREE_DIR" && git add -A && git commit -m "Fix post-build test/build failures [automated heal]") 2>&1 | tee -a "$LOG_FILE"
+                    healed=true
+                    break
+                else
+                    log "Post-build heal attempt $heal_attempt FAILED"
+                fi
+            done
+
+            if [ "$healed" != true ]; then
+                log "WARNING: Post-build healing exhausted ($MAX_POST_BUILD_HEALS attempts)"
+                build_success=false
+            fi
         fi
     fi
 
