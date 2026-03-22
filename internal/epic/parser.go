@@ -63,11 +63,19 @@ func ParseEpic(path string) (*Epic, error) {
 				case "@engine":
 					ep.Engine = value
 				case "@docker_from_sprint":
-					ep.DockerFromSprint, err = parseIntDirective(directive, value)
+					var parseErr error
+					ep.DockerFromSprint, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
+					}
 				case "@docker_ready_cmd":
 					ep.DockerReadyCmd = value
 				case "@docker_ready_timeout":
-					ep.DockerReadyTimeout, err = parseIntDirective(directive, value)
+					var parseErr error
+					ep.DockerReadyTimeout, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
+					}
 				case "@require_tool":
 					ep.RequiredTools = append(ep.RequiredTools, value)
 				case "@preflight_cmd":
@@ -83,11 +91,19 @@ func ParseEpic(path string) (*Epic, error) {
 				case "@verification":
 					ep.VerificationFile = value
 				case "@max_heal_attempts":
-					ep.MaxHealAttempts, err = parseIntDirective(directive, value)
+					var parseErr error
+					ep.MaxHealAttempts, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
+					}
 					maxHealAttemptsSet = true
 					ep.MaxHealAttemptsSet = true
 				case "@max_fail_percent":
-					ep.MaxFailPercent, err = parseIntDirective(directive, value)
+					var parseErr error
+					ep.MaxFailPercent, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
+					}
 					maxFailPercentSet = true
 					ep.MaxFailPercentSet = true
 				case "@compact_with_agent":
@@ -99,13 +115,21 @@ func ParseEpic(path string) (*Epic, error) {
 				case "@review_model":
 					ep.ReviewModel = value
 				case "@max_deviation_scope":
-					ep.MaxDeviationScope, err = parseIntDirective(directive, value)
+					var parseErr error
+					ep.MaxDeviationScope, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
+					}
 				case "@audit_after_sprint":
 					ep.AuditAfterSprint = true
 				case "@no_audit":
 					ep.AuditAfterSprint = false
 				case "@max_audit_iterations":
-					ep.MaxAuditIterations, err = parseIntDirective(directive, value)
+					var parseErr error
+					ep.MaxAuditIterations, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
+					}
 					ep.MaxAuditIterationsSet = true
 				case "@audit_engine":
 					ep.AuditEngine = value
@@ -115,7 +139,11 @@ func ParseEpic(path string) (*Epic, error) {
 					ep.EffortLevel, err = ParseEffortLevel(value)
 				case "@sprint":
 					current = Sprint{}
-					current.Number, err = parseIntDirective(directive, value)
+					var parseErr error
+					current.Number, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
+					}
 					state = stateSprintMeta
 				case "@end":
 					state = stateGlobal
@@ -136,15 +164,21 @@ func ParseEpic(path string) (*Epic, error) {
 				case "@name":
 					current.Name = value
 				case "@max_iterations":
-					current.MaxIterations, err = parseIntDirective(directive, value)
+					var parseErr error
+					current.MaxIterations, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
+					}
 				case "@promise":
 					current.Promise = value
 				case "@max_heal_attempts":
 					var heal int
-					heal, err = parseIntDirective(directive, value)
-					if err == nil {
-						current.MaxHealAttempts = &heal
+					var parseErr error
+					heal, parseErr = parseIntDirective(directive, value)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parse epic line %d: %w", lineNo, parseErr)
 					}
+					current.MaxHealAttempts = &heal
 				case "@prompt":
 					state = stateSprintPrompt
 					promptLines = nil
