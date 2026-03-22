@@ -33,6 +33,7 @@ RUN_ID="$(date +%Y%m%d-%H%M%S)"
 SKIP_PLANNING=false
 SKIP_BUILD=false
 DRY_RUN=false
+AUTO_MERGE=false
 
 # State (used by cleanup trap)
 WORKTREE_DIR=""
@@ -46,8 +47,9 @@ for arg in "$@"; do
         --skip-planning) SKIP_PLANNING=true ;;
         --skip-build)    SKIP_BUILD=true ;;
         --dry-run)       DRY_RUN=true ;;
+        --auto-merge)    AUTO_MERGE=true ;;
         --help|-h)
-            echo "Usage: orchestrate.sh [--skip-planning] [--skip-build] [--dry-run]"
+            echo "Usage: orchestrate.sh [--skip-planning] [--skip-build] [--dry-run] [--auto-merge]"
             exit 0
             ;;
         *) echo "Unknown argument: $arg" >&2; exit 1 ;;
@@ -396,8 +398,66 @@ run_build_phase() {
     fi
 }
 
-# Handle successful build: push branch, create PR, update roadmap
+# Handle successful build: either merge directly or create a PR
 handle_build_success() {
+    local worked_ids="$1"
+
+    if [ "$AUTO_MERGE" = true ]; then
+        handle_build_auto_merge "$worked_ids"
+    else
+        handle_build_create_pr "$worked_ids"
+    fi
+}
+
+# Auto-merge: merge worktree branch into master locally and push
+handle_build_auto_merge() {
+    local worked_ids="$1"
+    local id_list
+    id_list="$(echo "$worked_ids" | xargs | sed 's/ /, /g')"
+
+    log "Build succeeded — auto-merging into master (${id_list})"
+
+    # Switch to master in the main repo and merge the build branch
+    cd "$REPO_DIR"
+    git checkout master 2>/dev/null || true
+
+    if ! git merge "$BUILD_BRANCH" --no-edit -m "Self-improve: ${id_list} [auto-merged]" 2>&1 | tee -a "$LOG_FILE"; then
+        log "WARNING: Auto-merge failed (conflict) — falling back to PR"
+        git merge --abort 2>/dev/null || true
+        handle_build_create_pr "$worked_ids"
+        return
+    fi
+
+    # Push to remote
+    if ! git push origin master 2>&1 | tee -a "$LOG_FILE"; then
+        log "WARNING: Push failed after auto-merge"
+        handle_build_failure "$worked_ids"
+        return
+    fi
+
+    log "Auto-merged and pushed: ${id_list}"
+    PR_CREATED=true  # Prevents cleanup from deleting the branch prematurely
+
+    # Remove worked items from roadmap (they're done — no PR to track)
+    for id in $worked_ids; do
+        local exists
+        exists="$(jq --arg id "$id" '[.items[] | select(.id == $id)] | length' "$ROADMAP")"
+        if [ "$exists" -gt 0 ]; then
+            local tmp
+            tmp="$(mktemp)"
+            jq --arg id "$id" '.items = [.items[] | select(.id != $id)]' "$ROADMAP" > "$tmp"
+            mv "$tmp" "$ROADMAP"
+            log "  $id: removed from roadmap (merged)"
+        fi
+    done
+
+    # Rebuild binary with merged changes
+    log "Rebuilding fry with merged changes..."
+    make -C "$REPO_DIR" install 2>&1 | tee -a "$LOG_FILE" || log "WARNING: post-merge make install failed"
+}
+
+# Create PR: push branch and open a pull request for review
+handle_build_create_pr() {
     local worked_ids="$1"
 
     log "Build succeeded — pushing branch and creating PR"
