@@ -115,6 +115,14 @@ func TestParseCodexTokensPrefixedFieldsNotCounted(t *testing.T) {
 	assert.Equal(t, 1120, u.Total)
 }
 
+func TestParseTokensOllamaReturnsZero(t *testing.T) {
+	t.Parallel()
+	for _, output := range []string{"", "some random output", "input_tokens: 100"} {
+		got := ParseTokens("ollama", output)
+		assert.Equal(t, TokenUsage{}, got, "ollama output: %q", output)
+	}
+}
+
 func TestParseTokensDispatchesByEngine(t *testing.T) {
 	t.Parallel()
 

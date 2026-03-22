@@ -90,6 +90,9 @@ func ParseTokens(engineName, output string) TokenUsage {
 	switch strings.ToLower(engineName) {
 	case "codex":
 		return ParseCodexTokens(output)
+	case "ollama":
+		// Ollama CLI does not report token usage; counts are always zero.
+		return TokenUsage{}
 	default: // Unrecognised engines are treated as Claude-format output.
 		return ParseClaudeTokens(output)
 	}
