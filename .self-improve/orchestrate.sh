@@ -596,6 +596,71 @@ handle_build_failure() {
 }
 
 # ===========================================================================
+# HOUSEKEEPING
+# ===========================================================================
+
+# Remove items whose PRs have been merged. Runs at startup before planning/build.
+cleanup_merged_items() {
+    log "Checking for merged PRs to clean from roadmap..."
+
+    # Get all items with status pr_created and a pr_url
+    local pr_items
+    pr_items="$(jq -c '[.items[] | select(.status == "pr_created" and .pr_url != null)]' "$ROADMAP")"
+
+    local count
+    count="$(echo "$pr_items" | jq 'length')"
+    if [ "$count" -eq 0 ]; then
+        log "No pr_created items to check"
+        return 0
+    fi
+
+    local removed=0
+    echo "$pr_items" | jq -c '.[]' | while IFS= read -r item; do
+        local id pr_url
+        id="$(echo "$item" | jq -r '.id')"
+        pr_url="$(echo "$item" | jq -r '.pr_url')"
+
+        # Extract PR number from URL (e.g., https://github.com/owner/repo/pull/123 → 123)
+        local pr_number
+        pr_number="$(echo "$pr_url" | grep -oE '[0-9]+$')"
+        if [ -z "$pr_number" ]; then
+            log "  $id: could not parse PR number from $pr_url — skipping"
+            continue
+        fi
+
+        # Check if PR is merged via gh CLI
+        local pr_state
+        pr_state="$(gh pr view "$pr_number" --json state -q .state 2>/dev/null || echo "UNKNOWN")"
+
+        if [ "$pr_state" = "MERGED" ]; then
+            log "  $id: PR #$pr_number merged — removing from roadmap"
+            local tmp
+            tmp="$(mktemp)"
+            jq --arg id "$id" '.items = [.items[] | select(.id != $id)]' "$ROADMAP" > "$tmp"
+            mv "$tmp" "$ROADMAP"
+            removed=$((removed + 1))
+        elif [ "$pr_state" = "CLOSED" ]; then
+            # PR was closed without merging — reset to open so it can be retried
+            log "  $id: PR #$pr_number closed without merge — resetting to open"
+            local tmp
+            tmp="$(mktemp)"
+            jq --arg id "$id" '(.items[] | select(.id == $id)) |= (.status = "open" | .pr_url = null)' "$ROADMAP" > "$tmp"
+            mv "$tmp" "$ROADMAP"
+        else
+            log "  $id: PR #$pr_number state=$pr_state — keeping"
+        fi
+    done
+
+    # Commit if roadmap changed
+    cd "$REPO_DIR"
+    git add "$ROADMAP"
+    if ! git diff --cached --quiet; then
+        git commit -m "Remove merged items from roadmap [$DATE]"
+        git push origin master || log "WARNING: push of roadmap cleanup failed"
+    fi
+}
+
+# ===========================================================================
 # MAIN
 # ===========================================================================
 main() {
@@ -614,6 +679,9 @@ main() {
     # Pull latest
     log "Pulling latest from origin..."
     git pull origin master --ff-only || die "git pull failed — resolve conflicts manually"
+
+    # Clean up merged PRs from roadmap
+    cleanup_merged_items
 
     # Build latest fry
     log "Building latest fry..."
