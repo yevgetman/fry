@@ -74,6 +74,22 @@ func TestParseVerificationMultipleSprints(t *testing.T) {
 	assert.Equal(t, 1, checks[2].Sprint)
 }
 
+func TestParseCmdOutputWithPipeInCommand(t *testing.T) {
+	t.Parallel()
+
+	// Commands containing " | " (e.g. bash -c "... | wc -l") should split on the
+	// LAST " | " so that the pipeline inside the bash -c string is preserved.
+	path := writeVerificationFile(t, `
+@sprint 1
+@check_cmd_output bash -c "printf 'a\nb\n' | wc -l" | ^2$
+`)
+	checks, err := ParseVerification(path)
+	require.NoError(t, err)
+	require.Len(t, checks, 1)
+	assert.Equal(t, `bash -c "printf 'a\nb\n' | wc -l"`, checks[0].Command)
+	assert.Equal(t, "^2$", checks[0].Pattern)
+}
+
 func TestUnquotePattern(t *testing.T) {
 	t.Parallel()
 

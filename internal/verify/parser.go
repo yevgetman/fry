@@ -118,13 +118,13 @@ func parseFileContains(line string, sprint int) (Check, error) {
 
 func parseCmdOutput(line string, sprint int) (Check, error) {
 	remaining := strings.TrimSpace(strings.TrimPrefix(line, "@check_cmd_output "))
-	parts := strings.SplitN(remaining, " | ", 2)
-	if len(parts) != 2 {
+	idx := strings.LastIndex(remaining, " | ")
+	if idx < 0 {
 		return Check{}, fmt.Errorf("@check_cmd_output requires command and pattern separated by ' | '")
 	}
 
-	command := strings.TrimSpace(parts[0])
-	pattern := strings.TrimSpace(parts[1])
+	command := strings.TrimSpace(remaining[:idx])
+	pattern := strings.TrimSpace(remaining[idx+3:])
 	if command == "" || pattern == "" {
 		return Check{}, fmt.Errorf("@check_cmd_output requires command and pattern separated by ' | '")
 	}
