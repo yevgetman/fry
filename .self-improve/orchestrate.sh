@@ -607,8 +607,8 @@ sync_comment_approvals() {
             -q --arg owner "$repo_owner" '
                 [.comments[] |
                     select(.author.login == $owner) |
-                    .body | ascii_downcase |
-                    test("\\brejected?\\b")
+                    .body |
+                    (ascii_downcase | test("\\brejected?\\b")) or test("\ud83d\udc4e")
                 ] | any' \
             2>/dev/null || echo "false")"
 

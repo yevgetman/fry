@@ -55,8 +55,8 @@ jobs:
               return;
             }
 
-            // Check for reject command: "reject" or "rejected"
-            if (/\brejected?\b/i.test(comment)) {
+            // Check for reject command: "reject", "rejected", or thumbs down emoji
+            if (/\brejected?\b/i.test(comment) || /\u{1F44E}/u.test(comment)) {
               await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
