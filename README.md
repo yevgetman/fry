@@ -119,6 +119,22 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Dynamic sprint review** -- optional mid-build review with replanning
 - **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
 
+## Self-Improving Codebase
+
+Fry improves itself. An automated pipeline runs daily, scanning the Fry source code for bugs, testing gaps, feature opportunities, and other improvements. It selects 2-3 items from a roadmap, implements them, runs the full test suite, and either merges directly to master or opens a pull request for human review.
+
+The loop uses Fry's own features — planning mode for discovery, `--always-verify` for quality gates, worktrees for isolation, and the triage gate for complexity-appropriate effort levels. A bash orchestrator (`.self-improve/orchestrate.sh`) drives the cycle, and a macOS launchd agent triggers it daily.
+
+The canonical roadmap lives at `.self-improve/roadmap.json`. To run the loop manually:
+
+```bash
+fry-improve                  # full loop (planning if needed + build + PR)
+fry-improve --auto-merge     # merge directly to master
+fry-improve --skip-planning  # build only
+```
+
+See [Self-Improvement Pipeline](docs/self-improvement.md) for the full architecture, configuration, and operational guide.
+
 ## Requirements
 
 - **Go 1.22+** — to build fry from source
@@ -218,6 +234,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Terminal Output](docs/terminal-output.md) | Status banners, verbose mode, log format |
 | [Triage](docs/triage.md) | Complexity classification with interactive confirmation — controls whether full prepare runs |
 | [Git Strategy](docs/git-strategy.md) | Branch and worktree isolation strategies for builds |
+| [Self-Improvement](docs/self-improvement.md) | Automated self-improvement pipeline: roadmap, orchestrator, planning, build, healing |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
 
 ## License

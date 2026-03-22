@@ -399,6 +399,27 @@ make clean     # rm -rf bin/
 | `terminal-output.md` | Output format, logging |
 | `architecture.md` | Internal package structure, data flow |
 | `git-strategy.md` | Branch/worktree isolation strategies |
+| `self-improvement.md` | Automated self-improvement pipeline |
+
+---
+
+## Self-Improvement Pipeline (`.self-improve/`)
+
+Fry improves itself via an automated loop driven by `.self-improve/orchestrate.sh`:
+
+| File | Purpose |
+|------|---------|
+| `orchestrate.sh` | Bash orchestrator — planning, build, merge/PR, cleanup |
+| `executive.md` | Static directive copied to `plans/` before each run |
+| `planning-prompt.md` | User prompt for codebase scanning (9 categories) |
+| `build-prompt.md` | User prompt for implementation (Fry selects items) |
+| `roadmap.json` | Canonical roadmap — all open items |
+| `roadmap-schema.json` | JSON schema for roadmap validation |
+| `logs/` | Per-run timestamped log files |
+
+**Flow:** Planning (scan codebase → append findings to roadmap) → Build (select items → worktree → implement → test → merge/PR). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance).
+
+**Key flags:** `--auto-merge` (direct merge to master), `--skip-planning`, `--skip-build`, `--dry-run`.
 
 ---
 

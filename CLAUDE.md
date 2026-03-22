@@ -62,6 +62,7 @@ This is not optional. When you add, modify, or remove a feature:
    - Preflight → `docs/preflight.md`
    - Triage gate → `docs/triage.md`
    - Git strategy → `docs/git-strategy.md`
+   - Self-improvement pipeline → `docs/self-improvement.md`
    - Planning mode → `docs/planning-mode.md`
    - Writing mode → `docs/writing-mode.md`
    - Media assets → `docs/media-assets.md`
