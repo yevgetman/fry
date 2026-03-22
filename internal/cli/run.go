@@ -208,6 +208,7 @@ var runCmd = &cobra.Command{
 			if ep.MaxHealAttempts == 0 {
 				ep.MaxHealAttempts = config.DefaultMaxHealAttempts
 			}
+			ep.MaxHealAttemptsSet = true
 			// Generate verification checks if none exist (simple tasks skip this).
 			verifyPath := filepath.Join(projectPath, config.DefaultVerificationFile)
 			if _, statErr := os.Stat(verifyPath); os.IsNotExist(statErr) {
