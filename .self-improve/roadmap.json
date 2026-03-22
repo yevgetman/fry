@@ -129,7 +129,7 @@
       "fix": "Replace the os.WriteFile call with a write-to-temp-then-rename pattern: create a temp file in the same directory as path (so the rename is on the same filesystem), write to it, sync, close, then os.Rename to path. This guarantees that build-report.json is either absent or fully written. Example: use os.CreateTemp(filepath.Dir(path), \".build-report-*.json\"), write, close, then os.Rename(tmpFile.Name(), path).",
       "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": "https://github.com/yevgetman/fry/pull/3",
+      "pr_url": "https://github.com/yevgetman/fry/pull/4",
       "attempted_count": 0
     },
     {
@@ -162,7 +162,7 @@
       "fix": "Add an AuditSummary type to internal/report/report.go with fields: TotalFindings int, UnresolvedFindings int, FindingsByCategory map[string]int. Add an Audit *AuditSummary field to BuildReport. In internal/cli/run.go, before calling report.Write(), populate buildReport.Audit by converting the buildAuditResult (if non-nil) into an AuditSummary. Update docs/commands.md to mention the audit summary field in the --json-report description. Add tests for the new struct serialization.",
       "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": "https://github.com/yevgetman/fry/pull/3",
+      "pr_url": "https://github.com/yevgetman/fry/pull/4",
       "attempted_count": 0
     },
     {
@@ -178,7 +178,7 @@
       "fix": "Replace the hardcoded string on line 943 with the absolute path already computed in reportPath: change `frlog.Log(\"  BUILD REPORT: written to build-report.json\")` to `frlog.Log(\"  BUILD REPORT: written to %s\", reportPath)`. This is a one-line change with no behavioural side effects.",
       "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": "https://github.com/yevgetman/fry/pull/3",
+      "pr_url": "https://github.com/yevgetman/fry/pull/4",
       "attempted_count": 0
     },
     {
@@ -211,7 +211,7 @@
       "fix": "Add a row for PlanningOutputDir to the Key Constants table in README.LLM.md immediately before or after the WritingOutputDir row: | `PlanningOutputDir` | `output` | Output directory for planning-mode deliverables |",
       "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": "https://github.com/yevgetman/fry/pull/3",
+      "pr_url": "https://github.com/yevgetman/fry/pull/4",
       "attempted_count": 0
     },
     {
@@ -229,7 +229,7 @@
       "fix": "Thread a context.Context through InitGit, GitCheckpoint, CommitPartialWork, and GitDiffForAudit. Update runBash, runGit, gitConfigValue, hasHead, and listUntrackedPaths to accept ctx and use exec.CommandContext(ctx, ...). The package-level execCommand variable (used for test injection) should be changed to a context-aware variant, or the approach replaced with interface injection. All callers in internal/cli/run.go already hold a context. Add a timeout (e.g., 60s) for git init and git config calls specifically, since those are one-off operations.",
       "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": "https://github.com/yevgetman/fry/pull/3",
+      "pr_url": "https://github.com/yevgetman/fry/pull/4",
       "attempted_count": 1
     },
     {
@@ -263,7 +263,7 @@
       "fix": "Add internal/cli/verify.go with a verifyCmd cobra.Command. Accept an optional positional sprint number; default to all sprint checks. Use existing verify.ParseVerification and verify.RunChecks. Print results in tabular format showing check type, description, and pass/fail. Register in root.go. Update docs/commands.md and README.md. Add integration tests in internal/cli/integration_test.go.",
       "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": "https://github.com/yevgetman/fry/pull/3",
+      "pr_url": "https://github.com/yevgetman/fry/pull/4",
       "attempted_count": 0
     },
     {
@@ -313,7 +313,7 @@
       "fix": "Update the count in README.LLM.md from '27 test files' to '37 test files'. Consider replacing the hardcoded number with a description like 'Test files in every package (currently 37)' to make future drift more obvious. This is a one-line change.",
       "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": "https://github.com/yevgetman/fry/pull/3",
+      "pr_url": "https://github.com/yevgetman/fry/pull/4",
       "attempted_count": 0
     }
   ]
