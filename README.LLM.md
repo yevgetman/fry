@@ -49,6 +49,7 @@ fry/
 │   │   ├── runner.go            # Check execution with timeout
 │   │   └── collector.go         # Failure report aggregation
 │   ├── heal/heal.go             # Self-healing loop on verification failure
+│   ├── agentrun/agentrun.go     # Shared dual-log agent execution helper used by sprint and heal packages
 │   ├── audit/
 │   │   ├── audit.go             # Per-sprint two-level audit: outer audit cycles + inner fix loops
 │   │   └── build_audit.go       # Final holistic codebase audit
@@ -368,7 +369,7 @@ make install   # build + cp bin/fry /usr/local/bin/fry
 make clean     # rm -rf bin/
 ```
 
-**27 test files** covering all packages. Tests use `t.Parallel()`, temp directories, env mocking, and mock engines. No CI/CD configured — local testing only.
+**39 test files** covering all packages. Tests use `t.Parallel()`, temp directories, env mocking, and mock engines. No CI/CD configured — local testing only.
 
 ---
 

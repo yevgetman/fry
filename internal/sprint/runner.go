@@ -3,19 +3,19 @@ package sprint
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/yevgetman/fry/internal/agentrun"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/heal"
-	"github.com/yevgetman/fry/internal/shellhook"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/shellhook"
 	"github.com/yevgetman/fry/internal/verify"
 )
 
@@ -149,7 +149,13 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		preIterDiff := gitDiffStat(ctx, cfg.ProjectDir)
 
 		iterPath := filepath.Join(buildLogsDir, fmt.Sprintf("sprint%d_iter%d_%s.log", cfg.Sprint.Number, iter, time.Now().Format("20060102_150405")))
-		output, err := runAgentWithDualLogs(ctx, cfg, config.AgentInvocationPrompt, iterPath, sprintLogPath)
+		output, err := agentrun.RunWithDualLogs(ctx, config.AgentInvocationPrompt, iterPath, sprintLogPath, agentrun.DualLogOpts{
+			Engine:     cfg.Engine,
+			Model:      resolvedModel,
+			ExtraFlags: strings.Fields(cfg.Epic.AgentFlags),
+			WorkDir:    cfg.ProjectDir,
+			Verbose:    cfg.Verbose,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -435,66 +441,6 @@ func loadVerificationChecks(projectDir, verificationFile string) ([]verify.Check
 	}
 
 	return verify.ParseVerification(path)
-}
-
-func runAgentWithDualLogs(ctx context.Context, cfg RunConfig, prompt, iterPath, sprintLogPath string) (string, error) {
-	if cfg.Engine == nil {
-		return "", fmt.Errorf("run sprint: engine is required")
-	}
-
-	iterLog, err := os.Create(iterPath)
-	if err != nil {
-		return "", fmt.Errorf("create iteration log: %w", err)
-	}
-	defer iterLog.Close()
-
-	sprintLog, err := os.OpenFile(sprintLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return "", fmt.Errorf("open sprint log: %w", err)
-	}
-	defer sprintLog.Close()
-
-	resolvedModel := engine.ResolveModel(cfg.Epic.AgentModel, cfg.Engine.Name(), string(cfg.Epic.EffortLevel), engine.SessionSprint)
-	opts := engine.RunOpts{
-		Model:      resolvedModel,
-		ExtraFlags: strings.Fields(cfg.Epic.AgentFlags),
-		WorkDir:    cfg.ProjectDir,
-	}
-
-	if cfg.Verbose {
-		writer := io.MultiWriter(os.Stdout, iterLog, sprintLog)
-		opts.Stdout = writer
-		opts.Stderr = writer
-		output, _, runErr := cfg.Engine.Run(ctx, prompt, opts)
-		if runErr != nil && ctx.Err() == nil {
-			frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
-			return output, nil
-		}
-		return output, runErr
-	}
-
-	opts.Stdout = iterLog
-	opts.Stderr = iterLog
-	output, _, runErr := cfg.Engine.Run(ctx, prompt, opts)
-	iterBytes, err := os.ReadFile(iterPath)
-	if err != nil {
-		return output, fmt.Errorf("read iteration log: %w", err)
-	}
-	n, err := sprintLog.Write(iterBytes)
-	if err != nil {
-		return output, fmt.Errorf("append iteration log to sprint log: %w", err)
-	}
-	if n != len(iterBytes) {
-		return output, fmt.Errorf("append iteration log to sprint log: short write (%d/%d bytes)", n, len(iterBytes))
-	}
-	if err := sprintLog.Sync(); err != nil {
-		return output, fmt.Errorf("sync sprint log: %w", err)
-	}
-	if runErr != nil && ctx.Err() == nil {
-		frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
-		return output, nil
-	}
-	return output, runErr
 }
 
 func gitDiffStat(ctx context.Context, projectDir string) string {

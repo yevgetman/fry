@@ -967,11 +967,19 @@ var runCmd = &cobra.Command{
 			fmt.Fprintln(tw, "------\t------------\t-------------\t-----")
 			var totalIn, totalOut int
 			for _, st := range sprintTokens {
-				fmt.Fprintf(tw, "%d\t%d\t%d\t%d\n", st.SprintNum, st.Usage.Input, st.Usage.Output, st.Usage.Total)
+				if st.Usage.Total == 0 && strings.EqualFold(engineName, "ollama") {
+					fmt.Fprintf(tw, "%d\t-\t-\t-\n", st.SprintNum)
+				} else {
+					fmt.Fprintf(tw, "%d\t%d\t%d\t%d\n", st.SprintNum, st.Usage.Input, st.Usage.Output, st.Usage.Total)
+				}
 				totalIn += st.Usage.Input
 				totalOut += st.Usage.Output
 			}
-			fmt.Fprintf(tw, "TOTAL\t%d\t%d\t%d\n", totalIn, totalOut, totalIn+totalOut)
+			if strings.EqualFold(engineName, "ollama") && totalIn == 0 && totalOut == 0 {
+				fmt.Fprintln(tw, "TOTAL\t-\t-\t-")
+			} else {
+				fmt.Fprintf(tw, "TOTAL\t%d\t%d\t%d\n", totalIn, totalOut, totalIn+totalOut)
+			}
 			_ = tw.Flush()
 		}
 
