@@ -213,6 +213,108 @@
       "discovered": "2026-03-21",
       "pr_url": null,
       "attempted_count": 0
+    },
+    {
+      "id": "A8",
+      "category": "bug",
+      "title": "git/git.go subprocess calls lack context — builds can hang indefinitely",
+      "priority": "medium",
+      "effort": "low",
+      "files": [
+        "internal/git/git.go:14",
+        "internal/git/git.go:123-130",
+        "internal/git/git.go:40-48"
+      ],
+      "description": "All git subprocess calls in internal/git/git.go use the package-level `execCommand = exec.Command` variable (line 14), which does not accept a context. Functions InitGit, GitCheckpoint, CommitPartialWork, GitDiffForAudit, and the helpers they call (runBash, runGit, gitConfigValue, hasHead, listUntrackedPaths) cannot be cancelled or timed out. If git blocks — e.g., waiting on a pre-commit hook that prompts for input, a credential prompt for a remote, or stale network socket — the entire build hangs indefinitely with no recourse other than SIGKILL. By contrast, gitDiffStat in sprint/runner.go correctly uses exec.CommandContext. The inconsistency exists because git.go predates the context threading in the rest of the codebase.",
+      "fix": "Thread a context.Context through InitGit, GitCheckpoint, CommitPartialWork, and GitDiffForAudit. Update runBash, runGit, gitConfigValue, hasHead, and listUntrackedPaths to accept ctx and use exec.CommandContext(ctx, ...). The package-level execCommand variable (used for test injection) should be changed to a context-aware variant, or the approach replaced with interface injection. All callers in internal/cli/run.go already hold a context. Add a timeout (e.g., 60s) for git init and git config calls specifically, since those are one-off operations.",
+      "status": "open",
+      "discovered": "2026-03-21",
+      "pr_url": null,
+      "attempted_count": 0
+    },
+    {
+      "id": "B6",
+      "category": "testing",
+      "title": "sprint/compactor.go has no unit tests",
+      "priority": "medium",
+      "effort": "low",
+      "files": [
+        "internal/sprint/compactor.go"
+      ],
+      "description": "The compactor.go file contains two functions — mechanicalCompaction and CompactSprintProgress — with no unit tests. mechanicalCompaction implements a backwards-scan to find the last '## Iteration' or '--- Heal attempt' line in a sprint progress file, then returns everything from that point forward. This determines what context is preserved across sprint boundaries and fed to the agent in subsequent sprints. A bug (e.g., off-by-one, wrong prefix match) would silently cause context loss across all sprints without any indication. No compactor_test.go file exists in internal/sprint/; only prompt_test.go and runner_test.go are present.",
+      "fix": "Create internal/sprint/compactor_test.go with table-driven tests for mechanicalCompaction: (1) progress file with no iteration/heal entries — returns full trimmed content; (2) file with one Iteration entry — returns from that entry onward; (3) multiple Iteration and Heal entries — returns from the LAST one; (4) empty string input; (5) last entry is a Heal attempt. Also test CompactSprintProgress in non-agent mode (useAgent=false) to verify the returned string format matches '## Sprint N: Name — Status\\n\\n<compacted>\\n'. Call t.Parallel() on every test function.",
+      "status": "open",
+      "discovered": "2026-03-21",
+      "pr_url": null,
+      "attempted_count": 0
+    },
+    {
+      "id": "C4",
+      "category": "feature",
+      "title": "Add `fry verify` subcommand to run checks without iteration loop",
+      "priority": "medium",
+      "effort": "low",
+      "files": [
+        "internal/cli/",
+        "internal/verify/runner.go",
+        "internal/verify/parser.go"
+      ],
+      "description": "There is no way to run verification.md checks against the current project state without invoking a full sprint iteration loop. Users debugging a failed build must use --resume (which also triggers healing) or manually inspect files. A fry verify [sprint] subcommand would: (1) parse the epic file, (2) load verification.md, (3) run checks for the specified sprint (or all sprints if no sprint is given), and (4) print pass/fail results. Exit code 0 if all pass, 1 if any fail. This is useful for development workflows and lightweight CI integration.",
+      "fix": "Add internal/cli/verify.go with a verifyCmd cobra.Command. Accept an optional positional sprint number; default to all sprint checks. Use existing verify.ParseVerification and verify.RunChecks. Print results in tabular format showing check type, description, and pass/fail. Register in root.go. Update docs/commands.md and README.md. Add integration tests in internal/cli/integration_test.go.",
+      "status": "open",
+      "discovered": "2026-03-21",
+      "pr_url": null,
+      "attempted_count": 0
+    },
+    {
+      "id": "D9",
+      "category": "improvement",
+      "title": "--show-tokens silently displays 0/0 for Ollama engine",
+      "priority": "low",
+      "effort": "low",
+      "files": [
+        "internal/metrics/tokens.go:89-96",
+        "internal/cli/run.go"
+      ],
+      "description": "ParseTokens(\"ollama\", output) falls through to the default branch in tokens.go:93, which calls ParseClaudeTokens. Ollama's CLI output does not contain Claude-format token stats (input_tokens / output_tokens lines), so ParseClaudeTokens returns TokenUsage{0,0,0}. When a user runs fry with the Ollama engine and --show-tokens, the token column shows '0/0 tokens' for every sprint — which looks like a metrics bug rather than an expected limitation. The existing test in tokens_test.go:118 notes that 'unknown engines fall through to Claude parser' without mentioning Ollama specifically.",
+      "fix": "Add an explicit 'ollama' case in ParseTokens returning TokenUsage{} with a comment: 'Ollama CLI does not report token usage; counts are always zero.' In the token display output in internal/cli/run.go, suppress the token column or display 'N/A' when the engine is Ollama and the usage is zero. Update docs/commands.md --show-tokens description to note this limitation. Add a test case in tokens_test.go: TestParseTokensOllamaReturnsZero that asserts ParseTokens(\"ollama\", anyOutput) always returns TokenUsage{}.",
+      "status": "open",
+      "discovered": "2026-03-21",
+      "pr_url": null,
+      "attempted_count": 0
+    },
+    {
+      "id": "D10",
+      "category": "improvement",
+      "title": "runAgentWithDualLogs is duplicated in sprint and heal packages",
+      "priority": "low",
+      "effort": "medium",
+      "files": [
+        "internal/sprint/runner.go:440-498",
+        "internal/heal/heal.go:449-502"
+      ],
+      "description": "sprint/runner.go and heal/heal.go each define a private runAgentWithDualLogs function with nearly identical logic: write agent output to a per-iteration log file and append it to an accumulative sprint log, including a Sync call. The two differ only in their parameter signatures (RunConfig vs HealOpts, plus model handling). Any fix applied to one must be manually mirrored in the other. One existing divergence: sprint's version resolves the model internally via cfg.Engine.Name(), while heal's takes the resolved model as a string parameter.",
+      "fix": "Extract a shared runAgentWithDualLogs helper. Define a minimal DualLogOpts struct in a suitable package (e.g., internal/agentrun/ or alongside engine/): {Engine engine.Engine, Model string, ExtraFlags []string, WorkDir string, Verbose bool}. The function signature becomes runAgentWithDualLogs(ctx, prompt, iterPath, sprintLogPath string, opts DualLogOpts) (string, error). Update sprint/runner.go and heal/heal.go to call the shared function. Add a unit test for the shared function. This also removes a barrier to adding dual logging to audit and review session types.",
+      "status": "open",
+      "discovered": "2026-03-21",
+      "pr_url": null,
+      "attempted_count": 0
+    },
+    {
+      "id": "D11",
+      "category": "improvement",
+      "title": "README.LLM.md test file count is stale — says 27, actual is 37",
+      "priority": "low",
+      "effort": "low",
+      "files": [
+        "README.LLM.md:371"
+      ],
+      "description": "README.LLM.md line 371 reads '**27 test files** covering all packages.' The actual count (from globbing internal/**/*_test.go) is 37 test files. New test files added since the count was written include: audit/sarif_test.go, report/report_test.go, sprint/runner_test.go, continuerun/analyzer_test.go, continuerun/collector_helpers_test.go, continuerun/report_test.go, engine/ollama_test.go, git/strategy_test.go, heal/heal_test.go, and triage/confirm_test.go. AI agents use this file as their primary orientation and may underestimate test coverage or draw incorrect conclusions from the stale count.",
+      "fix": "Update the count in README.LLM.md from '27 test files' to '37 test files'. Consider replacing the hardcoded number with a description like 'Test files in every package (currently 37)' to make future drift more obvious. This is a one-line change.",
+      "status": "open",
+      "discovered": "2026-03-21",
+      "pr_url": null,
+      "attempted_count": 0
     }
   ]
 }
