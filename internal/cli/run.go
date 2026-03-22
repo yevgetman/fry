@@ -103,7 +103,7 @@ var runCmd = &cobra.Command{
 		// When --continue is used and no explicit --mode was given,
 		// auto-detect mode from the persisted build-mode.txt file.
 		userSetMode := strings.TrimSpace(runMode) != "" || runPlanning
-		if runContinue && !userSetMode {
+		if (runContinue || runSimpleContinue) && !userSetMode {
 			if detected := continuerun.ReadBuildMode(projectPath); detected != "" {
 				parsedMode, parseErr := prepare.ParseMode(detected)
 				if parseErr == nil && parsedMode != mode {
@@ -117,7 +117,7 @@ var runCmd = &cobra.Command{
 		// projectPath before any file reads (epic, user-prompt, etc.)
 		var strategySetup *git.StrategySetup
 		originalProjectPath := projectPath
-		if runContinue || runResume {
+		if runContinue || runSimpleContinue || runResume {
 			if persisted, readErr := git.ReadPersistedStrategy(projectPath); readErr == nil && persisted != nil {
 				if persisted.IsWorktree && git.IsInsideGitRepo(persisted.WorkDir) {
 					projectPath = persisted.WorkDir
@@ -160,6 +160,9 @@ var runCmd = &cobra.Command{
 			}
 			if runContinue {
 				return fmt.Errorf("--continue requires existing build artifacts; epic file not found at %s", epicArg)
+			}
+			if runSimpleContinue {
+				return fmt.Errorf("--simple-continue requires existing build artifacts; epic file not found at %s", epicArg)
 			}
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
 			if runFullPrepare {
@@ -235,7 +238,10 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		// Validate --continue flag conflicts
+		// Validate --continue and --simple-continue flag conflicts
+		if runContinue && runSimpleContinue {
+			return fmt.Errorf("cannot use --continue with --simple-continue; use one or the other")
+		}
 		if runContinue {
 			if runSprint > 0 {
 				return fmt.Errorf("cannot use --continue with --sprint; --continue auto-detects the resume point")
@@ -247,12 +253,20 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("cannot use --continue with --resume; --continue auto-detects whether to resume")
 			}
 		}
-		if runSimpleContinue && !runContinue {
-			return fmt.Errorf("--simple-continue requires --continue")
+		if runSimpleContinue {
+			if runSprint > 0 {
+				return fmt.Errorf("cannot use --simple-continue with --sprint")
+			}
+			if len(args) > 1 {
+				return fmt.Errorf("cannot use --simple-continue with positional sprint arguments")
+			}
+			if runResume {
+				return fmt.Errorf("cannot use --simple-continue with --resume")
+			}
 		}
 
 		var startSprint, endSprint int
-		if runContinue {
+		if runContinue || runSimpleContinue {
 			frlog.Log("▶ CONTINUE  collecting build state...")
 			state, collectErr := continuerun.CollectBuildState(cmd.Context(), projectPath, ep)
 			if collectErr != nil {
@@ -1027,7 +1041,7 @@ func init() {
 	runCmd.Flags().StringVar(&runGitStrategy, "git-strategy", "", "Git branching strategy: auto, current, branch, worktree (default: auto)")
 	runCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
 	runCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force verification, healing, and audit to run regardless of effort level or triage complexity")
-	runCmd.Flags().BoolVar(&runSimpleContinue, "simple-continue", false, "With --continue: skip LLM analysis and use heuristic to find first incomplete sprint")
+	runCmd.Flags().BoolVar(&runSimpleContinue, "simple-continue", false, "Resume from first incomplete sprint without LLM analysis (lightweight alternative to --continue)")
 	runCmd.Flags().BoolVar(&runSARIF, "sarif", false, "Write build-audit.sarif in SARIF 2.1.0 format alongside build-audit.md")
 	runCmd.Flags().BoolVar(&runJSONReport, "json-report", false, "Write build-report.json with structured sprint results")
 	runCmd.Flags().BoolVar(&runShowTokens, "show-tokens", false, "Print per-sprint token usage summary to stderr after the run")
