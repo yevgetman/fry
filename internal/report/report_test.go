@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWriteCreatesValidJSONFile(t *testing.T) {
+func TestWriteCreatesFile(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -122,7 +122,7 @@ func TestWriteFilePermissions(t *testing.T) {
 	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
 }
 
-func TestWriteIsAtomic(t *testing.T) {
+func TestWriteAtomicRename(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -142,4 +142,20 @@ func TestWriteIsAtomic(t *testing.T) {
 	for _, e := range entries {
 		assert.False(t, strings.HasPrefix(e.Name(), ".build-report-"), "unexpected temp file left: %s", e.Name())
 	}
+}
+
+func TestWriteZeroReport(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "build-report.json")
+
+	err := Write(path, BuildReport{})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	var decoded BuildReport
+	require.NoError(t, json.Unmarshal(data, &decoded))
 }

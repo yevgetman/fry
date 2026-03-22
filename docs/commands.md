@@ -65,7 +65,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--branch-name <name>` | Explicit branch name for `branch` or `worktree` strategies. Overrides the auto-generated `fry/<slug>` name. |
 | `--always-verify` | Force verification checks, healing, and audit to run regardless of effort level or triage complexity. Generates heuristic verification checks if none exist. Useful for CI/CD and automated builds. |
 | `--sarif` | Write `build-audit.sarif` in SARIF 2.1.0 format alongside `build-audit.md`. Only written when the build audit runs. See [Build Audit](build-audit.md). |
-| `--json-report` | Write `build-report.json` with structured sprint results (times, pass/fail, verification counts, token usage). |
+| `--json-report` | Write `.fry/build-report.json` containing sprint results, verification outcomes, and timing data. |
 | `--show-tokens` | Print a per-sprint token usage table to stderr at the end of the run. When using the Ollama engine, token counts are always 0 (Ollama does not report token usage); the column displays `-`. |
 | `--dry-run` | Parse epic and show plan without running anything |
 

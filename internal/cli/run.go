@@ -937,11 +937,11 @@ var runCmd = &cobra.Command{
 			buildReport.EndTime = buildEnd
 			buildReport.Duration = buildEnd.Sub(buildStart)
 			buildReport.Sprints = sprintReportResults
-			reportPath := filepath.Join(projectPath, "build-report.json")
+			reportPath := filepath.Join(projectPath, config.BuildReportFile)
 			if writeErr := report.Write(reportPath, buildReport); writeErr != nil {
 				frlog.Log("WARNING: could not write JSON build report: %v", writeErr)
 			} else {
-				frlog.Log("  BUILD REPORT: written to build-report.json")
+				frlog.Log("  BUILD REPORT: written to %s", config.BuildReportFile)
 			}
 		}
 

@@ -65,6 +65,9 @@ const (
 	SummaryFile       = "build-summary.md"
 	SummaryPromptFile = ".fry/summary-prompt.md"
 
+	// Build report constant
+	BuildReportFile = ".fry/build-report.json"
+
 	// Build audit constants
 	BuildAuditFile             = "build-audit.md"
 	BuildAuditPromptFile       = ".fry/build-audit-prompt.md"
