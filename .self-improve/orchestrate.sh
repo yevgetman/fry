@@ -355,13 +355,22 @@ run_build_phase() {
         fi
     fi
 
-    # Determine which items Fry worked on by parsing sprint names from the log
-    local worked_ids
-    worked_ids="$(grep "STARTING SPRINT" "$LOG_FILE" 2>/dev/null \
-        | grep -oE '[A-Z][0-9]+' \
-        | sort -u \
-        | tr '\n' ' ')"
-    log "Items found in sprint names: ${worked_ids:-none}"
+    # Determine which items Fry worked on.
+    # Primary: read output/worked-items.txt manifest written by Fry.
+    # Fallback: parse sprint names from log (less accurate — picks up mentioned IDs).
+    local worked_ids=""
+    local manifest="$WORKTREE_DIR/output/worked-items.txt"
+    if [ -f "$manifest" ]; then
+        worked_ids="$(grep -oE '^[A-Z][0-9]+$' "$manifest" | sort -u | tr '\n' ' ')"
+        log "Items from manifest: ${worked_ids:-none}"
+    else
+        log "No manifest file — falling back to sprint name parsing"
+        worked_ids="$(grep "STARTING SPRINT" "$LOG_FILE" 2>/dev/null \
+            | grep -oE '[A-Z][0-9]+' \
+            | sort -u \
+            | tr '\n' ' ')"
+        log "Items from sprint names (approximate): ${worked_ids:-none}"
+    fi
 
     # Handle result and persist status for next run
     if [ "$build_success" = true ]; then

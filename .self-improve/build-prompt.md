@@ -38,3 +38,13 @@ Do not select more than 3 items. It is better to do 2 items well than 3 items po
 ## Verification
 
 This build runs with `--always-verify`. All verification checks must pass. If a check fails, fix the root cause — do not weaken or remove the check.
+
+## Manifest
+
+After completing all items, write the IDs you implemented (one per line) to `output/worked-items.txt`. Only include items you actually implemented — not items you considered but skipped. Example:
+
+```
+B6
+D9
+D10
+```
