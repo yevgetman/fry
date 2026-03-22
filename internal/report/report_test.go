@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,4 +107,26 @@ func TestWriteErrorOnUnwritablePath(t *testing.T) {
 	path := filepath.Join(blockingFile, "build-report.json")
 	err := Write(path, BuildReport{})
 	assert.Error(t, err)
+}
+
+func TestWriteIsAtomic(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "build-report.json")
+
+	r := BuildReport{EpicName: "Atomic Test"}
+	require.NoError(t, Write(path, r))
+
+	// Final file must exist and be valid JSON.
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.True(t, json.Valid(data))
+
+	// No temp files should remain in the directory.
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		assert.False(t, strings.HasPrefix(e.Name(), ".build-report-"), "unexpected temp file left: %s", e.Name())
+	}
 }
