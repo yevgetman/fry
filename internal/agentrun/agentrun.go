@@ -58,22 +58,12 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 		return output, runErr
 	}
 
-	runOpts.Stdout = iterLog
-	runOpts.Stderr = iterLog
+	writer := io.MultiWriter(iterLog, sprintLog)
+	runOpts.Stdout = writer
+	runOpts.Stderr = writer
 	output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
 	if err := iterLog.Sync(); err != nil {
 		return output, fmt.Errorf("sync iter log: %w", err)
-	}
-	iterBytes, err := os.ReadFile(iterPath)
-	if err != nil {
-		return output, fmt.Errorf("read iter log: %w", err)
-	}
-	n, err := sprintLog.Write(iterBytes)
-	if err != nil {
-		return output, fmt.Errorf("append iter log to sprint log: %w", err)
-	}
-	if n != len(iterBytes) {
-		return output, fmt.Errorf("append iter log to sprint log: short write (%d/%d bytes)", n, len(iterBytes))
 	}
 	if err := sprintLog.Sync(); err != nil {
 		return output, fmt.Errorf("sync sprint log: %w", err)
