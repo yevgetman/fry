@@ -27,7 +27,7 @@ LAST_BUILD_STATUS="$SCRIPT_DIR/.last-build-status"
 MAX_BUILD_ITEMS=3
 MAX_ATTEMPTS=3          # Skip items that have failed this many times
 MAX_POST_BUILD_HEALS=3  # Attempts to heal test/build failures after Fry completes
-PLANNING_THRESHOLD=20   # Skip planning if this many open items already exist
+PLANNING_THRESHOLD=15   # Skip planning if this many open items already exist
 DATE="$(date +%Y-%m-%d)"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 
