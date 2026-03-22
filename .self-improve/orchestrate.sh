@@ -370,18 +370,37 @@ run_build_phase() {
                 local failure_output
                 failure_output="$(cd "$WORKTREE_DIR" && make test 2>&1; make build 2>&1)" || true
 
-                # Run claude to fix the failures
-                local heal_prompt
-                heal_prompt="The code changes in this repository cause test or build failures. Fix them. Do not remove or weaken tests — fix the underlying code. Run 'make test && make build' to verify your fix.
+                # Capture the diff of what changed (so the agent knows what was modified)
+                local diff_output
+                diff_output="$(cd "$WORKTREE_DIR" && git diff HEAD~1 --stat 2>/dev/null)" || true
 
-Here is the failure output:
+                # Write the heal prompt to a temp file to avoid argument length limits
+                local heal_prompt_file
+                heal_prompt_file="$(mktemp)"
+                cat > "$heal_prompt_file" <<HEALPROMPT
+You are fixing test or build failures in the Fry codebase. Read CLAUDE.md for coding conventions.
 
-${failure_output}"
+Recent changes (git diff --stat):
+${diff_output}
 
-                if ! (cd "$WORKTREE_DIR" && claude -p "$heal_prompt" --dangerously-skip-permissions) 2>&1 | tee -a "$LOG_FILE"; then
+The following test/build failures occurred after these changes:
+
+${failure_output}
+
+Instructions:
+1. Read the failing test files and the source code they test.
+2. Fix the underlying source code to make tests pass. Do NOT remove, weaken, or skip tests.
+3. If a test expectation is wrong due to an intentional behavior change, update the test to match the new behavior.
+4. Run 'make test && make build' to verify your fix before finishing.
+5. Keep changes minimal — only fix what is broken.
+HEALPROMPT
+
+                if ! (cd "$WORKTREE_DIR" && claude -p --dangerously-skip-permissions --model sonnet < "$heal_prompt_file") 2>&1 | tee -a "$LOG_FILE"; then
                     log "  Heal agent failed to run"
+                    rm -f "$heal_prompt_file"
                     continue
                 fi
+                rm -f "$heal_prompt_file"
 
                 # Re-verify
                 if (cd "$WORKTREE_DIR" && make test && make build) 2>&1 | tee -a "$LOG_FILE"; then
