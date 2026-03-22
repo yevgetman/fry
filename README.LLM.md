@@ -49,6 +49,7 @@ fry/
 │   │   ├── runner.go            # Check execution with timeout
 │   │   └── collector.go         # Failure report aggregation
 │   ├── heal/heal.go             # Self-healing loop on verification failure
+│   ├── agentrun/agentrun.go     # Shared dual-log agent execution helper used by sprint and heal packages
 │   ├── audit/
 │   │   ├── audit.go             # Per-sprint two-level audit: outer audit cycles + inner fix loops
 │   │   └── build_audit.go       # Final holistic codebase audit

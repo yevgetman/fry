@@ -3,12 +3,12 @@ package heal
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/yevgetman/fry/internal/agentrun"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
@@ -290,7 +290,13 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			fmt.Sprintf("sprint%d_heal%d_%s.log", opts.Sprint.Number, attempt, time.Now().Format("20060102_150405")),
 		)
 		healAgentRuns++
-		if _, err := runAgentWithDualLogs(ctx, opts, config.HealInvocationPrompt, healLogPath, resolvedModel); err != nil {
+		if _, err := agentrun.RunWithDualLogs(ctx, config.HealInvocationPrompt, healLogPath, opts.SprintLogFile, agentrun.DualLogOpts{
+			Engine:     opts.Engine,
+			Model:      resolvedModel,
+			ExtraFlags: strings.Fields(opts.Epic.AgentFlags),
+			WorkDir:    opts.ProjectDir,
+			Verbose:    opts.Verbose,
+		}); err != nil {
 			return nil, err
 		}
 
@@ -444,61 +450,6 @@ func buildHealPrompt(opts HealOpts, failureReport string) string {
 	b.WriteString("\n")
 	b.WriteString("Do NOT output any promise tokens. Just fix the issues.\n")
 	return b.String()
-}
-
-func runAgentWithDualLogs(ctx context.Context, opts HealOpts, prompt, iterPath, model string) (string, error) {
-	iterLog, err := os.Create(iterPath)
-	if err != nil {
-		return "", fmt.Errorf("run heal loop: create iteration log: %w", err)
-	}
-	defer iterLog.Close()
-
-	sprintLog, err := os.OpenFile(opts.SprintLogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return "", fmt.Errorf("run heal loop: open sprint log: %w", err)
-	}
-	defer sprintLog.Close()
-
-	runOpts := engine.RunOpts{
-		Model:      model,
-		ExtraFlags: strings.Fields(opts.Epic.AgentFlags),
-		WorkDir:    opts.ProjectDir,
-	}
-
-	if opts.Verbose {
-		writer := io.MultiWriter(os.Stdout, iterLog, sprintLog)
-		runOpts.Stdout = writer
-		runOpts.Stderr = writer
-		output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
-		if runErr != nil && ctx.Err() == nil {
-			frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
-			return output, nil
-		}
-		return output, runErr
-	}
-
-	runOpts.Stdout = iterLog
-	runOpts.Stderr = iterLog
-	output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
-	iterBytes, err := os.ReadFile(iterPath)
-	if err != nil {
-		return output, fmt.Errorf("run heal loop: read iteration log: %w", err)
-	}
-	n, err := sprintLog.Write(iterBytes)
-	if err != nil {
-		return output, fmt.Errorf("run heal loop: append iteration log: %w", err)
-	}
-	if n != len(iterBytes) {
-		return output, fmt.Errorf("run heal loop: short write (%d/%d bytes)", n, len(iterBytes))
-	}
-	if err := sprintLog.Sync(); err != nil {
-		return output, fmt.Errorf("run heal loop: sync sprint log: %w", err)
-	}
-	if runErr != nil && ctx.Err() == nil {
-		frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
-		return output, nil
-	}
-	return output, runErr
 }
 
 func appendToSprintProgress(projectDir, entry string) error {
