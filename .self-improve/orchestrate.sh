@@ -21,6 +21,7 @@ ROADMAP="$SCRIPT_DIR/roadmap.json"
 EXECUTIVE="$SCRIPT_DIR/executive.md"
 PLANNING_PROMPT="$SCRIPT_DIR/planning-prompt.md"
 BUILD_PROMPT="$SCRIPT_DIR/build-prompt.md"
+LAST_BUILD_STATUS="$SCRIPT_DIR/.last-build-status"
 
 MAX_BUILD_ITEMS=3
 MAX_ATTEMPTS=3          # Skip items that have failed this many times
@@ -376,11 +377,13 @@ run_build_phase() {
         fi
     fi
 
-    # Handle result
+    # Handle result and persist status for next run
     if [ "$build_success" = true ]; then
         handle_build_success "$selected"
+        echo "success" > "$LAST_BUILD_STATUS"
     else
         handle_build_failure "$selected"
+        echo "failure" > "$LAST_BUILD_STATUS"
     fi
 
     # Clean up worktree
@@ -706,9 +709,16 @@ main() {
         die "make install failed"
     fi
 
-    # Planning phase
+    # Planning phase — skip if last build failed (focus on building, not discovering)
+    local last_status=""
+    if [ -f "$LAST_BUILD_STATUS" ]; then
+        last_status="$(cat "$LAST_BUILD_STATUS")"
+    fi
+
     if [ "$SKIP_PLANNING" = true ]; then
         log "Skipping planning phase (--skip-planning)"
+    elif [ "$last_status" = "failure" ]; then
+        log "Skipping planning phase (last build failed — focusing on build)"
     else
         run_planning_phase
     fi
