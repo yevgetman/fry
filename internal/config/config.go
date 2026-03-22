@@ -69,6 +69,7 @@ const (
 	BuildReportFile = ".fry/build-report.json"
 
 	// Build audit constants
+	BuildAuditSARIFFile        = "build-audit.sarif"
 	BuildAuditFile             = "build-audit.md"
 	BuildAuditPromptFile       = ".fry/build-audit-prompt.md"
 	BuildAuditInvocationPrompt = "Read and execute ALL instructions in .fry/build-audit-prompt.md. You are performing a final holistic audit of the entire codebase. Audit, classify, report, remediate, and re-audit as instructed in the prompt."

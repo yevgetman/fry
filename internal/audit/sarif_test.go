@@ -53,6 +53,95 @@ func TestConvertToSARIFSingleFinding(t *testing.T) {
 	assert.Equal(t, "src/main.go:10", result.Locations[0].PhysicalLocation.ArtifactLocation.URI)
 }
 
+// TestConvertToSARIFEmpty verifies that an empty findings slice produces a
+// valid SARIF document with an empty results array.
+func TestConvertToSARIFEmpty(t *testing.T) {
+	t.Parallel()
+
+	data, err := ConvertToSARIF([]Finding{})
+	require.NoError(t, err)
+
+	var log SARIFLog
+	require.NoError(t, json.Unmarshal(data, &log))
+	require.Len(t, log.Runs, 1)
+	assert.Empty(t, log.Runs[0].Results)
+}
+
+// TestConvertToSARIFSeverityMapping verifies that each severity level maps to
+// the correct SARIF level string.
+func TestConvertToSARIFSeverityMapping(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{Description: "critical", Severity: "CRITICAL"},
+		{Description: "high", Severity: "HIGH"},
+		{Description: "moderate", Severity: "MODERATE"},
+		{Description: "low", Severity: "LOW"},
+	}
+	data, err := ConvertToSARIF(findings)
+	require.NoError(t, err)
+
+	var log SARIFLog
+	require.NoError(t, json.Unmarshal(data, &log))
+	results := log.Runs[0].Results
+	require.Len(t, results, 4)
+	assert.Equal(t, "error", results[0].Level, "CRITICAL → error")
+	assert.Equal(t, "error", results[1].Level, "HIGH → error")
+	assert.Equal(t, "warning", results[2].Level, "MODERATE → warning")
+	assert.Equal(t, "note", results[3].Level, "LOW → note")
+}
+
+// TestConvertToSARIFWithLocation verifies that a finding with a non-empty
+// Location field populates the SARIF locations array.
+func TestConvertToSARIFWithLocation(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{Description: "issue", Severity: "HIGH", Location: "internal/foo/bar.go:42"},
+	}
+	data, err := ConvertToSARIF(findings)
+	require.NoError(t, err)
+
+	var log SARIFLog
+	require.NoError(t, json.Unmarshal(data, &log))
+	result := log.Runs[0].Results[0]
+	require.Len(t, result.Locations, 1)
+	assert.Equal(t, "internal/foo/bar.go:42", result.Locations[0].PhysicalLocation.ArtifactLocation.URI)
+}
+
+// TestConvertToSARIFWithoutFix verifies that a finding with empty RecommendedFix
+// produces a message containing only the description (no "Recommended fix:" suffix).
+func TestConvertToSARIFWithoutFix(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{Description: "description only", Severity: "LOW", RecommendedFix: ""},
+	}
+	data, err := ConvertToSARIF(findings)
+	require.NoError(t, err)
+
+	var log SARIFLog
+	require.NoError(t, json.Unmarshal(data, &log))
+	text := log.Runs[0].Results[0].Message.Text
+	assert.Equal(t, "description only", text)
+	assert.NotContains(t, text, "Recommended fix:")
+}
+
+// TestConvertToSARIFRuleIDFormat verifies that the first result has ruleId "FRY0001".
+func TestConvertToSARIFRuleIDFormat(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{Description: "first finding", Severity: "LOW"},
+	}
+	data, err := ConvertToSARIF(findings)
+	require.NoError(t, err)
+
+	var log SARIFLog
+	require.NoError(t, json.Unmarshal(data, &log))
+	assert.Equal(t, "FRY0001", log.Runs[0].Results[0].RuleID)
+}
+
 func TestConvertToSARIFMultipleSeverities(t *testing.T) {
 	t.Parallel()
 
