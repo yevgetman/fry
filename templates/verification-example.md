@@ -21,7 +21,7 @@
 #
 # ─── CHECK PRIMITIVES ───
 #
-# Four check types are supported:
+# Five check types are supported:
 #
 #   @check_file <path>
 #     File exists and is non-empty.
@@ -47,6 +47,15 @@
 #     The pipe character (|) separates the command from the pattern.
 #     Example: @check_cmd_output node -e "console.log(process.version)" | ^v[0-9]+
 #     Example: @check_cmd_output cat .nvmrc | ^20
+#
+#   @check_test <command>
+#     Run a test suite command and parse its output.
+#     Passes when: exit code is 0 AND no test failures are detected.
+#     Detects framework from command prefix: go test, pytest, npm test / jest.
+#     Reports pass/fail/skip counts in the build report.
+#     Example: @check_test go test ./...
+#     Example: @check_test pytest tests/
+#     Example: @check_test npm test
 #
 # ─── WRITING GOOD CHECKS ───
 #
@@ -138,6 +147,8 @@
 @check_file src/models/user.ts
 @check_file src/models/post.ts
 @check_cmd npm run build
+@check_test go test ./...
+@check_test pytest tests/
 @check_test npm test
 
 # =============================================================================

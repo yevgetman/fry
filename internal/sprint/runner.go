@@ -41,6 +41,7 @@ type SprintResult struct {
 	HealAttempts           int                  // number of heal agent invocations
 	AuditWarning           string               // non-empty when MODERATE audit issues remain (advisory)
 	DeferredFailures       []verify.CheckResult  // verification failures below threshold
+	VerificationResults    []verify.CheckResult  // all check results from the final verification run
 	VerificationPassCount  int                  // pass count from final verification run
 	VerificationTotalCount int                  // total checks from final verification run
 	SprintLogPath          string               // path to combined sprint log file
@@ -218,6 +219,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		Duration:               elapsed,
 		HealAttempts:           healAttempts,
 		DeferredFailures:       deferred,
+		VerificationResults:    results,
 		VerificationPassCount:  passCount,
 		VerificationTotalCount: totalCount,
 		SprintLogPath:          sprintLogPath,

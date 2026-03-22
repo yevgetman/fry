@@ -51,10 +51,12 @@ The four primitives are designed for **basic programmatic checks**, not semantic
 
 | Command prefix | Framework | What is parsed |
 |---|---|---|
-| `go test` | Go | `--- PASS:` and `--- FAIL:` lines |
+| `go test` | Go | `--- PASS:` and `--- FAIL:` lines (requires `-v`; without `-v`, counts report as 0) |
 | `pytest` | pytest | Summary line (`N passed, N failed, N skipped`) |
 | `npm test` or `jest` | Jest | `Tests:` summary line |
 | Anything else | unknown | Exit code only; counts remain 0 |
+
+> **Note:** Go pass/fail counts require `go test -v`. Without `-v`, the `--- PASS:` and `--- FAIL:` per-test lines are suppressed and counts report as 0. The check still passes or fails correctly based on exit code — only the diagnostic counts are affected.
 
 When a test fails, the heal prompt includes the pass/fail/skip counts and truncated output, giving the healing agent a precise diagnosis.
 

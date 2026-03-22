@@ -164,9 +164,10 @@ func TestCollectFailures(t *testing.T) {
 		{Check: Check{Type: CheckFileContains, Path: "go.mod", Pattern: "module x"}},
 		{Check: Check{Type: CheckCmd, Command: "go test ./..."}, Output: strings.Repeat("a\n", 25)},
 		{Check: Check{Type: CheckCmdOutput, Command: "printf nope", Pattern: "^ok$"}, Output: cmdOutput},
-	}, 0, 4)
+		{Check: Check{Type: CheckTest, Command: "go test -v ./..."}, Output: "--- FAIL: TestFoo\n", TestFailCount: 1, TestFramework: "go"},
+	}, 0, 5)
 
-	assert.Contains(t, report, "Verification: 0/4 checks passed.\n\nFailed checks:")
+	assert.Contains(t, report, "Verification: 0/5 checks passed.\n\nFailed checks:")
 	assert.Contains(t, report, "- FAILED: File missing or empty: missing.txt")
 	assert.Contains(t, report, "- FAILED: File 'go.mod' does not contain pattern: module x")
 	assert.Contains(t, report, "- FAILED: Command failed: go test ./...")
@@ -174,6 +175,8 @@ func TestCollectFailures(t *testing.T) {
 	assert.Contains(t, report, "- FAILED: Command output mismatch: printf nope")
 	assert.Contains(t, report, "  Expected pattern: ^ok$")
 	assert.NotContains(t, report, "line11")
+	assert.Contains(t, report, "FAILED: Test command failed: go test -v ./...")
+	assert.Contains(t, report, "fail=1")
 }
 
 func TestShellQuote(t *testing.T) {
@@ -339,12 +342,14 @@ func TestCollectDeferredSummary(t *testing.T) {
 		{Check: Check{Type: CheckFileContains, Path: "go.mod", Pattern: "module x"}},
 		{Check: Check{Type: CheckCmd, Command: "go test ./..."}},
 		{Check: Check{Type: CheckCmdOutput, Command: "echo nope", Pattern: "^ok$"}},
+		{Check: Check{Type: CheckTest, Command: "pytest tests/"}, TestFailCount: 2, TestPassCount: 1},
 	}
 	summary := CollectDeferredSummary(deferred)
 	assert.Contains(t, summary, "DEFERRED: File missing or empty: missing.txt")
 	assert.Contains(t, summary, "DEFERRED: File 'go.mod' does not contain pattern: module x")
 	assert.Contains(t, summary, "DEFERRED: Command failed: go test ./...")
 	assert.Contains(t, summary, "DEFERRED: Command output mismatch: echo nope (expected pattern: ^ok$)")
+	assert.Contains(t, summary, "DEFERRED: Test command failed: pytest tests/")
 }
 
 // --- P1: cappedBuffer tests ---

@@ -566,6 +566,14 @@ var runCmd = &cobra.Command{
 				PassedChecks: result.VerificationPassCount,
 				FailedChecks: result.VerificationTotalCount - result.VerificationPassCount,
 			}
+			for _, cr := range result.VerificationResults {
+				sprintVerify.CheckResults = append(sprintVerify.CheckResults, report.CheckResult{
+					Name:    cr.Check.Command + cr.Check.Path,
+					Type:    cr.Check.Type.String(),
+					Passed:  cr.Passed,
+					Message: truncateString(cr.Output, 4096),
+				})
+			}
 			if result.VerificationTotalCount == 0 {
 				sprintVerify = nil
 			}
@@ -1438,6 +1446,14 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 	}
 
 	return decision, nil
+}
+
+// truncateString returns s truncated to maxBytes bytes, appending a notice if truncated.
+func truncateString(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	return s[:maxBytes] + "... [truncated]"
 }
 
 func readOptionalFile(path string) (string, error) {

@@ -140,36 +140,54 @@ func parseGoTestOutput(result *CheckResult, output string) {
 	result.TestFailCount = len(goTestFailRe.FindAllString(output, -1))
 }
 
-var pytestSummaryRe = regexp.MustCompile(`(\d+) passed(?:,\s*(\d+) failed)?(?:,\s*(\d+) skipped)?`)
+var (
+	pytestPassedRe  = regexp.MustCompile(`(\d+) passed`)
+	pytestFailedRe  = regexp.MustCompile(`(\d+) failed`)
+	pytestSkippedRe = regexp.MustCompile(`(\d+) skipped`)
+)
 
 func parsePytestOutput(result *CheckResult, output string) {
-	m := pytestSummaryRe.FindStringSubmatch(output)
-	if m == nil {
-		return
+	// Match each token independently so order doesn't matter.
+	// Modern pytest may print "1 failed, 3 passed, 1 skipped in 0.52s".
+	if m := pytestPassedRe.FindStringSubmatch(output); m != nil {
+		result.TestPassCount, _ = strconv.Atoi(m[1])
 	}
-	result.TestPassCount, _ = strconv.Atoi(m[1])
-	if m[2] != "" {
-		result.TestFailCount, _ = strconv.Atoi(m[2])
+	if m := pytestFailedRe.FindStringSubmatch(output); m != nil {
+		result.TestFailCount, _ = strconv.Atoi(m[1])
 	}
-	if m[3] != "" {
-		result.TestSkipCount, _ = strconv.Atoi(m[3])
+	if m := pytestSkippedRe.FindStringSubmatch(output); m != nil {
+		result.TestSkipCount, _ = strconv.Atoi(m[1])
 	}
 }
 
-var jestSummaryRe = regexp.MustCompile(`Tests:\s+(?:(\d+) failed,\s*)?(?:(\d+) skipped,\s*)?(\d+) passed`)
+var (
+	jestPassedRe  = regexp.MustCompile(`(\d+) passed`)
+	jestFailedRe  = regexp.MustCompile(`(\d+) failed`)
+	jestSkippedRe = regexp.MustCompile(`(\d+) skipped`)
+)
 
 func parseJestOutput(result *CheckResult, output string) {
-	m := jestSummaryRe.FindStringSubmatch(output)
-	if m == nil {
+	// Find the "Tests:" summary line; apply regexes independently so that
+	// "Tests: 3 failed, 3 total" (no "passed" token) still records counts.
+	var summaryLine string
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "Tests:") {
+			summaryLine = line
+			break
+		}
+	}
+	if summaryLine == "" {
 		return
 	}
-	if m[1] != "" {
+	if m := jestPassedRe.FindStringSubmatch(summaryLine); m != nil {
+		result.TestPassCount, _ = strconv.Atoi(m[1])
+	}
+	if m := jestFailedRe.FindStringSubmatch(summaryLine); m != nil {
 		result.TestFailCount, _ = strconv.Atoi(m[1])
 	}
-	if m[2] != "" {
-		result.TestSkipCount, _ = strconv.Atoi(m[2])
+	if m := jestSkippedRe.FindStringSubmatch(summaryLine); m != nil {
+		result.TestSkipCount, _ = strconv.Atoi(m[1])
 	}
-	result.TestPassCount, _ = strconv.Atoi(m[3])
 }
 
 // trimOutputLines trims leading and trailing whitespace from each line of
