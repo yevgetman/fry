@@ -151,13 +151,58 @@ count_open_items() {
     jq '[.items[] | select(.status == "open")] | length' "$ROADMAP"
 }
 
+# --- Decide whether planning is needed ---
+# Returns 0 (true) if planning should run, 1 (false) if not.
+should_run_planning() {
+    local open_count
+    open_count="$(count_open_items)"
+
+    # Hard ceiling — too many items already
+    if [ "$open_count" -ge "$PLANNING_THRESHOLD" ]; then
+        log "Planning not needed: $open_count open items (threshold: $PLANNING_THRESHOLD)"
+        return 1
+    fi
+
+    # Running low — always plan
+    if [ "$open_count" -lt 5 ]; then
+        log "Planning needed: only $open_count open items (< 5)"
+        return 0
+    fi
+
+    # Check core category coverage (bug, testing, feature, improvement)
+    local empty_core
+    empty_core="$(jq '
+        ["bug", "testing", "feature", "improvement"] as $core |
+        [.items[] | select(.status == "open") | .category] | unique as $present |
+        [$core[] | select(. as $c | $present | index($c) | not)] | length
+    ' "$ROADMAP")"
+    if [ "$empty_core" -ge 2 ]; then
+        log "Planning needed: $empty_core core categories have zero items"
+        return 0
+    fi
+
+    # Check for imbalance — any category > 50% of all items
+    local imbalanced
+    imbalanced="$(jq --argjson total "$open_count" '
+        [.items[] | select(.status == "open")] | group_by(.category) |
+        any(length > ($total / 2))
+    ' "$ROADMAP")"
+    if [ "$imbalanced" = "true" ]; then
+        log "Planning needed: roadmap is imbalanced (one category > 50%)"
+        return 0
+    fi
+
+    log "Planning not needed: $open_count items, balanced across categories"
+    return 1
+}
+
 # ===========================================================================
 # PLANNING PHASE
 # ===========================================================================
 run_planning_phase() {
     log "--- Planning Phase ---"
 
-    # Skip if enough open items already
+    # Redundant guard (should_run_planning already checked, but safe for direct calls)
     local open_count
     open_count="$(count_open_items)"
     if [ "$open_count" -ge "$PLANNING_THRESHOLD" ]; then
@@ -749,7 +794,7 @@ main() {
         log "Skipping planning phase (--skip-planning)"
     elif [ "$last_status" = "failure" ]; then
         log "Skipping planning phase (last build failed — focusing on build)"
-    else
+    elif should_run_planning; then
         run_planning_phase
     fi
 
