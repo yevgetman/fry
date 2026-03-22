@@ -100,7 +100,7 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 		runOpts.Stdout = os.Stdout
 		runOpts.Stderr = os.Stdout
 	}
-	beforeMod := textutil.FileModTime(epicPath)
+	beforeSize := textutil.FileSize(epicPath)
 	output, _, runErr := opts.Engine.Run(ctx,
 		"Read and execute ALL instructions in .fry/replan-prompt.md. Output ONLY the complete updated epic.md file content. No explanation, no code fences.",
 		runOpts,
@@ -112,18 +112,17 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 		frylog.Log("WARNING: replanner agent exited with error (non-fatal): %v", runErr)
 	}
 
-	// If the engine wrote the epic file directly, read its clean content.
-	// Otherwise fall back to the captured output (stripped of markdown fences).
-	var updatedContent string
-	if textutil.FileModTime(epicPath).After(beforeMod) {
-		data, err := os.ReadFile(epicPath)
-		if err != nil {
-			return fmt.Errorf("run replan: read engine-written epic: %w", err)
-		}
-		updatedContent = string(data)
-	} else {
-		updatedContent = textutil.StripMarkdownFences(output)
+	// Use size-based artifact detection (same pattern as prepare.go).
+	// If the engine changed the file size, its on-disk content is authoritative.
+	// Otherwise ResolveArtifact writes the captured output (stripped of fences).
+	if err := textutil.ResolveArtifact(epicPath, beforeSize, output); err != nil {
+		return fmt.Errorf("run replan: resolve artifact: %w", err)
 	}
+	data, err := os.ReadFile(epicPath)
+	if err != nil {
+		return fmt.Errorf("run replan: read updated epic: %w", err)
+	}
+	updatedContent := string(data)
 	if strings.TrimSpace(updatedContent) == "" {
 		return fmt.Errorf("run replan: replanner produced empty output")
 	}

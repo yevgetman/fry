@@ -376,7 +376,7 @@ func TestCappedBuffer_ExceedsCap(t *testing.T) {
 	// Write more than remaining — truncated to remaining (10 bytes)
 	n, err := buf.Write([]byte("0123456789extra"))
 	require.NoError(t, err)
-	assert.Equal(t, 10, n) // only 10 remaining bytes accepted
+	assert.Equal(t, 15, n) // reports full input length per io.Writer contract
 	assert.Equal(t, maxCheckOutput, buf.Len())
 }
 
@@ -575,6 +575,30 @@ func TestRunnerCommandTimeout(t *testing.T) {
 	assert.Equal(t, 1, totalCount)
 	assert.Equal(t, 0, passCount)
 	assert.False(t, results[0].Passed, "command that exceeds context deadline must fail")
+}
+
+// TestRunnerCheckFileContainsTimeout verifies that a CheckFileContains check
+// with an already-expired context fails instead of hanging.
+func TestRunnerCheckFileContainsTimeout(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "data.txt"), []byte("hello world"), 0o644))
+
+	// Create a pre-expired context.
+	deadline := time.Now()
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckFileContains, Path: "data.txt", Pattern: "hello"},
+	}
+
+	results, passCount, totalCount := RunChecks(ctx, checks, 1, projectDir)
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, totalCount)
+	assert.Equal(t, 0, passCount)
+	assert.False(t, results[0].Passed, "CheckFileContains with expired context must fail")
 }
 
 // TestRunnerLargeOutputTruncation verifies that a command generating more than

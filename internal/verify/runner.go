@@ -49,9 +49,14 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		info, err := os.Stat(filepath.Join(projectDir, check.Path))
 		result.Passed = err == nil && info.Size() > 0
 	case CheckFileContains:
+		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
+		defer checkCancel()
 		targetPath := filepath.Join(projectDir, check.Path)
-		cmd := exec.CommandContext(ctx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", textutil.ShellQuote(check.Pattern), textutil.ShellQuote(targetPath)))
+		cmd := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", textutil.ShellQuote(check.Pattern), textutil.ShellQuote(targetPath)))
+		var stderrBuf cappedBuffer
+		cmd.Stderr = &stderrBuf
 		result.Passed = cmd.Run() == nil
+		result.Output = stderrBuf.String()
 	case CheckCmd:
 		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
 		defer checkCancel()
@@ -193,7 +198,8 @@ func (c *cappedBuffer) Write(p []byte) (int, error) {
 		return len(p), nil // discard silently
 	}
 	if len(p) > remaining {
-		p = p[:remaining]
+		_, err := c.buf.Write(p[:remaining])
+		return len(p), err
 	}
 	return c.buf.Write(p)
 }

@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,8 +27,8 @@ func TestResolveArtifactUsesEngineFile(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "artifact.md")
 
-	// Record before-mod (file doesn't exist yet → zero).
-	before := FileModTime(target)
+	// Record before-size (file doesn't exist yet → -1).
+	before := FileSize(target)
 
 	// Simulate engine writing the file with clean content.
 	cleanContent := "1. Rule one\n2. Rule two\n"
@@ -52,7 +51,7 @@ func TestResolveArtifactFallsBackToOutput(t *testing.T) {
 	target := filepath.Join(dir, "artifact.md")
 
 	// File doesn't exist and engine doesn't write it → fallback to output.
-	before := FileModTime(target)
+	before := FileSize(target)
 	output := "1. Rule one\n2. Rule two\n"
 
 	require.NoError(t, ResolveArtifact(target, before, output))
@@ -70,10 +69,7 @@ func TestResolveArtifactFallsBackWhenFileUnchanged(t *testing.T) {
 
 	// File exists before engine run.
 	require.NoError(t, os.WriteFile(target, []byte("old"), 0o644))
-	before := FileModTime(target)
-
-	// Wait to ensure any new write would have a later mod time.
-	time.Sleep(10 * time.Millisecond)
+	before := FileSize(target)
 
 	// Engine doesn't modify the file → fallback writes output.
 	output := "new content"
@@ -82,6 +78,41 @@ func TestResolveArtifactFallsBackWhenFileUnchanged(t *testing.T) {
 	got, err := os.ReadFile(target)
 	require.NoError(t, err)
 	assert.Equal(t, output, string(got))
+}
+
+func TestResolveArtifactSameSizeRewrite(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "artifact.md")
+
+	// File exists with 11 bytes.
+	require.NoError(t, os.WriteFile(target, []byte("old content"), 0o644))
+	before := FileSize(target)
+
+	// Engine rewrites the file with different content but the same byte count.
+	require.NoError(t, os.WriteFile(target, []byte("new content"), 0o644))
+
+	// Because sizes match, ResolveArtifact treats the file as unchanged and
+	// overwrites with the fallback output — this is the known limitation.
+	output := "fallback text"
+	require.NoError(t, ResolveArtifact(target, before, output))
+
+	got, err := os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, output, string(got), "same-size rewrite triggers fallback (known limitation)")
+}
+
+func TestFileSize(t *testing.T) {
+	t.Parallel()
+
+	// Non-existent file returns -1.
+	assert.Equal(t, int64(-1), FileSize("/no/such/file"))
+
+	// Existing file returns its byte count.
+	path := filepath.Join(t.TempDir(), "f.txt")
+	require.NoError(t, os.WriteFile(path, []byte("hello"), 0o644))
+	assert.Equal(t, int64(5), FileSize(path))
 }
 
 func TestStripMarkdownFences(t *testing.T) {

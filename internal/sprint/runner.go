@@ -38,6 +38,7 @@ type SprintResult struct {
 	Name                   string
 	Status                 string
 	Duration               time.Duration
+	HealAttempts           int                  // number of heal agent invocations
 	AuditWarning           string               // non-empty when MODERATE audit issues remain (advisory)
 	DeferredFailures       []verify.CheckResult  // verification failures below threshold
 	VerificationPassCount  int                  // pass count from final verification run
@@ -188,7 +189,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		frylog.Log("  Verification: %d/%d checks passed.", passCount, totalCount)
 	}
 
-	status, deferred, err := determineOutcome(ctx, cfg, checks, promiseFound, results, passCount, totalCount, sprintLogPath)
+	status, deferred, healAttempts, err := determineOutcome(ctx, cfg, checks, promiseFound, results, passCount, totalCount, sprintLogPath)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +210,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		Name:                   cfg.Sprint.Name,
 		Status:                 status,
 		Duration:               elapsed,
+		HealAttempts:           healAttempts,
 		DeferredFailures:       deferred,
 		VerificationPassCount:  passCount,
 		VerificationTotalCount: totalCount,
@@ -216,7 +218,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	}, nil
 }
 
-func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check, promiseFound bool, results []verify.CheckResult, passCount, totalCount int, sprintLogPath string) (string, []verify.CheckResult, error) {
+func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check, promiseFound bool, results []verify.CheckResult, passCount, totalCount int, sprintLogPath string) (string, []verify.CheckResult, int, error) {
 	hasChecks := totalCount > 0
 	checksPass := totalCount == passCount
 
@@ -237,37 +239,37 @@ func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check,
 
 	switch {
 	case promiseFound && !hasChecks:
-		return StatusPass, nil, nil
+		return StatusPass, nil, 0, nil
 	case promiseFound && checksPass:
-		return StatusPass, nil, nil
+		return StatusPass, nil, 0, nil
 	case promiseFound && hasChecks && !checksPass:
 		hr, err := heal.RunHealLoop(ctx, healOpts)
 		if err != nil {
-			return "", nil, err
+			return "", nil, 0, err
 		}
 		if hr.Healed {
-			return StatusPassHealed, nil, nil
+			return StatusPassHealed, nil, hr.Attempts, nil
 		}
 		if hr.WithinThreshold {
-			return StatusPassWithDeferredFailures, hr.DeferredFailures, nil
+			return StatusPassWithDeferredFailures, hr.DeferredFailures, hr.Attempts, nil
 		}
-		return StatusFailVerificationFailedHealExhausted, nil, nil
+		return StatusFailVerificationFailedHealExhausted, nil, hr.Attempts, nil
 	case !promiseFound && !hasChecks:
-		return fmt.Sprintf("FAIL (no promise after %d iters)", cfg.Sprint.MaxIterations), nil, nil
+		return fmt.Sprintf("FAIL (no promise after %d iters)", cfg.Sprint.MaxIterations), nil, 0, nil
 	case !promiseFound && checksPass:
-		return StatusPassVerificationPassedNoPromise, nil, nil
+		return StatusPassVerificationPassedNoPromise, nil, 0, nil
 	default:
 		hr, err := heal.RunHealLoop(ctx, healOpts)
 		if err != nil {
-			return "", nil, err
+			return "", nil, 0, err
 		}
 		if hr.Healed {
-			return StatusPassHealedNoPromise, nil, nil
+			return StatusPassHealedNoPromise, nil, hr.Attempts, nil
 		}
 		if hr.WithinThreshold {
-			return StatusPassHealedWithDeferredFailures, hr.DeferredFailures, nil
+			return StatusPassHealedWithDeferredFailures, hr.DeferredFailures, hr.Attempts, nil
 		}
-		return StatusFailNoPromiseVerificationHealExhaust, nil, nil
+		return StatusFailNoPromiseVerificationHealExhaust, nil, hr.Attempts, nil
 	}
 }
 
@@ -408,6 +410,7 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		Name:                   cfg.Sprint.Name,
 		Status:                 status,
 		Duration:               elapsed,
+		HealAttempts:           hr.Attempts,
 		DeferredFailures:       deferred,
 		VerificationPassCount:  hr.PassCount,
 		VerificationTotalCount: hr.TotalCount,

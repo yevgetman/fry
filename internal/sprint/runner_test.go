@@ -436,7 +436,7 @@ func TestDetermineOutcome(t *testing.T) {
 				Engine: &stubEngine{name: "codex"},
 			}
 
-			status, _, err := determineOutcome(
+			status, _, _, err := determineOutcome(
 				context.Background(), cfg, tt.checks, tt.promiseFound,
 				nil, tt.passCount, tt.totalCount, sprintLog,
 			)
@@ -510,7 +510,7 @@ func TestDetermineOutcomeDeferredFailures(t *testing.T) {
 		Engine: &stubEngine{name: "codex"},
 	}
 
-	status, deferred, err := determineOutcome(
+	status, deferred, _, err := determineOutcome(
 		context.Background(), cfg, checks, true,
 		nil, 4, 5, sprintLog,
 	)

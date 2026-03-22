@@ -178,12 +178,12 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 			return err
 		}
 		prompt := step0Prompt(opts.Mode, string(executiveContent), mediaManifest, assetsSection)
-		beforeMod := textutil.FileModTime(planPath)
+		beforeSize := textutil.FileSize(planPath)
 		output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 		if err != nil {
 			return err
 		}
-		if err := textutil.ResolveArtifact(planPath, beforeMod, output); err != nil {
+		if err := textutil.ResolveArtifact(planPath, beforeSize, output); err != nil {
 			return err
 		}
 		if err := validateStep0(planPath); err != nil {
@@ -226,12 +226,12 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 	logf("Step 1: Generating %s from %s (engine: %s, model: %s)...", config.AgentsFile, strings.Join(step1Inputs, ", "), engName, prepModel)
 	prompt := step1Prompt(opts.Mode, planContent, executiveContent, mediaManifest)
-	beforeMod := textutil.FileModTime(agentsPath)
+	beforeSize := textutil.FileSize(agentsPath)
 	output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 	if err != nil {
 		return err
 	}
-	if err := textutil.ResolveArtifact(agentsPath, beforeMod, output); err != nil {
+	if err := textutil.ResolveArtifact(agentsPath, beforeSize, output); err != nil {
 		return fmt.Errorf("run prepare: write agents: %w", err)
 	}
 	if err := validateStep1(agentsPath); err != nil {
@@ -267,12 +267,12 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 	logf("Step 2: Generating %s from %s (engine: %s, model: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName, prepModel)
 	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
-	beforeMod = textutil.FileModTime(epicPath)
+	beforeSize = textutil.FileSize(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 	if err != nil {
 		return err
 	}
-	if err := textutil.ResolveArtifact(epicPath, beforeMod, output); err != nil {
+	if err := textutil.ResolveArtifact(epicPath, beforeSize, output); err != nil {
 		return fmt.Errorf("run prepare: write epic: %w", err)
 	}
 	if err := validateStep2(epicPath); err != nil {
@@ -296,12 +296,12 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	logf("Step 3: Generating %s from %s (engine: %s, model: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), engName, prepModel)
 	prompt = step3Prompt(opts.Mode, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest)
 	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
-	beforeMod = textutil.FileModTime(verificationPath)
+	beforeSize = textutil.FileSize(verificationPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 	if err != nil {
 		return err
 	}
-	if err := textutil.ResolveArtifact(verificationPath, beforeMod, output); err != nil {
+	if err := textutil.ResolveArtifact(verificationPath, beforeSize, output); err != nil {
 		return fmt.Errorf("run prepare: write verification: %w", err)
 	}
 	if err := validateStep3(verificationPath); err != nil {

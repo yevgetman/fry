@@ -570,7 +570,7 @@ var runCmd = &cobra.Command{
 				sprintVerify = nil
 			}
 			var sprintTokenUsage *metrics.TokenUsage
-			if result.SprintLogPath != "" {
+			if (runShowTokens || runJSONReport) && result.SprintLogPath != "" {
 				if logData, readErr := os.ReadFile(result.SprintLogPath); readErr == nil {
 					u := metrics.ParseTokens(engineName, string(logData))
 					if u.Total > 0 {
@@ -584,6 +584,7 @@ var runCmd = &cobra.Command{
 				StartTime:    sprintStart,
 				EndTime:      sprintEnd,
 				Passed:       sprintPassed,
+				HealAttempts: result.HealAttempts,
 				Verification: sprintVerify,
 				TokenUsage:   sprintTokenUsage,
 			}

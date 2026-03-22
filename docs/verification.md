@@ -140,5 +140,5 @@ When a heal pass modifies `.fry/verification.md` (e.g., fixing a broken check), 
 ## Safety Limits
 
 - **Output cap**: Output from verification checks is capped at 10 MB to prevent unbounded memory growth.
-- **Per-check timeout**: Command-based checks (`@check_cmd` and `@check_cmd_output`) are killed after 120 seconds to prevent hanging builds.
+- **Per-check timeout**: All command-based checks (`@check_cmd`, `@check_cmd_output`, `@check_test`, and `@check_file_contains`) are killed after 120 seconds to prevent hanging builds.
 - **Diagnostic truncation**: Per-check diagnostic output in heal prompts is truncated to 20 lines for `@check_cmd` failures and 10 lines for `@check_cmd_output` failures.
