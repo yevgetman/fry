@@ -413,9 +413,9 @@ Fry improves itself via an automated loop driven by `.self-improve/orchestrate.s
 | `executive.md` | Static directive copied to `plans/` before each run |
 | `planning-prompt.md` | User prompt for codebase scanning (9 categories) |
 | `build-prompt.md` | User prompt for implementation (Fry selects items) |
-| `roadmap.json` | Canonical roadmap — all open items |
-| `roadmap-schema.json` | JSON schema for roadmap validation |
 | `logs/` | Per-run timestamped log files |
+
+The roadmap lives in GitHub Issues (labels: category/*, priority/*, effort/*, status/*). See docs/self-improvement.md for the full architecture.
 
 **Flow:** Planning (scan codebase → append findings to roadmap) → Build (select items → worktree → implement → test → merge/PR). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance).
 
