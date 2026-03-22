@@ -127,9 +127,9 @@
       ],
       "description": "report.Write() calls os.WriteFile(path, data, 0o644) directly on the final destination path (report.go:60). If the process is killed (SIGKILL, OOM, power loss) mid-write, a truncated build-report.json remains on disk. Subsequent tooling that reads build-report.json for programmatic analysis will fail to parse the truncated file. The original C2 feature plan explicitly required a temp-file-then-rename pattern for atomicity.",
       "fix": "Replace the os.WriteFile call with a write-to-temp-then-rename pattern: create a temp file in the same directory as path (so the rename is on the same filesystem), write to it, sync, close, then os.Rename to path. This guarantees that build-report.json is either absent or fully written. Example: use os.CreateTemp(filepath.Dir(path), \".build-report-*.json\"), write, close, then os.Rename(tmpFile.Name(), path).",
-      "status": "open",
+      "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/3",
       "attempted_count": 0
     },
     {
@@ -160,9 +160,9 @@
       ],
       "description": "The BuildReport struct (report.go:14-20) includes per-sprint verification results and token usage but has no field for build audit findings. In run.go the buildAuditResult variable is populated (and used for the SARIF export at line 948), but it is never added to buildReport before the JSON report is written (lines 933-944). Users relying on --json-report for programmatic build analysis cannot access audit findings from the JSON output, which defeats part of the purpose of structured reporting.",
       "fix": "Add an AuditSummary type to internal/report/report.go with fields: TotalFindings int, UnresolvedFindings int, FindingsByCategory map[string]int. Add an Audit *AuditSummary field to BuildReport. In internal/cli/run.go, before calling report.Write(), populate buildReport.Audit by converting the buildAuditResult (if non-nil) into an AuditSummary. Update docs/commands.md to mention the audit summary field in the --json-report description. Add tests for the new struct serialization.",
-      "status": "open",
+      "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/3",
       "attempted_count": 0
     },
     {
@@ -176,9 +176,9 @@
       ],
       "description": "run.go line 943 logs `\"  BUILD REPORT: written to build-report.json\"` — a hardcoded relative path string. The actual file is written to reportPath = filepath.Join(projectPath, \"build-report.json\") (line 939), which may be an absolute path on a different directory when --project-dir is set. Users running fry from a directory other than the project directory will see the relative path in the log and be unable to locate the file without manual calculation.",
       "fix": "Replace the hardcoded string on line 943 with the absolute path already computed in reportPath: change `frlog.Log(\"  BUILD REPORT: written to build-report.json\")` to `frlog.Log(\"  BUILD REPORT: written to %s\", reportPath)`. This is a one-line change with no behavioural side effects.",
-      "status": "open",
+      "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/3",
       "attempted_count": 0
     },
     {
@@ -209,9 +209,9 @@
       ],
       "description": "README.LLM.md line 313 lists WritingOutputDir = \"output\" in the Key Constants table but does not mention the parallel constant PlanningOutputDir = \"output\" defined immediately above it in internal/config/config.go. Both constants are used in internal/prepare/prepare.go (lines 98 and 103 respectively) and have the same value. The omission could cause future agents to miss PlanningOutputDir when searching the constants table for planning-mode output path configuration.",
       "fix": "Add a row for PlanningOutputDir to the Key Constants table in README.LLM.md immediately before or after the WritingOutputDir row: | `PlanningOutputDir` | `output` | Output directory for planning-mode deliverables |",
-      "status": "open",
+      "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/3",
       "attempted_count": 0
     },
     {
@@ -227,9 +227,9 @@
       ],
       "description": "All git subprocess calls in internal/git/git.go use the package-level `execCommand = exec.Command` variable (line 14), which does not accept a context. Functions InitGit, GitCheckpoint, CommitPartialWork, GitDiffForAudit, and the helpers they call (runBash, runGit, gitConfigValue, hasHead, listUntrackedPaths) cannot be cancelled or timed out. If git blocks — e.g., waiting on a pre-commit hook that prompts for input, a credential prompt for a remote, or stale network socket — the entire build hangs indefinitely with no recourse other than SIGKILL. By contrast, gitDiffStat in sprint/runner.go correctly uses exec.CommandContext. The inconsistency exists because git.go predates the context threading in the rest of the codebase.",
       "fix": "Thread a context.Context through InitGit, GitCheckpoint, CommitPartialWork, and GitDiffForAudit. Update runBash, runGit, gitConfigValue, hasHead, and listUntrackedPaths to accept ctx and use exec.CommandContext(ctx, ...). The package-level execCommand variable (used for test injection) should be changed to a context-aware variant, or the approach replaced with interface injection. All callers in internal/cli/run.go already hold a context. Add a timeout (e.g., 60s) for git init and git config calls specifically, since those are one-off operations.",
-      "status": "open",
+      "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/3",
       "attempted_count": 1
     },
     {
@@ -261,9 +261,9 @@
       ],
       "description": "There is no way to run verification.md checks against the current project state without invoking a full sprint iteration loop. Users debugging a failed build must use --resume (which also triggers healing) or manually inspect files. A fry verify [sprint] subcommand would: (1) parse the epic file, (2) load verification.md, (3) run checks for the specified sprint (or all sprints if no sprint is given), and (4) print pass/fail results. Exit code 0 if all pass, 1 if any fail. This is useful for development workflows and lightweight CI integration.",
       "fix": "Add internal/cli/verify.go with a verifyCmd cobra.Command. Accept an optional positional sprint number; default to all sprint checks. Use existing verify.ParseVerification and verify.RunChecks. Print results in tabular format showing check type, description, and pass/fail. Register in root.go. Update docs/commands.md and README.md. Add integration tests in internal/cli/integration_test.go.",
-      "status": "open",
+      "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/3",
       "attempted_count": 0
     },
     {
@@ -311,9 +311,9 @@
       ],
       "description": "README.LLM.md line 371 reads '**27 test files** covering all packages.' The actual count (from globbing internal/**/*_test.go) is 37 test files. New test files added since the count was written include: audit/sarif_test.go, report/report_test.go, sprint/runner_test.go, continuerun/analyzer_test.go, continuerun/collector_helpers_test.go, continuerun/report_test.go, engine/ollama_test.go, git/strategy_test.go, heal/heal_test.go, and triage/confirm_test.go. AI agents use this file as their primary orientation and may underestimate test coverage or draw incorrect conclusions from the stale count.",
       "fix": "Update the count in README.LLM.md from '27 test files' to '37 test files'. Consider replacing the hardcoded number with a description like 'Test files in every package (currently 37)' to make future drift more obvious. This is a one-line change.",
-      "status": "open",
+      "status": "pr_created",
       "discovered": "2026-03-21",
-      "pr_url": null,
+      "pr_url": "https://github.com/yevgetman/fry/pull/3",
       "attempted_count": 0
     }
   ]
