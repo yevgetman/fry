@@ -45,6 +45,7 @@ const (
 
 	// Audit constants
 	SprintAuditFile            = ".fry/sprint-audit.txt"
+	SprintReviewLogPattern     = "sprint%d_review_%s.log"
 	AuditPromptFile            = ".fry/audit-prompt.md"
 	DefaultMaxAuditIterations  = 3
 	MaxAuditDiffBytes          = 100_000

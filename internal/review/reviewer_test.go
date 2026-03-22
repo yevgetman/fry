@@ -482,6 +482,43 @@ func TestRunSprintReview_WithEngine(t *testing.T) {
 	assert.Equal(t, VerdictContinue, result.Verdict)
 }
 
+func TestRunSprintReview_WritesReviewLog(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
+
+	engineOutput := "### Analysis\nAll good.\n\n### Decision\n<verdict>CONTINUE</verdict>\n"
+	eng := &stubReplanEngine{output: engineOutput}
+
+	result, err := RunSprintReview(context.Background(), RunReviewOpts{
+		ProjectDir:      projectDir,
+		SprintNum:       2,
+		TotalSprints:    3,
+		SprintName:      "Core",
+		Engine:          eng,
+		SimulateVerdict: "",
+		Epic: &epic.Epic{
+			TotalSprints: 3,
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "Setup", Prompt: "Build setup."},
+				{Number: 2, Name: "Core", Prompt: "Build core."},
+				{Number: 3, Name: "Polish", Prompt: "Polish."},
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, VerdictContinue, result.Verdict)
+
+	matches, err := filepath.Glob(filepath.Join(projectDir, ".fry/build-logs", "sprint*_review_*.log"))
+	require.NoError(t, err)
+	require.Len(t, matches, 1)
+
+	data, err := os.ReadFile(matches[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(data), engineOutput)
+}
+
 func TestRunSprintReview_EngineReturnsDeviate(t *testing.T) {
 	t.Parallel()
 

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
@@ -262,6 +263,14 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 	}
 	if runErr != nil {
 		frylog.Log("WARNING: reviewer agent exited with error (non-fatal): %v", runErr)
+	}
+
+	reviewTS := time.Now().Format("20060102_150405")
+	reviewLogPath := filepath.Join(opts.ProjectDir, config.BuildLogsDir, fmt.Sprintf(config.SprintReviewLogPattern, opts.SprintNum, reviewTS))
+	if err := os.MkdirAll(filepath.Dir(reviewLogPath), 0o755); err != nil {
+		frylog.Log("WARNING: could not create review log dir: %v", err)
+	} else if err := os.WriteFile(reviewLogPath, []byte(output), 0o644); err != nil {
+		frylog.Log("WARNING: could not write review log: %v", err)
 	}
 
 	result := &ReviewResult{
