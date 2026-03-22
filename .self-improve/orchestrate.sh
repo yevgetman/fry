@@ -331,12 +331,14 @@ run_build_phase() {
     cp "$EXECUTIVE" "$WORKTREE_DIR/plans/executive.md"
     cp "$ROADMAP" "$WORKTREE_DIR/assets/roadmap.json"
 
-    # Run Fry build — build prompt instructs Fry to select items from the roadmap
+    # Run Fry build — full prepare so the LLM reads assets/roadmap.json
+    # and chooses items before building the epic
     log "Running Fry build in worktree..."
     local build_success=true
     if ! fry run \
         --user-prompt-file "$BUILD_PROMPT" \
         --always-verify \
+        --full-prepare \
         --no-sanity-check \
         --git-strategy current \
         --project-dir "$WORKTREE_DIR" 2>&1 | tee -a "$LOG_FILE"; then
