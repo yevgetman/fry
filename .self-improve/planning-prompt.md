@@ -43,6 +43,16 @@ Evaluate terminal output, progress reporting, error messages, and user-facing te
 ### I. Documentation
 Check that documentation in `docs/`, `README.md`, `README.LLM.md`, and `CLAUDE.md` is complete, accurate, and consistent with the current code. Flag stale references, missing sections, and undocumented features.
 
+### J. Build Experience
+Analyze the build journal at `assets/build-journal.json` (if present) for patterns across recent self-improvement builds. Look for:
+- Recurring failure patterns (same files, same test failures across builds)
+- Effort mismatches (items estimated as "low" that required healing, or "high" items that completed easily)
+- Categories that consistently fail or succeed
+- Fragile areas of the codebase that appear in multiple failed builds
+- Process improvements for the self-improvement pipeline itself
+
+Only create findings if the journal exists and contains entries. Do not fabricate patterns from insufficient data (fewer than 3 entries). Experience findings should propose concrete, actionable improvements — not vague observations. Use category `experience` in the output JSON.
+
 ## Rules
 
 1. **Read `assets/existing-issues.json` first.** Do not re-discover items that are already tracked there. If you find a variation of an existing item, skip it.

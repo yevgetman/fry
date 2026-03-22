@@ -24,7 +24,7 @@ PLANNING_THRESHOLD=15
 
 # Categories that are auto-approved — built without human review (space-separated).
 # All other categories require human approval via GitHub Issue labels.
-# Valid categories: bug testing feature improvement sunset refactor security ui_ux documentation
+# Valid categories: bug testing feature improvement sunset refactor security ui_ux documentation experience
 AUTO_APPROVE="bug security testing documentation"
 
 # --- Engines & Models ---
@@ -37,6 +37,15 @@ BUILD_ENGINE=claude
 
 # Model for the post-build heal agent (default: sonnet)
 HEAL_MODEL=sonnet
+
+# --- Build Journal ---
+
+# Model for the AI journal summarization pass (default: sonnet)
+# Use a capable model (sonnet or better) for accurate build summaries.
+JOURNAL_MODEL=sonnet
+
+# Maximum journal entries to retain (default: 30)
+MAX_JOURNAL_ENTRIES=30
 
 # --- Behavior Defaults ---
 

@@ -411,13 +411,15 @@ Fry improves itself via an automated loop driven by `.self-improve/orchestrate.s
 |------|---------|
 | `orchestrate.sh` | Bash orchestrator — planning, build, merge/PR, cleanup |
 | `executive.md` | Static directive copied to `plans/` before each run |
-| `planning-prompt.md` | User prompt for codebase scanning (9 categories) |
+| `planning-prompt.md` | User prompt for codebase scanning (10 categories) |
 | `build-prompt.md` | User prompt for implementation (Fry selects items) |
+| `build-journal.json` | Build history — last 30 entries, used by planning for experience category |
+| `config` | KEY=VALUE configuration (overrides script defaults) |
 | `logs/` | Per-run timestamped log files |
 
 The roadmap lives in GitHub Issues (labels: category/*, priority/*, effort/*, status/*). See docs/self-improvement.md for the full architecture.
 
-**Flow:** Planning (scan codebase → append findings to roadmap) → Build (select items → worktree → implement → test → merge/PR). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance).
+**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (select items → worktree → implement → test → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). After each build, a structured journal entry is written to `build-journal.json` with outcome, items, heal rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
 
 **Key flags:** `--auto-merge` (direct merge to master), `--skip-planning`, `--skip-build`, `--dry-run`.
 

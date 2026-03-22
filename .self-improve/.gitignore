@@ -3,3 +3,4 @@ orchestrate.log
 logs/
 .lock
 .last-build-status
+build-journal.json

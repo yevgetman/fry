@@ -26,6 +26,7 @@ EXECUTIVE="$SCRIPT_DIR/executive.md"
 PLANNING_PROMPT="$SCRIPT_DIR/planning-prompt.md"
 BUILD_PROMPT="$SCRIPT_DIR/build-prompt.md"
 LAST_BUILD_STATUS="$SCRIPT_DIR/.last-build-status"
+BUILD_JOURNAL="$SCRIPT_DIR/build-journal.json"
 
 # --- Defaults (overridden by config file, then by CLI flags) ---
 MAX_BUILD_ITEMS=3
@@ -36,6 +37,8 @@ AUTO_APPROVE="bug security testing documentation"
 PLANNING_ENGINE=claude
 BUILD_ENGINE=claude
 HEAL_MODEL=sonnet
+JOURNAL_MODEL=sonnet
+MAX_JOURNAL_ENTRIES=30
 DATE="$(date +%Y-%m-%d)"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 
@@ -71,6 +74,7 @@ AUTO_MERGE="${AUTO_MERGE:-false}"
 WORKTREE_DIR=""
 BUILD_BRANCH=""
 PR_CREATED=false
+ACTUAL_MERGE_METHOD="none"
 
 # --- Argument parsing ---
 for arg in "$@"; do
@@ -329,6 +333,7 @@ create_issue_from_finding() {
         security)      category_label="Security" ;;
         ui_ux)         category_label="UI/UX" ;;
         documentation) category_label="Documentation" ;;
+        experience)    category_label="Experience" ;;
         *)             category_label="$(echo "$category" | sed 's/.*/\u&/')" ;;
     esac
 
@@ -473,6 +478,14 @@ run_planning_phase() {
     log "Exporting existing issues for deduplication..."
     export_issues_json "$REPO_DIR/assets/existing-issues.json"
     log "  Exported $(jq 'length' "$REPO_DIR/assets/existing-issues.json") existing issues"
+
+    # Export build journal if it exists (for experience category analysis)
+    if [ -f "$BUILD_JOURNAL" ]; then
+        cp "$BUILD_JOURNAL" "$REPO_DIR/assets/build-journal.json"
+        log "  Exported build journal ($(jq 'length' "$REPO_DIR/assets/build-journal.json") entries)"
+    else
+        log "  No build journal yet — skipping journal export"
+    fi
 
     if [ "$DRY_RUN" = true ]; then
         log "[DRY RUN] Would run Fry planning scan"
@@ -696,6 +709,7 @@ run_build_phase() {
     # and chooses items before building the epic
     log "Running Fry build in worktree..."
     local build_success=true
+    local final_heal_rounds=0
     if ! fry run \
         --user-prompt-file "$BUILD_PROMPT" \
         --engine "$BUILD_ENGINE" \
@@ -771,6 +785,7 @@ HEALPROMPT
                     log "Post-build heal attempt $heal_attempt FAILED"
                 fi
             done
+            final_heal_rounds="$heal_attempt"
 
             if [ "$healed" != true ]; then
                 log "WARNING: Post-build healing exhausted ($MAX_POST_BUILD_HEALS attempts)"
@@ -805,6 +820,13 @@ HEALPROMPT
         handle_build_failure "$worked_numbers"
         echo "failure" > "$LAST_BUILD_STATUS"
     fi
+
+    # Generate build journal entry (before worktree removal — needs worktree data)
+    generate_journal_entry \
+        "$( [ "$build_success" = true ] && echo "success" || echo "failure" )" \
+        "$worked_numbers" \
+        "$final_heal_rounds" \
+        "$ACTUAL_MERGE_METHOD"
 
     # Clean up worktree
     log "Removing worktree..."
@@ -855,6 +877,7 @@ handle_build_auto_merge() {
 
     log "Auto-merged and pushed: ${num_list}"
     PR_CREATED=true  # Prevents cleanup from deleting the branch prematurely
+    ACTUAL_MERGE_METHOD="auto-merge"
 
     # Close worked issues
     for num in $worked_numbers; do
@@ -954,6 +977,7 @@ EOF
 
     log "PR created: $pr_url"
     PR_CREATED=true
+    ACTUAL_MERGE_METHOD="pr"
 }
 
 # Handle failed build: comment on issues and potentially add max-attempts label
@@ -979,6 +1003,168 @@ handle_build_failure() {
             log "  #$num: attempt $attempt_count/$MAX_ATTEMPTS"
         fi
     done
+}
+
+# ===========================================================================
+# BUILD JOURNAL
+# ===========================================================================
+
+# Generate a build journal entry and append it to the journal file.
+# Called after every build (success or failure), before worktree removal.
+# Arguments: $1=outcome, $2=worked_numbers, $3=heal_rounds_total, $4=merge_method
+generate_journal_entry() {
+    local outcome="$1"
+    local worked_numbers="$2"
+    local heal_rounds_total="${3:-0}"
+    local merge_method="${4:-none}"
+
+    log "Generating build journal entry..."
+
+    # --- Mechanical extraction ---
+
+    # Build items_attempted array from approved-items.json + worked-items manifest
+    local items_attempted="[]"
+    local approved_file=""
+    if [ -n "$WORKTREE_DIR" ] && [ -f "$WORKTREE_DIR/assets/approved-items.json" ]; then
+        approved_file="$WORKTREE_DIR/assets/approved-items.json"
+    fi
+
+    if [ -n "$approved_file" ] && [ -n "$worked_numbers" ]; then
+        local items_json=""
+        for num in $worked_numbers; do
+            # Validate numeric
+            [[ "$num" =~ ^[0-9]+$ ]] || continue
+
+            local item_json
+            item_json="$(jq --argjson n "$num" '.[] | select(.number == $n)' "$approved_file" 2>/dev/null)" || true
+            if [ -n "$item_json" ]; then
+                local title category effort item_result
+                title="$(echo "$item_json" | jq -r '.title')"
+                category="$(echo "$item_json" | jq -r '.category')"
+                effort="$(echo "$item_json" | jq -r '.effort')"
+                # Determine per-item result
+                item_result="$outcome"
+                if [ "$outcome" = "success" ] && [ "$heal_rounds_total" -gt 0 ]; then
+                    item_result="healed"
+                fi
+                local one_item
+                one_item="$(jq -n \
+                    --argjson issue "$num" \
+                    --arg title "$title" \
+                    --arg category "$category" \
+                    --arg effort "$effort" \
+                    --arg result "$item_result" \
+                    --argjson heal "$heal_rounds_total" \
+                    '{issue: $issue, title: $title, category: $category, effort: $effort, result: $result, heal_rounds: $heal}')"
+                if [ -z "$items_json" ]; then
+                    items_json="$one_item"
+                else
+                    items_json="${items_json}
+${one_item}"
+                fi
+            fi
+        done
+        if [ -n "$items_json" ]; then
+            items_attempted="$(echo "$items_json" | jq -s '.')"
+        fi
+    fi
+
+    # Get files changed from the worktree
+    local files_changed="[]"
+    if [ -n "$WORKTREE_DIR" ] && [ -d "$WORKTREE_DIR" ]; then
+        files_changed="$(cd "$WORKTREE_DIR" && git diff master --name-only 2>/dev/null | jq -R . | jq -s '.')" || files_changed="[]"
+    fi
+
+    # Determine tests_passed
+    local tests_passed=false
+    if [ "$outcome" = "success" ]; then
+        tests_passed=true
+    fi
+
+    # --- AI summarization pass (non-fatal) ---
+    local observations=""
+    if [ -n "$RUN_LOG" ] && [ -f "$RUN_LOG" ]; then
+        log "Running AI summarization for journal entry..."
+        local journal_ai_prompt
+        journal_ai_prompt="$(cat <<AIPROMPT
+Analyze this self-improvement build log and produce a brief (2-4 sentences) observation summary. Focus on: recurring patterns, fragility, difficulty mismatches (effort estimate vs actual), edge cases encountered, and anything surprising or notable. Output ONLY the summary text — no JSON, no markdown headers, no bullet points.
+
+Build outcome: ${outcome}
+Heal rounds: ${heal_rounds_total}
+Merge method: ${merge_method}
+Items attempted: $(echo "$items_attempted" | jq -c '.')
+
+Build log (last 200 lines):
+$(tail -200 "$RUN_LOG" 2>/dev/null || echo "Log unavailable")
+AIPROMPT
+)"
+
+        observations="$(echo "$journal_ai_prompt" | claude -p --model "${JOURNAL_MODEL}" 2>/dev/null)" || true
+        # Sanitize: limit length, collapse whitespace
+        if [ -n "$observations" ]; then
+            observations="$(echo "$observations" | head -10 | tr '\n' ' ' | sed 's/  */ /g')"
+            if [ ${#observations} -gt 500 ]; then
+                observations="${observations:0:497}..."
+            fi
+        fi
+    fi
+    if [ -z "$observations" ]; then
+        observations="AI summarization unavailable for this run."
+    fi
+
+    # --- Build the journal entry JSON ---
+    local entry
+    entry="$(jq -n \
+        --arg run_id "$RUN_ID" \
+        --arg date "$DATE" \
+        --arg outcome "$outcome" \
+        --argjson items "$items_attempted" \
+        --argjson heal_rounds "$heal_rounds_total" \
+        --arg merge_method "$merge_method" \
+        --argjson files_changed "$files_changed" \
+        --argjson tests_passed "$tests_passed" \
+        --arg observations "$observations" \
+        '{
+            run_id: $run_id,
+            date: $date,
+            outcome: $outcome,
+            items_attempted: $items,
+            heal_rounds_total: $heal_rounds,
+            merge_method: $merge_method,
+            files_changed: $files_changed,
+            tests_passed: $tests_passed,
+            observations: $observations
+        }'
+    )"
+
+    # --- Append to journal and prune ---
+    append_journal_entry "$entry"
+    log "Journal entry recorded for run $RUN_ID"
+}
+
+# Append an entry to the journal file, pruning to MAX_JOURNAL_ENTRIES.
+# Handles: missing file, corrupt file, concurrent access (lock-guarded).
+append_journal_entry() {
+    local entry="$1"
+
+    local journal="$BUILD_JOURNAL"
+    local existing="[]"
+
+    # Read existing journal (handle missing or corrupt file)
+    if [ -f "$journal" ]; then
+        existing="$(jq -e 'if type == "array" then . else [] end' "$journal" 2>/dev/null)" || existing="[]"
+    fi
+
+    # Prepend new entry (newest first), then prune to limit
+    local updated
+    updated="$(echo "$existing" | jq --argjson entry "$entry" --argjson max "$MAX_JOURNAL_ENTRIES" \
+        '[$entry] + . | .[:$max]')"
+
+    # Write atomically via temp file
+    local tmp_journal
+    tmp_journal="$(mktemp)"
+    echo "$updated" > "$tmp_journal"
+    mv "$tmp_journal" "$journal"
 }
 
 # ===========================================================================

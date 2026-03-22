@@ -247,6 +247,52 @@ begin_test "config: partial config keeps other defaults"
     pass
 ) || true
 
+begin_test "config: JOURNAL_MODEL default"
+(
+    JOURNAL_MODEL=sonnet
+    CONFIG_FILE="/nonexistent/config"
+    assert_eq "sonnet" "$JOURNAL_MODEL" "JOURNAL_MODEL default" && pass
+) || true
+
+begin_test "config: JOURNAL_MODEL override"
+(
+    tmp_config="$(mktemp)"
+    trap "rm -f $tmp_config" EXIT
+    echo "JOURNAL_MODEL=opus" > "$tmp_config"
+    JOURNAL_MODEL=sonnet
+    CONFIG_FILE="$tmp_config"
+    while IFS='=' read -r key value; do
+        key="$(echo "$key" | xargs)"
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        value="$(echo "$value" | sed 's/#.*//' | xargs)"
+        declare "$key=$value" 2>/dev/null || true
+    done < "$CONFIG_FILE"
+    assert_eq "opus" "$JOURNAL_MODEL" "JOURNAL_MODEL overridden" && pass
+) || true
+
+begin_test "config: MAX_JOURNAL_ENTRIES default"
+(
+    MAX_JOURNAL_ENTRIES=30
+    CONFIG_FILE="/nonexistent/config"
+    assert_eq "30" "$MAX_JOURNAL_ENTRIES" "MAX_JOURNAL_ENTRIES default" && pass
+) || true
+
+begin_test "config: MAX_JOURNAL_ENTRIES override"
+(
+    tmp_config="$(mktemp)"
+    trap "rm -f $tmp_config" EXIT
+    echo "MAX_JOURNAL_ENTRIES=50" > "$tmp_config"
+    MAX_JOURNAL_ENTRIES=30
+    CONFIG_FILE="$tmp_config"
+    while IFS='=' read -r key value; do
+        key="$(echo "$key" | xargs)"
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        value="$(echo "$value" | sed 's/#.*//' | xargs)"
+        declare "$key=$value" 2>/dev/null || true
+    done < "$CONFIG_FILE"
+    assert_eq "50" "$MAX_JOURNAL_ENTRIES" "MAX_JOURNAL_ENTRIES overridden" && pass
+) || true
+
 # ===========================================================================
 # Category Classification
 # ===========================================================================
@@ -280,6 +326,9 @@ begin_test "auto-approve: sunset needs approval"
 begin_test "auto-approve: ui_ux needs approval"
 ! is_auto_approve_category "ui_ux" && pass || fail "ui_ux should need approval"
 
+begin_test "auto-approve: experience needs approval"
+! is_auto_approve_category "experience" && pass || fail "experience should need approval"
+
 begin_test "auto-approve: unknown category needs approval"
 ! is_auto_approve_category "unknown_thing" && pass || fail "unknown should need approval"
 
@@ -302,6 +351,7 @@ get_category_label() {
         security)      echo "Security" ;;
         ui_ux)         echo "UI/UX" ;;
         documentation) echo "Documentation" ;;
+        experience)    echo "Experience" ;;
         *)             echo "$category" | sed 's/.*/\u&/' ;;
     esac
 }
@@ -321,10 +371,13 @@ assert_eq "Documentation" "$(get_category_label documentation)" && pass || true
 begin_test "label: security → Security"
 assert_eq "Security" "$(get_category_label security)" && pass || true
 
-begin_test "label: all 9 categories have mappings"
+begin_test "label: experience → Experience"
+assert_eq "Experience" "$(get_category_label experience)" && pass || true
+
+begin_test "label: all 10 categories have mappings"
 (
     all_ok=true
-    for cat in bug testing feature improvement sunset refactor security ui_ux documentation; do
+    for cat in bug testing feature improvement sunset refactor security ui_ux documentation experience; do
         label="$(get_category_label "$cat")"
         if [ -z "$label" ]; then
             all_ok=false
@@ -415,6 +468,111 @@ begin_test "config: no syntax errors when sourced"
     done < "$tmp_config"
     pass
 ) || fail "config parse error"
+
+# ===========================================================================
+# Build Journal
+# ===========================================================================
+echo ""
+echo "--- Build Journal ---"
+
+begin_test "journal: append creates file from scratch"
+(
+    tmp_journal="$(mktemp)"
+    rm -f "$tmp_journal"  # start with no file
+    BUILD_JOURNAL="$tmp_journal"
+    MAX_JOURNAL_ENTRIES=30
+
+    entry='{"run_id":"test-001","date":"2026-01-01","outcome":"success"}'
+    append_journal_entry "$entry"
+
+    assert_eq "1" "$(jq 'length' "$tmp_journal")" "single entry" &&
+    assert_eq "test-001" "$(jq -r '.[0].run_id' "$tmp_journal")" "run_id" &&
+    pass
+    rm -f "$tmp_journal"
+) || true
+
+begin_test "journal: append prepends newest first"
+(
+    tmp_journal="$(mktemp)"
+    echo '[{"run_id":"old","date":"2026-01-01","outcome":"success"}]' > "$tmp_journal"
+    BUILD_JOURNAL="$tmp_journal"
+    MAX_JOURNAL_ENTRIES=30
+
+    entry='{"run_id":"new","date":"2026-01-02","outcome":"failure"}'
+    append_journal_entry "$entry"
+
+    assert_eq "2" "$(jq 'length' "$tmp_journal")" "two entries" &&
+    assert_eq "new" "$(jq -r '.[0].run_id' "$tmp_journal")" "newest first" &&
+    assert_eq "old" "$(jq -r '.[1].run_id' "$tmp_journal")" "oldest second" &&
+    pass
+    rm -f "$tmp_journal"
+) || true
+
+begin_test "journal: prunes to MAX_JOURNAL_ENTRIES"
+(
+    tmp_journal="$(mktemp)"
+    # Create journal with 30 entries
+    jq -n '[range(30) | {run_id: ("entry-" + tostring), date: "2026-01-01"}]' > "$tmp_journal"
+    BUILD_JOURNAL="$tmp_journal"
+    MAX_JOURNAL_ENTRIES=30
+
+    entry='{"run_id":"entry-new","date":"2026-01-02"}'
+    append_journal_entry "$entry"
+
+    assert_eq "30" "$(jq 'length' "$tmp_journal")" "pruned to 30" &&
+    assert_eq "entry-new" "$(jq -r '.[0].run_id' "$tmp_journal")" "newest is first" &&
+    pass
+    rm -f "$tmp_journal"
+) || true
+
+begin_test "journal: corrupt file recovers gracefully"
+(
+    tmp_journal="$(mktemp)"
+    echo "NOT VALID JSON" > "$tmp_journal"
+    BUILD_JOURNAL="$tmp_journal"
+    MAX_JOURNAL_ENTRIES=30
+
+    entry='{"run_id":"recovery","date":"2026-01-01"}'
+    append_journal_entry "$entry"
+
+    assert_eq "1" "$(jq 'length' "$tmp_journal")" "recovered with single entry" &&
+    assert_eq "recovery" "$(jq -r '.[0].run_id' "$tmp_journal")" "correct entry" &&
+    pass
+    rm -f "$tmp_journal"
+) || true
+
+begin_test "journal: missing file creates new journal"
+(
+    tmp_journal="/tmp/fry-test-journal-$$-missing.json"
+    rm -f "$tmp_journal"
+    BUILD_JOURNAL="$tmp_journal"
+    MAX_JOURNAL_ENTRIES=30
+
+    entry='{"run_id":"first","date":"2026-01-01"}'
+    append_journal_entry "$entry"
+
+    [ -f "$tmp_journal" ] || { fail "file not created"; }
+    assert_eq "1" "$(jq 'length' "$tmp_journal")" "single entry" &&
+    pass
+    rm -f "$tmp_journal"
+) || true
+
+begin_test "journal: small MAX_JOURNAL_ENTRIES prunes correctly"
+(
+    tmp_journal="$(mktemp)"
+    echo '[{"run_id":"a"},{"run_id":"b"},{"run_id":"c"}]' > "$tmp_journal"
+    BUILD_JOURNAL="$tmp_journal"
+    MAX_JOURNAL_ENTRIES=2
+
+    entry='{"run_id":"d"}'
+    append_journal_entry "$entry"
+
+    assert_eq "2" "$(jq 'length' "$tmp_journal")" "pruned to 2" &&
+    assert_eq "d" "$(jq -r '.[0].run_id' "$tmp_journal")" "newest" &&
+    assert_eq "a" "$(jq -r '.[1].run_id' "$tmp_journal")" "second" &&
+    pass
+    rm -f "$tmp_journal"
+) || true
 
 # ===========================================================================
 # Results

@@ -19,7 +19,9 @@ An orchestrator script (`.self-improve/orchestrate.sh`) drives the loop. It can 
 ├── executive.md            # Static directive — context for Fry about the loop
 ├── planning-prompt.md      # User prompt for the planning phase
 ├── build-prompt.md         # User prompt for the build phase
-├── .gitignore              # Excludes logs, lock, status files
+├── config                  # KEY=VALUE configuration (overrides script defaults)
+├── build-journal.json      # Build history — last 30 entries (auto-generated)
+├── .gitignore              # Excludes logs, lock, status, journal files
 ├── logs/                   # Per-run log files (timestamped)
 └── 2026-03-19-roadmap.md   # Historical first roadmap (archive)
 ```
@@ -42,6 +44,7 @@ GitHub Issues is the single source of truth for all open items. Each issue is ma
 | `category/security` | Security fixes |
 | `category/ui_ux` | Terminal output and user flows |
 | `category/documentation` | Documentation updates |
+| `category/experience` | Build experience insights |
 | `status/proposed` | Awaiting human approval |
 | `status/approved` | Ready to build |
 | `priority/high` | High priority |
@@ -57,7 +60,7 @@ GitHub Issues is the single source of truth for all open items. Each issue is ma
 | Tier | Categories | Behavior |
 |---|---|---|
 | **Auto-approve** | bug, security, testing, documentation | Created with `status/approved` — built immediately |
-| **Needs approval** | feature, improvement, refactor, sunset, ui_ux | Created with `status/proposed` — requires human to add `status/approved` |
+| **Needs approval** | feature, improvement, refactor, sunset, ui_ux, experience | Created with `status/proposed` — requires human to add `status/approved` |
 
 ### Issue Format
 
@@ -116,6 +119,7 @@ The planning phase scans the codebase for new issues across 9 categories:
 | Security | Injection vectors, unsafe input, secrets exposure |
 | UI/UX | Terminal output, error messages, user flows |
 | Documentation | Stale docs, missing sections, inaccurate references |
+| Experience | Build journal patterns, effort mismatches, pipeline improvements |
 
 ### When planning runs
 
@@ -173,6 +177,41 @@ If `make test && make build` fails after Fry completes:
 5. If healed: the fix is committed and the build proceeds to merge/PR
 6. If exhausted: the build is marked as failed
 
+## Build Journal
+
+After every build (success or failure), the orchestrator generates a structured journal entry capturing what happened. The journal serves two purposes:
+
+1. **Operational record** — track build outcomes, healing rounds, and merge methods over time
+2. **Pattern source** — during planning, the AI analyzes the journal to discover experience-based improvements
+
+### Journal file
+
+`.self-improve/build-journal.json` — A JSON array of entries, newest first. Bounded to the last 30 entries (configurable via `MAX_JOURNAL_ENTRIES`). Not committed to git.
+
+### Entry structure
+
+Each entry contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `run_id` | string | Orchestrator run ID (e.g., `20260322-131636`) |
+| `date` | string | Build date (YYYY-MM-DD) |
+| `outcome` | string | `success` or `failure` |
+| `items_attempted` | array | Per-item details: issue number, title, category, effort, result, heal rounds |
+| `heal_rounds_total` | number | Total post-build heal attempts used |
+| `merge_method` | string | `auto-merge`, `pr`, or `none` |
+| `files_changed` | array | List of files modified in the build |
+| `tests_passed` | boolean | Whether `make test` passed |
+| `observations` | string | AI-generated summary of notable patterns |
+
+### AI summarization
+
+After mechanical extraction, the orchestrator runs an AI model (configurable via `JOURNAL_MODEL`, default: `sonnet`) to analyze the build log and produce a brief observations field. The AI looks for recurring patterns, fragility, effort mismatches, and anything surprising. If summarization fails, a fallback message is used — journal generation never blocks the build.
+
+### Experience category
+
+During planning, if the journal exists, it is exported to `assets/build-journal.json`. The planning prompt includes **Category J: Build Experience**, which instructs the AI to analyze the journal for patterns and propose experience-based improvements. Experience findings are always created with `status/proposed` (never auto-approved) to ensure human review.
+
 ## The Orchestrator
 
 `.self-improve/orchestrate.sh` is the glue script. It handles:
@@ -189,6 +228,7 @@ If `make test && make build` fails after Fry completes:
 - **PR creation** — with `Closes #N` for auto-closing issues on merge
 - **Auto-merge** — optional direct merge to master with `--auto-merge`
 - **Failure tracking** — comments on issues on failure, adds `max-attempts` label at threshold
+- **Build journal** — generates structured journal entries after every build for experience-based planning
 - **Per-run logging** — timestamped log files in `.self-improve/logs/`
 
 ### Flags
@@ -266,7 +306,7 @@ The self-improvement loop uses several Fry features:
 
 ## Configuration
 
-Constants at the top of `orchestrate.sh`:
+Constants at the top of `orchestrate.sh`, overridable via `.self-improve/config`:
 
 | Constant | Default | Description |
 |---|---|---|
@@ -274,6 +314,8 @@ Constants at the top of `orchestrate.sh`:
 | `MAX_ATTEMPTS` | 3 | Skip items that have failed this many times |
 | `MAX_POST_BUILD_HEALS` | 3 | Heal attempts for post-build test/build failures |
 | `PLANNING_THRESHOLD` | 15 | Skip planning if this many open issues exist |
+| `JOURNAL_MODEL` | sonnet | AI model for build journal summarization |
+| `MAX_JOURNAL_ENTRIES` | 30 | Maximum entries retained in build journal |
 
 ## Safety
 
