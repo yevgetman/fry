@@ -109,6 +109,19 @@ func TestWriteErrorOnUnwritablePath(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestWriteFilePermissions(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "build-report.json")
+
+	require.NoError(t, Write(path, BuildReport{EpicName: "Perms Test"}))
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+}
+
 func TestWriteIsAtomic(t *testing.T) {
 	t.Parallel()
 

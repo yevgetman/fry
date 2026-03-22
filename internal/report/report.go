@@ -79,6 +79,10 @@ func Write(path string, r BuildReport) error {
 		os.Remove(tmpName)
 		return fmt.Errorf("report: close temp file: %w", err)
 	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("report: chmod temp file: %w", err)
+	}
 	if err := os.Rename(tmpName, path); err != nil {
 		os.Remove(tmpName)
 		return fmt.Errorf("report: rename temp file: %w", err)
