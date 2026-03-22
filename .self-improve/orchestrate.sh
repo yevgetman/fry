@@ -572,33 +572,48 @@ sync_comment_approvals() {
         return 0
     fi
 
+    # Get the repo owner login for author filtering
+    local repo_owner
+    repo_owner="$(gh api repos/{owner}/{repo} --jq '.owner.login' 2>/dev/null || echo "")"
+
     local synced=0
     for num in $proposed_issues; do
-        # Check if any comment contains "approve" (case-insensitive)
+        # Check if any comment from the repo owner contains "approve", "approved", or thumbs up
         local has_approve
         has_approve="$(gh issue view "$num" \
             --json comments \
-            -q '[.comments[].body | ascii_downcase | test("\\bapprove\\b")] | any' \
+            -q --arg owner "$repo_owner" '
+                [.comments[] |
+                    select(.author.login == $owner) |
+                    .body | ascii_downcase |
+                    test("\\bapproved?\\b") or test("\ud83d\udc4d")
+                ] | any' \
             2>/dev/null || echo "false")"
 
         if [ "$has_approve" = "true" ]; then
-            log "  #$num: found /approve comment — swapping labels"
+            log "  #$num: found approve from $repo_owner — swapping labels"
             gh issue edit "$num" \
                 --remove-label "$LABEL_STATUS_PROPOSED" \
                 --add-label "$LABEL_STATUS_APPROVED" \
                 2>/dev/null || log "  WARNING: failed to update labels on #$num"
             synced=$((synced + 1))
+            continue
         fi
 
-        # Check if any comment contains "reject" (case-insensitive)
+        # Check if any comment from the repo owner contains "reject" or "rejected"
         local has_reject
         has_reject="$(gh issue view "$num" \
             --json comments \
-            -q '[.comments[].body | ascii_downcase | test("\\breject\\b")] | any' \
+            -q --arg owner "$repo_owner" '
+                [.comments[] |
+                    select(.author.login == $owner) |
+                    .body | ascii_downcase |
+                    test("\\brejected?\\b")
+                ] | any' \
             2>/dev/null || echo "false")"
 
         if [ "$has_reject" = "true" ]; then
-            log "  #$num: found /reject comment — closing issue"
+            log "  #$num: found reject from $repo_owner — closing issue"
             gh issue close "$num" \
                 --reason "not planned" \
                 2>/dev/null || log "  WARNING: failed to close #$num"
