@@ -6,6 +6,8 @@
 
 Fry is an agent orchestration tool designed for long-run coding, planning, and writing tasks. You provide some input — as little as a simple prompt or as much as a comprehensive build plan with an extensive corpus of supporting documents — and it will apply a layered system of planning, building, and checking its own work to produce a result with the level of effort of your choosing. To put it simply, **you give it as much or as little you want, and it will do as much or as little as you want it to do.**
 
+Fry is also a self-improving codebase. An automated pipeline scans its own source code daily, identifies bugs, test gaps, and feature opportunities, implements approved fixes, and merges the results — learning from previous build outcomes to write its own code, improving itself with each build. See [Self-Improvement Pipeline](docs/self-improvement.md).
+
 ### What does it actually do?
 
 Fry can code, write [planning documents](docs/planning-mode.md), or write human-language content like essays, technical writing, and can even [write a complete book](docs/writing-mode.md)!
