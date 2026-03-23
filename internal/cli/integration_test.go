@@ -358,6 +358,38 @@ func TestTriageOnlyWithExistingEpic(t *testing.T) {
 	assert.Contains(t, guardErr.Error(), epicArg)
 }
 
+func TestCheckArgsForMissingDashes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{"flag without dashes", []string{"user-prompt-file", "./plan.md"}, `"user-prompt-file" looks like a flag — did you mean --user-prompt-file?`},
+		{"engine without dashes", []string{"engine", "claude"}, `"engine" looks like a flag — did you mean --engine?`},
+		{"normal epic path", []string{".fry/epic.md"}, ""},
+		{"absolute path", []string{"/tmp/epic.md"}, ""},
+		{"relative path", []string{"./plans/epic.md"}, ""},
+		{"sprint number", []string{".fry/epic.md", "1", "3"}, ""},
+		{"proper flag not caught", []string{"--engine", "claude"}, ""},
+		{"unknown word is fine", []string{"myepic.md"}, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := checkArgsForMissingDashes(runCmd, tt.args)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantErr, err.Error())
+			}
+		})
+	}
+}
+
 func runRepoCommand(t *testing.T, name string, args ...string) {
 	t.Helper()
 

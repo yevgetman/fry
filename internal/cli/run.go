@@ -80,6 +80,10 @@ var runCmd = &cobra.Command{
 	Short: "Run fry against an epic",
 	Args:  cobra.MaximumNArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := checkArgsForMissingDashes(cmd, args); err != nil {
+			return err
+		}
+
 		projectPath, err := resolveProjectDir(projectDir)
 		if err != nil {
 			return err
@@ -1284,6 +1288,28 @@ func userPromptSource(prompt, flagValue, fileFlagValue string) string {
 		return "--user-prompt flag"
 	}
 	return config.UserPromptFile
+}
+
+// checkArgsForMissingDashes detects positional arguments that look like flag names
+// without the leading "--". This catches common mistakes like
+// "fry run user-prompt-file ./file.md" instead of "fry run --user-prompt-file ./file.md".
+func checkArgsForMissingDashes(cmd *cobra.Command, args []string) error {
+	for _, arg := range args {
+		// Skip args that start with dashes (already a flag) or look like file paths.
+		if strings.HasPrefix(arg, "-") || strings.HasPrefix(arg, "/") || strings.HasPrefix(arg, ".") {
+			continue
+		}
+		// Check if this arg matches a known flag name on this command or its parent.
+		if f := cmd.Flags().Lookup(arg); f != nil {
+			return fmt.Errorf("%q looks like a flag — did you mean --%s?", arg, arg)
+		}
+		if cmd.HasParent() {
+			if f := cmd.Parent().Flags().Lookup(arg); f != nil {
+				return fmt.Errorf("%q looks like a flag — did you mean --%s?", arg, arg)
+			}
+		}
+	}
+	return nil
 }
 
 func resolveEpicPath(projectDir, requested string) (string, bool, error) {

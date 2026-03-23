@@ -25,6 +25,10 @@ var prepareCmd = &cobra.Command{
 	Short: "Prepare a project for fry",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := checkArgsForMissingDashes(cmd, args); err != nil {
+			return err
+		}
+
 		projectPath, err := resolveProjectDir(projectDir)
 		if err != nil {
 			return err
