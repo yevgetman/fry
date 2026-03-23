@@ -220,6 +220,41 @@ fry clean --project-dir /path/to/proj  # Archive a different project
 
 ---
 
+## `fry init`
+
+Scaffold the fry project structure in the current (or specified) directory. Creates `plans/`, `assets/`, and `media/` directories, writes a `plan.example.md` template, initializes a git repository, and configures `.gitignore` with fry entries.
+
+```
+fry init [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--project-dir <path>` | Project directory to operate on (default: current directory) |
+
+### Behavior
+
+1. Creates `plans/`, `assets/`, and `media/` directories if they don't exist.
+2. Writes `plans/plan.example.md` with a starter template for reference.
+3. Initializes a git repository if one doesn't exist.
+4. Adds `.fry/`, `.fry-archive/`, `.env`, `.DS_Store`, and `.fry-worktrees/` to `.gitignore`.
+5. Prints created items and next steps.
+
+`fry init` does **not** create `plans/plan.md`. You write that yourself using `plan.example.md` as a reference, or provide a `--user-prompt` to `fry prepare` / `fry run` and fry will generate the plan for you (the normal flow via `executive.md` and/or prompt).
+
+Running `fry init` in an already-initialized project is safe — it only creates missing directories and always refreshes the example file.
+
+### Examples
+
+```bash
+fry init                                # Initialize in the current directory
+fry init --project-dir /path/to/proj    # Initialize a different directory
+```
+
+---
+
 ## `fry version`
 
 Print the Fry version string.

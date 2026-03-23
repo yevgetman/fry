@@ -53,6 +53,8 @@ your-project/
 
 Unlike the bash version, Fry is installed as a standalone binary — it does not live inside your project's `.fry/` directory. The `.fry/` directory contains only generated artifacts.
 
+To scaffold this structure in a new project, run `fry init`. This creates `plans/`, `assets/`, and `media/` directories with a `plan.example.md` template, initializes git, and configures `.gitignore`. You then write your own `plans/plan.md` or provide a `--user-prompt` to let fry generate one.
+
 ## File Reference
 
 ### Input Files (Your Authorship)

@@ -50,6 +50,7 @@ func init() {
 	rootCmd.AddCommand(prepareCmd)
 	rootCmd.AddCommand(replanCmd)
 	rootCmd.AddCommand(cleanCmd)
+	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 

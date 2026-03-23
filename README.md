@@ -180,6 +180,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | Command | Description |
 |---|---|
 | `fry run` | Execute sprints from an epic file (default command) |
+| `fry init` | Scaffold the fry project structure (`plans/`, `assets/`, `media/`, git, `.gitignore`) |
 | `fry prepare` | Generate `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan |
 | `fry replan` | Replan an epic after a deviation |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |

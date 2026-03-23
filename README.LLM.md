@@ -20,9 +20,10 @@ Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex, Claude Code, or 
 fry/
 ├── cmd/fry/main.go              # Entry point — calls cli.Execute()
 ├── internal/
-│   ├── cli/                     # Cobra commands: root, run, prepare, replan, clean, version
+│   ├── cli/                     # Cobra commands: root, run, init, prepare, replan, clean, version
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose, --engine, etc.)
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
+│   │   ├── init.go              # Scaffold project structure (plans/, assets/, media/, git, .gitignore)
 │   │   ├── prepare.go           # Generate .fry/ artifacts from plans
 │   │   ├── replan.go            # Mid-build replanning
 │   │   ├── clean.go             # Archive .fry/ and build outputs to .fry-archive/
