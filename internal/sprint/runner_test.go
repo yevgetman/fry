@@ -915,7 +915,7 @@ func TestCompactSprintProgressMechanical(t *testing.T) {
 	assert.NotContains(t, result, "## Iteration 1")
 }
 
-func TestCompactSprintProgressAgentNilEngine(t *testing.T) {
+func TestCompactSprintProgressAgentNilEngineRunner(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()

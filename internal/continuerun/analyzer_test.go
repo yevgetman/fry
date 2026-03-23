@@ -1,10 +1,33 @@
 package continuerun
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/engine"
 )
+
+type stubEngine struct {
+	output     string
+	exitCode   int
+	err        error
+	decisionFn func(workDir string)
+}
+
+func (s *stubEngine) Run(_ context.Context, _ string, opts engine.RunOpts) (string, int, error) {
+	if s.decisionFn != nil {
+		s.decisionFn(opts.WorkDir)
+	}
+	return s.output, s.exitCode, s.err
+}
+
+func (s *stubEngine) Name() string { return "stub" }
 
 func TestParseDecision(t *testing.T) {
 	t.Parallel()
@@ -285,4 +308,95 @@ func TestBuildAnalysisPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "<reason>")
 	assert.Contains(t, prompt, "continue-decision.txt")
 	assert.Contains(t, prompt, "TestEpic")
+}
+
+func TestAnalyzeSuccess(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry", "build-logs"), 0o755))
+
+	state := BuildState{TotalSprints: 2, EpicName: "Test"}
+	stub := stubEngine{
+		output: "<verdict>RESUME</verdict>\n<sprint>1</sprint>\n<reason>Sprint 1 incomplete.</reason>",
+	}
+
+	decision, err := Analyze(context.Background(), AnalyzeOpts{
+		ProjectDir: dir,
+		State:      &state,
+		Engine:     &stub,
+		Model:      "test-model",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, VerdictResume, decision.Verdict)
+	assert.Equal(t, 1, decision.StartSprint)
+	assert.FileExists(t, filepath.Join(dir, config.ContinueReportFile))
+	assert.FileExists(t, filepath.Join(dir, config.ContinuePromptFile))
+}
+
+func TestAnalyzeReadsDecisionFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry", "build-logs"), 0o755))
+
+	state := BuildState{TotalSprints: 2, EpicName: "Test"}
+	stub := stubEngine{
+		output: "<verdict>BLOCKED</verdict>",
+		decisionFn: func(workDir string) {
+			content := "<verdict>ALL_COMPLETE</verdict>\n<sprint>2</sprint>\n<reason>Done.</reason>"
+			_ = os.WriteFile(filepath.Join(workDir, config.ContinueDecisionFile), []byte(content), 0o644)
+		},
+	}
+
+	decision, err := Analyze(context.Background(), AnalyzeOpts{
+		ProjectDir: dir,
+		State:      &state,
+		Engine:     &stub,
+		Model:      "test-model",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, VerdictAllComplete, decision.Verdict)
+}
+
+func TestAnalyzeEngineNil(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	state := BuildState{TotalSprints: 2, EpicName: "Test"}
+
+	_, err := Analyze(context.Background(), AnalyzeOpts{
+		ProjectDir: dir,
+		State:      &state,
+		Engine:     nil,
+		Model:      "test-model",
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "engine is required")
+}
+
+func TestAnalyzeContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	state := BuildState{TotalSprints: 2, EpicName: "Test"}
+	stub := stubEngine{
+		err: ctx.Err(),
+	}
+
+	_, err := Analyze(ctx, AnalyzeOpts{
+		ProjectDir: dir,
+		State:      &state,
+		Engine:     &stub,
+		Model:      "test-model",
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
 }

@@ -293,7 +293,7 @@ func isMarkdownDivider(line string) bool {
 
 func warnUnknownDirective(line string) {
 	if isWarnableDirective(line) {
-		fmt.Fprintf(os.Stderr, "warning: unrecognized directive: %s\n", line)
+		fmt.Fprintf(os.Stderr, "fry: warning: unrecognized directive: %s\n", line)
 	}
 }
 

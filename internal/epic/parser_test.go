@@ -186,8 +186,8 @@ Prompt.
 `)
 	})
 
-	assert.Contains(t, output, "warning: unrecognized directive: @mystery value")
-	assert.Contains(t, output, "warning: unrecognized directive: @bogus nope")
+	assert.Contains(t, output, "fry: warning: unrecognized directive: @mystery value")
+	assert.Contains(t, output, "fry: warning: unrecognized directive: @bogus nope")
 }
 
 func TestParseBooleanFlags(t *testing.T) {
