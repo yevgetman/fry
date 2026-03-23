@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -598,6 +599,48 @@ func TestValidateEpic_MaxFailPercentOutOfRange(t *testing.T) {
 	assert.Contains(t, err.Error(), "@max_fail_percent must be between 0 and 100")
 }
 
+func TestParseEpicDeprecatedCodexModelWarning(t *testing.T) {
+	t.Parallel()
+
+	var ep *Epic
+	output := captureStderr(t, func() {
+		ep = parseTempEpic(t, `
+@epic Deprecated Model
+@codex_model gpt-5
+@sprint 1
+@name One
+@max_iterations 1
+@promise ONE
+@prompt
+Prompt.
+`)
+	})
+
+	assert.Contains(t, output, "fry: warning: @codex_model is deprecated; use @model instead")
+	assert.Equal(t, "gpt-5", ep.AgentModel)
+}
+
+func TestParseEpicDeprecatedCodexFlagsWarning(t *testing.T) {
+	t.Parallel()
+
+	var ep *Epic
+	output := captureStderr(t, func() {
+		ep = parseTempEpic(t, `
+@epic Deprecated Flags
+@codex_flags --profile fast
+@sprint 1
+@name One
+@max_iterations 1
+@promise ONE
+@prompt
+Prompt.
+`)
+	})
+
+	assert.Contains(t, output, "fry: warning: @codex_flags is deprecated; use @engine_flags instead")
+	assert.Equal(t, "--profile fast", ep.AgentFlags)
+}
+
 func parseTempEpic(t *testing.T, contents string) *Epic {
 	t.Helper()
 
@@ -611,8 +654,15 @@ func parseTempEpic(t *testing.T, contents string) *Epic {
 	return ep
 }
 
+// stderrMu serializes tests that redirect os.Stderr to avoid data races
+// when parallel tests concurrently modify the global os.Stderr pointer.
+var stderrMu sync.Mutex
+
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
+
+	stderrMu.Lock()
+	defer stderrMu.Unlock()
 
 	old := os.Stderr
 	r, w, err := os.Pipe()
