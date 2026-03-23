@@ -213,7 +213,9 @@ Prompt.
 func TestParseModelAliases(t *testing.T) {
 	t.Parallel()
 
-	ep := parseTempEpic(t, `
+	var ep *Epic
+	captureStderr(t, func() {
+		ep = parseTempEpic(t, `
 @epic Aliases
 @codex_model gpt-5
 @codex_flags --profile fast
@@ -224,6 +226,7 @@ func TestParseModelAliases(t *testing.T) {
 @prompt
 Prompt.
 `)
+	})
 
 	assert.Equal(t, "gpt-5", ep.AgentModel)
 	assert.Equal(t, "--profile fast", ep.AgentFlags)
