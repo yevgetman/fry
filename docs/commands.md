@@ -237,7 +237,6 @@ fry status [flags]
 ### Behavior
 
 - If no `.fry/epic.md` exists, prints "No active build found" and exits cleanly.
-- If `.fry/epic.md` exists but no `.fry/` artifacts are present, prints "No active build found" and exits cleanly.
 - Otherwise, prints a full build state report including sprint completion, environment readiness, deferred failures, and deviation count.
 
 ### Examples
