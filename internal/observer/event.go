@@ -93,7 +93,11 @@ func ReadEvents(projectDir string) ([]Event, error) {
 }
 
 // ReadRecentEvents reads the last n events.
+// Returns nil if n <= 0.
 func ReadRecentEvents(projectDir string, n int) ([]Event, error) {
+	if n <= 0 {
+		return nil, nil
+	}
 	events, err := ReadEvents(projectDir)
 	if err != nil {
 		return nil, err

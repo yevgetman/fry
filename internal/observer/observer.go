@@ -74,10 +74,12 @@ func InitBuild(projectDir string, epicName string, effort string, totalSprints i
 		return fmt.Errorf("init observer: create dir: %w", err)
 	}
 
-	// Reset scratchpad for this build
+	// Reset scratchpad and events for this build
 	if err := WriteScratchpad(projectDir, ""); err != nil {
 		return fmt.Errorf("init observer: reset scratchpad: %w", err)
 	}
+	eventsPath := filepath.Join(projectDir, config.ObserverEventsFile)
+	_ = os.Remove(eventsPath) // ignore error if file doesn't exist
 
 	// Ensure identity exists (seed from template if missing)
 	if _, err := EnsureIdentity(projectDir); err != nil {
@@ -142,6 +144,13 @@ func AppendScratchpad(projectDir string, text string) error {
 func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 	if opts.Engine == nil {
 		return nil, fmt.Errorf("observer wake-up: engine is required")
+	}
+
+	// Check context before doing work
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("observer wake-up: %w", ctx.Err())
+	default:
 	}
 
 	frylog.Log("▶ OBSERVER  wake=%s  sprint=%d/%d", opts.WakePoint, opts.SprintNum, opts.TotalSprints)
@@ -227,9 +236,8 @@ func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 	}
 
 	// 8. If identity updated, write new identity
-	if obs.IdentityEdited && obs.Thoughts != "" {
-		// Parse identity from the response
-		identityContent := extractIdentityUpdate(output)
+	if obs.IdentityEdited {
+		identityContent := extractTagContent(output, "identity_update")
 		if identityContent != "" {
 			if err := WriteIdentity(opts.ProjectDir, identityContent); err != nil {
 				frylog.Log("  OBSERVER: identity write failed: %v", err)
@@ -247,15 +255,3 @@ func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 	return obs, nil
 }
 
-// extractIdentityUpdate extracts the identity_update section from raw output.
-// This is used by WakeUp after parsing to get the full identity content.
-func extractIdentityUpdate(output string) string {
-	obs, err := parseObserverResponse(output)
-	if err != nil || obs == nil {
-		return ""
-	}
-	// The identity content is stored via the IdentityEdited flag
-	// and the actual content is in the identity_update tag
-	content := extractTagContent(output, "identity_update")
-	return content
-}

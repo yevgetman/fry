@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/yevgetman/fry/internal/config"
@@ -85,40 +86,43 @@ func buildObserverPrompt(opts ObserverOpts, identity, scratchpad string, events 
 		b.WriteString(fmt.Sprintf("Wake point: %s\n\n", opts.WakePoint))
 	}
 
-	// Include any build data
+	// Include any build data (sorted for deterministic output)
 	if len(opts.BuildData) > 0 {
 		b.WriteString("### Additional Build Data\n\n")
-		for k, v := range opts.BuildData {
-			b.WriteString(fmt.Sprintf("- **%s:** %s\n", k, v))
+		keys := make([]string, 0, len(opts.BuildData))
+		for k := range opts.BuildData {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			b.WriteString(fmt.Sprintf("- **%s:** %s\n", k, opts.BuildData[k]))
 		}
 		b.WriteString("\n")
 	}
 
 	// 6. Output format instructions
 	b.WriteString("## Output Format\n\n")
-	b.WriteString("Structure your response using these XML-style tags:\n\n")
-	b.WriteString("```\n")
-	b.WriteString("<thoughts>\n")
-	b.WriteString("Your observations, reflections, and analysis. What did you notice?\n")
-	b.WriteString("What patterns are emerging? What concerns or insights do you have?\n")
-	b.WriteString("</thoughts>\n\n")
-	b.WriteString("<scratchpad>\n")
-	b.WriteString("Notes for your next wake-up this build. Track ongoing patterns,\n")
-	b.WriteString("hypotheses to verify, things to watch for in subsequent sprints.\n")
-	b.WriteString("</scratchpad>\n\n")
-	b.WriteString("<identity_update>\n")
-	b.WriteString("(OPTIONAL) If — and only if — your self-understanding has genuinely evolved,\n")
-	b.WriteString("write the complete updated identity document here. Omit this section entirely\n")
-	b.WriteString("if no update is warranted. Do not update just for the sake of updating.\n")
-	b.WriteString("</identity_update>\n\n")
-	b.WriteString("<directives>\n")
-	b.WriteString("(OPTIONAL) Structured directives for the build system. One per line.\n")
-	b.WriteString("Format: TYPE: value\n")
-	b.WriteString("Currently supported: WARN, NOTE, SUGGEST\n")
-	b.WriteString("Example: WARN: heal loop on sprint 3 appears stuck on the same error\n")
-	b.WriteString("</directives>\n")
-	b.WriteString("```\n\n")
-	b.WriteString("The <thoughts> and <scratchpad> sections are required. The others are optional.\n")
+	b.WriteString("Structure your response using these XML-style tags. Output the tags directly — do NOT wrap them in code fences or backticks.\n\n")
+	b.WriteString("**Required tags:**\n\n")
+	b.WriteString("  <thoughts>\n")
+	b.WriteString("  Your observations, reflections, and analysis. What did you notice?\n")
+	b.WriteString("  What patterns are emerging? What concerns or insights do you have?\n")
+	b.WriteString("  </thoughts>\n\n")
+	b.WriteString("  <scratchpad>\n")
+	b.WriteString("  Notes for your next wake-up this build. Track ongoing patterns,\n")
+	b.WriteString("  hypotheses to verify, things to watch for in subsequent sprints.\n")
+	b.WriteString("  </scratchpad>\n\n")
+	b.WriteString("**Optional tags (omit entirely if not needed):**\n\n")
+	b.WriteString("  <identity_update>\n")
+	b.WriteString("  Only if your self-understanding has genuinely evolved — write the complete\n")
+	b.WriteString("  updated identity document here. Do not update just for the sake of updating.\n")
+	b.WriteString("  </identity_update>\n\n")
+	b.WriteString("  <directives>\n")
+	b.WriteString("  Structured directives for the build system. One per line.\n")
+	b.WriteString("  Format: TYPE: value\n")
+	b.WriteString("  Supported types: WARN, NOTE, SUGGEST\n")
+	b.WriteString("  Example: WARN: heal loop on sprint 3 appears stuck on the same error\n")
+	b.WriteString("  </directives>\n")
 
 	return b.String()
 }

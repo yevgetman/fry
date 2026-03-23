@@ -131,6 +131,37 @@ func TestBuildObserverPrompt_WakePointContext(t *testing.T) {
 	}
 }
 
+func TestBuildObserverPrompt_BuildDataSorted(t *testing.T) {
+	t.Parallel()
+
+	opts := ObserverOpts{
+		ProjectDir:   t.TempDir(),
+		EpicName:     "Test",
+		WakePoint:    WakeAfterBuildAudit,
+		TotalSprints: 3,
+		EffortLevel:  epic.EffortHigh,
+		BuildData: map[string]string{
+			"z_key": "last",
+			"a_key": "first",
+			"m_key": "middle",
+		},
+	}
+
+	prompt := buildObserverPrompt(opts, "", "", nil)
+
+	assert.Contains(t, prompt, "### Additional Build Data")
+	assert.Contains(t, prompt, "**a_key:** first")
+	assert.Contains(t, prompt, "**m_key:** middle")
+	assert.Contains(t, prompt, "**z_key:** last")
+
+	// Verify sorted order: a_key appears before m_key which appears before z_key
+	aIdx := strings.Index(prompt, "a_key")
+	mIdx := strings.Index(prompt, "m_key")
+	zIdx := strings.Index(prompt, "z_key")
+	assert.Less(t, aIdx, mIdx)
+	assert.Less(t, mIdx, zIdx)
+}
+
 func TestParseObserverResponse_AllSections(t *testing.T) {
 	t.Parallel()
 

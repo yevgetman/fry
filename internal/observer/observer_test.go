@@ -103,6 +103,29 @@ func TestInitBuild_CreatesDirAndResetsScratchpad(t *testing.T) {
 	assert.Equal(t, "3", events[0].Data["total_sprints"])
 }
 
+func TestInitBuild_ClearsStaleEvents(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Simulate a prior build that left events behind
+	require.NoError(t, EmitEvent(dir, Event{Timestamp: "2025-01-01T00:00:00Z", Type: EventBuildStart}))
+	require.NoError(t, EmitEvent(dir, Event{Timestamp: "2025-01-01T00:01:00Z", Type: EventSprintComplete, Sprint: 1}))
+	staleEvents, err := ReadEvents(dir)
+	require.NoError(t, err)
+	require.Len(t, staleEvents, 2)
+
+	// Init a new build — should clear stale events and emit fresh build_start
+	err = InitBuild(dir, "NewEpic", "high", 2)
+	require.NoError(t, err)
+
+	events, err := ReadEvents(dir)
+	require.NoError(t, err)
+	require.Len(t, events, 1, "should only have the new build_start event")
+	assert.Equal(t, EventBuildStart, events[0].Type)
+	assert.Equal(t, "NewEpic", events[0].Data["epic"])
+}
+
 func TestInitBuild_PreservesIdentity(t *testing.T) {
 	t.Parallel()
 

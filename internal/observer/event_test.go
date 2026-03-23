@@ -146,6 +146,30 @@ func TestReadRecentEvents_LimitsCount(t *testing.T) {
 	assert.Equal(t, 10, events[2].Sprint)
 }
 
+func TestReadRecentEvents_ZeroN(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	err := EmitEvent(dir, Event{Timestamp: "2026-01-01T00:00:00Z", Type: EventBuildStart})
+	require.NoError(t, err)
+
+	events, err := ReadRecentEvents(dir, 0)
+	require.NoError(t, err)
+	assert.Nil(t, events)
+}
+
+func TestReadRecentEvents_NegativeN(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	err := EmitEvent(dir, Event{Timestamp: "2026-01-01T00:00:00Z", Type: EventBuildStart})
+	require.NoError(t, err)
+
+	events, err := ReadRecentEvents(dir, -5)
+	require.NoError(t, err)
+	assert.Nil(t, events)
+}
+
 func TestReadRecentEvents_FewerThanN(t *testing.T) {
 	t.Parallel()
 

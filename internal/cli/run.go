@@ -613,6 +613,16 @@ var runCmd = &cobra.Command{
 						"heal_attempts": strconv.Itoa(result.HealAttempts),
 					},
 				})
+				if result.HealAttempts > 0 {
+					_ = observer.EmitEvent(projectPath, observer.Event{
+						Type:   observer.EventHealComplete,
+						Sprint: spr.Number,
+						Data: map[string]string{
+							"attempts": strconv.Itoa(result.HealAttempts),
+							"status":   result.Status,
+						},
+					})
+				}
 			}
 
 			// Collect per-sprint data for the build report and token summary.
