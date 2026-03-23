@@ -66,17 +66,20 @@ var prepareCmd = &cobra.Command{
 			return nil
 		}
 
+		promptSource := userPromptSource(userPrompt, prepareUserPrompt, prepareUserPromptFile)
+
 		return prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-			ProjectDir:      projectPath,
-			EpicFilename:    epicArg,
-			Engine:          prepareEngine,
-			UserPrompt:      userPrompt,
-			ValidateOnly:    false,
-			SkipSanityCheck: prepareNoSanityCheck,
-			Mode:            mode,
-			EffortLevel:     effortLevel,
-			Stdin:           os.Stdin,
-			Stdout:          cmd.OutOrStdout(),
+			ProjectDir:       projectPath,
+			EpicFilename:     epicArg,
+			Engine:           prepareEngine,
+			UserPrompt:       userPrompt,
+			UserPromptSource: promptSource,
+			ValidateOnly:     false,
+			SkipSanityCheck:  prepareNoSanityCheck,
+			Mode:             mode,
+			EffortLevel:      effortLevel,
+			Stdin:            os.Stdin,
+			Stdout:           cmd.OutOrStdout(),
 		})
 	},
 }

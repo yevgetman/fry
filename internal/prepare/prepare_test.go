@@ -682,6 +682,33 @@ func TestRunPrepare_Logging(t *testing.T) {
 		assert.Contains(t, logOutput, "Supplementary assets detected (1 file(s) in assets/)")
 		assert.Contains(t, logOutput, "Step 2: Generating .fry/epic.md from plans/plan.md, .fry/AGENTS.md, user prompt, assets/ assets")
 	})
+
+	t.Run("logs user prompt source when provided", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+
+		require.NoError(t, os.MkdirAll(dir+"/plans", 0o755))
+		require.NoError(t, os.WriteFile(dir+"/plans/executive.md", []byte("exec content"), 0o644))
+		require.NoError(t, os.WriteFile(dir+"/plans/plan.md", []byte(strings.Repeat("word ", 100)), 0o644))
+
+		var logBuf strings.Builder
+
+		err := RunPrepare(context.Background(), PrepareOpts{
+			ProjectDir:       dir,
+			Engine:           "claude",
+			UserPrompt:       "focus on backend",
+			UserPromptSource: "--user-prompt-file prompts/backend.txt",
+			SkipSanityCheck:  true,
+			EngineFactory:    fakeFactory,
+			LogFunc:          testLogFunc(&logBuf),
+		})
+
+		require.NoError(t, err)
+		logOutput := logBuf.String()
+		assert.Contains(t, logOutput, "User prompt loaded from --user-prompt-file prompts/backend.txt")
+		assert.NotContains(t, logOutput, "User prompt detected")
+	})
 }
 
 func TestRunSanityCheck_AdjustAddsUserPrompt(t *testing.T) {

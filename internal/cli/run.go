@@ -157,6 +157,7 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		promptSource := userPromptSource(userPrompt, runUserPrompt, runUserPromptFile)
 
 		epicPath, epicExists, err := resolveEpicPath(projectPath, epicArg)
 		if err != nil {
@@ -183,21 +184,22 @@ var runCmd = &cobra.Command{
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
 			if runFullPrepare {
 				if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-					ProjectDir:      projectPath,
-					EpicFilename:    filepath.Base(epicPath),
-					Engine:          prepareEngineName,
-					UserPrompt:      userPrompt,
-					SkipSanityCheck: runNoSanityCheck || runDryRun,
-					Mode:            mode,
-					EffortLevel:     effortLevel,
-					Stdin:           os.Stdin,
-					Stdout:          cmd.OutOrStdout(),
+					ProjectDir:       projectPath,
+					EpicFilename:     filepath.Base(epicPath),
+					Engine:           prepareEngineName,
+					UserPrompt:       userPrompt,
+					UserPromptSource: promptSource,
+					SkipSanityCheck:  runNoSanityCheck || runDryRun,
+					Mode:             mode,
+					EffortLevel:      effortLevel,
+					Stdin:            os.Stdin,
+					Stdout:           cmd.OutOrStdout(),
 				}); err != nil {
 					return err
 				}
 			} else {
 				var err error
-				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoSanityCheck || runDryRun, runTriageOnly)
+				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, promptSource, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoSanityCheck || runDryRun, runTriageOnly)
 				if err != nil {
 					return err
 				}
@@ -1269,6 +1271,21 @@ func resolveUserPrompt(projectDir, provided, promptFile string, persist bool) (s
 	return string(data), nil
 }
 
+// userPromptSource returns a human-readable description of where the user prompt
+// was loaded from, for use in log messages. Returns empty string if no prompt.
+func userPromptSource(prompt, flagValue, fileFlagValue string) string {
+	if strings.TrimSpace(prompt) == "" {
+		return ""
+	}
+	if strings.TrimSpace(fileFlagValue) != "" {
+		return "--user-prompt-file " + fileFlagValue
+	}
+	if strings.TrimSpace(flagValue) != "" {
+		return "--user-prompt flag"
+	}
+	return config.UserPromptFile
+}
+
 func resolveEpicPath(projectDir, requested string) (string, bool, error) {
 	if strings.TrimSpace(requested) == "" {
 		requested = filepath.Join(config.FryDir, "epic.md")
@@ -1493,7 +1510,7 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 // For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it builds
 // a programmatic epic with auto-generated verification. For COMPLEX, it falls
 // through to full prepare.
-func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool, triageOnly bool) (*triage.TriageDecision, error) {
+func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt, promptSource string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool, triageOnly bool) (*triage.TriageDecision, error) {
 	// Read available inputs.
 	planPath := filepath.Join(projectPath, config.PlanFile)
 	executivePath := filepath.Join(projectPath, config.ExecutiveFile)
@@ -1631,15 +1648,16 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 
 		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
 		if err := prepare.RunPrepare(ctx, prepare.PrepareOpts{
-			ProjectDir:      projectPath,
-			EpicFilename:    filepath.Base(epicPath),
-			Engine:          prepareEngineName,
-			UserPrompt:      userPrompt,
-			SkipSanityCheck: runNoSanityCheck || runDryRun,
-			Mode:            mode,
-			EffortLevel:     complexEffort,
-			Stdin:           stdin,
-			Stdout:          stdout,
+			ProjectDir:       projectPath,
+			EpicFilename:     filepath.Base(epicPath),
+			Engine:           prepareEngineName,
+			UserPrompt:       userPrompt,
+			UserPromptSource: promptSource,
+			SkipSanityCheck:  runNoSanityCheck || runDryRun,
+			Mode:             mode,
+			EffortLevel:      complexEffort,
+			Stdin:            stdin,
+			Stdout:           stdout,
 		}); err != nil {
 			return nil, err
 		}

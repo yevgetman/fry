@@ -22,18 +22,19 @@ import (
 )
 
 type PrepareOpts struct {
-	ProjectDir      string
-	EpicFilename    string
-	Engine          string
-	UserPrompt      string
-	ValidateOnly    bool
-	SkipSanityCheck bool
-	EngineFactory   func(string) (engine.Engine, error)       // optional; defaults to engine.NewEngine
-	LogFunc         func(format string, args ...interface{})   // optional; defaults to frylog.Log
-	Mode            Mode
-	EffortLevel     epic.EffortLevel
-	Stdin           io.Reader // for interactive confirmation (defaults to os.Stdin)
-	Stdout          io.Writer // for displaying generated content (defaults to os.Stdout)
+	ProjectDir       string
+	EpicFilename     string
+	Engine           string
+	UserPrompt       string
+	UserPromptSource string // human-readable origin, e.g. "--user-prompt-file path" or "--user-prompt flag"
+	ValidateOnly     bool
+	SkipSanityCheck  bool
+	EngineFactory    func(string) (engine.Engine, error)       // optional; defaults to engine.NewEngine
+	LogFunc          func(format string, args ...interface{})   // optional; defaults to frylog.Log
+	Mode             Mode
+	EffortLevel      epic.EffortLevel
+	Stdin            io.Reader // for interactive confirmation (defaults to os.Stdin)
+	Stdout           io.Writer // for displaying generated content (defaults to os.Stdout)
 }
 
 var numberedRulePattern = regexp.MustCompile(`(?m)^[0-9]+\.`)
@@ -142,7 +143,11 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	// Log detected inputs for visibility.
 	if hasUserPrompt {
-		logf("User prompt detected — will be included in generation.")
+		if opts.UserPromptSource != "" {
+			logf("User prompt loaded from %s — will be included in generation.", opts.UserPromptSource)
+		} else {
+			logf("User prompt detected — will be included in generation.")
+		}
 	}
 	if hasAssets {
 		logf("Supplementary assets detected (%d file(s) in %s/) — will be included in generation.", len(assetsResult.Assets), config.AssetsDir)
