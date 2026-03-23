@@ -304,6 +304,7 @@ Key flags:
   --branch-name name                 # Explicit branch name (overrides auto-generated)
   --always-verify                    # Force verification, healing, and audit regardless of effort/complexity
   --full-prepare                     # Skip triage, run full prepare pipeline
+  --triage-only                      # Classify task and exit (no artifact generation)
   --no-sanity-check                  # Skip interactive confirmations (triage + project summary)
   --no-observer                      # Disable observer metacognitive layer
   --no-review                        # Skip mid-build sprint review

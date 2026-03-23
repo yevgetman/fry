@@ -62,6 +62,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--continue` | Auto-detect where a previous build left off and resume. Uses an LLM agent to analyze `.fry/` build artifacts, determine the next sprint, and decide whether to resume or start fresh. Automatically restores the build mode (`software`, `planning`, or `writing`) from the previous run unless `--mode` is explicitly passed. Cannot be combined with `--sprint`, `--resume`, or positional sprint arguments. |
 | `--simple-continue` | Resume from the first incomplete sprint without LLM analysis. Scans sprint completion markers in the build state and resumes from the first sprint without a marker. Lightweight alternative to `--continue` — no LLM call, no cost. Cannot be combined with `--continue`, `--resume`, or `--sprint`. |
 | `--full-prepare` | Skip triage and run the full prepare pipeline when no epic exists. Equivalent to the pre-triage behavior. See [Triage](triage.md). |
+| `--triage-only` | Run the triage classifier and exit without generating any artifacts (no epic, verification, or AGENTS.md). Prints the classification result. Cannot be combined with `--full-prepare`, `--continue`, `--resume`, or `--simple-continue`. See [Triage](triage.md). |
 | `--git-strategy <auto\|current\|branch\|worktree>` | Git isolation strategy (default: `auto`). `auto` lets triage decide (complex -> worktree, simple/moderate -> branch). `current` works on the current branch (previous behavior). See [Git Strategy](git-strategy.md). |
 | `--branch-name <name>` | Explicit branch name for `branch` or `worktree` strategies. Overrides the auto-generated `fry/<slug>` name. |
 | `--always-verify` | Force verification checks, healing, and audit to run regardless of effort level or triage complexity. Generates heuristic verification checks if none exist. Useful for CI/CD and automated builds. |
@@ -75,6 +76,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 ```bash
 fry                                               # Run all sprints (.fry/epic.md default)
 fry --dry-run                                     # Validate and preview
+fry --triage-only --user-prompt "add a CLI flag"  # Preview triage classification only
 fry --engine claude                               # Run all sprints with Claude Code
 fry --effort low                                  # Quick task: 1-2 sprints, minimal overhead
 fry --effort medium --engine claude               # Moderate task: 2-4 sprints

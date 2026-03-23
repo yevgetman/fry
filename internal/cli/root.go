@@ -45,6 +45,7 @@ func init() {
 	rootCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
 	rootCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force verification, healing, and audit to run regardless of effort level or triage complexity")
 	rootCmd.Flags().BoolVar(&runSimpleContinue, "simple-continue", false, "Resume from first incomplete sprint without LLM analysis (lightweight alternative to --continue)")
+	rootCmd.Flags().BoolVar(&runTriageOnly, "triage-only", false, "Run triage classification and exit without generating artifacts")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(prepareCmd)

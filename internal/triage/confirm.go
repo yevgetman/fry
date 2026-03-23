@@ -34,7 +34,7 @@ func ConfirmDecision(opts ConfirmOpts) (*ConfirmResult, error) {
 	stdin := opts.Stdin
 	d := opts.Decision
 
-	displayTriageSummary(stdout, d)
+	DisplayTriageSummary(stdout, d)
 	fmt.Fprint(stdout, "Accept this classification? [Y/n/a] (a = adjust) ")
 
 	scanner := bufio.NewScanner(stdin)
@@ -132,7 +132,8 @@ func adjustDecision(scanner *bufio.Scanner, stdout io.Writer, d *TriageDecision)
 	}, nil
 }
 
-func displayTriageSummary(w io.Writer, d *TriageDecision) {
+// DisplayTriageSummary prints the triage classification result to the given writer.
+func DisplayTriageSummary(w io.Writer, d *TriageDecision) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "── Triage classification ───────────────────────────────────────")
 	fmt.Fprintf(w, "Difficulty:  %s\n", d.Complexity)

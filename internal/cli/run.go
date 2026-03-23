@@ -64,6 +64,7 @@ var (
 	runJSONReport     bool
 	runShowTokens     bool
 	runNoObserver     bool
+	runTriageOnly     bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -100,6 +101,12 @@ var runCmd = &cobra.Command{
 		}
 		if gitStrategy == git.StrategyCurrent && runBranchName != "" {
 			return fmt.Errorf("--branch-name cannot be used with --git-strategy current")
+		}
+		if runTriageOnly && runFullPrepare {
+			return fmt.Errorf("cannot use --triage-only with --full-prepare")
+		}
+		if runTriageOnly && (runResume || runContinue || runSimpleContinue) {
+			return fmt.Errorf("cannot use --triage-only with --resume, --continue, or --simple-continue")
 		}
 
 		// When --continue is used and no explicit --mode was given,
@@ -158,6 +165,10 @@ var runCmd = &cobra.Command{
 
 		printMigrationHintIfNeeded(cmd.OutOrStdout(), projectPath, epicArg)
 
+		if runTriageOnly && epicExists {
+			return fmt.Errorf("--triage-only: epic already exists at %s; triage only runs when no epic exists", epicArg)
+		}
+
 		var triageDecision *triage.TriageDecision
 		if !epicExists {
 			if runResume {
@@ -186,11 +197,18 @@ var runCmd = &cobra.Command{
 				}
 			} else {
 				var err error
-				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoSanityCheck || runDryRun)
+				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoSanityCheck || runDryRun, runTriageOnly)
 				if err != nil {
 					return err
 				}
 			}
+		}
+
+		if runTriageOnly {
+			if triageDecision != nil {
+				triage.DisplayTriageSummary(cmd.OutOrStdout(), triageDecision)
+			}
+			return nil
 		}
 
 		ep, err := epic.ParseEpic(epicPath)
@@ -1202,6 +1220,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runJSONReport, "json-report", false, "Write build-report.json with structured sprint results")
 	runCmd.Flags().BoolVar(&runShowTokens, "show-tokens", false, "Print per-sprint token usage summary to stderr after the run")
 	runCmd.Flags().BoolVar(&runNoObserver, "no-observer", false, "Disable the observer metacognitive layer")
+	runCmd.Flags().BoolVar(&runTriageOnly, "triage-only", false, "Run triage classification and exit without generating artifacts")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -1471,7 +1490,7 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 // For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it builds
 // a programmatic epic with auto-generated verification. For COMPLEX, it falls
 // through to full prepare.
-func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool) (*triage.TriageDecision, error) {
+func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool, triageOnly bool) (*triage.TriageDecision, error) {
 	// Read available inputs.
 	planPath := filepath.Join(projectPath, config.PlanFile)
 	executivePath := filepath.Join(projectPath, config.ExecutiveFile)
@@ -1523,6 +1542,10 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		if result.GitStrategy != "" {
 			decision.GitStrategyOverride = result.GitStrategy
 		}
+	}
+
+	if triageOnly {
+		return decision, nil
 	}
 
 	// Resolve effort: CLI flag > triage suggestion > default per difficulty.

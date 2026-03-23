@@ -137,6 +137,7 @@ The auto-generated verification checks are heuristic-only — they detect `go.mo
 | Flag | Description |
 |---|---|
 | `--full-prepare` | Skip triage and run full prepare pipeline (equivalent to pre-triage behavior) |
+| `--triage-only` | Run triage classification and exit without generating any artifacts. Prints the classification result. |
 | `--no-sanity-check` | Skip the interactive triage confirmation (and the prepare sanity check on the complex path) |
 
 ## Mode-Aware Classification
@@ -160,5 +161,6 @@ The classifier adjusts its criteria based on `--mode`:
 - `--effort`: takes precedence over triage suggestion. Capped to `high` for simple/moderate tasks (max reserved for complex).
 - `--continue` / `--resume`: require an existing epic — triage never runs.
 - `--dry-run`: skips the interactive triage confirmation. Triage runs, classification is logged, then dry-run proceeds.
+- `--triage-only`: runs only the classification (and optional interactive confirmation), prints the result, and exits. No epic, verification, or AGENTS.md files are generated. Cannot be combined with `--full-prepare`, `--continue`, `--resume`, or `--simple-continue`. Triage diagnostic files (`.fry/triage-prompt.md`, `.fry/triage-decision.txt`) are still written.
 - `--no-audit`: disables the triage-path build audit too.
 - `--no-sanity-check`: skips the interactive triage confirmation and the prepare sanity check on the complex path.
