@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func formatCheckLine(result CheckResult, prefix string) string {
+func formatCheckLine(result CheckResult, prefix string, includeDetail bool) string {
 	switch result.Check.Type {
 	case CheckFile:
 		return fmt.Sprintf("- %s: File missing or empty: %s", prefix, result.Check.Path)
@@ -14,12 +14,12 @@ func formatCheckLine(result CheckResult, prefix string) string {
 	case CheckCmd:
 		return fmt.Sprintf("- %s: Command failed: %s", prefix, result.Check.Command)
 	case CheckCmdOutput:
-		if prefix == "FAILED" {
+		if includeDetail {
 			return fmt.Sprintf("- %s: Command output mismatch: %s\n  Expected pattern: %s", prefix, result.Check.Command, result.Check.Pattern)
 		}
 		return fmt.Sprintf("- %s: Command output mismatch: %s (expected pattern: %s)", prefix, result.Check.Command, result.Check.Pattern)
 	case CheckTest:
-		if prefix == "FAILED" {
+		if includeDetail {
 			return fmt.Sprintf("- %s: Test command failed: %s (pass=%d fail=%d skip=%d framework=%s)",
 				prefix, result.Check.Command, result.TestPassCount, result.TestFailCount, result.TestSkipCount, result.TestFramework)
 		}
@@ -39,7 +39,7 @@ func CollectFailures(results []CheckResult, passCount, totalCount int) string {
 		}
 
 		b.WriteString("\n")
-		b.WriteString(formatCheckLine(result, "FAILED"))
+		b.WriteString(formatCheckLine(result, "FAILED", true))
 		switch result.Check.Type {
 		case CheckCmd:
 			b.WriteString(fmt.Sprintf("\n  Output (truncated):\n%s", indentLines(truncateLines(result.Output, 20))))
@@ -86,7 +86,7 @@ func EvaluateThreshold(results []CheckResult, passCount, totalCount, maxFailPerc
 func CollectDeferredSummary(deferred []CheckResult) string {
 	var b strings.Builder
 	for _, result := range deferred {
-		b.WriteString(formatCheckLine(result, "DEFERRED"))
+		b.WriteString(formatCheckLine(result, "DEFERRED", false))
 		b.WriteByte('\n')
 	}
 	return b.String()
