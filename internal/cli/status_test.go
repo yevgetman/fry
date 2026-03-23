@@ -48,5 +48,5 @@ func TestStatusCommandWithBuild(t *testing.T) {
 
 	err := statusCmd.RunE(fakeCmd, []string{})
 	require.NoError(t, err)
-	assert.NotEmpty(t, buf.String())
+	assert.Contains(t, buf.String(), "Test Epic")
 }

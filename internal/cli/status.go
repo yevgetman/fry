@@ -30,11 +30,6 @@ var statusCmd = &cobra.Command{
 		}
 		state, err := continuerun.CollectBuildState(cmd.Context(), projectDir, ep)
 		if err != nil {
-			if errors.Is(err, continuerun.ErrNoPreviousBuild) {
-				fmt.Fprintf(cmd.OutOrStdout(), "No active build found in %s\n", projectDir)
-				fmt.Fprintf(cmd.OutOrStdout(), "Run 'fry run' to start a build.\n")
-				return nil
-			}
 			return err
 		}
 		report := continuerun.FormatReport(state)
