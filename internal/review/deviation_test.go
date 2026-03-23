@@ -52,7 +52,7 @@ func TestAppendDeviationLogDeviateVerdict(t *testing.T) {
 	assert.Contains(t, string(content), "Low")
 }
 
-func TestAppendDeviationLogMultipleEntriesAppend(t *testing.T) {
+func TestAppendDeviationLogMultipleCallsAppend(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
