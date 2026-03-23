@@ -27,6 +27,7 @@ import (
 	"github.com/yevgetman/fry/internal/lock"
 	frlog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/metrics"
+	"github.com/yevgetman/fry/internal/observer"
 	"github.com/yevgetman/fry/internal/preflight"
 	"github.com/yevgetman/fry/internal/prepare"
 	"github.com/yevgetman/fry/internal/report"
@@ -62,6 +63,7 @@ var (
 	runSARIF          bool
 	runJSONReport     bool
 	runShowTokens     bool
+	runNoObserver     bool
 )
 
 var errBuildFailed = fmt.Errorf("build failed")
@@ -498,6 +500,23 @@ var runCmd = &cobra.Command{
 			frlog.Log("WARNING: could not persist build mode: %v", writeErr)
 		}
 
+		// Initialize observer metacognitive layer
+		observerEnabled := !runNoObserver && !runDryRun && ep.EffortLevel != epic.EffortLow
+		var observerEngine engine.Engine
+		if observerEnabled {
+			observerEngine, err = engine.NewEngine(engineName)
+			if err != nil {
+				frlog.Log("WARNING: observer: could not create engine: %v", err)
+				observerEnabled = false
+			}
+		}
+		if observerEnabled {
+			if initErr := observer.InitBuild(projectPath, ep.Name, string(ep.EffortLevel), ep.TotalSprints); initErr != nil {
+				frlog.Log("WARNING: observer: init failed: %v", initErr)
+				observerEnabled = false
+			}
+		}
+
 		exitErr := error(nil)
 		for sprintNum := startSprint; sprintNum <= endSprint; sprintNum++ {
 			if sprintNum < 1 || sprintNum > len(ep.Sprints) {
@@ -508,6 +527,14 @@ var runCmd = &cobra.Command{
 			mu.Lock()
 			currentSprint = sprintNum
 			mu.Unlock()
+
+			if observerEnabled {
+				_ = observer.EmitEvent(projectPath, observer.Event{
+					Type:   observer.EventSprintStart,
+					Sprint: spr.Number,
+					Data:   map[string]string{"name": spr.Name},
+				})
+			}
 
 			if ep.DockerFromSprint > 0 && sprintNum >= ep.DockerFromSprint {
 				if err := docker.EnsureDockerUp(ctx, projectPath, ep.DockerReadyCmd, ep.DockerReadyTimeout); err != nil {
@@ -575,6 +602,18 @@ var runCmd = &cobra.Command{
 			mu.Lock()
 			results[sprintNum-startSprint] = *result
 			mu.Unlock()
+
+			if observerEnabled {
+				_ = observer.EmitEvent(projectPath, observer.Event{
+					Type:   observer.EventSprintComplete,
+					Sprint: spr.Number,
+					Data: map[string]string{
+						"status":        result.Status,
+						"duration":      result.Duration.Round(time.Second).String(),
+						"heal_attempts": strconv.Itoa(result.HealAttempts),
+					},
+				})
+			}
 
 			// Collect per-sprint data for the build report and token summary.
 			sprintEnd := time.Now()
@@ -698,6 +737,21 @@ var runCmd = &cobra.Command{
 					if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
 						frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
 					}
+
+					if observerEnabled {
+						auditData := map[string]string{
+							"passed":     strconv.FormatBool(auditResult.Passed),
+							"iterations": strconv.Itoa(auditResult.Iterations),
+						}
+						if auditResult.MaxSeverity != "" {
+							auditData["max_severity"] = auditResult.MaxSeverity
+						}
+						_ = observer.EmitEvent(projectPath, observer.Event{
+							Type:   observer.EventAuditComplete,
+							Sprint: spr.Number,
+							Data:   auditData,
+						})
+					}
 				}
 
 				frlog.Log("  GIT: checkpoint — sprint %d complete", spr.Number)
@@ -750,6 +804,14 @@ var runCmd = &cobra.Command{
 							reviewResult.Deviation.RiskAssessment)
 					} else {
 						frlog.Log("  REVIEW: verdict %s", reviewResult.Verdict)
+					}
+
+					if observerEnabled {
+						_ = observer.EmitEvent(projectPath, observer.Event{
+							Type:   observer.EventReviewComplete,
+							Sprint: spr.Number,
+							Data:   map[string]string{"verdict": string(reviewResult.Verdict)},
+						})
 					}
 
 					entry := review.DeviationLogEntry{
@@ -814,6 +876,26 @@ var runCmd = &cobra.Command{
 						}
 					}
 				}
+
+				// Observer wake-up: after sprint
+				if observerEnabled && observer.ShouldWakeUp(ep.EffortLevel, observer.WakeAfterSprint) {
+					observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
+					frlog.Log("  OBSERVER: wake-up after sprint %d...  model=%s", spr.Number, observerModel)
+					if _, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+						ProjectDir:   projectPath,
+						Engine:       observerEngine,
+						Model:        observerModel,
+						EpicName:     ep.Name,
+						WakePoint:    observer.WakeAfterSprint,
+						SprintNum:    spr.Number,
+						TotalSprints: ep.TotalSprints,
+						EffortLevel:  ep.EffortLevel,
+						Verbose:      frlog.Verbose,
+					}); obsErr != nil {
+						frlog.Log("  OBSERVER: wake-up failed (non-fatal): %v", obsErr)
+					}
+				}
+
 				continue
 			}
 
@@ -933,6 +1015,39 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Observer: build audit event and wake-up
+		if observerEnabled {
+			buildAuditData := map[string]string{"ran": strconv.FormatBool(buildAuditResult != nil)}
+			if buildAuditResult != nil {
+				buildAuditData["passed"] = strconv.FormatBool(buildAuditResult.Passed)
+				if buildAuditResult.MaxSeverity != "" {
+					buildAuditData["max_severity"] = buildAuditResult.MaxSeverity
+				}
+			}
+			_ = observer.EmitEvent(projectPath, observer.Event{
+				Type: observer.EventBuildAuditDone,
+				Data: buildAuditData,
+			})
+
+			if observer.ShouldWakeUp(ep.EffortLevel, observer.WakeAfterBuildAudit) {
+				observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
+				frlog.Log("  OBSERVER: wake-up after build audit...  model=%s", observerModel)
+				if _, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+					ProjectDir:   projectPath,
+					Engine:       observerEngine,
+					Model:        observerModel,
+					EpicName:     ep.Name,
+					WakePoint:    observer.WakeAfterBuildAudit,
+					TotalSprints: ep.TotalSprints,
+					EffortLevel:  ep.EffortLevel,
+					Verbose:      frlog.Verbose,
+					BuildData:    buildAuditData,
+				}); obsErr != nil {
+					frlog.Log("  OBSERVER: wake-up failed (non-fatal): %v", obsErr)
+				}
+			}
+		}
+
 		// Generate build summary document (after build audit so results can be included)
 		summaryEngine, err := engine.NewEngine(engineName)
 		if err != nil {
@@ -952,6 +1067,36 @@ var runCmd = &cobra.Command{
 				frlog.Log("WARNING: build summary generation failed: %v", summaryErr)
 			} else {
 				frlog.Log("  BUILD SUMMARY: complete")
+			}
+		}
+
+		// Observer: final wake-up at build end
+		if observerEnabled {
+			buildOutcome := "success"
+			if exitErr != nil {
+				buildOutcome = "failure"
+			}
+			_ = observer.EmitEvent(projectPath, observer.Event{
+				Type: observer.EventBuildEnd,
+				Data: map[string]string{"outcome": buildOutcome},
+			})
+
+			if observer.ShouldWakeUp(ep.EffortLevel, observer.WakeBuildEnd) {
+				observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
+				frlog.Log("  OBSERVER: final wake-up...  model=%s", observerModel)
+				if _, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+					ProjectDir:   projectPath,
+					Engine:       observerEngine,
+					Model:        observerModel,
+					EpicName:     ep.Name,
+					WakePoint:    observer.WakeBuildEnd,
+					TotalSprints: ep.TotalSprints,
+					EffortLevel:  ep.EffortLevel,
+					Verbose:      frlog.Verbose,
+					BuildData:    map[string]string{"outcome": buildOutcome},
+				}); obsErr != nil {
+					frlog.Log("  OBSERVER: final wake-up failed (non-fatal): %v", obsErr)
+				}
 			}
 		}
 
@@ -1046,6 +1191,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runSARIF, "sarif", false, "Write build-audit.sarif in SARIF 2.1.0 format alongside build-audit.md")
 	runCmd.Flags().BoolVar(&runJSONReport, "json-report", false, "Write build-report.json with structured sprint results")
 	runCmd.Flags().BoolVar(&runShowTokens, "show-tokens", false, "Print per-sprint token usage summary to stderr after the run")
+	runCmd.Flags().BoolVar(&runNoObserver, "no-observer", false, "Disable the observer metacognitive layer")
 }
 
 func resolveProjectDir(dir string) (string, error) {

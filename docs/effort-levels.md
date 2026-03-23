@@ -204,6 +204,7 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | Heal fail threshold | 20% | 20% | 20% | 10% |
 | Resume heal attempts | 6 | 6 | 20 | 6 (min) |
 | Compact with agent | Default | Default | Default | Enabled |
+| Observer wake-ups | Disabled | Build end only | After sprint + build audit + build end | After sprint + build audit + build end |
 
 ## Writing Mode
 

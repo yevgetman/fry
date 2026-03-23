@@ -87,6 +87,11 @@ fry/
 │   │   ├── report.go            # BuildState → human-readable markdown report
 │   │   └── analyzer.go          # LLM analysis agent for resume decisions
 │   ├── summary/summary.go       # AI-generated build summary
+│   ├── observer/
+│   │   ├── observer.go          # Observer lifecycle: InitBuild, WakeUp, ShouldWakeUp, scratchpad I/O
+│   │   ├── event.go             # Event types, EmitEvent, ReadEvents, ReadRecentEvents
+│   │   ├── identity.go          # Identity document: EnsureIdentity, ReadIdentity, WriteIdentity
+│   │   └── prompt.go            # Wake-up prompt builder, response parser, directive extraction
 │   ├── metrics/tokens.go        # Token usage parsing for Claude and Codex engines
 │   ├── report/report.go         # BuildReport types and JSON serialisation (--json-report)
 │   ├── shellhook/shellhook.go   # Pre-sprint/iteration shell commands
@@ -134,6 +139,10 @@ fry/
 | `triage-prompt.md` | Classifier prompt for triage gate |
 | `triage-decision.txt` | Triage classifier output (complexity, effort, sprints, reason) |
 | `git-strategy.txt` | Persisted git strategy for `--continue`/`--resume` reattachment |
+| `observer/events.jsonl` | Observer event stream (JSONL, reset per build) |
+| `observer/identity.md` | Observer identity document (persists across builds) |
+| `observer/scratchpad.md` | Observer working memory (reset per build) |
+| `observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) |
 | `.fry.lock` | Concurrency lock |
 
 ---
@@ -295,6 +304,7 @@ Key flags:
   --always-verify                    # Force verification, healing, and audit regardless of effort/complexity
   --full-prepare                     # Skip triage, run full prepare pipeline
   --no-sanity-check                  # Skip interactive confirmations (triage + project summary)
+  --no-observer                      # Disable observer metacognitive layer
   --no-review                        # Skip mid-build sprint review
   --no-audit                         # Skip audits
   --verbose                          # Verbose logging
@@ -340,6 +350,12 @@ Key flags:
 | `GitWorktreeDir` | `.fry-worktrees` | Parent directory for worktree checkouts |
 | `GitStrategyFile` | `.fry/git-strategy.txt` | Persisted strategy for continue/resume |
 | `GitBranchPrefix` | `fry/` | Prefix for auto-generated branch names |
+| `ObserverDir` | `.fry/observer` | Observer files directory |
+| `ObserverEventsFile` | `.fry/observer/events.jsonl` | Structured event stream |
+| `ObserverIdentityFile` | `.fry/observer/identity.md` | Persistent self-description |
+| `ObserverScratchpadFile` | `.fry/observer/scratchpad.md` | Per-build working memory |
+| `ObserverPromptFile` | `.fry/observer/wake-prompt.md` | Transient wake-up prompt |
+| `MaxObserverEvents` | `50` | Max recent events included in wake-up prompt |
 
 ---
 
@@ -398,6 +414,7 @@ make clean     # rm -rf bin/
 | `project-structure.md` | Directory layout, file reference |
 | `terminal-output.md` | Output format, logging |
 | `architecture.md` | Internal package structure, data flow |
+| `observer.md` | Metacognitive layer: events, identity, wake-ups |
 | `git-strategy.md` | Branch/worktree isolation strategies |
 | `self-improvement.md` | Automated self-improvement pipeline |
 

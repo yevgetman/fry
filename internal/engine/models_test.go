@@ -239,6 +239,14 @@ func TestTierForSession(t *testing.T) {
 		{"triage-claude-low", "claude", "low", SessionTriage, TierMini},
 		{"triage-claude-max", "claude", "max", SessionTriage, TierMini},
 		{"triage-codex-high", "codex", "high", SessionTriage, TierMini},
+
+		// Observer: Mini for low/medium, Standard for high/max
+		{"observer-claude-low", "claude", "low", SessionObserver, TierMini},
+		{"observer-claude-medium", "claude", "medium", SessionObserver, TierMini},
+		{"observer-claude-high", "claude", "high", SessionObserver, TierStandard},
+		{"observer-claude-max", "claude", "max", SessionObserver, TierStandard},
+		{"observer-codex-low", "codex", "low", SessionObserver, TierMini},
+		{"observer-codex-high", "codex", "high", SessionObserver, TierStandard},
 	}
 
 	for _, tc := range tests {

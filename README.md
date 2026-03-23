@@ -117,6 +117,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Git strategy** -- `--git-strategy auto|current|branch|worktree` controls build isolation. Auto mode lets triage decide: complex tasks get an isolated worktree, simpler tasks get a new branch. Use `current` for the previous behavior (work on the current branch). See [Git Strategy](docs/git-strategy.md).
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
+- **Observer** -- metacognitive layer that watches builds, notices patterns, and develops persistent self-awareness across runs. Non-fatal; effort-level gated. See [Observer](docs/observer.md).
 - **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
 
 ## Self-Improving Codebase
@@ -203,6 +204,7 @@ fry --user-prompt-file ./prompt.txt   # Load a longer prompt from a file
 fry --git-strategy worktree            # Force worktree isolation for the build
 fry --git-strategy branch --branch-name feat/api  # Build on a named branch
 fry --always-verify                    # Force verification+audit on all tasks
+fry --no-observer                      # Disable the observer metacognitive layer
 fry prepare --effort medium            # Generate artifacts with medium effort sizing
 ```
 
@@ -235,6 +237,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Triage](docs/triage.md) | Complexity classification with interactive confirmation — controls whether full prepare runs |
 | [Git Strategy](docs/git-strategy.md) | Branch and worktree isolation strategies for builds |
 | [Self-Improvement](docs/self-improvement.md) | Automated self-improvement pipeline: roadmap, orchestrator, planning, build, healing |
+| [Observer](docs/observer.md) | Metacognitive layer: event stream, identity, wake-ups, effort-level gating |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
 
 ## License

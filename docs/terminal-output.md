@@ -318,6 +318,38 @@ Or when a deviation is needed:
 [2026-03-10 12:18:01]   GIT: checkpoint — sprint 3 reviewed-deviate
 ```
 
+## Observer
+
+The observer emits status lines at each wake-up point. Wake-ups are effort-level gated -- see [Observer](observer.md) for the full schedule.
+
+### Wake-up after sprint:
+```
+[2026-03-10 12:10:37] ▶ OBSERVER  wake=after_sprint  sprint=3/8
+[2026-03-10 12:10:37]   OBSERVER: wake-up after sprint 3...  model=sonnet
+[2026-03-10 12:10:50]   OBSERVER: observation complete
+```
+
+### Wake-up after build audit:
+```
+[2026-03-10 13:15:02] ▶ OBSERVER  wake=after_build_audit  sprint=8/8
+[2026-03-10 13:15:02]   OBSERVER: wake-up after build audit...  model=sonnet
+[2026-03-10 13:15:15]   OBSERVER: identity document updated
+[2026-03-10 13:15:15]   OBSERVER: observation complete
+```
+
+### Final wake-up at build end:
+```
+[2026-03-10 13:20:01] ▶ OBSERVER  wake=build_end  sprint=8/8
+[2026-03-10 13:20:01]   OBSERVER: final wake-up...  model=sonnet
+[2026-03-10 13:20:12]   OBSERVER: observation complete
+```
+
+### Observer warnings (non-fatal):
+```
+[2026-03-10 12:10:37]   OBSERVER: agent exited with error (non-fatal): exit status 1
+[2026-03-10 12:10:37]   OBSERVER: parse warning: no structured tags found in response
+```
+
 ## Compaction
 
 When `@compact_with_agent` is enabled:

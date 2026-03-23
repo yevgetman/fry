@@ -41,6 +41,11 @@ your-project/
     continue-prompt.md                   #   Assembled prompt for --continue analysis agent (transient)
     continue-decision.txt                #   LLM agent's resume decision: verdict, sprint, reason (transient)
     continue-report.md                   #   Programmatic build state report for --continue (transient)
+    observer/                            #   Observer metacognitive layer
+      events.jsonl                       #     Structured event stream (JSONL)
+      identity.md                        #     Persistent self-description (survives across builds)
+      scratchpad.md                      #     Working memory (reset each build)
+      wake-prompt.md                     #     Transient wake-up prompt (deleted after use)
     build-logs/                          #   Per-iteration logs
     .fry.lock                            #   Concurrency lock
   build-summary.md                       # Build summary report (persisted in project root)
@@ -86,6 +91,10 @@ Unlike the bash version, Fry is installed as a standalone binary — it does not
 | `build-summary.md` | Build summary report (persisted in project root) | `fry run` at runtime |
 | `build-audit.md` | Build audit report (persisted in project root) | `fry run` at runtime |
 | `.fry-archive/` | Archived builds (timestamped snapshots of `.fry/` + root outputs) | `fry clean` or auto-archive after successful full build |
+| `.fry/observer/events.jsonl` | Observer event stream (JSONL, reset per build) | `fry run` at runtime |
+| `.fry/observer/identity.md` | Observer identity document (persists across builds) | `fry run` at runtime |
+| `.fry/observer/scratchpad.md` | Observer working memory (reset per build) | `fry run` at runtime |
+| `.fry/observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) | `fry run` at runtime |
 | `.fry/build-logs/` | Per-iteration, per-sprint, resume, audit, and continue logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 

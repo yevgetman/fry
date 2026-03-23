@@ -98,4 +98,16 @@ const (
 	GitBranchPrefix    = "fry/"
 	GitWorktreeDir     = ".fry-worktrees"
 	GitStrategyFile    = ".fry/git-strategy.txt"
+
+	// Observer constants
+	ObserverDir                = ".fry/observer"
+	ObserverEventsFile         = ".fry/observer/events.jsonl"
+	ObserverScratchpadFile     = ".fry/observer/scratchpad.md"
+	ObserverIdentityFile       = ".fry/observer/identity.md"
+	ObserverPromptFile         = ".fry/observer/wake-prompt.md"
+	ObserverIdentitySeedFile   = "identity-seed.md"
+	MaxObserverEvents          = 50
+	MaxObserverIdentityBytes   = 10_000
+	MaxObserverScratchpadBytes = 20_000
+	ObserverInvocationPrompt   = "Read and execute ALL instructions in .fry/observer/wake-prompt.md. You are the Observer — a metacognitive layer watching a build. Read your identity, scratchpad, and events, then write your observations. You may update your identity document if your self-understanding has genuinely evolved."
 )

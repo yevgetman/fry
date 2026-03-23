@@ -54,6 +54,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
 | `--no-sanity-check` | Skip interactive confirmations (triage classification and project summary) |
 | `--no-audit` | Disable sprint and build audits for this run |
+| `--no-observer` | Disable the observer metacognitive layer (event stream and wake-ups). Observer is also disabled at `low` effort and during `--dry-run`. See [Observer](observer.md). |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 | `--sprint <N>` | Start from sprint N. Alternative to the positional start sprint argument — no need to specify the epic file path. Cannot be combined with positional sprint arguments. |
@@ -101,6 +102,7 @@ fry --git-strategy worktree                       # Force worktree isolation
 fry --git-strategy branch --branch-name feat/auth # Branch with explicit name
 fry --git-strategy current                        # Work on current branch (previous behavior)
 fry --always-verify                               # Force verification+healing+audit on all tasks
+fry --no-observer                                 # Disable the observer metacognitive layer
 fry --project-dir /path/to/project                # Operate on a different project
 FRY_ENGINE=claude fry                             # Set engine via environment variable
 ```
