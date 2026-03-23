@@ -857,9 +857,16 @@ handle_build_auto_merge() {
 
     log "Build succeeded — auto-merging into master (${num_list})"
 
-    # Switch to master in the main repo and merge the build branch
+    # Switch to master in the main repo, pull latest, then merge the build branch
     cd "$REPO_DIR"
     git checkout master 2>/dev/null || true
+
+    # Pull any upstream changes that landed during the build
+    if ! git pull origin master --ff-only 2>&1 | tee -a "$LOG_FILE"; then
+        log "WARNING: Pull failed before auto-merge — falling back to PR"
+        handle_build_create_pr "$worked_numbers"
+        return
+    fi
 
     if ! git merge "$BUILD_BRANCH" --no-edit -m "Self-improve: ${num_list} [auto-merged]" 2>&1 | tee -a "$LOG_FILE"; then
         log "WARNING: Auto-merge failed (conflict) — falling back to PR"
