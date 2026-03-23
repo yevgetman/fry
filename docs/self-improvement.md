@@ -163,7 +163,7 @@ Fry prioritizes higher-priority items with fewer prior attempts and avoids items
 6. Documentation updates are required for every change
 7. After Fry completes, `make test && make build` runs as a post-build check
 8. If tests fail, a heal agent (claude with sonnet) attempts to fix the failures (up to 3 attempts)
-9. On success: merge directly to master (with `--auto-merge`) or create a PR
+9. On success with `--auto-merge`: pull latest from remote, merge locally, push. On success without: create a PR
 10. Fry writes `output/worked-items.txt` listing the issue numbers it implemented
 
 ### Post-build healing
@@ -226,7 +226,7 @@ During planning, if the journal exists, it is exported to `assets/build-journal.
 - **Worktree lifecycle** — create, scaffold, run, cleanup
 - **Item tracking** — reads `output/worked-items.txt` manifest (issue numbers)
 - **PR creation** — with `Closes #N` for auto-closing issues on merge
-- **Auto-merge** — optional direct merge to master with `--auto-merge`
+- **Auto-merge** — pulls latest from remote, merges locally, pushes; falls back to PR on conflict
 - **Failure tracking** — comments on issues on failure, adds `max-attempts` label at threshold
 - **Build journal** — generates structured journal entries after every build for experience-based planning
 - **Per-run logging** — timestamped log files in `.self-improve/logs/`
@@ -323,7 +323,7 @@ Constants at the top of `orchestrate.sh`, overridable via `.self-improve/config`
 - **Post-build healing** — test failures get 3 attempts at automated repair before giving up
 - **Lock file** — prevents concurrent orchestrator runs
 - **Max attempts** — issues that fail 3 times get the `max-attempts` label and are skipped
-- **Auto-merge fallback** — if merge conflicts occur, falls back to creating a PR
+- **Auto-merge safety** — pulls latest from remote before merging; falls back to PR on conflicts or pull failures
 - **Cleanup trap** — worktrees, branches, temp files, and scaffolding are cleaned up on any exit
 - **Manifest-based tracking** — only items Fry explicitly reports as worked on get status updates
 - **Human approval gate** — product-direction items require explicit human approval via GitHub Issue labels
