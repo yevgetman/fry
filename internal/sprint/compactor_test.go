@@ -133,3 +133,29 @@ func TestCompactSprintProgressMissingFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "## Sprint 1: TestSprint — COMPLETE")
 }
+
+func TestCompactSprintProgressAgentNilEngine(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte("## Iteration 1\nsome work"), 0o644))
+
+	_, err := CompactSprintProgress(context.Background(), dir, 1, "Sprint", "PASS", nil, true, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "engine is required")
+}
+
+func TestCompactSprintProgressWithAgent(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte("## Iteration 1\nwork done"), 0o644))
+
+	stub := &stubEngine{name: "stub", outputs: []string{"Agent summarized: work done"}}
+	result, err := CompactSprintProgress(context.Background(), dir, 2, "API", "PASSED", stub, true, "gpt-4")
+	require.NoError(t, err)
+	assert.Contains(t, result, "## Sprint 2: API — PASSED")
+	assert.Contains(t, result, "Agent summarized: work done")
+}
