@@ -205,7 +205,10 @@ var runCmd = &cobra.Command{
 		}
 
 		if runTriageOnly {
-			if triageDecision != nil {
+			// When --no-sanity-check or --dry-run skipped the interactive
+			// confirmation, the summary was never shown — display it now.
+			// Otherwise ConfirmDecision already printed it.
+			if triageDecision != nil && (runNoSanityCheck || runDryRun) {
 				triage.DisplayTriageSummary(cmd.OutOrStdout(), triageDecision)
 			}
 			return nil

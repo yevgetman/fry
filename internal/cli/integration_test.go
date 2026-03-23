@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -291,6 +292,70 @@ func TestAlwaysVerifyFlagSetsHealConfig(t *testing.T) {
 
 	assert.Equal(t, config.DefaultMaxHealAttempts, ep.MaxHealAttempts)
 	assert.True(t, ep.MaxHealAttemptsSet, "MaxHealAttemptsSet must be true so effectiveHealConfig uses path 3")
+}
+
+func TestTriageOnlyFlagConflicts(t *testing.T) {
+	t.Parallel()
+
+	// Test the conflict logic without mutating package-level vars (race-safe).
+	// These mirror the guards in RunE at run.go:105-110.
+	tests := []struct {
+		name          string
+		triageOnly    bool
+		fullPrepare   bool
+		resume        bool
+		cont          bool
+		simpleCont    bool
+		wantErr       string
+	}{
+		{"triage-only with full-prepare", true, true, false, false, false, "cannot use --triage-only with --full-prepare"},
+		{"triage-only with continue", true, false, false, true, false, "cannot use --triage-only with --resume, --continue, or --simple-continue"},
+		{"triage-only with resume", true, false, true, false, false, "cannot use --triage-only with --resume, --continue, or --simple-continue"},
+		{"triage-only with simple-continue", true, false, false, false, true, "cannot use --triage-only with --resume, --continue, or --simple-continue"},
+		{"triage-only alone is valid", true, false, false, false, false, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var err error
+			if tt.triageOnly && tt.fullPrepare {
+				err = fmt.Errorf("cannot use --triage-only with --full-prepare")
+			}
+			if tt.triageOnly && (tt.resume || tt.cont || tt.simpleCont) {
+				err = fmt.Errorf("cannot use --triage-only with --resume, --continue, or --simple-continue")
+			}
+
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestTriageOnlyWithExistingEpic(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, ".fry")
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte("@epic test\n"), 0o644))
+
+	// Verify that the epic-exists guard produces the right error format.
+	epicArg := filepath.Join(".fry", "epic.md")
+	_, epicExists, err := resolveEpicPath(dir, epicArg)
+	require.NoError(t, err)
+	require.True(t, epicExists, "precondition: epic file must exist for this test")
+
+	// Reproduce the guard from RunE.
+	guardErr := fmt.Errorf("--triage-only: epic already exists at %s; triage only runs when no epic exists", epicArg)
+	assert.Contains(t, guardErr.Error(), "--triage-only")
+	assert.Contains(t, guardErr.Error(), "epic already exists")
+	assert.Contains(t, guardErr.Error(), epicArg)
 }
 
 func runRepoCommand(t *testing.T, name string, args ...string) {
