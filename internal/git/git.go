@@ -1,81 +1,181 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/yevgetman/fry/internal/textutil"
+	frylog "github.com/yevgetman/fry/internal/log"
 )
 
-var execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
-	return exec.CommandContext(ctx, name, arg...)
+// InitGit initializes a git repository with local identity and .gitignore entries.
+func InitGit(ctx context.Context, projectDir string) error {
+	return InitGitWith(ctx, projectDir, DefaultExecutor)
 }
 
-func InitGit(ctx context.Context, projectDir string) error {
+// InitGitWith is like InitGit but uses the provided Executor.
+func InitGitWith(ctx context.Context, projectDir string, ex Executor) error {
 	if _, err := os.Stat(filepath.Join(projectDir, ".git")); os.IsNotExist(err) {
-		if err := runBash(ctx, projectDir, "git init"); err != nil {
+		if err := ex.Init(ctx, projectDir); err != nil {
 			return fmt.Errorf("init git: %w", err)
 		}
 	}
 
-	if err := ensureLocalIdentity(ctx, projectDir); err != nil {
+	if err := ensureLocalIdentityWith(ctx, projectDir, ex); err != nil {
 		return err
 	}
 	if err := ensureGitignoreEntries(projectDir, []string{".fry/", ".fry-archive/", ".env", ".DS_Store", ".fry-worktrees/"}); err != nil {
 		return err
 	}
 
-	if hasHead(ctx, projectDir) {
+	if ex.HasHead(ctx, projectDir) {
 		return nil
 	}
 
-	if err := runBash(ctx, projectDir, "git add -A && git commit --allow-empty -m 'Initial commit [automated]'"); err != nil {
+	if err := ex.AddAll(ctx, projectDir); err != nil {
+		return fmt.Errorf("initial commit: add: %w", err)
+	}
+	if err := ex.CommitAllowEmpty(ctx, projectDir, "Initial commit [automated]"); err != nil {
 		return fmt.Errorf("initial commit: %w", err)
 	}
 	return nil
 }
 
+// GitCheckpoint creates a git commit capturing all current changes.
 func GitCheckpoint(ctx context.Context, projectDir, epicName string, sprintNum int, label string) error {
-	cmd := fmt.Sprintf(
-		"git add -A && git commit --allow-empty -m %s",
-		textutil.ShellQuote(fmt.Sprintf("%s: Sprint %d %s [automated]", epicName, sprintNum, label)),
-	)
-	if err := runBash(ctx, projectDir, cmd); err != nil {
+	return GitCheckpointWith(ctx, projectDir, epicName, sprintNum, label, DefaultExecutor)
+}
+
+// GitCheckpointWith is like GitCheckpoint but uses the provided Executor.
+func GitCheckpointWith(ctx context.Context, projectDir, epicName string, sprintNum int, label string, ex Executor) error {
+	message := fmt.Sprintf("%s: Sprint %d %s [automated]", epicName, sprintNum, label)
+	if err := ex.AddAll(ctx, projectDir); err != nil {
+		return fmt.Errorf("git checkpoint: add: %w", err)
+	}
+	if err := ex.CommitAllowEmpty(ctx, projectDir, message); err != nil {
 		return fmt.Errorf("git checkpoint: %w", err)
 	}
 	return nil
 }
 
+// CommitPartialWork commits partial work from a failed sprint.
 func CommitPartialWork(ctx context.Context, projectDir, epicName string, sprintNum int) error {
 	return GitCheckpoint(ctx, projectDir, epicName, sprintNum, "failed-partial")
 }
 
+// CommitPartialWorkWith is like CommitPartialWork but uses the provided Executor.
+func CommitPartialWorkWith(ctx context.Context, projectDir, epicName string, sprintNum int, ex Executor) error {
+	return GitCheckpointWith(ctx, projectDir, epicName, sprintNum, "failed-partial", ex)
+}
+
+// GitDiffForAudit returns a full diff including untracked files, excluding .fry/.
+func GitDiffForAudit(ctx context.Context, projectDir string) (string, error) {
+	return GitDiffForAuditWith(ctx, projectDir, DefaultExecutor)
+}
+
+// GitDiffForAuditWith is like GitDiffForAudit but uses the provided Executor.
+func GitDiffForAuditWith(ctx context.Context, projectDir string, ex Executor) (string, error) {
+	untrackedPaths, err := ex.ListUntracked(ctx, projectDir, []string{":!.fry/"})
+	if err != nil {
+		untrackedPaths = nil
+	}
+
+	if len(untrackedPaths) > 0 {
+		if addErr := ex.AddIntent(ctx, projectDir, untrackedPaths); addErr != nil {
+			untrackedPaths = nil
+		}
+	}
+
+	diff, diffErr := ex.DiffHead(ctx, projectDir, []string{":!.fry/"})
+
+	// Undo only the temporary intent-to-add entries we created for untracked files.
+	if len(untrackedPaths) > 0 {
+		if resetErr := ex.Reset(ctx, projectDir, untrackedPaths); resetErr != nil {
+			fmt.Fprintf(os.Stderr, "fry: warning: git reset after diff failed: %v\n", resetErr)
+		}
+	}
+
+	if diffErr != nil {
+		return "", fmt.Errorf("git diff for audit: %w", diffErr)
+	}
+	return diff, nil
+}
+
+// DiffStatForNoopDetection returns git diff --stat output excluding progress files,
+// for use in no-op detection. Returns a unique error string on failure to prevent
+// false-positive no-op matching.
+func DiffStatForNoopDetection(ctx context.Context, projectDir string) string {
+	return DiffStatForNoopDetectionWith(ctx, projectDir, DefaultExecutor)
+}
+
+// DiffStatForNoopDetectionWith is like DiffStatForNoopDetection but uses the provided Executor.
+func DiffStatForNoopDetectionWith(ctx context.Context, projectDir string, ex Executor) string {
+	out, err := ex.DiffStat(ctx, projectDir, []string{
+		":!.fry/sprint-progress.txt",
+		":!.fry/epic-progress.txt",
+	})
+	if err != nil {
+		frylog.Log("WARNING: git diff --stat failed: %v", err)
+		return fmt.Sprintf("__git_error_%d__", time.Now().UnixNano())
+	}
+	return out
+}
+
+// CollectState returns git working tree state for build resumption reporting.
+func CollectState(ctx context.Context, projectDir string) (clean bool, branch string, lastAutoCommit string) {
+	return CollectStateWith(ctx, projectDir, DefaultExecutor)
+}
+
+// CollectStateWith is like CollectState but uses the provided Executor.
+func CollectStateWith(ctx context.Context, projectDir string, ex Executor) (bool, string, string) {
+	clean := true
+	status, err := ex.StatusPorcelain(ctx, projectDir)
+	if err == nil {
+		clean = strings.TrimSpace(status) == ""
+	}
+
+	branch := ex.CurrentBranch(ctx, projectDir)
+
+	lastCommit := ""
+	out, err := ex.LogGrep(ctx, projectDir, `\[automated\]`, 1, "%s")
+	if err == nil {
+		lastCommit = strings.TrimSpace(out)
+	}
+
+	return clean, branch, lastCommit
+}
+
+// gitConfigValue is an unexported convenience that uses DefaultExecutor.
+// Used by tests in the same package.
+func gitConfigValue(ctx context.Context, projectDir, key string) string {
+	return DefaultExecutor.ConfigGet(ctx, projectDir, key)
+}
+
+// hasHead is an unexported convenience that uses DefaultExecutor.
+func hasHead(ctx context.Context, projectDir string) bool {
+	return DefaultExecutor.HasHead(ctx, projectDir)
+}
+
+// ensureLocalIdentity uses DefaultExecutor. Called by tests in the same package.
 func ensureLocalIdentity(ctx context.Context, projectDir string) error {
-	if strings.TrimSpace(gitConfigValue(ctx, projectDir, "user.name")) == "" {
-		if err := runBash(ctx, projectDir, "git config user.name fry"); err != nil {
+	return ensureLocalIdentityWith(ctx, projectDir, DefaultExecutor)
+}
+
+func ensureLocalIdentityWith(ctx context.Context, projectDir string, ex Executor) error {
+	if strings.TrimSpace(ex.ConfigGet(ctx, projectDir, "user.name")) == "" {
+		if err := ex.ConfigSet(ctx, projectDir, "user.name", "fry"); err != nil {
 			return fmt.Errorf("set git user.name: %w", err)
 		}
 	}
-	if strings.TrimSpace(gitConfigValue(ctx, projectDir, "user.email")) == "" {
-		if err := runBash(ctx, projectDir, "git config user.email fry@automated"); err != nil {
+	if strings.TrimSpace(ex.ConfigGet(ctx, projectDir, "user.email")) == "" {
+		if err := ex.ConfigSet(ctx, projectDir, "user.email", "fry@automated"); err != nil {
 			return fmt.Errorf("set git user.email: %w", err)
 		}
 	}
 	return nil
-}
-
-func gitConfigValue(ctx context.Context, projectDir, key string) string {
-	cmd := execCommand(ctx, "bash", "-c", "git config --get "+textutil.ShellQuote(key))
-	cmd.Dir = projectDir
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	_ = cmd.Run()
-	return stdout.String()
 }
 
 func ensureGitignoreEntries(projectDir string, entries []string) error {
@@ -113,82 +213,6 @@ func ensureGitignoreEntries(projectDir string, entries []string) error {
 	}
 	if _, err := file.WriteString(strings.Join(toAppend, "\n") + "\n"); err != nil {
 		return fmt.Errorf("write .gitignore entries: %w", err)
-	}
-	return nil
-}
-
-func hasHead(ctx context.Context, projectDir string) bool {
-	cmd := execCommand(ctx, "bash", "-c", "git rev-parse --verify HEAD")
-	cmd.Dir = projectDir
-	return cmd.Run() == nil
-}
-
-func runBash(ctx context.Context, projectDir, command string) error {
-	cmd := execCommand(ctx, "bash", "-c", command)
-	cmd.Dir = projectDir
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %s", command, strings.TrimSpace(string(output)))
-	}
-	return nil
-}
-
-func GitDiffForAudit(ctx context.Context, projectDir string) (string, error) {
-	untrackedPaths, err := listUntrackedPaths(ctx, projectDir)
-	if err == nil && len(untrackedPaths) > 0 {
-		if addErr := runGit(ctx, projectDir, append([]string{"add", "-N", "--"}, untrackedPaths...)...); addErr != nil {
-			// Non-fatal: if this fails, we still try to get a diff of tracked files.
-			untrackedPaths = nil
-		}
-	}
-
-	cmd := execCommand(ctx, "bash", "-c", "git diff HEAD -- . ':!.fry/'")
-	cmd.Dir = projectDir
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = nil
-	err = cmd.Run()
-
-	// Undo only the temporary intent-to-add entries we created for untracked files.
-	if len(untrackedPaths) > 0 {
-		if resetErr := runGit(ctx, projectDir, append([]string{"reset", "--"}, untrackedPaths...)...); resetErr != nil {
-			fmt.Fprintf(os.Stderr, "fry: warning: git reset after diff failed: %v\n", resetErr)
-		}
-	}
-
-	if err != nil {
-		return "", fmt.Errorf("git diff for audit: %w", err)
-	}
-	return stdout.String(), nil
-}
-
-func listUntrackedPaths(ctx context.Context, projectDir string) ([]string, error) {
-	cmd := execCommand(ctx, "bash", "-c", "git ls-files --others --exclude-standard -- . ':!.fry/'")
-	cmd.Dir = projectDir
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("list untracked paths: %w", err)
-	}
-
-	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-	var paths []string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			paths = append(paths, line)
-		}
-	}
-	return paths, nil
-}
-
-func runGit(ctx context.Context, projectDir string, args ...string) error {
-	cmd := execCommand(ctx, "git", args...)
-	cmd.Dir = projectDir
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(string(output)))
 	}
 	return nil
 }

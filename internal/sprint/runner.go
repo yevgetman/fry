@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/heal"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/shellhook"
@@ -447,20 +447,7 @@ func loadVerificationChecks(projectDir, verificationFile string) ([]verify.Check
 }
 
 func gitDiffStat(ctx context.Context, projectDir string) string {
-	// Exclude .fry/sprint-progress.txt and .fry/epic-progress.txt — the agent
-	// appends to sprint-progress.txt every iteration, so including it would
-	// make pre/post diffs always differ, defeating no-op detection entirely.
-	cmd := exec.CommandContext(ctx, "git", "diff", "--stat", "HEAD", "--",
-		".", ":!.fry/sprint-progress.txt", ":!.fry/epic-progress.txt")
-	cmd.Dir = projectDir
-	out, err := cmd.Output()
-	if err != nil {
-		// Return a unique value so pre/post diffs never falsely compare equal
-		// when git is broken, which would trigger premature early exit.
-		frylog.Log("WARNING: git diff --stat failed: %v", err)
-		return fmt.Sprintf("__git_error_%d__", time.Now().UnixNano())
-	}
-	return string(out)
+	return git.DiffStatForNoopDetection(ctx, projectDir)
 }
 
 func countChecksForSprint(checks []verify.Check, sprintNum int) int {

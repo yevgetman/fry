@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
@@ -11,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/yevgetman/fry/internal/config"
-	"github.com/yevgetman/fry/internal/textutil"
 )
 
 // StrategyOpts configures SetupStrategy.
@@ -24,9 +22,12 @@ type StrategyOpts struct {
 }
 
 // SetupStrategy configures the git branch/worktree based on the chosen strategy.
-// It validates preconditions, creates branches/worktrees as needed, and returns
-// a StrategySetup with the effective working directory.
 func SetupStrategy(ctx context.Context, opts StrategyOpts) (*StrategySetup, error) {
+	return SetupStrategyWith(ctx, opts, DefaultExecutor)
+}
+
+// SetupStrategyWith is like SetupStrategy but uses the provided Executor.
+func SetupStrategyWith(ctx context.Context, opts StrategyOpts, ex Executor) (*StrategySetup, error) {
 	if opts.Strategy == StrategyAuto {
 		return nil, fmt.Errorf("git strategy must be resolved before calling SetupStrategy (got auto)")
 	}
@@ -38,7 +39,7 @@ func SetupStrategy(ctx context.Context, opts StrategyOpts) (*StrategySetup, erro
 		}, nil
 	}
 
-	if !IsInsideGitRepo(ctx, opts.ProjectDir) {
+	if !ex.IsRepo(ctx, opts.ProjectDir) {
 		return nil, fmt.Errorf("git strategy %q requires an existing git repository; run 'git init' first or use --git-strategy current", opts.Strategy)
 	}
 
@@ -47,31 +48,31 @@ func SetupStrategy(ctx context.Context, opts StrategyOpts) (*StrategySetup, erro
 		branchName = GenerateBranchName(opts.EpicName)
 	}
 
-	origBranch := CurrentBranch(ctx, opts.ProjectDir)
+	origBranch := ex.CurrentBranch(ctx, opts.ProjectDir)
 
 	switch opts.Strategy {
 	case StrategyBranch:
-		return setupBranch(ctx, opts.ProjectDir, branchName, origBranch, opts.ForceReuse)
+		return setupBranch(ctx, opts.ProjectDir, branchName, origBranch, opts.ForceReuse, ex)
 	case StrategyWorktree:
-		return setupWorktree(ctx, opts.ProjectDir, branchName, origBranch, opts.ForceReuse)
+		return setupWorktree(ctx, opts.ProjectDir, branchName, origBranch, opts.ForceReuse, ex)
 	default:
 		return nil, fmt.Errorf("unexpected git strategy %q", opts.Strategy)
 	}
 }
 
-func setupBranch(ctx context.Context, projectDir, branchName, origBranch string, forceReuse bool) (*StrategySetup, error) {
-	exists := branchExists(ctx, projectDir, branchName)
+func setupBranch(ctx context.Context, projectDir, branchName, origBranch string, forceReuse bool, ex Executor) (*StrategySetup, error) {
+	exists := ex.BranchExists(ctx, projectDir, branchName)
 
 	if exists && !forceReuse {
 		return nil, fmt.Errorf("branch %q already exists; use --branch-name to specify a different name, or delete it with: git branch -d %s", branchName, branchName)
 	}
 
 	if exists {
-		if err := runBash(ctx, projectDir, fmt.Sprintf("git checkout %s", textutil.ShellQuote(branchName))); err != nil {
+		if err := ex.Checkout(ctx, projectDir, branchName); err != nil {
 			return nil, fmt.Errorf("checkout existing branch: %w", err)
 		}
 	} else {
-		if err := runBash(ctx, projectDir, fmt.Sprintf("git checkout -b %s", textutil.ShellQuote(branchName))); err != nil {
+		if err := ex.CreateAndCheckout(ctx, projectDir, branchName); err != nil {
 			return nil, fmt.Errorf("create branch: %w", err)
 		}
 	}
@@ -85,11 +86,11 @@ func setupBranch(ctx context.Context, projectDir, branchName, origBranch string,
 	}, nil
 }
 
-func setupWorktree(ctx context.Context, projectDir, branchName, origBranch string, forceReuse bool) (*StrategySetup, error) {
+func setupWorktree(ctx context.Context, projectDir, branchName, origBranch string, forceReuse bool, ex Executor) (*StrategySetup, error) {
 	slug := worktreeSlug(branchName)
 	worktreeDir := filepath.Join(projectDir, config.GitWorktreeDir, slug)
 
-	exists := worktreeExists(ctx, projectDir, worktreeDir)
+	exists := worktreeExists(ctx, projectDir, worktreeDir, ex)
 
 	if exists && !forceReuse {
 		return nil, fmt.Errorf("worktree at %q already exists; remove it with: git worktree remove %s", worktreeDir, worktreeDir)
@@ -97,9 +98,9 @@ func setupWorktree(ctx context.Context, projectDir, branchName, origBranch strin
 
 	if exists {
 		// Validate it's still a valid worktree
-		if !IsInsideGitRepo(ctx, worktreeDir) {
+		if !ex.IsRepo(ctx, worktreeDir) {
 			// Worktree directory exists but is invalid; prune and recreate
-			_ = runBash(ctx, projectDir, "git worktree prune")
+			_ = ex.WorktreePrune(ctx, projectDir)
 			exists = false
 		}
 	}
@@ -109,19 +110,12 @@ func setupWorktree(ctx context.Context, projectDir, branchName, origBranch strin
 			return nil, fmt.Errorf("create worktree parent dir: %w", err)
 		}
 
-		branchFlag := fmt.Sprintf("-b %s", textutil.ShellQuote(branchName))
-		if branchExists(ctx, projectDir, branchName) {
-			branchFlag = textutil.ShellQuote(branchName)
-		}
-
-		cmd := fmt.Sprintf("git worktree add %s %s", textutil.ShellQuote(worktreeDir), branchFlag)
-		if err := runBash(ctx, projectDir, cmd); err != nil {
+		createBranch := !ex.BranchExists(ctx, projectDir, branchName)
+		if err := ex.WorktreeAdd(ctx, projectDir, worktreeDir, branchName, createBranch); err != nil {
 			return nil, fmt.Errorf("create worktree: %w", err)
 		}
 
 		// Copy .fry/ and plans/ into worktree so sprint runner finds artifacts.
-		// Only on fresh creation — when reusing an existing worktree (ForceReuse),
-		// the worktree's .fry/ has the actual build progress and must not be overwritten.
 		if err := copyDirIfExists(filepath.Join(projectDir, config.FryDir), filepath.Join(worktreeDir, config.FryDir)); err != nil {
 			return nil, fmt.Errorf("copy .fry/ to worktree: %w", err)
 		}
@@ -163,60 +157,64 @@ func GenerateBranchName(epicName string) string {
 
 // IsInsideGitRepo checks if projectDir is inside a git repository.
 func IsInsideGitRepo(ctx context.Context, projectDir string) bool {
-	cmd := execCommand(ctx, "bash", "-c", "git rev-parse --is-inside-work-tree")
-	cmd.Dir = projectDir
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-	return strings.TrimSpace(stdout.String()) == "true"
+	return DefaultExecutor.IsRepo(ctx, projectDir)
+}
+
+// IsInsideGitRepoWith is like IsInsideGitRepo but uses the provided Executor.
+func IsInsideGitRepoWith(ctx context.Context, projectDir string, ex Executor) bool {
+	return ex.IsRepo(ctx, projectDir)
 }
 
 // CurrentBranch returns the name of the current git branch, or "" on error.
 func CurrentBranch(ctx context.Context, projectDir string) string {
-	cmd := execCommand(ctx, "bash", "-c", "git rev-parse --abbrev-ref HEAD")
-	cmd.Dir = projectDir
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(stdout.String())
+	return DefaultExecutor.CurrentBranch(ctx, projectDir)
+}
+
+// CurrentBranchWith is like CurrentBranch but uses the provided Executor.
+func CurrentBranchWith(ctx context.Context, projectDir string, ex Executor) string {
+	return ex.CurrentBranch(ctx, projectDir)
 }
 
 // CheckoutBranch switches to the specified branch.
 func CheckoutBranch(ctx context.Context, projectDir, branchName string) error {
-	return runBash(ctx, projectDir, fmt.Sprintf("git checkout %s", textutil.ShellQuote(branchName)))
+	return CheckoutBranchWith(ctx, projectDir, branchName, DefaultExecutor)
+}
+
+// CheckoutBranchWith is like CheckoutBranch but uses the provided Executor.
+func CheckoutBranchWith(ctx context.Context, projectDir, branchName string, ex Executor) error {
+	return ex.Checkout(ctx, projectDir, branchName)
 }
 
 // DetectExistingSetup checks if a prior fry branch or worktree exists
 // for the given branch name. Returns nil if nothing found.
 func DetectExistingSetup(ctx context.Context, projectDir, branchName string) (*StrategySetup, error) {
+	return DetectExistingSetupWith(ctx, projectDir, branchName, DefaultExecutor)
+}
+
+// DetectExistingSetupWith is like DetectExistingSetup but uses the provided Executor.
+func DetectExistingSetupWith(ctx context.Context, projectDir, branchName string, ex Executor) (*StrategySetup, error) {
 	slug := worktreeSlug(branchName)
 	worktreeDir := filepath.Join(projectDir, config.GitWorktreeDir, slug)
 
 	// Check for worktree first
-	if worktreeExists(ctx, projectDir, worktreeDir) && IsInsideGitRepo(ctx, worktreeDir) {
+	if worktreeExists(ctx, projectDir, worktreeDir, ex) && ex.IsRepo(ctx, worktreeDir) {
 		return &StrategySetup{
 			WorkDir:        worktreeDir,
 			OriginalDir:    projectDir,
 			BranchName:     branchName,
-			OriginalBranch: CurrentBranch(ctx, projectDir),
+			OriginalBranch: ex.CurrentBranch(ctx, projectDir),
 			Strategy:       StrategyWorktree,
 			IsWorktree:     true,
 		}, nil
 	}
 
 	// Check for branch
-	if branchExists(ctx, projectDir, branchName) {
+	if ex.BranchExists(ctx, projectDir, branchName) {
 		return &StrategySetup{
 			WorkDir:        projectDir,
 			OriginalDir:    projectDir,
 			BranchName:     branchName,
-			OriginalBranch: CurrentBranch(ctx, projectDir),
+			OriginalBranch: ex.CurrentBranch(ctx, projectDir),
 			Strategy:       StrategyBranch,
 		}, nil
 	}
@@ -300,33 +298,18 @@ func worktreeSlug(branchName string) string {
 	return slugify(name)
 }
 
-func branchExists(ctx context.Context, projectDir, name string) bool {
-	cmd := execCommand(ctx, "bash", "-c", fmt.Sprintf("git rev-parse --verify %s", textutil.ShellQuote("refs/heads/"+name)))
-	cmd.Dir = projectDir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run() == nil
-}
-
-func worktreeExists(ctx context.Context, projectDir, worktreeDir string) bool {
+func worktreeExists(ctx context.Context, projectDir, worktreeDir string, ex Executor) bool {
 	absWT, err := filepath.Abs(worktreeDir)
 	if err != nil {
 		return false
 	}
-	cmd := execCommand(ctx, "bash", "-c", "git worktree list --porcelain")
-	cmd.Dir = projectDir
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
+	paths, err := ex.WorktreeList(ctx, projectDir)
+	if err != nil {
 		return false
 	}
-	for _, line := range strings.Split(stdout.String(), "\n") {
-		if strings.HasPrefix(line, "worktree ") {
-			wt := strings.TrimPrefix(line, "worktree ")
-			if wt == absWT {
-				return true
-			}
+	for _, wt := range paths {
+		if wt == absWT {
+			return true
 		}
 	}
 	return false

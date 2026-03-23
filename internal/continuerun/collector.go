@@ -1,18 +1,18 @@
 package continuerun
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/epic"
 )
 
@@ -207,38 +207,7 @@ func checkRequiredTools(tools []string) []ToolStatus {
 
 // collectGitState returns (clean, branch, lastAutoCommit).
 func collectGitState(ctx context.Context, projectDir string) (bool, string, string) {
-	clean := true
-	branch := ""
-	lastCommit := ""
-
-	// Check if working tree is clean
-	var statusOut bytes.Buffer
-	statusCmd := exec.CommandContext(ctx, "bash", "-c", "git status --porcelain")
-	statusCmd.Dir = projectDir
-	statusCmd.Stdout = &statusOut
-	if statusCmd.Run() == nil {
-		clean = strings.TrimSpace(statusOut.String()) == ""
-	}
-
-	// Get current branch
-	var branchOut bytes.Buffer
-	branchCmd := exec.CommandContext(ctx, "bash", "-c", "git branch --show-current")
-	branchCmd.Dir = projectDir
-	branchCmd.Stdout = &branchOut
-	if branchCmd.Run() == nil {
-		branch = strings.TrimSpace(branchOut.String())
-	}
-
-	// Get last automated commit
-	var logOut bytes.Buffer
-	logCmd := exec.CommandContext(ctx, "bash", "-c", `git log --oneline --grep="\[automated\]" -1 --format="%s"`)
-	logCmd.Dir = projectDir
-	logCmd.Stdout = &logOut
-	if logCmd.Run() == nil {
-		lastCommit = strings.TrimSpace(logOut.String())
-	}
-
-	return clean, branch, lastCommit
+	return git.CollectState(ctx, projectDir)
 }
 
 // countDeviations counts the number of DEVIATE verdict entries in the deviation log.
