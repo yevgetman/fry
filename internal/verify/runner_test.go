@@ -647,17 +647,17 @@ func TestRunnerLargeOutputTruncation(t *testing.T) {
 }
 
 // TestRunnerRegexEdgeCases tests CheckFileContains behaviour for edge-case patterns:
-// empty pattern, an invalid regex with an unclosed group, and a pattern that
+// empty pattern, a pattern with literal parentheses, and a pattern that
 // matches the entire file content.
 func TestRunnerRegexEdgeCases(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "data.txt"), []byte("hello world\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "data.txt"), []byte("hello world\ncall(arg)\n"), 0o644))
 
 	cases := []struct {
-		name    string
-		pattern string
+		name     string
+		pattern  string
 		wantPass bool
 	}{
 		{
@@ -666,14 +666,19 @@ func TestRunnerRegexEdgeCases(t *testing.T) {
 			wantPass: true,
 		},
 		{
-			name:     "invalid unclosed group fails gracefully",
-			pattern:  "(unclosed",
-			wantPass: false,
+			name:     "literal parentheses match literally",
+			pattern:  "call(arg)",
+			wantPass: true,
 		},
 		{
 			name:     "pattern matching entire content passes",
 			pattern:  "hello world",
 			wantPass: true,
+		},
+		{
+			name:     "pattern not in file fails",
+			pattern:  "(unclosed",
+			wantPass: false,
 		},
 	}
 
