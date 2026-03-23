@@ -31,8 +31,9 @@ type BuildAuditOpts struct {
 	Results          []sprint.SprintResult
 	Verbose          bool
 	Model            string
-	DeferredFailures string // content of .fry/deferred-failures.md
+	DeferredFailures string    // content of .fry/deferred-failures.md
 	Mode             string
+	Stdout           io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
 // RunBuildAudit performs a final holistic audit of the entire codebase after
@@ -81,7 +82,11 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 	}
 
 	if opts.Verbose {
-		writer := io.MultiWriter(os.Stdout, logFile)
+		stdout := opts.Stdout
+		if stdout == nil {
+			stdout = os.Stdout
+		}
+		writer := io.MultiWriter(stdout, logFile)
 		runOpts.Stdout = writer
 		runOpts.Stderr = writer
 	} else {

@@ -32,6 +32,7 @@ type SummaryOpts struct {
 	Verbose          bool
 	Model            string
 	BuildAuditResult *audit.AuditResult // nil if build audit was skipped or failed
+	Stdout           io.Writer          // optional; defaults to os.Stdout when Verbose is true
 }
 
 // GenerateBuildSummary invokes a separate agent session that reads all build
@@ -77,7 +78,11 @@ func GenerateBuildSummary(ctx context.Context, opts SummaryOpts) error {
 	}
 
 	if opts.Verbose {
-		writer := io.MultiWriter(os.Stdout, logFile)
+		stdout := opts.Stdout
+		if stdout == nil {
+			stdout = os.Stdout
+		}
+		writer := io.MultiWriter(stdout, logFile)
 		runOpts.Stdout = writer
 		runOpts.Stderr = writer
 	} else {

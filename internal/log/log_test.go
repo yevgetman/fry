@@ -48,6 +48,31 @@ func TestAgentBanner_DefaultModel(t *testing.T) {
 	assert.Contains(t, output, "model=default")
 }
 
+func TestSetStdout(t *testing.T) {
+	t.Parallel()
+
+	var stdout strings.Builder
+	l := NewLogger(nil)
+	l.SetStdout(&stdout)
+
+	l.Log("routed message %d", 7)
+
+	output := stdout.String()
+	assert.Contains(t, output, "routed message 7")
+	assert.Contains(t, output, "[") // timestamp bracket
+}
+
+func TestSetStdout_NilFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+
+	l := NewLogger(nil)
+	l.SetStdout(nil) // explicitly nil — should not panic
+
+	require.NotPanics(t, func() {
+		l.Log("default stdout")
+	})
+}
+
 func TestAgentBanner_CustomModel(t *testing.T) {
 	t.Parallel()
 

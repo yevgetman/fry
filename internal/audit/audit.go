@@ -55,6 +55,7 @@ type AuditOpts struct {
 	DiffFn     func() (string, error) // if set, called before each audit pass to refresh the diff
 	Verbose    bool
 	Mode       string
+	Stdout     io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
 type AuditResult struct {
@@ -1123,7 +1124,11 @@ func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model
 	}
 
 	if opts.Verbose {
-		writer := io.MultiWriter(os.Stdout, logFile)
+		stdout := opts.Stdout
+		if stdout == nil {
+			stdout = os.Stdout
+		}
+		writer := io.MultiWriter(stdout, logFile)
 		runOpts.Stdout = writer
 		runOpts.Stderr = writer
 		output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)

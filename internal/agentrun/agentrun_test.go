@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -214,6 +215,50 @@ func TestRunWithDualLogsEngineError(t *testing.T) {
 
 	_, err := RunWithDualLogs(context.Background(), "prompt", filepath.Join(dir, "iter.log"), filepath.Join(dir, "sprint.log"), opts)
 	require.NoError(t, err)
+}
+
+// Test: custom Stdout — verbose output routes to the provided writer.
+func TestRunWithDualLogs_CustomStdout(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	iterPath := filepath.Join(dir, "iter.log")
+	sprintLogPath := filepath.Join(dir, "sprint.log")
+
+	var stdoutBuf strings.Builder
+	eng := &mockEngine{output: "custom stdout output"}
+	opts := DualLogOpts{
+		Engine:  eng,
+		WorkDir: dir,
+		Verbose: true,
+		Stdout:  &stdoutBuf,
+	}
+
+	output, err := RunWithDualLogs(context.Background(), "test prompt", iterPath, sprintLogPath, opts)
+	require.NoError(t, err)
+	assert.Equal(t, "custom stdout output", output)
+	assert.Contains(t, stdoutBuf.String(), "custom stdout output")
+}
+
+// Test: nil Stdout with Verbose — falls back to os.Stdout (no panic).
+func TestRunWithDualLogs_NilStdoutDefault(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	iterPath := filepath.Join(dir, "iter.log")
+	sprintLogPath := filepath.Join(dir, "sprint.log")
+
+	eng := &mockEngine{output: "default stdout"}
+	opts := DualLogOpts{
+		Engine:  eng,
+		WorkDir: dir,
+		Verbose: true,
+		Stdout:  nil, // explicitly nil — should not panic
+	}
+
+	require.NotPanics(t, func() {
+		_, _ = RunWithDualLogs(context.Background(), "test prompt", iterPath, sprintLogPath, opts)
+	})
 }
 
 // Test 5: missing iterPath directory — returns a non-nil error.

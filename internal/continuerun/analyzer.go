@@ -24,6 +24,7 @@ type AnalyzeOpts struct {
 	Engine     engine.Engine
 	Model      string
 	Verbose    bool
+	Stdout     io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
 var (
@@ -75,7 +76,11 @@ func Analyze(ctx context.Context, opts AnalyzeOpts) (*ContinueDecision, error) {
 		WorkDir: opts.ProjectDir,
 	}
 	if opts.Verbose {
-		writer := io.MultiWriter(os.Stdout, logFile)
+		stdout := opts.Stdout
+		if stdout == nil {
+			stdout = os.Stdout
+		}
+		writer := io.MultiWriter(stdout, logFile)
 		runOpts.Stdout = writer
 		runOpts.Stderr = writer
 	} else {

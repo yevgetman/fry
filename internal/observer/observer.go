@@ -36,6 +36,7 @@ type ObserverOpts struct {
 	EffortLevel  epic.EffortLevel
 	Verbose      bool
 	BuildData    map[string]string
+	Stdout       io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
 // Observation holds the parsed result of an observer LLM session.
@@ -204,7 +205,11 @@ func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 	}
 
 	if opts.Verbose {
-		writer := io.MultiWriter(os.Stdout, logFile)
+		stdout := opts.Stdout
+		if stdout == nil {
+			stdout = os.Stdout
+		}
+		writer := io.MultiWriter(stdout, logFile)
 		runOpts.Stdout = writer
 		runOpts.Stderr = writer
 	} else {

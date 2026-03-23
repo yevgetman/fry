@@ -3,6 +3,7 @@ package review
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -28,6 +29,7 @@ type ReplanOpts struct {
 	Model             string
 	DryRun            bool
 	Verbose           bool
+	Stdout            io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
 func RunReplan(ctx context.Context, opts ReplanOpts) error {
@@ -97,8 +99,12 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 		WorkDir: opts.ProjectDir,
 	}
 	if opts.Verbose {
-		runOpts.Stdout = os.Stdout
-		runOpts.Stderr = os.Stdout
+		stdout := opts.Stdout
+		if stdout == nil {
+			stdout = os.Stdout
+		}
+		runOpts.Stdout = stdout
+		runOpts.Stderr = stdout
 	}
 	beforeSize := textutil.FileSize(epicPath)
 	output, _, runErr := opts.Engine.Run(ctx,

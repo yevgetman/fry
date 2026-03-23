@@ -3,6 +3,7 @@ package review
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -40,6 +41,7 @@ type RunReviewOpts struct {
 	SimulateVerdict string
 	Verbose         bool
 	Mode            string
+	Stdout          io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
 func AssembleReviewPrompt(opts ReviewPromptOpts) (string, error) {
@@ -247,8 +249,12 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 		WorkDir: opts.ProjectDir,
 	}
 	if opts.Verbose {
-		runOpts.Stdout = os.Stdout
-		runOpts.Stderr = os.Stdout
+		stdout := opts.Stdout
+		if stdout == nil {
+			stdout = os.Stdout
+		}
+		runOpts.Stdout = stdout
+		runOpts.Stderr = stdout
 	}
 	reviewRole := "build plan reviewer"
 	if opts.Mode == "writing" {

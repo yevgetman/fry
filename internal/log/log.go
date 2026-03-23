@@ -14,6 +14,7 @@ var Verbose bool
 type Logger struct {
 	mu      sync.Mutex
 	logFile io.Writer
+	stdout  io.Writer // optional; defaults to os.Stdout when nil
 }
 
 // NewLogger creates a Logger that writes to the given writer (in addition to stdout).
@@ -28,6 +29,21 @@ func (l *Logger) SetLogFile(w io.Writer) {
 	l.logFile = w
 }
 
+// SetStdout overrides the default stdout destination for log output.
+// Pass nil to revert to os.Stdout.
+func (l *Logger) SetStdout(w io.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.stdout = w
+}
+
+func (l *Logger) resolveStdout() io.Writer {
+	if l.stdout != nil {
+		return l.stdout
+	}
+	return os.Stdout
+}
+
 func (l *Logger) Log(format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
 	line := fmt.Sprintf("[%s] %s\n", time.Now().Format("2006-01-02 15:04:05"), message)
@@ -35,7 +51,7 @@ func (l *Logger) Log(format string, args ...interface{}) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	_, _ = io.WriteString(os.Stdout, line)
+	_, _ = io.WriteString(l.resolveStdout(), line)
 	if l.logFile != nil {
 		if _, err := io.WriteString(l.logFile, line); err != nil {
 			fmt.Fprintf(os.Stderr, "fry: log write failed: %v\n", err)
@@ -66,6 +82,10 @@ var defaultLogger = &Logger{}
 
 func SetLogFile(w io.Writer) {
 	defaultLogger.SetLogFile(w)
+}
+
+func SetStdout(w io.Writer) {
+	defaultLogger.SetStdout(w)
 }
 
 func Log(format string, args ...interface{}) {

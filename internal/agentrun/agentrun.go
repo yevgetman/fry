@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/yevgetman/fry/internal/engine"
+	frylog "github.com/yevgetman/fry/internal/log"
 )
 
 // DualLogOpts holds the configuration for a dual-log agent invocation.
@@ -15,13 +16,19 @@ type DualLogOpts struct {
 	Model      string        // resolved model string (e.g. "claude-opus-4-5")
 	ExtraFlags []string      // agent extra flags from epic (e.g. --verbose)
 	WorkDir    string        // project directory for the agent
-	Verbose    bool          // if true, also write to os.Stdout
+	Verbose    bool          // if true, also write to Stdout (or os.Stdout if nil)
+	Stdout     io.Writer     // optional; defaults to os.Stdout when Verbose is true
 }
 
 // RunWithDualLogs runs the engine with the given prompt, writing output to both
 // iterPath (fresh per-iteration log) and sprintLogPath (appended cross-iteration log).
 // Returns the agent's combined stdout+stderr output string.
 func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string, opts DualLogOpts) (string, error) {
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+
 	iterLog, err := os.Create(iterPath)
 	if err != nil {
 		return "", fmt.Errorf("open iter log: %w", err)
@@ -41,7 +48,7 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 	}
 
 	if opts.Verbose {
-		writer := io.MultiWriter(os.Stdout, iterLog, sprintLog)
+		writer := io.MultiWriter(stdout, iterLog, sprintLog)
 		runOpts.Stdout = writer
 		runOpts.Stderr = writer
 		output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
@@ -52,7 +59,7 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 			return output, fmt.Errorf("sync sprint log: %w", err)
 		}
 		if runErr != nil && ctx.Err() == nil {
-			fmt.Fprintf(os.Stderr, "fry: warning: agent exited with error (non-fatal): %v\n", runErr)
+			frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
 			return output, nil
 		}
 		return output, runErr
@@ -69,7 +76,7 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 		return output, fmt.Errorf("sync sprint log: %w", err)
 	}
 	if runErr != nil && ctx.Err() == nil {
-		fmt.Fprintf(os.Stderr, "fry: warning: agent exited with error (non-fatal): %v\n", runErr)
+		frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
 		return output, nil
 	}
 	return output, runErr
