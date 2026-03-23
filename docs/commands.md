@@ -220,6 +220,35 @@ fry clean --project-dir /path/to/proj  # Archive a different project
 
 ---
 
+## `fry status`
+
+Show the current build state without making an LLM call. Reads `.fry/` artifacts and displays a summary of completed sprints, active/partial sprint work, environment checks, and deferred failures.
+
+```
+fry status [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--project-dir <path>` | Project directory to inspect (default: current directory) |
+
+### Behavior
+
+- If no `.fry/epic.md` exists, prints "No active build found" and exits cleanly.
+- If `.fry/epic.md` exists but no `.fry/` artifacts are present, prints "No active build found" and exits cleanly.
+- Otherwise, prints a full build state report including sprint completion, environment readiness, deferred failures, and deviation count.
+
+### Examples
+
+```bash
+fry status                              # Show build state for current directory
+fry status --project-dir /path/to/proj  # Show build state for a different project
+```
+
+---
+
 ## `fry version`
 
 Print the Fry version string.
