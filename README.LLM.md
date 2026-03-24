@@ -29,6 +29,9 @@ fry/
 │   │   ├── clean.go             # Archive .fry/ and build outputs to .fry-archive/
 │   │   ├── version.go           # Version subcommand
 │   │   └── status.go            # Show current build state (no LLM call)
+│   ├── color/
+│   │   ├── color.go             # ANSI color utilities, TTY detection, NO_COLOR support
+│   │   └── logcolor.go          # Pattern-matched log line colorizer
 │   ├── config/config.go         # All constants: paths, defaults, invocation prompts
 │   ├── engine/
 │   │   ├── engine.go            # Engine interface + ResolveEngine + NewEngine
@@ -312,6 +315,7 @@ Key flags:
   --no-review                        # Skip mid-build sprint review
   --no-audit                         # Skip audits
   --verbose                          # Verbose logging
+  --no-color                         # Disable colored output (also: NO_COLOR env, TERM=dumb)
   --project-dir path                 # Working directory (default: .)
 ```
 

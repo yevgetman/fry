@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/yevgetman/fry/internal/color"
 	"github.com/yevgetman/fry/internal/epic"
 )
 
@@ -135,13 +136,13 @@ func adjustDecision(scanner *bufio.Scanner, stdout io.Writer, d *TriageDecision)
 // DisplayTriageSummary prints the triage classification result to the given writer.
 func DisplayTriageSummary(w io.Writer, d *TriageDecision) {
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "── Triage classification ───────────────────────────────────────")
-	fmt.Fprintf(w, "Difficulty:  %s\n", d.Complexity)
-	fmt.Fprintf(w, "Effort:      %s\n", d.EffortLevel.String())
-	fmt.Fprintf(w, "Git:         %s\n", gitStrategyLabel(d.Complexity))
-	fmt.Fprintf(w, "Reason:      %s\n", d.Reason)
-	fmt.Fprintf(w, "Action:      %s\n", actionDescription(d.Complexity, d.SprintCount))
-	fmt.Fprintln(w, "─────────────────────────────────────────────────────────────────")
+	fmt.Fprintln(w, color.DimText("── Triage classification ───────────────────────────────────────"))
+	fmt.Fprintf(w, "%s  %s\n", color.BoldText("Difficulty:"), d.Complexity)
+	fmt.Fprintf(w, "%s      %s\n", color.BoldText("Effort:"), d.EffortLevel.String())
+	fmt.Fprintf(w, "%s         %s\n", color.BoldText("Git:"), gitStrategyLabel(d.Complexity))
+	fmt.Fprintf(w, "%s      %s\n", color.BoldText("Reason:"), d.Reason)
+	fmt.Fprintf(w, "%s      %s\n", color.BoldText("Action:"), actionDescription(d.Complexity, d.SprintCount))
+	fmt.Fprintln(w, color.DimText("─────────────────────────────────────────────────────────────────"))
 }
 
 func gitStrategyLabel(c Complexity) string {

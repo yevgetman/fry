@@ -2,15 +2,26 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
+
+	"github.com/yevgetman/fry/internal/color"
 	frlog "github.com/yevgetman/fry/internal/log"
 )
 
 var (
 	projectDir string
+	noColor    bool
 
 	rootCmd = &cobra.Command{
 		Use:   "fry",
 		Short: "Automated AI build orchestration engine",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if noColor {
+				color.SetEnabled(false)
+			}
+			if color.Enabled() {
+				frlog.SetColorize(color.ColorizeLogLine)
+			}
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCmd.RunE(cmd, args)
 		},
@@ -20,6 +31,7 @@ var (
 func init() {
 	rootCmd.PersistentFlags().StringVar(&projectDir, "project-dir", ".", "Project directory")
 	rootCmd.PersistentFlags().BoolVar(&frlog.Verbose, "verbose", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 
 	// These flags are intentionally registered on both rootCmd and runCmd.
 	// rootCmd delegates to runCmd when invoked without a subcommand (e.g.,

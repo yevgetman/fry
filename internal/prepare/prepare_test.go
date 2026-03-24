@@ -2,6 +2,7 @@ package prepare
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,22 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 )
+
+// errReader returns an error after reading all buffered data.
+type errReader struct {
+	data []byte
+	pos  int
+	err  error
+}
+
+func (r *errReader) Read(p []byte) (int, error) {
+	if r.pos >= len(r.data) {
+		return 0, r.err
+	}
+	n := copy(p, r.data[r.pos:])
+	r.pos += n
+	return n, nil
+}
 
 type fakeEngine struct {
 	output string
@@ -885,6 +902,25 @@ func TestSoftwareStep2Prompt_WithReviewEnabled(t *testing.T) {
 
 	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", true, "", "")
 	assert.Contains(t, prompt, "@review_between_sprints")
+}
+
+func TestRunSanityCheck_ReaderErrorNotSilenced(t *testing.T) {
+	t.Parallel()
+
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
+	readErr := errors.New("disk read failed")
+	stdin := &errReader{data: nil, err: readErr}
+	var stdout strings.Builder
+
+	_, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+		ProjectDir: t.TempDir(),
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, "plan", "", "", "")
+
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrSanityCheckDeclined)
+	assert.Contains(t, err.Error(), "disk read failed")
 }
 
 func TestSanityCheckPrompt_SprintsNotHours(t *testing.T) {

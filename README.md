@@ -119,6 +119,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Dynamic sprint review** -- optional mid-build review with replanning
 - **Observer** -- metacognitive layer that watches builds, notices patterns, and develops persistent self-awareness across runs. Non-fatal; effort-level gated. See [Observer](docs/observer.md).
 - **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
+- **Colored output** -- terminal output is colorized for readability (phase banners in cyan, PASS in green, FAIL in red, warnings in yellow). Respects `NO_COLOR`, `TERM=dumb`, and `--no-color`. Log files are always plain text.
 
 ## Self-Improving Codebase
 

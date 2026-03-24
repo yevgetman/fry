@@ -9,6 +9,29 @@ Fry provides status output at every phase so you always know what it's doing, ev
 | Default | Status banners and progress lines at every phase; full output goes to log files only |
 | `--verbose` | Everything above, plus full agent transcript streamed to terminal |
 
+## Color
+
+When stdout is a terminal, Fry colorizes output to improve readability:
+
+| Element | Color |
+|---|---|
+| Phase banners (`▶ AGENT`, `▶ TRIAGE`, `▶ AUDIT`, etc.) | Cyan |
+| `PASS` statuses | Green |
+| `FAIL` statuses | Red |
+| Warnings (`WARNING`, `⚠`) | Yellow |
+| Sprint start banners (`STARTING SPRINT`) | Bold |
+| Section dividers (`──`) | Dim |
+| Git checkpoint lines (`GIT:`) | Dim |
+
+Color is **disabled** when:
+
+- stdout is not a TTY (piped or redirected output)
+- The `NO_COLOR` environment variable is set (per [no-color.org](https://no-color.org))
+- `TERM=dumb`
+- `--no-color` is passed
+
+Log files (`.fry/build-logs/`) never contain ANSI escape codes regardless of color settings.
+
 ## Prepare Phase
 
 The prepare phase logs every input it detects and which inputs feed into each generation step.

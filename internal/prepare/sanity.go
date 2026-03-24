@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/yevgetman/fry/internal/color"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
@@ -50,6 +51,18 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 	enableReview := opts.EnableReview
 	scanner := bufio.NewScanner(stdin)
 
+	// scanLine reads a line from the scanner and returns the trimmed text.
+	// Returns ErrSanityCheckDeclined on EOF or wraps the scanner error.
+	scanLine := func() (string, error) {
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return "", fmt.Errorf("run prepare: read input: %w", err)
+			}
+			return "", ErrSanityCheckDeclined
+		}
+		return strings.TrimSpace(scanner.Text()), nil
+	}
+
 	for {
 		sanityModel := engine.ResolveModelForSession(eng.Name(), string(effortLevel), engine.SessionSanityCheck)
 		frylog.Log("Sanity check: summarizing project (engine: %s, model: %s)...", eng.Name(), sanityModel)
@@ -64,10 +77,11 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 		displaySanitySummary(stdout, summary)
 		fmt.Fprint(stdout, "Does this look right? [Y/n/a] (a = adjust) ")
 
-		if !scanner.Scan() {
-			return nil, ErrSanityCheckDeclined
+		answer, err := scanLine()
+		if err != nil {
+			return nil, err
 		}
-		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+		answer = strings.ToLower(answer)
 
 		if answer == "" || answer == "y" || answer == "yes" {
 			return &SanityResult{UserPrompt: userPrompt, EffortLevel: effortLevel, EnableReview: enableReview}, nil
@@ -75,10 +89,10 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 
 		if answer == "a" || answer == "adjust" {
 			fmt.Fprint(stdout, "\nPrompt adjustment (describe any change, or leave blank to skip): ")
-			if !scanner.Scan() {
-				return nil, ErrSanityCheckDeclined
+			adjustment, err := scanLine()
+			if err != nil {
+				return nil, err
 			}
-			adjustment := strings.TrimSpace(scanner.Text())
 			if adjustment != "" {
 				if strings.TrimSpace(userPrompt) == "" {
 					userPrompt = adjustment
@@ -88,10 +102,11 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 			}
 
 			fmt.Fprintf(stdout, "Effort level [%s] (low/medium/high/max, or Enter to keep): ", effortLevel.String())
-			if !scanner.Scan() {
-				return nil, ErrSanityCheckDeclined
+			effortInput, err := scanLine()
+			if err != nil {
+				return nil, err
 			}
-			effortInput := strings.TrimSpace(strings.ToLower(scanner.Text()))
+			effortInput = strings.ToLower(effortInput)
 			if effortInput != "" {
 				parsed, parseErr := epic.ParseEffortLevel(effortInput)
 				if parseErr != nil {
@@ -113,17 +128,15 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 					reviewDefault = "y"
 				}
 				fmt.Fprintf(stdout, "Enable sprint review? [%s] (y/n, or Enter to keep): ", reviewDefault)
-				if !scanner.Scan() {
-					return nil, ErrSanityCheckDeclined
+				reviewInput, err := scanLine()
+				if err != nil {
+					return nil, err
 				}
-				reviewInput := strings.TrimSpace(strings.ToLower(scanner.Text()))
-				switch reviewInput {
+				switch strings.ToLower(reviewInput) {
 				case "y", "yes":
 					enableReview = true
 				case "n", "no":
 					enableReview = false
-				case "":
-					// keep current value
 				}
 			}
 
@@ -170,13 +183,13 @@ func parseSanitySummary(output string) SanitySummary {
 
 func displaySanitySummary(w io.Writer, s SanitySummary) {
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "── Project summary ─────────────────────────────────────────────")
-	fmt.Fprintf(w, "Project type:    %s\n", fieldOrUnknown(s.ProjectType))
-	fmt.Fprintf(w, "Goal:            %s\n", fieldOrUnknown(s.Goal))
-	fmt.Fprintf(w, "Expected output: %s\n", fieldOrUnknown(s.ExpectedOutput))
-	fmt.Fprintf(w, "Key topics:      %s\n", fieldOrUnknown(s.KeyTopics))
-	fmt.Fprintf(w, "Effort:          %s\n", fieldOrUnknown(s.EffortEstimate))
-	fmt.Fprintln(w, "─────────────────────────────────────────────────────────────────")
+	fmt.Fprintln(w, color.DimText("── Project summary ─────────────────────────────────────────────"))
+	fmt.Fprintf(w, "%s    %s\n", color.BoldText("Project type:"), fieldOrUnknown(s.ProjectType))
+	fmt.Fprintf(w, "%s            %s\n", color.BoldText("Goal:"), fieldOrUnknown(s.Goal))
+	fmt.Fprintf(w, "%s %s\n", color.BoldText("Expected output:"), fieldOrUnknown(s.ExpectedOutput))
+	fmt.Fprintf(w, "%s      %s\n", color.BoldText("Key topics:"), fieldOrUnknown(s.KeyTopics))
+	fmt.Fprintf(w, "%s          %s\n", color.BoldText("Effort:"), fieldOrUnknown(s.EffortEstimate))
+	fmt.Fprintln(w, color.DimText("─────────────────────────────────────────────────────────────────"))
 }
 
 func fieldOrUnknown(v string) string {

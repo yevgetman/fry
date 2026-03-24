@@ -85,3 +85,23 @@ func TestAgentBanner_CustomModel(t *testing.T) {
 	assert.Contains(t, output, "model=gpt-5.4")
 	assert.NotContains(t, output, "model=default")
 }
+
+func TestSetColorize_StdoutColoredLogFilePlain(t *testing.T) {
+	t.Parallel()
+
+	var stdoutBuf, logBuf strings.Builder
+	l := NewLogger(&logBuf)
+	l.SetStdout(&stdoutBuf)
+	l.SetColorize(func(line string) string {
+		return strings.ReplaceAll(line, "PASS", "\033[32mPASS\033[0m")
+	})
+
+	l.Log("SPRINT 1 PASS")
+
+	// Stdout should contain the ANSI escape code.
+	assert.Contains(t, stdoutBuf.String(), "\033[32mPASS\033[0m")
+
+	// Log file should contain plain text only.
+	assert.Contains(t, logBuf.String(), "PASS")
+	assert.NotContains(t, logBuf.String(), "\033[")
+}

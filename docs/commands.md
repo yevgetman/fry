@@ -70,6 +70,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--sarif` | Write `build-audit.sarif` in SARIF 2.1.0 format alongside `build-audit.md`. Only written when the build audit runs. See [Build Audit](build-audit.md). |
 | `--json-report` | Write `.fry/build-report.json` containing sprint results, verification outcomes, and timing data. |
 | `--show-tokens` | Print a per-sprint token usage table to stderr at the end of the run. When using the Ollama engine, token counts are always 0 (Ollama does not report token usage); the column displays `-`. |
+| `--no-color` | Disable colored terminal output. Color is also disabled by setting the `NO_COLOR` environment variable or when stdout is not a TTY. |
 | `--dry-run` | Parse epic and show plan without running anything |
 
 ### Examples
@@ -134,6 +135,7 @@ fry prepare [epic_filename] [flags]
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. |
 | `--no-sanity-check` | Skip the interactive project summary confirmation |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
+| `--no-color` | Disable colored terminal output |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 
 All artifacts are **always regenerated** (overwritten) on each run.

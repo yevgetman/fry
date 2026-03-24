@@ -375,6 +375,9 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 
 	scanner := bufio.NewScanner(stdin)
 	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("run prepare: read input: %w", err)
+		}
 		return ErrUserDeclined
 	}
 	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))

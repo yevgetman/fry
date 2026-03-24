@@ -18,6 +18,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/archive"
 	"github.com/yevgetman/fry/internal/audit"
+	"github.com/yevgetman/fry/internal/color"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/docker"
@@ -963,7 +964,7 @@ var runCmd = &cobra.Command{
 		summaryCopy := append([]sprint.SprintResult(nil), results...)
 		mu.Unlock()
 		if ep.EffortLevel != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "Effort level: %s\n", ep.EffortLevel)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", color.BoldText("Effort level:"), ep.EffortLevel)
 		}
 		printBuildSummary(cmd.OutOrStdout(), summaryCopy)
 
@@ -1400,11 +1401,11 @@ func resolvePrepareEngine(prepareFlag, runFlag string) string {
 }
 
 func printDryRunReport(w io.Writer, projectDir, epicPath string, ep *epic.Epic, engineName string, startSprint, endSprint int) error {
-	fmt.Fprintf(w, "Epic: %s\n", ep.Name)
-	fmt.Fprintf(w, "Project dir: %s\n", projectDir)
-	fmt.Fprintf(w, "Epic file: %s\n", epicPath)
-	fmt.Fprintf(w, "Engine: %s\n", engineName)
-	fmt.Fprintf(w, "Effort: %s\n", ep.EffortLevel)
+	fmt.Fprintf(w, "%s %s\n", color.BoldText("Epic:"), ep.Name)
+	fmt.Fprintf(w, "%s %s\n", color.BoldText("Project dir:"), projectDir)
+	fmt.Fprintf(w, "%s %s\n", color.BoldText("Epic file:"), epicPath)
+	fmt.Fprintf(w, "%s %s\n", color.BoldText("Engine:"), engineName)
+	fmt.Fprintf(w, "%s %s\n", color.BoldText("Effort:"), ep.EffortLevel)
 	if runContinue {
 		fmt.Fprintln(w, "Mode: continue (auto-detected resume point)")
 	} else if runResume {
@@ -1460,19 +1461,32 @@ func printBuildSummary(w io.Writer, results []sprint.SprintResult) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "SPRINT\tNAME\tSTATUS\tDURATION")
 	for _, result := range results {
-		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", result.Number, result.Name, result.Status, result.Duration.Round(1e9))
+		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", result.Number, result.Name, colorizeStatus(result.Status), result.Duration.Round(1e9))
 	}
 	_ = tw.Flush()
 
 	// Print warnings after the table
 	for _, result := range results {
 		if result.AuditWarning != "" {
-			fmt.Fprintf(w, "  ⚠ Sprint %d: %s\n", result.Number, result.AuditWarning)
+			fmt.Fprintf(w, "  %s Sprint %d: %s\n", color.YellowText("⚠"), result.Number, result.AuditWarning)
 		}
 		if len(result.DeferredFailures) > 0 {
-			fmt.Fprintf(w, "  ⚠ Sprint %d: %d deferred verification failures\n", result.Number, len(result.DeferredFailures))
+			fmt.Fprintf(w, "  %s Sprint %d: %d deferred verification failures\n", color.YellowText("⚠"), result.Number, len(result.DeferredFailures))
 		}
 	}
+}
+
+func colorizeStatus(status string) string {
+	if strings.HasPrefix(status, "PASS") {
+		return color.GreenText(status)
+	}
+	if strings.HasPrefix(status, "FAIL") {
+		return color.RedText(status)
+	}
+	if status == sprint.StatusSkipped {
+		return color.YellowText(status)
+	}
+	return status
 }
 
 func isPassStatus(status string) bool {
