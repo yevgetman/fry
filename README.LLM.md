@@ -210,7 +210,7 @@ Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → defa
 
 ### Verification Checks (`internal/verify/types.go`)
 
-Four check primitives: `@check_file` (file exists), `@check_file_contains` (regex match in file), `@check_cmd` (command exits 0), `@check_cmd_output` (command output matches regex).
+Five check primitives: `@check_file` (file exists), `@check_file_contains` (regex match in file), `@check_cmd` (command exits 0), `@check_cmd_output` (command output matches regex), `@check_test` (go test command passes).
 
 ---
 
@@ -287,6 +287,7 @@ fry prepare [epic_filename]          # Generate .fry/ artifacts from plans
 fry replan                           # Replan after deviation
 fry clean                            # Archive .fry/ + build outputs to .fry-archive/
 fry version                          # Print version
+fry status                           # Show current build state (no LLM call)
 
 Key flags:
   --engine codex|claude|ollama       # AI engine for build
