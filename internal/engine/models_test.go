@@ -230,10 +230,11 @@ func TestTierForSession(t *testing.T) {
 		{"sanity-claude-max", "claude", "max", SessionSanityCheck, TierLabor},
 		{"sanity-codex-high", "codex", "high", SessionSanityCheck, TierLabor},
 
-		// Prepare: Standard always
+		// Prepare: Standard for low/medium/high, Frontier for max
 		{"prepare-claude-low", "claude", "low", SessionPrepare, TierStandard},
-		{"prepare-claude-max", "claude", "max", SessionPrepare, TierStandard},
-		{"prepare-codex-high", "codex", "high", SessionPrepare, TierStandard},
+		{"prepare-claude-high", "claude", "high", SessionPrepare, TierStandard},
+		{"prepare-claude-max", "claude", "max", SessionPrepare, TierFrontier},
+		{"prepare-codex-max", "codex", "max", SessionPrepare, TierFrontier},
 
 		// Triage: Mini always
 		{"triage-claude-low", "claude", "low", SessionTriage, TierMini},

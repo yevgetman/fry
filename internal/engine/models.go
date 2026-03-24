@@ -209,6 +209,9 @@ func TierForSession(engineName, effort string, session SessionType) ModelTier {
 		return TierLabor
 
 	case SessionPrepare:
+		if e == "max" {
+			return TierFrontier
+		}
 		return TierStandard
 
 	case SessionTriage:

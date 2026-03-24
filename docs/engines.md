@@ -132,7 +132,7 @@ To update models when new ones release, change only the tier mapping table in `i
 | Compaction | Labor | Labor | Labor | Mini |
 | Continue analysis | Mini | Mini | Standard | Standard |
 | Sanity check | Labor | Labor | Labor | Labor |
-| Prepare | Standard | Standard | Standard | Standard |
+| Prepare | Standard | Standard | Standard | **Frontier** |
 
 Empty effort level defaults to "medium" behavior.
 
