@@ -150,6 +150,31 @@ Prompt.
 	assert.Equal(t, 3, ep.MaxHealAttempts)
 }
 
+func TestParseMaxHealAttemptsIgnoredForMaxEffort(t *testing.T) {
+	t.Parallel()
+
+	input := `
+@epic Max Heal
+@effort max
+@max_heal_attempts 5
+@sprint 1
+@name One
+@max_iterations 1
+@promise ONE
+@prompt
+Prompt.
+`
+	var ep *Epic
+	stderr := captureStderr(t, func() {
+		ep = parseTempEpic(t, input)
+	})
+
+	// Max effort ignores explicit @max_heal_attempts — resets to 0 (unlimited).
+	assert.Equal(t, 0, ep.MaxHealAttempts)
+	assert.False(t, ep.MaxHealAttemptsSet)
+	assert.Contains(t, stderr, "@max_heal_attempts ignored for max effort")
+}
+
 func TestParsePromptBleedStripping(t *testing.T) {
 	t.Parallel()
 

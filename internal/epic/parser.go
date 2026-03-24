@@ -240,6 +240,15 @@ func ParseEpic(path string) (*Epic, error) {
 	if ep.MaxHealAttempts == 0 && !maxHealAttemptsSet {
 		ep.MaxHealAttempts = config.DefaultMaxHealAttempts
 	}
+	// Max effort uses unlimited progress-based healing. If the LLM (or user)
+	// explicitly set @max_heal_attempts, clear the flag so effectiveHealConfig
+	// falls through to the effort-level default path instead of treating it as
+	// a hard cap.
+	if ep.EffortLevel == EffortMax && maxHealAttemptsSet {
+		fmt.Fprintf(os.Stderr, "fry: warning: @max_heal_attempts ignored for max effort (uses unlimited progress-based healing)\n")
+		ep.MaxHealAttempts = 0
+		ep.MaxHealAttemptsSet = false
+	}
 	if ep.MaxFailPercent == 0 && !maxFailPercentSet {
 		ep.MaxFailPercent = config.DefaultMaxFailPercent
 	}

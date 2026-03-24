@@ -75,7 +75,7 @@ The heal loop adapts to the effort level, controlling how many attempts are made
 | `@max_heal_attempts <N>` | Per-sprint | Inherits global | Override for a specific sprint |
 | `@max_fail_percent <N>` | Global | Effort-level default | Maximum failure percentage before sprint fails |
 
-When `@max_heal_attempts` is explicitly set, it overrides the effort-level default and disables progress detection — the loop runs a fixed number of attempts.
+When `@max_heal_attempts` is explicitly set, it overrides the effort-level default and disables progress detection — the loop runs a fixed number of attempts. **Exception:** for `@effort max`, any explicit `@max_heal_attempts` is ignored with a warning — max effort always uses unlimited progress-based healing (safety cap: 50).
 
 ### Override Priority
 
