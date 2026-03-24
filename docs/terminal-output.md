@@ -103,7 +103,7 @@ If the summary doesn't look right but you don't want to start over, type `a` to 
 ```
 Does this look right? [Y/n/a] (a = adjust) a
 
-Adjustment (describe changes, or leave blank to skip): focus on backend, skip the frontend for now
+Prompt adjustment (describe any change, or leave blank to skip): focus on backend, skip the frontend for now
 Effort level [auto] (low/medium/high/max, or Enter to keep): high
 [2026-03-10 11:51:30] Regenerating project summary with adjustments...
 [2026-03-10 11:51:32] Sanity check: summarizing project (engine: claude, model: haiku)...

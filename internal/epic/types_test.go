@@ -141,7 +141,8 @@ func TestEffortLevel_DeviationScopeUnlimited(t *testing.T) {
 	t.Parallel()
 
 	assert.False(t, EffortLow.DeviationScopeUnlimited())
-	assert.False(t, EffortMedium.DeviationScopeUnlimited())
-	assert.False(t, EffortHigh.DeviationScopeUnlimited())
+	assert.True(t, EffortMedium.DeviationScopeUnlimited())
+	assert.True(t, EffortHigh.DeviationScopeUnlimited())
 	assert.True(t, EffortMax.DeviationScopeUnlimited())
+	assert.True(t, EffortLevel("").DeviationScopeUnlimited()) // auto-detect
 }

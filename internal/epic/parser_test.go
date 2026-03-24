@@ -175,13 +175,10 @@ Prompt.
 	assert.Contains(t, stderr, "@max_heal_attempts ignored for max effort")
 }
 
-func TestParseMaxEffortDeviationScopeCoversAllSprints(t *testing.T) {
+func TestParseDeviationScopeExpandsToTotalSprints(t *testing.T) {
 	t.Parallel()
 
-	input := `
-@epic Wide Deviation
-@effort max
-@max_deviation_scope 3
+	fourSprints := `
 @sprint 1
 @name One
 @max_iterations 1
@@ -210,14 +207,56 @@ Prompt three.
 @prompt
 Prompt four.
 `
-	var ep *Epic
-	captureStderr(t, func() {
-		ep = parseTempEpic(t, input)
+
+	t.Run("max effort expands scope to all sprints", func(t *testing.T) {
+		t.Parallel()
+		var ep *Epic
+		captureStderr(t, func() {
+			ep = parseTempEpic(t, "@epic Max\n@effort max\n@max_deviation_scope 3\n"+fourSprints)
+		})
+		assert.Equal(t, 4, ep.TotalSprints)
+		assert.Equal(t, 4, ep.MaxDeviationScope)
 	})
 
-	// Max effort overrides deviation scope to cover all sprints.
-	assert.Equal(t, 4, ep.TotalSprints)
-	assert.Equal(t, 4, ep.MaxDeviationScope)
+	t.Run("high effort expands scope to all sprints", func(t *testing.T) {
+		t.Parallel()
+		ep := parseTempEpic(t, "@epic High\n@effort high\n"+fourSprints)
+		assert.Equal(t, 4, ep.TotalSprints)
+		assert.Equal(t, 4, ep.MaxDeviationScope)
+	})
+
+	t.Run("medium effort expands scope to all sprints", func(t *testing.T) {
+		t.Parallel()
+		ep := parseTempEpic(t, "@epic Med\n@effort medium\n"+fourSprints)
+		assert.Equal(t, 4, ep.TotalSprints)
+		assert.Equal(t, 4, ep.MaxDeviationScope)
+	})
+
+	t.Run("auto-detect effort expands scope", func(t *testing.T) {
+		t.Parallel()
+		ep := parseTempEpic(t, "@epic Auto\n"+fourSprints)
+		assert.Equal(t, 4, ep.TotalSprints)
+		assert.Equal(t, 4, ep.MaxDeviationScope)
+	})
+
+	t.Run("low effort keeps default scope", func(t *testing.T) {
+		t.Parallel()
+		ep := parseTempEpic(t, "@epic Low\n@effort low\n"+fourSprints)
+		assert.Equal(t, 4, ep.TotalSprints)
+		assert.Equal(t, config.DefaultMaxDeviationScope, ep.MaxDeviationScope)
+	})
+
+	t.Run("capped at safety limit for large epics", func(t *testing.T) {
+		t.Parallel()
+		// Build a 12-sprint epic — scope should cap at MaxDeviationScopeCap (10).
+		var big string
+		for i := 1; i <= 12; i++ {
+			big += fmt.Sprintf("@sprint %d\n@name S%d\n@max_iterations 1\n@promise P%d\n@prompt\nDo sprint %d.\n\n", i, i, i, i)
+		}
+		ep := parseTempEpic(t, "@epic Big\n@effort high\n"+big)
+		assert.Equal(t, 12, ep.TotalSprints)
+		assert.Equal(t, config.MaxDeviationScopeCap, ep.MaxDeviationScope)
+	})
 }
 
 func TestParsePromptBleedStripping(t *testing.T) {

@@ -72,7 +72,7 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 		}
 
 		if answer == "a" || answer == "adjust" {
-			fmt.Fprint(stdout, "\nAdjustment (describe changes, or leave blank to skip): ")
+			fmt.Fprint(stdout, "\nPrompt adjustment (describe any change, or leave blank to skip): ")
 			if !scanner.Scan() {
 				return nil, ErrSanityCheckDeclined
 			}

@@ -26,7 +26,7 @@ See [Effort Levels](effort-levels.md) for full details.
 @review_between_sprints         # Enable the feature
 @review_engine claude           # Use a specific engine for the reviewer (optional)
 @review_model claude-sonnet-4-6 # Use a specific model for the reviewer (optional)
-@max_deviation_scope 3          # Max sprints a single deviation can touch (default: 3; max effort overrides to totalSprints)
+@max_deviation_scope 3          # Max sprints a single deviation can touch (auto-expanded to totalSprints for all effort levels except low, capped at 10)
 ```
 
 ### Disabling at Runtime
@@ -65,7 +65,7 @@ When a deviation is approved, the replanner:
 2. Reads the original epic, plan, and deviation log
 3. Makes **surgical edits** to affected `@prompt` blocks only
 4. Validates the result:
-   - Scope check — can't affect more than `@max_deviation_scope` sprints
+   - Scope check — can't affect more than `@max_deviation_scope` sprints (auto-expanded to all remaining sprints for medium/high/max, capped at 10)
    - No completed sprints touched
    - No structural directives changed (`@sprint`, `@name`, `@promise`, `@max_iterations`)
 5. Backs up the original epic before writing changes

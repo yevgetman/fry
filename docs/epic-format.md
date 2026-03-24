@@ -48,7 +48,7 @@ Placed before any `@sprint` block:
 | `@review_between_sprints` | Enable mid-build sprint review (default: disabled) |
 | `@review_engine <codex\|claude>` | AI engine for reviewer session (default: same as `@engine`) |
 | `@review_model <model>` | Model override for the reviewer session |
-| `@max_deviation_scope <N>` | Maximum sprints a single deviation can touch (default: 3) |
+| `@max_deviation_scope <N>` | Maximum sprints a single deviation can touch (default: 3; auto-expanded to `totalSprints` for all non-low effort levels, capped at 10) |
 | `@audit_after_sprint` | Enable post-sprint semantic audit (default: enabled). See [Sprint Audit](sprint-audit.md). |
 | `@no_audit` | Disable post-sprint semantic audit. See [Sprint Audit](sprint-audit.md). |
 | `@max_audit_iterations <N>` | Maximum audit→fix cycles per sprint (default: 3) |
