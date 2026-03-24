@@ -20,14 +20,15 @@ Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex, Claude Code, or 
 fry/
 ├── cmd/fry/main.go              # Entry point — calls cli.Execute()
 ├── internal/
-│   ├── cli/                     # Cobra commands: root, run, init, prepare, replan, clean, version
+│   ├── cli/                     # Cobra commands: root, run, init, prepare, replan, clean, version, status
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose, --engine, etc.)
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
 │   │   ├── init.go              # Scaffold project structure (plans/, assets/, media/, git, .gitignore)
 │   │   ├── prepare.go           # Generate .fry/ artifacts from plans
 │   │   ├── replan.go            # Mid-build replanning
 │   │   ├── clean.go             # Archive .fry/ and build outputs to .fry-archive/
-│   │   └── version.go           # Version subcommand
+│   │   ├── version.go           # Version subcommand
+│   │   └── status.go            # Show current build state (no LLM call)
 │   ├── config/config.go         # All constants: paths, defaults, invocation prompts
 │   ├── engine/
 │   │   ├── engine.go            # Engine interface + ResolveEngine + NewEngine
@@ -45,7 +46,7 @@ fry/
 │   │   ├── progress.go          # Iteration memory management
 │   │   └── compactor.go         # Sprint progress → epic-progress summarization
 │   ├── verify/
-│   │   ├── types.go             # CheckType: FILE, FILE_CONTAINS, CMD, CMD_OUTPUT
+│   │   ├── types.go             # CheckType: FILE, FILE_CONTAINS, CMD, CMD_OUTPUT, TEST
 │   │   ├── parser.go            # verification.md parser
 │   │   ├── runner.go            # Check execution with timeout
 │   │   └── collector.go         # Failure report aggregation
@@ -210,7 +211,7 @@ Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → defa
 
 ### Verification Checks (`internal/verify/types.go`)
 
-Four check primitives: `@check_file` (file exists), `@check_file_contains` (regex match in file), `@check_cmd` (command exits 0), `@check_cmd_output` (command output matches regex).
+Five check primitives: `@check_file` (file exists), `@check_file_contains` (regex match in file), `@check_cmd` (command exits 0), `@check_cmd_output` (command output matches regex), `@check_test` (go test command passes).
 
 ---
 
@@ -287,6 +288,7 @@ fry prepare [epic_filename]          # Generate .fry/ artifacts from plans
 fry replan                           # Replan after deviation
 fry clean                            # Archive .fry/ + build outputs to .fry-archive/
 fry version                          # Print version
+fry status                           # Show current build state (no LLM call)
 
 Key flags:
   --engine codex|claude|ollama       # AI engine for build

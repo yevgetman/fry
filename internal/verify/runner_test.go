@@ -666,8 +666,8 @@ func TestRunnerRegexEdgeCases(t *testing.T) {
 			wantPass: true,
 		},
 		{
-			name:     "literal parentheses match literally",
-			pattern:  "call(arg)",
+			name:     "escaped parentheses match literal parentheses in file",
+			pattern:  `call\(arg\)`,
 			wantPass: true,
 		},
 		{
@@ -723,6 +723,25 @@ func TestRunnerMixedCheckTypes(t *testing.T) {
 	assert.True(t, results[2].Passed, "file_contains check for present needle should pass")
 	assert.True(t, results[3].Passed, "cmd 'true' should pass")
 	assert.False(t, results[4].Passed, "cmd 'false' should fail")
+}
+
+func TestRunChecksFileContainsRegex(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "doc.md"), []byte("# Introduction\n\nSome text\n"), 0o644))
+
+	checks := []Check{
+		{Sprint: 1, Type: CheckFileContains, Path: "doc.md", Pattern: "^# "},
+		{Sprint: 1, Type: CheckFileContains, Path: "doc.md", Pattern: "^# Foo"},
+	}
+
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, projectDir)
+	require.Len(t, results, 2)
+	assert.Equal(t, 2, totalCount)
+	assert.Equal(t, 1, passCount)
+	assert.True(t, results[0].Passed, "^# should match a line starting with '# '")
+	assert.False(t, results[1].Passed, "^# Foo should not match '# Introduction'")
 }
 
 func writeVerificationFile(t *testing.T, contents string) string {

@@ -52,7 +52,7 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
 		defer checkCancel()
 		targetPath := filepath.Join(projectDir, check.Path)
-		cmd := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qF -- %s %s", textutil.ShellQuote(check.Pattern), textutil.ShellQuote(targetPath)))
+		cmd := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", textutil.ShellQuote(check.Pattern), textutil.ShellQuote(targetPath)))
 		var stderrBuf cappedBuffer
 		cmd.Stderr = &stderrBuf
 		result.Passed = cmd.Run() == nil

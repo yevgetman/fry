@@ -5,15 +5,24 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/verify"
 )
+
+// logCaptureMu serializes subtests that redirect the package-level frylog logger.
+// frylog.SetStdout mutates a global logger; holding this mutex for the duration
+// of each log-capturing subtest prevents output from one subtest appearing in
+// another's buffer when subtests run in parallel.
+var logCaptureMu sync.Mutex
 
 func TestPromptAssembly(t *testing.T) {
 	t.Parallel()
@@ -948,24 +957,29 @@ func TestCompactSprintProgressAgent(t *testing.T) {
 func TestCountChecksForSprint(t *testing.T) {
 	t.Parallel()
 
-	checks := []verify.Check{
-		{Sprint: 1, Type: verify.CheckFile, Path: "a.txt"},
-		{Sprint: 1, Type: verify.CheckFile, Path: "b.txt"},
-		{Sprint: 2, Type: verify.CheckFile, Path: "c.txt"},
-		{Sprint: 3, Type: verify.CheckFile, Path: "d.txt"},
+	checks := []verify.Check{{Sprint: 1}, {Sprint: 2}, {Sprint: 1}, {Sprint: 3}}
+
+	tests := []struct {
+		name      string
+		checks    []verify.Check
+		sprintNum int
+		wantCount int
+	}{
+		{name: "empty slice", checks: nil, sprintNum: 1, wantCount: 0},
+		{name: "all match sprint 1", checks: checks, sprintNum: 1, wantCount: 2},
+		{name: "no match sprint 99", checks: checks, sprintNum: 99, wantCount: 0},
+		{name: "single match sprint 2", checks: checks, sprintNum: 2, wantCount: 1},
+		{name: "single match sprint 3", checks: checks, sprintNum: 3, wantCount: 1},
 	}
 
-	assert.Equal(t, 2, countChecksForSprint(checks, 1))
-	assert.Equal(t, 1, countChecksForSprint(checks, 2))
-	assert.Equal(t, 1, countChecksForSprint(checks, 3))
-	assert.Equal(t, 0, countChecksForSprint(checks, 99))
-}
-
-func TestCountChecksForSprint_Empty(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, 0, countChecksForSprint(nil, 1))
-	assert.Equal(t, 0, countChecksForSprint([]verify.Check{}, 1))
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := countChecksForSprint(tc.checks, tc.sprintNum)
+			assert.Equal(t, tc.wantCount, got)
+		})
+	}
 }
 
 // --- P0: RunSprint context cancellation ---
@@ -1001,18 +1015,37 @@ func TestWarnOutOfRangeChecks(t *testing.T) {
 		name         string
 		checks       []verify.Check
 		totalSprints int
+		wantWarning  bool
+		wantOnce     bool
 	}{
-		{"no checks", nil, 2},
-		{"all in range", []verify.Check{{Sprint: 1}, {Sprint: 2}}, 2},
-		{"one out of range", []verify.Check{{Sprint: 3}}, 2},
-		{"multiple out of range same sprint", []verify.Check{{Sprint: 5}, {Sprint: 5}}, 2},
-		{"zero totalSprints skips check", []verify.Check{{Sprint: 99}}, 0},
+		{name: "totalSprints zero: no output", checks: []verify.Check{{Sprint: 5}}, totalSprints: 0, wantWarning: false},
+		{name: "checks within range: no output", checks: []verify.Check{{Sprint: 1}, {Sprint: 2}}, totalSprints: 3, wantWarning: false},
+		{name: "check exceeds range: warning logged", checks: []verify.Check{{Sprint: 4}}, totalSprints: 3, wantWarning: true},
+		{name: "duplicate out-of-range sprint: warning logged once", checks: []verify.Check{{Sprint: 5}, {Sprint: 5}, {Sprint: 5}}, totalSprints: 3, wantWarning: true, wantOnce: true},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			warnOutOfRangeChecks(tt.checks, tt.totalSprints)
+			logCaptureMu.Lock()
+			t.Cleanup(logCaptureMu.Unlock)
+
+			var buf strings.Builder
+			frylog.SetStdout(&buf)
+			t.Cleanup(func() { frylog.SetStdout(nil) })
+			warnOutOfRangeChecks(tc.checks, tc.totalSprints)
+			output := buf.String()
+			if tc.wantWarning {
+				assert.Contains(t, output, "WARNING")
+				assert.Contains(t, output, "will never run")
+			} else {
+				assert.Empty(t, output)
+			}
+			if tc.wantOnce {
+				assert.Equal(t, 1, strings.Count(output, "WARNING"),
+					"duplicate out-of-range sprint number should produce exactly one warning")
+			}
 		})
 	}
 }
