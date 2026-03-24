@@ -1009,7 +1009,10 @@ func TestRunSprintContextCancellation(t *testing.T) {
 }
 
 func TestWarnOutOfRangeChecks(t *testing.T) {
-	t.Parallel()
+	// NOT parallel: this test redirects the global frylog stdout via
+	// SetStdout. Other tests in this package call functions that write to
+	// frylog (e.g. RunSprint, RunHealLoop), so running concurrently causes
+	// a data race on the shared strings.Builder.
 
 	tests := []struct {
 		name         string
@@ -1025,28 +1028,26 @@ func TestWarnOutOfRangeChecks(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			logCaptureMu.Lock()
-			t.Cleanup(logCaptureMu.Unlock)
+		logCaptureMu.Lock()
 
-			var buf strings.Builder
-			frylog.SetStdout(&buf)
-			t.Cleanup(func() { frylog.SetStdout(nil) })
-			warnOutOfRangeChecks(tc.checks, tc.totalSprints)
-			output := buf.String()
-			if tc.wantWarning {
-				assert.Contains(t, output, "WARNING")
-				assert.Contains(t, output, "will never run")
-			} else {
-				assert.Empty(t, output)
-			}
-			if tc.wantOnce {
-				assert.Equal(t, 1, strings.Count(output, "WARNING"),
-					"duplicate out-of-range sprint number should produce exactly one warning")
-			}
-		})
+		var buf strings.Builder
+		frylog.SetStdout(&buf)
+		warnOutOfRangeChecks(tc.checks, tc.totalSprints)
+		output := buf.String()
+		frylog.SetStdout(nil)
+
+		logCaptureMu.Unlock()
+
+		if tc.wantWarning {
+			assert.Contains(t, output, "WARNING", tc.name)
+			assert.Contains(t, output, "will never run", tc.name)
+		} else {
+			assert.Empty(t, output, tc.name)
+		}
+		if tc.wantOnce {
+			assert.Equal(t, 1, strings.Count(output, "WARNING"),
+				"duplicate out-of-range sprint number should produce exactly one warning")
+		}
 	}
 }
 
