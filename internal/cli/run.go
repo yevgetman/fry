@@ -1658,6 +1658,13 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		resolvedEffort = decision.EffortLevel
 	}
 
+	// Non-software modes (planning, writing) always need the full prepare pipeline
+	// because programmatic epic builders only produce software-mode epics.
+	if mode != prepare.ModeSoftware && mode != "" {
+		decision.Complexity = triage.ComplexityComplex
+		frlog.Log("  TRIAGE: non-software mode (%s) — routing to full prepare pipeline", mode)
+	}
+
 	switch decision.Complexity {
 	case triage.ComplexitySimple:
 		// Cap max → high for simple tasks.

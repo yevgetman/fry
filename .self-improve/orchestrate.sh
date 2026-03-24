@@ -506,6 +506,7 @@ run_planning_phase() {
         $planning_model_flag \
         --no-sanity-check \
         --no-audit \
+        --full-prepare \
         --git-strategy current \
         --mode planning \
         --effort medium \
