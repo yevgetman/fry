@@ -28,8 +28,9 @@ type SanitySummary struct {
 
 // SanityResult holds adjusted values from the sanity check confirmation loop.
 type SanityResult struct {
-	UserPrompt  string
-	EffortLevel epic.EffortLevel
+	UserPrompt   string
+	EffortLevel  epic.EffortLevel
+	EnableReview bool
 }
 
 func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
@@ -46,6 +47,7 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 
 	userPrompt := opts.UserPrompt
 	effortLevel := opts.EffortLevel
+	enableReview := opts.EnableReview
 	scanner := bufio.NewScanner(stdin)
 
 	for {
@@ -68,7 +70,7 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
 
 		if answer == "" || answer == "y" || answer == "yes" {
-			return &SanityResult{UserPrompt: userPrompt, EffortLevel: effortLevel}, nil
+			return &SanityResult{UserPrompt: userPrompt, EffortLevel: effortLevel, EnableReview: enableReview}, nil
 		}
 
 		if answer == "a" || answer == "adjust" {
@@ -96,6 +98,32 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 					fmt.Fprintf(stdout, "Invalid effort level %q — keeping %s.\n", effortInput, effortLevel.String())
 				} else {
 					effortLevel = parsed
+				}
+			}
+
+			// Offer sprint review toggle for non-low effort levels.
+			// Max effort auto-enables review, so only ask for medium/high/auto.
+			effectiveEffort := effortLevel
+			if effectiveEffort == "" {
+				effectiveEffort = epic.EffortMedium // auto-detect defaults to at least medium
+			}
+			if effectiveEffort != epic.EffortLow && effectiveEffort != epic.EffortMax {
+				reviewDefault := "n"
+				if enableReview {
+					reviewDefault = "y"
+				}
+				fmt.Fprintf(stdout, "Enable sprint review? [%s] (y/n, or Enter to keep): ", reviewDefault)
+				if !scanner.Scan() {
+					return nil, ErrSanityCheckDeclined
+				}
+				reviewInput := strings.TrimSpace(strings.ToLower(scanner.Text()))
+				switch reviewInput {
+				case "y", "yes":
+					enableReview = true
+				case "n", "no":
+					enableReview = false
+				case "":
+					// keep current value
 				}
 			}
 

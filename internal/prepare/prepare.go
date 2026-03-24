@@ -33,6 +33,7 @@ type PrepareOpts struct {
 	LogFunc          func(format string, args ...interface{})   // optional; defaults to frylog.Log
 	Mode             Mode
 	EffortLevel      epic.EffortLevel
+	EnableReview     bool      // include @review_between_sprints in the generated epic
 	Stdin            io.Reader // for interactive confirmation (defaults to os.Stdin)
 	Stdout           io.Writer // for displaying generated content (defaults to os.Stdout)
 }
@@ -215,6 +216,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		}
 		opts.UserPrompt = result.UserPrompt
 		opts.EffortLevel = result.EffortLevel
+		opts.EnableReview = result.EnableReview
 		// Refresh derived flags — user may have added a prompt or changed effort via adjust.
 		hasUserPrompt = strings.TrimSpace(opts.UserPrompt) != ""
 		prepModel = engine.ResolveModelForSession(engName, string(opts.EffortLevel), engine.SessionPrepare)
@@ -271,7 +273,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		step2Inputs = append(step2Inputs, config.MediaDir+"/ manifest")
 	}
 	logf("Step 2: Generating %s from %s (engine: %s, model: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName, prepModel)
-	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, mediaManifest, assetsSection)
+	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, opts.EnableReview, mediaManifest, assetsSection)
 	beforeSize = textutil.FileSize(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 	if err != nil {
@@ -500,14 +502,14 @@ func step1Prompt(mode Mode, planContent, executiveContent, mediaManifest string)
 	}
 }
 
-func step2Prompt(mode Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+func step2Prompt(mode Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel, enableReview bool, mediaManifest, assetsSection string) string {
 	switch mode {
 	case ModePlanning:
-		return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, mediaManifest, assetsSection)
+		return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, enableReview, mediaManifest, assetsSection)
 	case ModeWriting:
-		return WritingStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, mediaManifest, assetsSection)
+		return WritingStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, enableReview, mediaManifest, assetsSection)
 	default:
-		return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort, mediaManifest, assetsSection)
+		return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort, enableReview, mediaManifest, assetsSection)
 	}
 }
 

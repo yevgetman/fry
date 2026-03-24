@@ -109,10 +109,15 @@ Executive context:
 %s`, contextLine, planContent, executiveContent, mediaSection(mediaManifest))
 }
 
-func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+func PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt string, effort epic.EffortLevel, enableReview bool, mediaManifest, assetsSection string) string {
 	userPromptLine := ""
 	if userPrompt != "" {
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive for the build: %q. Ensure sprint prompts align with this directive.\n", userPrompt)
+	}
+
+	reviewLine := ""
+	if enableReview {
+		reviewLine = "\n- Include the @review_between_sprints directive in the epic header. The user has opted into sprint review."
 	}
 
 	effortGuidance := effortSizingGuidancePlanning(effort)
@@ -151,14 +156,14 @@ CRITICAL RULES:
 - Sprint 1 is always research/discovery. The final sprint is always synthesis/review.
 - If media assets exist, sprint prompts that need those assets must instruct the agent to reference them from the media/ directory.
 - If supplementary asset documents are provided below, ensure sprint prompts reference relevant specifications or requirements from those documents where applicable.
-- Do NOT include any output other than writing the file. No explanations, no summaries.%s
+- Do NOT include any output other than writing the file. No explanations, no summaries.%s%s
 
 Plan:
 %s
 
 AGENTS.md:
 %s
-%s%s`, epicExamplePath, effortGuidance, userPromptLine, planContent, agentsContent, mediaSection(mediaManifest), assetsPromptBlock(assetsSection))
+%s%s`, epicExamplePath, effortGuidance, userPromptLine, reviewLine, planContent, agentsContent, mediaSection(mediaManifest), assetsPromptBlock(assetsSection))
 }
 
 func effortSizingGuidancePlanning(effort epic.EffortLevel) string {

@@ -51,6 +51,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
+| `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. Also offered interactively during the adjust flow for medium/high effort builds. Max effort auto-enables review. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
 | `--no-sanity-check` | Skip interactive confirmations (triage classification and project summary) |
 | `--no-audit` | Disable sprint and build audits for this run |
@@ -130,6 +131,7 @@ fry prepare [epic_filename] [flags]
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--validate-only` | Check that the epic is valid, then exit |
+| `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. |
 | `--no-sanity-check` | Skip the interactive project summary confirmation |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |

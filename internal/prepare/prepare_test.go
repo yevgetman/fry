@@ -52,14 +52,14 @@ func TestPrepareValidation(t *testing.T) {
 func TestSoftwareStep2ReferencesGenerateEpic(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", "", "")
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", false, "", "")
 	assert.Contains(t, prompt, "/tmp/GENERATE_EPIC.md")
 }
 
 func TestPlanningStep2NoGenerateEpic(t *testing.T) {
 	t.Parallel()
 
-	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "", "")
+	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", false, "", "")
 	assert.NotContains(t, prompt, "GENERATE_EPIC.md")
 }
 
@@ -90,7 +90,7 @@ func TestEffortSizingGuidance_Auto(t *testing.T) {
 func TestSoftwareStep2Prompt_IncludesEffort(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "low", "", "")
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "low", false, "", "")
 	assert.Contains(t, prompt, "EFFORT LEVEL: LOW")
 	assert.Contains(t, prompt, "AT MOST 2 sprints")
 }
@@ -168,7 +168,7 @@ func TestSoftwareStep2Prompt_WithAssets(t *testing.T) {
 	t.Parallel()
 
 	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/api.json (50 B)\n```json\n{}\n```\n"
-	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", "", assetsSection)
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", false, "", assetsSection)
 	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
 	assert.Contains(t, prompt, "supplementary asset documents")
 }
@@ -195,7 +195,7 @@ func TestPlanningStep2Prompt_WithAssets(t *testing.T) {
 	t.Parallel()
 
 	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/framework.yaml (80 B)\n```yaml\nname: test\n```\n"
-	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "", assetsSection)
+	prompt := PlanningStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", false, "", assetsSection)
 	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
 	assert.Contains(t, prompt, "supplementary asset documents")
 }
@@ -212,7 +212,7 @@ func TestPlanningExecutiveFromUserPromptPrompt_WithAssets(t *testing.T) {
 func TestWritingStep2NoGenerateEpic(t *testing.T) {
 	t.Parallel()
 
-	prompt := WritingStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "", "")
+	prompt := WritingStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", false, "", "")
 	assert.NotContains(t, prompt, "GENERATE_EPIC.md")
 }
 
@@ -229,7 +229,7 @@ func TestWritingStep2Prompt_WithAssets(t *testing.T) {
 	t.Parallel()
 
 	assetsSection := "# ===== SUPPLEMENTARY ASSETS =====\n## File: assets/source.md (80 B)\n```markdown\ndata\n```\n"
-	prompt := WritingStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", "", assetsSection)
+	prompt := WritingStep2Prompt("plan", "agents", "/tmp/epic-example.md", "", "", false, "", assetsSection)
 	assert.Contains(t, prompt, "SUPPLEMENTARY ASSETS")
 	assert.Contains(t, prompt, "supplementary asset documents")
 }
@@ -715,8 +715,8 @@ func TestRunSanityCheck_AdjustAddsUserPrompt(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
-	// First: adjust with text and keep effort, then: approve
-	stdin := strings.NewReader("a\nfocus on the backend\n\ny\n")
+	// First: adjust with text, keep effort, keep review default, then: approve
+	stdin := strings.NewReader("a\nfocus on the backend\n\n\ny\n")
 	var stdout strings.Builder
 
 	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
@@ -734,7 +734,7 @@ func TestRunSanityCheck_AdjustAppendsToExistingPrompt(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: medium (2-4 sprints)"}
-	stdin := strings.NewReader("a\nalso add tests\n\ny\n")
+	stdin := strings.NewReader("a\nalso add tests\n\n\ny\n")
 	var stdout strings.Builder
 
 	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
@@ -754,8 +754,8 @@ func TestRunSanityCheck_AdjustChangesEffort(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: high (4-10 sprints)"}
-	// Adjust: blank text, change effort to high, then approve
-	stdin := strings.NewReader("a\n\nhigh\ny\n")
+	// Adjust: blank text, change effort to high, keep review default, then approve
+	stdin := strings.NewReader("a\n\nhigh\n\ny\n")
 	var stdout strings.Builder
 
 	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
@@ -773,8 +773,8 @@ func TestRunSanityCheck_AdjustInvalidEffortKeepsOld(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: medium (2-4 sprints)"}
-	// Adjust: blank text, invalid effort, then approve
-	stdin := strings.NewReader("a\n\ngarbage\ny\n")
+	// Adjust: blank text, invalid effort, keep review default, then approve
+	stdin := strings.NewReader("a\n\ngarbage\n\ny\n")
 	var stdout strings.Builder
 
 	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
@@ -838,6 +838,53 @@ func TestRunSanityCheck_AdjustEOFDuringEffort(t *testing.T) {
 	}, "plan", "", "", "")
 
 	require.ErrorIs(t, err, ErrSanityCheckDeclined)
+}
+
+func TestRunSanityCheck_AdjustEnablesReview(t *testing.T) {
+	t.Parallel()
+
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: high (4-10 sprints)"}
+	// Adjust: blank text, keep effort (high), enable review, then approve
+	stdin := strings.NewReader("a\n\n\ny\ny\n")
+	var stdout strings.Builder
+
+	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+		ProjectDir:  t.TempDir(),
+		EffortLevel: epic.EffortHigh,
+		Stdin:       stdin,
+		Stdout:      &stdout,
+	}, "plan", "", "", "")
+
+	require.NoError(t, err)
+	assert.True(t, result.EnableReview)
+	assert.Contains(t, stdout.String(), "Enable sprint review?")
+}
+
+func TestRunSanityCheck_ReviewNotShownForLowEffort(t *testing.T) {
+	t.Parallel()
+
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
+	// Adjust: blank text, keep effort (low), then approve — no review prompt expected
+	stdin := strings.NewReader("a\n\n\ny\n")
+	var stdout strings.Builder
+
+	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+		ProjectDir:  t.TempDir(),
+		EffortLevel: epic.EffortLow,
+		Stdin:       stdin,
+		Stdout:      &stdout,
+	}, "plan", "", "", "")
+
+	require.NoError(t, err)
+	assert.False(t, result.EnableReview)
+	assert.NotContains(t, stdout.String(), "Enable sprint review?")
+}
+
+func TestSoftwareStep2Prompt_WithReviewEnabled(t *testing.T) {
+	t.Parallel()
+
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "", true, "", "")
+	assert.Contains(t, prompt, "@review_between_sprints")
 }
 
 func TestSanityCheckPrompt_SprintsNotHours(t *testing.T) {

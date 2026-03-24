@@ -18,6 +18,7 @@ var (
 	prepareMode           string
 	prepareEffort         string
 	prepareNoSanityCheck  bool
+	prepareReview         bool
 )
 
 var prepareCmd = &cobra.Command{
@@ -82,6 +83,7 @@ var prepareCmd = &cobra.Command{
 			SkipSanityCheck:  prepareNoSanityCheck,
 			Mode:             mode,
 			EffortLevel:      effortLevel,
+			EnableReview:     prepareReview,
 			Stdin:            os.Stdin,
 			Stdout:           cmd.OutOrStdout(),
 		})
@@ -97,4 +99,5 @@ func init() {
 	prepareCmd.Flags().StringVar(&prepareMode, "mode", "", "Execution mode: software, planning, writing")
 	prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 	prepareCmd.Flags().BoolVar(&prepareNoSanityCheck, "no-sanity-check", false, "Skip the interactive project summary confirmation")
+	prepareCmd.Flags().BoolVar(&prepareReview, "review", false, "Enable sprint review between sprints")
 }

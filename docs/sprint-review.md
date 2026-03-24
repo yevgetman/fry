@@ -29,6 +29,17 @@ See [Effort Levels](effort-levels.md) for full details.
 @max_deviation_scope 3          # Max sprints a single deviation can touch (auto-expanded to totalSprints for all effort levels except low, capped at 10)
 ```
 
+### Enabling via CLI
+
+Use `--review` on `fry run` or `fry prepare` to instruct the epic generator to include `@review_between_sprints`:
+
+```bash
+fry run --review --effort high
+fry prepare --review
+```
+
+When using the interactive adjust flow during the project summary, Fry also prompts `Enable sprint review? [n]` for medium and high effort builds. Max effort auto-enables review without prompting.
+
 ### Disabling at Runtime
 
 Use `--no-review` to disable sprint review even when the epic enables it:

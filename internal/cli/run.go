@@ -45,6 +45,7 @@ var (
 	runUserPrompt     string
 	runUserPromptFile string
 	runNoReview       bool
+	runReview         bool
 	runSimulateReview string
 	runPrepareEngine  string
 	runPlanning       bool
@@ -194,6 +195,7 @@ var runCmd = &cobra.Command{
 					SkipSanityCheck:  runNoSanityCheck || runDryRun,
 					Mode:             mode,
 					EffortLevel:      effortLevel,
+					EnableReview:     runReview,
 					Stdin:            os.Stdin,
 					Stdout:           cmd.OutOrStdout(),
 				}); err != nil {
@@ -1223,6 +1225,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "Preview actions without executing")
 	runCmd.Flags().StringVar(&runUserPrompt, "user-prompt", "", "Additional user prompt")
 	runCmd.Flags().StringVar(&runUserPromptFile, "user-prompt-file", "", "Path to file containing user prompt")
+	runCmd.Flags().BoolVar(&runReview, "review", false, "Enable sprint review between sprints")
 	runCmd.Flags().BoolVar(&runNoReview, "no-review", false, "Disable sprint review")
 	runCmd.Flags().StringVar(&runSimulateReview, "simulate-review", "", "Simulate review verdict")
 	runCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")
@@ -1712,6 +1715,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			SkipSanityCheck:  runNoSanityCheck || runDryRun,
 			Mode:             mode,
 			EffortLevel:      complexEffort,
+			EnableReview:     runReview,
 			Stdin:            stdin,
 			Stdout:           stdout,
 		}); err != nil {
