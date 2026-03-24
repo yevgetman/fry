@@ -18,6 +18,7 @@ import (
 	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/prepare"
 	"github.com/yevgetman/fry/internal/sprint"
+	"github.com/yevgetman/fry/internal/triage"
 )
 
 func TestDryRunParsing(t *testing.T) {
@@ -388,6 +389,22 @@ func TestCheckArgsForMissingDashes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAlwaysVerifyWarnsWhenNoBuildSystem(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+
+	// Create a project directory with no recognized build system files
+	// (no go.mod, package.json, Cargo.toml, Makefile, pyproject.toml, or setup.py).
+	checks := triage.GenerateVerificationChecks(projectDir, 1)
+	assert.Empty(t, checks, "no build system files exist so checks must be empty")
+
+	// Verify the verification file is NOT written when checks are empty.
+	verifyPath := filepath.Join(projectDir, config.DefaultVerificationFile)
+	_, err := os.Stat(verifyPath)
+	assert.True(t, os.IsNotExist(err), "verification file must not exist when no build system is detected")
 }
 
 func runRepoCommand(t *testing.T, name string, args ...string) {

@@ -257,6 +257,8 @@ var runCmd = &cobra.Command{
 					} else {
 						frlog.Log("  VERIFY: generated heuristic verification checks (--always-verify)")
 					}
+				} else {
+					frlog.Log("WARNING: --always-verify: no recognized build system detected; skipping heuristic check generation")
 				}
 			}
 		}
