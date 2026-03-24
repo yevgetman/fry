@@ -964,7 +964,7 @@ var runCmd = &cobra.Command{
 		summaryCopy := append([]sprint.SprintResult(nil), results...)
 		mu.Unlock()
 		if ep.EffortLevel != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", color.BoldText("Effort level:"), ep.EffortLevel)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", color.CyanText("Effort level:"), ep.EffortLevel)
 		}
 		printBuildSummary(cmd.OutOrStdout(), summaryCopy)
 
@@ -1401,11 +1401,11 @@ func resolvePrepareEngine(prepareFlag, runFlag string) string {
 }
 
 func printDryRunReport(w io.Writer, projectDir, epicPath string, ep *epic.Epic, engineName string, startSprint, endSprint int) error {
-	fmt.Fprintf(w, "%s %s\n", color.BoldText("Epic:"), ep.Name)
-	fmt.Fprintf(w, "%s %s\n", color.BoldText("Project dir:"), projectDir)
-	fmt.Fprintf(w, "%s %s\n", color.BoldText("Epic file:"), epicPath)
-	fmt.Fprintf(w, "%s %s\n", color.BoldText("Engine:"), engineName)
-	fmt.Fprintf(w, "%s %s\n", color.BoldText("Effort:"), ep.EffortLevel)
+	fmt.Fprintf(w, "%s %s\n", color.CyanText("Epic:"), ep.Name)
+	fmt.Fprintf(w, "%s %s\n", color.CyanText("Project dir:"), projectDir)
+	fmt.Fprintf(w, "%s %s\n", color.CyanText("Epic file:"), epicPath)
+	fmt.Fprintf(w, "%s %s\n", color.CyanText("Engine:"), engineName)
+	fmt.Fprintf(w, "%s %s\n", color.CyanText("Effort:"), ep.EffortLevel)
 	if runContinue {
 		fmt.Fprintln(w, "Mode: continue (auto-detected resume point)")
 	} else if runResume {

@@ -125,7 +125,7 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 			}
 			if effectiveEffort == epic.EffortMax {
 				enableReview = true
-				fmt.Fprintf(stdout, "Sprint review: %s (auto-enabled for max effort)\n", color.BoldText("enabled"))
+				fmt.Fprintf(stdout, "Sprint review: %s (auto-enabled for max effort)\n", color.GreenText("enabled"))
 			} else if effectiveEffort != epic.EffortLow {
 				reviewDefault := "n"
 				if enableReview {
@@ -187,13 +187,13 @@ func parseSanitySummary(output string) SanitySummary {
 
 func displaySanitySummary(w io.Writer, s SanitySummary) {
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, color.DimText("── Project summary ─────────────────────────────────────────────"))
-	fmt.Fprintf(w, "%s    %s\n", color.BoldText("Project type:"), fieldOrUnknown(s.ProjectType))
-	fmt.Fprintf(w, "%s            %s\n", color.BoldText("Goal:"), fieldOrUnknown(s.Goal))
-	fmt.Fprintf(w, "%s %s\n", color.BoldText("Expected output:"), fieldOrUnknown(s.ExpectedOutput))
-	fmt.Fprintf(w, "%s      %s\n", color.BoldText("Key topics:"), fieldOrUnknown(s.KeyTopics))
-	fmt.Fprintf(w, "%s          %s\n", color.BoldText("Effort:"), fieldOrUnknown(s.EffortEstimate))
-	fmt.Fprintln(w, color.DimText("─────────────────────────────────────────────────────────────────"))
+	fmt.Fprintln(w, color.CyanText("── Project summary ─────────────────────────────────────────────"))
+	fmt.Fprintf(w, "%s    %s\n", color.CyanText("Project type:"), fieldOrUnknown(s.ProjectType))
+	fmt.Fprintf(w, "%s            %s\n", color.CyanText("Goal:"), fieldOrUnknown(s.Goal))
+	fmt.Fprintf(w, "%s %s\n", color.CyanText("Expected output:"), fieldOrUnknown(s.ExpectedOutput))
+	fmt.Fprintf(w, "%s      %s\n", color.CyanText("Key topics:"), fieldOrUnknown(s.KeyTopics))
+	fmt.Fprintf(w, "%s          %s\n", color.CyanText("Effort:"), fieldOrUnknown(s.EffortEstimate))
+	fmt.Fprintln(w, color.CyanText("─────────────────────────────────────────────────────────────────"))
 }
 
 func fieldOrUnknown(v string) string {

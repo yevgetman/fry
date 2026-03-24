@@ -136,13 +136,13 @@ func adjustDecision(scanner *bufio.Scanner, stdout io.Writer, d *TriageDecision)
 // DisplayTriageSummary prints the triage classification result to the given writer.
 func DisplayTriageSummary(w io.Writer, d *TriageDecision) {
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, color.DimText("── Triage classification ───────────────────────────────────────"))
-	fmt.Fprintf(w, "%s  %s\n", color.BoldText("Difficulty:"), d.Complexity)
-	fmt.Fprintf(w, "%s      %s\n", color.BoldText("Effort:"), d.EffortLevel.String())
-	fmt.Fprintf(w, "%s         %s\n", color.BoldText("Git:"), gitStrategyLabel(d.Complexity))
-	fmt.Fprintf(w, "%s      %s\n", color.BoldText("Reason:"), d.Reason)
-	fmt.Fprintf(w, "%s      %s\n", color.BoldText("Action:"), actionDescription(d.Complexity, d.SprintCount))
-	fmt.Fprintln(w, color.DimText("─────────────────────────────────────────────────────────────────"))
+	fmt.Fprintln(w, color.CyanText("── Triage classification ───────────────────────────────────────"))
+	fmt.Fprintf(w, "%s  %s\n", color.CyanText("Difficulty:"), d.Complexity)
+	fmt.Fprintf(w, "%s      %s\n", color.CyanText("Effort:"), d.EffortLevel.String())
+	fmt.Fprintf(w, "%s         %s\n", color.CyanText("Git:"), gitStrategyLabel(d.Complexity))
+	fmt.Fprintf(w, "%s      %s\n", color.CyanText("Reason:"), d.Reason)
+	fmt.Fprintf(w, "%s      %s\n", color.CyanText("Action:"), actionDescription(d.Complexity, d.SprintCount))
+	fmt.Fprintln(w, color.CyanText("─────────────────────────────────────────────────────────────────"))
 }
 
 func gitStrategyLabel(c Complexity) string {
