@@ -226,8 +226,8 @@ func TestFormatReport_Environment(t *testing.T) {
 			{Name: "pnpm", Available: true},
 			{Name: "docker", Available: false},
 		},
-		GitClean:   true,
-		GitBranch:  "master",
+		GitClean:    true,
+		GitBranch:   "master",
 		SprintNames: []string{"Setup", "Auth"},
 	}
 

@@ -51,7 +51,7 @@ var (
 	runMode           string
 	runEffort         string
 	runNoAudit        bool
-	runResume          bool
+	runResume         bool
 	runSprint         int
 	runContinue       bool
 	runNoSanityCheck  bool
@@ -59,15 +59,13 @@ var (
 	runGitStrategy    string
 	runBranchName     string
 	runAlwaysVerify   bool
-	runSimpleContinue      bool
+	runSimpleContinue bool
 	runSARIF          bool
 	runJSONReport     bool
 	runShowTokens     bool
 	runNoObserver     bool
 	runTriageOnly     bool
 )
-
-var errBuildFailed = fmt.Errorf("build failed")
 
 type deferredEntry struct {
 	SprintNumber int
@@ -760,7 +758,8 @@ var runCmd = &cobra.Command{
 							fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
 							fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
 							fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
-							exitErr = errBuildFailed
+							exitErr = fmt.Errorf("sprint %d audit failed: %s after %d cycles",
+								spr.Number, failStatus, auditResult.Iterations)
 							break
 						}
 						warning := fmt.Sprintf("%s remain after %d audit cycles (advisory)",
@@ -814,7 +813,7 @@ var runCmd = &cobra.Command{
 					return err
 				}
 				compactModel := engine.ResolveModel(ep.AgentModel, engineName, string(ep.EffortLevel), engine.SessionCompaction)
-			compacted, err := sprint.CompactSprintProgress(ctx, projectPath, spr.Number, spr.Name, result.Status, compactEngine, ep.CompactWithAgent, compactModel)
+				compacted, err := sprint.CompactSprintProgress(ctx, projectPath, spr.Number, spr.Name, result.Status, compactEngine, ep.CompactWithAgent, compactModel)
 				if err != nil {
 					return err
 				}
@@ -954,7 +953,7 @@ var runCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
 			fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
 			fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
-			exitErr = errBuildFailed
+			exitErr = fmt.Errorf("sprint %d failed: %s", spr.Number, result.Status)
 			break
 		}
 

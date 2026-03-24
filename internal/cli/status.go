@@ -31,8 +31,13 @@ var statusCmd = &cobra.Command{
 		ep, err := epic.ParseEpic(epicPath)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
-				fmt.Fprintf(cmd.OutOrStdout(), "No active build found in %s\n", projectDir)
-				fmt.Fprintf(cmd.OutOrStdout(), "Run 'fry run' to start a build.\n")
+				if buildDir != projectDir {
+					fmt.Fprintf(cmd.OutOrStdout(), "Build worktree not found at %s\n", buildDir)
+					fmt.Fprintf(cmd.OutOrStdout(), "The worktree may have been removed. Run 'fry run --continue' to resume.\n")
+				} else {
+					fmt.Fprintf(cmd.OutOrStdout(), "No active build found in %s\n", projectDir)
+					fmt.Fprintf(cmd.OutOrStdout(), "Run 'fry run' to start a build.\n")
+				}
 				return nil
 			}
 			return err

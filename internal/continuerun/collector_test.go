@@ -64,15 +64,7 @@ func TestParseCompletedSprints(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			dir := t.TempDir()
-			fryDir := filepath.Join(dir, config.FryDir)
-			require.NoError(t, os.MkdirAll(fryDir, 0o755))
-
-			if tt.content != "" {
-				require.NoError(t, os.WriteFile(filepath.Join(dir, config.EpicProgressFile), []byte(tt.content), 0o644))
-			}
-
-			result := parseCompletedSprints(dir)
+			result := parseCompletedSprints(tt.content)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -119,15 +111,7 @@ func TestParseFailedSprints(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			dir := t.TempDir()
-			fryDir := filepath.Join(dir, config.FryDir)
-			require.NoError(t, os.MkdirAll(fryDir, 0o755))
-
-			if tt.content != "" {
-				require.NoError(t, os.WriteFile(filepath.Join(dir, config.EpicProgressFile), []byte(tt.content), 0o644))
-			}
-
-			result := parseFailedSprints(dir)
+			result := parseFailedSprints(tt.content)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -429,8 +413,8 @@ func TestCollectBuildState_MultipleActiveSprints(t *testing.T) {
 	assert.Equal(t, 1, state.ActiveSprints[0].Number)
 	assert.Equal(t, "Scaffold", state.ActiveSprints[0].Name)
 	assert.Equal(t, 1, state.ActiveSprints[0].IterationCount)
-	assert.Empty(t, state.ActiveSprints[0].ProgressExcerpt)  // filtered out — belongs to sprint 6
-	assert.Empty(t, state.ActiveSprints[0].AuditSeverity)    // filtered out — audit file belongs to sprint 6
+	assert.Empty(t, state.ActiveSprints[0].ProgressExcerpt) // filtered out — belongs to sprint 6
+	assert.Empty(t, state.ActiveSprints[0].AuditSeverity)   // filtered out — audit file belongs to sprint 6
 
 	// Sprint 6: has logs, progress file, and audit file
 	assert.Equal(t, 6, state.ActiveSprints[1].Number)

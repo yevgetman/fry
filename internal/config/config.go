@@ -13,6 +13,7 @@ const (
 	DefaultMaxFailPercent     = 20
 	DefaultDockerReadyTimeout = 30
 	DefaultMaxDeviationScope  = 3
+	MaxDeviationScopeCap      = 10
 	DefaultVerificationFile   = ".fry/verification.md"
 	PromptFile                = ".fry/prompt.md"
 	SprintProgressFile        = ".fry/sprint-progress.txt"
@@ -44,13 +45,13 @@ const (
 	MaxFailPercentMax      = 10 // stricter threshold for max effort
 
 	// Audit constants
-	SprintAuditFile            = ".fry/sprint-audit.txt"
-	SprintReviewLogPattern     = "sprint%d_review_%s.log"
-	AuditPromptFile            = ".fry/audit-prompt.md"
-	DefaultMaxAuditIterations  = 3
-	MaxAuditDiffBytes          = 100_000
-	AuditInvocationPrompt      = "Read and execute ALL instructions in .fry/audit-prompt.md. You are a code auditor. Review the sprint's work and write your findings to .fry/sprint-audit.txt. Do NOT modify any source code."
-	AuditFixInvocationPrompt   = "Read and execute ALL instructions in .fry/audit-prompt.md. Fix the issues described in the prompt."
+	SprintAuditFile           = ".fry/sprint-audit.txt"
+	SprintReviewLogPattern    = "sprint%d_review_%s.log"
+	AuditPromptFile           = ".fry/audit-prompt.md"
+	DefaultMaxAuditIterations = 3
+	MaxAuditDiffBytes         = 100_000
+	AuditInvocationPrompt     = "Read and execute ALL instructions in .fry/audit-prompt.md. You are a code auditor. Review the sprint's work and write your findings to .fry/sprint-audit.txt. Do NOT modify any source code."
+	AuditFixInvocationPrompt  = "Read and execute ALL instructions in .fry/audit-prompt.md. Fix the issues described in the prompt."
 
 	// Two-level audit loop constants
 	DefaultMaxOuterAuditCycles = 3  // outer audit cycles (medium/default)
@@ -80,19 +81,19 @@ const (
 	ArchivePrefix = ".fry--build--"
 
 	// Build mode persistence
-	BuildModeFile    = ".fry/build-mode.txt"
+	BuildModeFile       = ".fry/build-mode.txt"
 	BuildExitReasonFile = ".fry/build-exit-reason.txt"
 
 	// Continue constants
-	ContinuePromptFile        = ".fry/continue-prompt.md"
-	ContinueDecisionFile      = ".fry/continue-decision.txt"
-	ContinueReportFile        = ".fry/continue-report.md"
-	ContinueInvocationPrompt  = "Read and execute ALL instructions in .fry/continue-prompt.md. You are a build analyst. Review the build state report and output your decision to .fry/continue-decision.txt. Do NOT modify any source code."
+	ContinuePromptFile       = ".fry/continue-prompt.md"
+	ContinueDecisionFile     = ".fry/continue-decision.txt"
+	ContinueReportFile       = ".fry/continue-report.md"
+	ContinueInvocationPrompt = "Read and execute ALL instructions in .fry/continue-prompt.md. You are a build analyst. Review the build state report and output your decision to .fry/continue-decision.txt. Do NOT modify any source code."
 
 	// Triage constants
-	TriagePromptFile         = ".fry/triage-prompt.md"
-	TriageDecisionFile       = ".fry/triage-decision.txt"
-	TriageInvocationPrompt   = "Read and execute ALL instructions in .fry/triage-prompt.md. You are a task complexity classifier. Write your classification to .fry/triage-decision.txt. Do NOT modify any source code."
+	TriagePromptFile       = ".fry/triage-prompt.md"
+	TriageDecisionFile     = ".fry/triage-decision.txt"
+	TriageInvocationPrompt = "Read and execute ALL instructions in .fry/triage-prompt.md. You are a task complexity classifier. Write your classification to .fry/triage-decision.txt. Do NOT modify any source code."
 
 	// Git strategy constants
 	DefaultGitStrategy = "auto"
