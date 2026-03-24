@@ -137,7 +137,7 @@ When a heal pass modifies `.fry/verification.md` (e.g., fixing a broken check), 
 
 - If `.fry/verification.md` does not exist, Fry falls back to promise-only behavior
 - If `fry prepare` fails to generate `.fry/verification.md`, it logs a warning and continues
-- When `--always-verify` is set and no recognized build system is detected, Fry logs a WARNING and skips heuristic check generation; write a verification file manually for your project type
+- When `--always-verify` is set, Fry probes for recognized build system markers: `go.mod`, `package.json`, `Cargo.toml`, `Makefile`, `pyproject.toml`, and `setup.py`. Python projects that use only `requirements.txt` (without `pyproject.toml` or `setup.py`) are **not** detected by the heuristic. If none of these markers are found, Fry logs a WARNING and skips heuristic check generation — write a `.fry/verification.md` file manually for your project type
 - If a sprint has no checks defined, it behaves as if no verification file exists for that sprint
 
 ## Safety Limits
