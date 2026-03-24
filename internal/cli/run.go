@@ -67,6 +67,7 @@ var (
 	runShowTokens     bool
 	runNoObserver     bool
 	runTriageOnly     bool
+	runModel          string
 )
 
 type deferredEntry struct {
@@ -230,6 +231,10 @@ var runCmd = &cobra.Command{
 			ep.EffortLevel = effortLevel
 		} else if effortLevel != "" && ep.EffortLevel != "" && effortLevel != ep.EffortLevel {
 			frlog.Log("WARNING: --effort %s ignored; epic already specifies @effort %s. To change effort level, re-run fry prepare with --effort %s.", effortLevel, ep.EffortLevel, effortLevel)
+		}
+		// Apply model override — unconditional, takes precedence over @model in epic.
+		if runModel != "" {
+			ep.AgentModel = runModel
 		}
 		if err := epic.ValidateEpic(ep); err != nil {
 			return err
@@ -909,6 +914,9 @@ var runCmd = &cobra.Command{
 						if err != nil {
 							return err
 						}
+						if runModel != "" {
+							ep.AgentModel = runModel
+						}
 						if err := epic.ValidateEpic(ep); err != nil {
 							return err
 						}
@@ -1248,6 +1256,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runShowTokens, "show-tokens", false, "Print per-sprint token usage summary to stderr after the run")
 	runCmd.Flags().BoolVar(&runNoObserver, "no-observer", false, "Disable the observer metacognitive layer")
 	runCmd.Flags().BoolVar(&runTriageOnly, "triage-only", false, "Run triage classification and exit without generating artifacts")
+	runCmd.Flags().StringVar(&runModel, "model", "", "Override agent model for sprints (e.g. opus[1m], sonnet, haiku)")
 }
 
 func resolveProjectDir(dir string) (string, error) {

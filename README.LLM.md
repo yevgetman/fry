@@ -297,6 +297,7 @@ Key flags:
   --engine codex|claude|ollama       # AI engine for build
   --prepare-engine codex|claude      # AI engine for prepare phase
   --effort low|medium|high|max       # Effort level (auto-detect if omitted)
+  --model model-id                   # Override agent model (e.g. opus[1m], sonnet, haiku)
   --mode software|planning|writing   # Execution mode (default: software)
   --planning                         # Alias for --mode planning (backwards compat)
   --user-prompt "..."                # Inject directive into prompts

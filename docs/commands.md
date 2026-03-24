@@ -46,6 +46,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <codex\|claude>` | AI engine to use (default: claude) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
+| `--model <model>` | Override the agent model for sprints, healing, review, and replan sessions (e.g. `opus[1m]`, `sonnet`, `haiku`). Takes precedence over `@model` in the epic and the effort-based automatic model selection. Use this to pair a lower effort level (fewer sprints) with a more capable model. |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). `planning` generates structured documents; `writing` generates human-language content (books, guides, reports). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic (defaults to `--engine`, `FRY_ENGINE`, or claude) |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
@@ -106,6 +107,7 @@ fry --git-strategy worktree                       # Force worktree isolation
 fry --git-strategy branch --branch-name feat/auth # Branch with explicit name
 fry --git-strategy current                        # Work on current branch (previous behavior)
 fry --always-verify                               # Force verification+healing+audit on all tasks
+fry --model opus[1m] --effort medium               # Medium sprint count with frontier model
 fry --no-observer                                 # Disable the observer metacognitive layer
 fry --project-dir /path/to/project                # Operate on a different project
 FRY_ENGINE=claude fry                             # Set engine via environment variable

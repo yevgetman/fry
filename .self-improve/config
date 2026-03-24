@@ -32,6 +32,10 @@ AUTO_APPROVE="bug security testing documentation"
 # Engine for the planning phase (default: claude). Options: claude, codex
 PLANNING_ENGINE=claude
 
+# Model override for planning sprints (default: empty = use effort-based selection).
+# Set to a frontier model like opus[1m] for higher quality codebase analysis.
+PLANNING_MODEL=opus[1m]
+
 # Engine for the build phase (default: claude). Options: claude, codex
 BUILD_ENGINE=claude
 

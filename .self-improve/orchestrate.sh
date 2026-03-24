@@ -35,6 +35,7 @@ MAX_POST_BUILD_HEALS=3
 PLANNING_THRESHOLD=15
 AUTO_APPROVE="bug security testing documentation"
 PLANNING_ENGINE=claude
+PLANNING_MODEL=""
 BUILD_ENGINE=claude
 HEAL_MODEL=sonnet
 JOURNAL_MODEL=sonnet
@@ -495,9 +496,14 @@ run_planning_phase() {
 
     # Run Fry — planning is analysis-only, no verification/audit needed
     log "Running Fry planning scan..."
+    local planning_model_flag=""
+    if [ -n "$PLANNING_MODEL" ]; then
+        planning_model_flag="--model $PLANNING_MODEL"
+    fi
     if ! fry run \
         --user-prompt-file "$PLANNING_PROMPT" \
         --engine "$PLANNING_ENGINE" \
+        $planning_model_flag \
         --no-sanity-check \
         --no-audit \
         --git-strategy current \
