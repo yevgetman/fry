@@ -5,16 +5,24 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/verify"
 )
+
+// logCaptureMu serializes subtests that redirect the package-level frylog logger.
+// frylog.SetStdout mutates a global logger; holding this mutex for the duration
+// of each log-capturing subtest prevents output from one subtest appearing in
+// another's buffer when subtests run in parallel.
+var logCaptureMu sync.Mutex
 
 func TestPromptAssembly(t *testing.T) {
 	t.Parallel()
@@ -1019,6 +1027,10 @@ func TestWarnOutOfRangeChecks(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			logCaptureMu.Lock()
+			t.Cleanup(logCaptureMu.Unlock)
+
 			var buf strings.Builder
 			frylog.SetStdout(&buf)
 			t.Cleanup(func() { frylog.SetStdout(nil) })

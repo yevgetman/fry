@@ -37,7 +37,7 @@ The `@verification` directive in the epic file can override the default path:
 
 ## Verification Primitive Guidelines
 
-The four primitives are designed for **basic programmatic checks**, not semantic code analysis:
+The five primitives are designed for **basic programmatic checks**, not semantic code analysis:
 
 - **`@check_file`** — use for confirming expected files were created
 - **`@check_cmd`** — use for build commands, lint passes, or any command where exit code is the only signal
@@ -100,7 +100,7 @@ When the heal loop is exhausted and failures exceed the threshold, Fry prints re
 
 ## Verification for Documents
 
-The same four check primitives work for non-code deliverables in [planning mode](planning-mode.md) and [writing mode](writing-mode.md).
+The same five check primitives work for non-code deliverables in [planning mode](planning-mode.md) and [writing mode](writing-mode.md).
 
 ### Planning mode
 
