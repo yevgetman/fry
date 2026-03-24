@@ -897,6 +897,27 @@ func TestRunSanityCheck_ReviewNotShownForLowEffort(t *testing.T) {
 	assert.NotContains(t, stdout.String(), "Enable sprint review?")
 }
 
+func TestRunSanityCheck_ReviewAutoEnabledForMaxEffort(t *testing.T) {
+	t.Parallel()
+
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: max (4-10 sprints)"}
+	// Adjust: blank text, keep effort (max), then approve — no review prompt, but auto-enabled
+	stdin := strings.NewReader("a\n\n\ny\n")
+	var stdout strings.Builder
+
+	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+		ProjectDir:  t.TempDir(),
+		EffortLevel: epic.EffortMax,
+		Stdin:       stdin,
+		Stdout:      &stdout,
+	}, "plan", "", "", "")
+
+	require.NoError(t, err)
+	assert.True(t, result.EnableReview)
+	assert.NotContains(t, stdout.String(), "Enable sprint review?")
+	assert.Contains(t, stdout.String(), "auto-enabled for max effort")
+}
+
 func TestSoftwareStep2Prompt_WithReviewEnabled(t *testing.T) {
 	t.Parallel()
 

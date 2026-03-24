@@ -117,12 +117,16 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 			}
 
 			// Offer sprint review toggle for non-low effort levels.
-			// Max effort auto-enables review, so only ask for medium/high/auto.
+			// Max effort auto-enables review and shows a confirmation message.
+			// Medium/high/auto get an interactive toggle.
 			effectiveEffort := effortLevel
 			if effectiveEffort == "" {
 				effectiveEffort = epic.EffortMedium // auto-detect defaults to at least medium
 			}
-			if effectiveEffort != epic.EffortLow && effectiveEffort != epic.EffortMax {
+			if effectiveEffort == epic.EffortMax {
+				enableReview = true
+				fmt.Fprintf(stdout, "Sprint review: %s (auto-enabled for max effort)\n", color.BoldText("enabled"))
+			} else if effectiveEffort != epic.EffortLow {
 				reviewDefault := "n"
 				if enableReview {
 					reviewDefault = "y"
