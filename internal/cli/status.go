@@ -11,6 +11,7 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/git"
 )
 
 var statusCmd = &cobra.Command{
@@ -18,7 +19,15 @@ var statusCmd = &cobra.Command{
 	Short: "Show current build state without making an LLM call",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectDir, _ := cmd.Flags().GetString("project-dir")
-		epicPath := filepath.Join(projectDir, config.FryDir, "epic.md")
+
+		// If a worktree strategy was used, resolve to the worktree directory
+		// where the actual build artifacts live.
+		buildDir := projectDir
+		if setup, err := git.ReadPersistedStrategy(projectDir); err == nil && setup != nil && setup.WorkDir != "" {
+			buildDir = setup.WorkDir
+		}
+
+		epicPath := filepath.Join(buildDir, config.FryDir, "epic.md")
 		ep, err := epic.ParseEpic(epicPath)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
@@ -28,7 +37,7 @@ var statusCmd = &cobra.Command{
 			}
 			return err
 		}
-		state, err := continuerun.CollectBuildState(cmd.Context(), projectDir, ep)
+		state, err := continuerun.CollectBuildState(cmd.Context(), buildDir, ep)
 		if err != nil {
 			return err
 		}

@@ -80,7 +80,8 @@ const (
 	ArchivePrefix = ".fry--build--"
 
 	// Build mode persistence
-	BuildModeFile = ".fry/build-mode.txt"
+	BuildModeFile    = ".fry/build-mode.txt"
+	BuildExitReasonFile = ".fry/build-exit-reason.txt"
 
 	// Continue constants
 	ContinuePromptFile        = ".fry/continue-prompt.md"

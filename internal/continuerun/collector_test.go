@@ -78,6 +78,61 @@ func TestParseCompletedSprints(t *testing.T) {
 	}
 }
 
+func TestParseFailedSprints(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		content  string
+		expected []FailedSprint
+	}{
+		{
+			name:     "empty file",
+			content:  "",
+			expected: nil,
+		},
+		{
+			name: "only PASS entries",
+			content: "# Epic Progress \u2014 TestEpic\n\n" +
+				"## Sprint 1: Setup \u2014 PASS\n\nDone.\n",
+			expected: nil,
+		},
+		{
+			name: "one failed sprint",
+			content: "# Epic Progress \u2014 TestEpic\n\n" +
+				"## Sprint 1: Setup \u2014 FAIL (audit: HIGH)\n\n",
+			expected: []FailedSprint{
+				{Number: 1, Name: "Setup", Status: "FAIL (audit: HIGH)"},
+			},
+		},
+		{
+			name: "mixed pass and fail",
+			content: "# Epic Progress \u2014 TestEpic\n\n" +
+				"## Sprint 1: Setup \u2014 PASS\n\nDone.\n\n" +
+				"## Sprint 2: Auth \u2014 FAIL\n\n",
+			expected: []FailedSprint{
+				{Number: 2, Name: "Auth", Status: "FAIL"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			fryDir := filepath.Join(dir, config.FryDir)
+			require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+			if tt.content != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, config.EpicProgressFile), []byte(tt.content), 0o644))
+			}
+
+			result := parseFailedSprints(dir)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestFindNextSprint(t *testing.T) {
 	t.Parallel()
 
@@ -245,6 +300,38 @@ func TestCollectBuildState_FreshBuild(t *testing.T) {
 	assert.Equal(t, 3, state.TotalSprints)
 	assert.Empty(t, state.CompletedSprints)
 	assert.Equal(t, 0, state.HighestCompleted)
+	assert.Empty(t, state.ActiveSprints)
+}
+
+func TestCollectBuildState_FailedSprint(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+	epicProgress := "# Epic Progress \u2014 TestEpic\n\n## Sprint 1: Setup \u2014 FAIL (audit: HIGH)\n\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.EpicProgressFile), []byte(epicProgress), 0o644))
+
+	ep := &epic.Epic{
+		Name:         "TestEpic",
+		TotalSprints: 3,
+		Engine:       "claude",
+		EffortLevel:  epic.EffortMax,
+		Sprints: []epic.Sprint{
+			{Number: 1, Name: "Setup"},
+			{Number: 2, Name: "Auth"},
+			{Number: 3, Name: "API"},
+		},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep)
+	require.NoError(t, err)
+	assert.Empty(t, state.CompletedSprints)
+	assert.Equal(t, 0, state.HighestCompleted)
+	require.Len(t, state.FailedSprints, 1)
+	assert.Equal(t, 1, state.FailedSprints[0].Number)
+	assert.Equal(t, "Setup", state.FailedSprints[0].Name)
+	assert.Equal(t, "FAIL (audit: HIGH)", state.FailedSprints[0].Status)
 	assert.Empty(t, state.ActiveSprints)
 }
 
@@ -501,6 +588,26 @@ func TestCollectBuildState_Mode(t *testing.T) {
 		state, err := CollectBuildState(context.Background(), dir, ep)
 		require.NoError(t, err)
 		assert.Equal(t, "", state.Mode)
+	})
+}
+
+func TestReadExitReason(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		assert.Equal(t, "", readExitReason(dir))
+	})
+
+	t.Run("with reason", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildExitReasonFile), []byte("After sprint 2: sprint 6 is outside deviation scope (max: sprint 5)\n"), 0o644))
+
+		assert.Equal(t, "After sprint 2: sprint 6 is outside deviation scope (max: sprint 5)", readExitReason(dir))
 	})
 }
 

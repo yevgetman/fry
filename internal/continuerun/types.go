@@ -38,6 +38,9 @@ type BuildState struct {
 	CompletedSprints []CompletedSprint
 	HighestCompleted int // 0 if none
 
+	// Sprints that were attempted but failed (from epic-progress.txt)
+	FailedSprints []FailedSprint
+
 	// Evidence of started-but-not-passed sprints (may be multiple)
 	ActiveSprints []ActiveSprintState // empty if no partial work detected
 
@@ -48,6 +51,9 @@ type BuildState struct {
 	GitClean        bool
 	GitBranch       string
 	LastAutoCommit  string // message of most recent [automated] commit
+
+	// Build exit reason (from .fry/build-exit-reason.txt)
+	ExitReason string
 
 	// History
 	DeviationCount   int
@@ -62,6 +68,13 @@ type CompletedSprint struct {
 	Number int
 	Name   string
 	Status string // "PASS", "PASS (healed)", etc.
+}
+
+// FailedSprint records one sprint that was attempted but did not pass.
+type FailedSprint struct {
+	Number int
+	Name   string
+	Status string // "FAIL", "FAIL (audit: HIGH)", etc.
 }
 
 // ActiveSprintState describes a sprint that was started but did not pass.

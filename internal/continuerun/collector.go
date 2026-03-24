@@ -17,6 +17,7 @@ import (
 )
 
 var completedSprintRe = regexp.MustCompile(`(?m)^## Sprint (\d+):\s*(.+?)\s*—\s*(PASS.*)$`)
+var failedSprintRe = regexp.MustCompile(`(?m)^## Sprint (\d+):\s*(.+?)\s*—\s*(FAIL.*)$`)
 
 // CollectBuildState gathers a snapshot of the current build state from .fry/ artifacts.
 func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*BuildState, error) {
@@ -38,21 +39,25 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*
 		state.SprintNames[i] = spr.Name
 	}
 
-	// Parse completed sprints from epic-progress.txt
+	// Parse completed and failed sprints from epic-progress.txt
 	state.CompletedSprints = parseCompletedSprints(projectDir)
 	for _, cs := range state.CompletedSprints {
 		if cs.Number > state.HighestCompleted {
 			state.HighestCompleted = cs.Number
 		}
 	}
+	state.FailedSprints = parseFailedSprints(projectDir)
 
 	// Collect active state for all incomplete sprints that have evidence on disk
-	completedSet := make(map[int]bool, len(state.CompletedSprints))
+	knownSet := make(map[int]bool, len(state.CompletedSprints)+len(state.FailedSprints))
 	for _, cs := range state.CompletedSprints {
-		completedSet[cs.Number] = true
+		knownSet[cs.Number] = true
+	}
+	for _, fs := range state.FailedSprints {
+		knownSet[fs.Number] = true
 	}
 	for i := 1; i <= ep.TotalSprints; i++ {
-		if completedSet[i] {
+		if knownSet[i] {
 			continue
 		}
 		active := collectActiveSprintState(projectDir, i, ep)
@@ -77,7 +82,20 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*
 	// Deferred failures
 	state.DeferredFailures = collectDeferredFailures(projectDir)
 
+	// Build exit reason
+	state.ExitReason = readExitReason(projectDir)
+
 	return state, nil
+}
+
+// readExitReason reads the persisted exit reason from .fry/build-exit-reason.txt.
+func readExitReason(projectDir string) string {
+	path := filepath.Join(projectDir, config.BuildExitReasonFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // parseCompletedSprints reads epic-progress.txt and extracts completed sprint entries.
@@ -102,6 +120,30 @@ func parseCompletedSprints(projectDir string) []CompletedSprint {
 		})
 	}
 	return completed
+}
+
+// parseFailedSprints reads epic-progress.txt and extracts failed sprint entries.
+func parseFailedSprints(projectDir string) []FailedSprint {
+	path := filepath.Join(projectDir, config.EpicProgressFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	matches := failedSprintRe.FindAllStringSubmatch(string(data), -1)
+	var failed []FailedSprint
+	for _, m := range matches {
+		num, err := strconv.Atoi(m[1])
+		if err != nil || num < 1 {
+			continue
+		}
+		failed = append(failed, FailedSprint{
+			Number: num,
+			Name:   strings.TrimSpace(m[2]),
+			Status: strings.TrimSpace(m[3]),
+		})
+	}
+	return failed
 }
 
 // findNextSprint returns the first sprint number not in the completed set.

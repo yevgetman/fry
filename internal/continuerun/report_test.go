@@ -65,6 +65,74 @@ func TestFormatReport_PartialBuild(t *testing.T) {
 	assert.Contains(t, report, "NOT RUNNING")
 }
 
+func TestFormatReport_FailedSprint(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		EpicName:     "TestEpic",
+		TotalSprints: 3,
+		Engine:       "claude",
+		EffortLevel:  "max",
+		FailedSprints: []FailedSprint{
+			{Number: 1, Name: "Setup", Status: "FAIL (audit: HIGH)"},
+		},
+		SprintNames: []string{"Setup", "Auth", "API"},
+	}
+
+	report := FormatReport(state)
+	assert.Contains(t, report, "## Failed Sprints")
+	assert.Contains(t, report, "FAIL (audit: HIGH)")
+	assert.Contains(t, report, "Completed Sprints\nNone")
+	assert.Contains(t, report, "Next Sprint: 1")
+}
+
+func TestFormatReport_MixedPassAndFail(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		EpicName:     "TestEpic",
+		TotalSprints: 5,
+		Engine:       "claude",
+		EffortLevel:  "max",
+		CompletedSprints: []CompletedSprint{
+			{Number: 1, Name: "Setup", Status: "PASS"},
+		},
+		HighestCompleted: 1,
+		FailedSprints: []FailedSprint{
+			{Number: 2, Name: "Auth", Status: "FAIL"},
+		},
+		SprintNames: []string{"Setup", "Auth", "API", "UI", "Tests"},
+	}
+
+	report := FormatReport(state)
+	assert.Contains(t, report, "## Completed Sprints")
+	assert.Contains(t, report, "## Failed Sprints")
+	assert.Contains(t, report, "Next Sprint: 2")
+}
+
+func TestFormatReport_ExitReason(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		EpicName:     "TestEpic",
+		TotalSprints: 9,
+		Engine:       "claude",
+		EffortLevel:  "max",
+		CompletedSprints: []CompletedSprint{
+			{Number: 1, Name: "Setup", Status: "PASS (healed)"},
+			{Number: 2, Name: "Models", Status: "PASS (healed)"},
+		},
+		HighestCompleted: 2,
+		ExitReason:       "After sprint 2: sprint 6 is outside deviation scope (max: sprint 5)",
+		SprintNames:      []string{"Setup", "Models", "Services", "ViewModels", "Today UI", "Detail UI", "Tomorrow", "Polish", "Final"},
+	}
+
+	report := FormatReport(state)
+	assert.Contains(t, report, "## Last Run Stopped")
+	assert.Contains(t, report, "outside deviation scope")
+	assert.Contains(t, report, "Next Sprint: 3")
+}
+
 func TestFormatReport_AllComplete(t *testing.T) {
 	t.Parallel()
 

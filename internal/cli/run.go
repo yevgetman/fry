@@ -79,7 +79,7 @@ var runCmd = &cobra.Command{
 	Use:   "run [epic.md] [start] [end]",
 	Short: "Run fry against an epic",
 	Args:  cobra.MaximumNArgs(3),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (retErr error) {
 		if err := checkArgsForMissingDashes(cmd, args); err != nil {
 			return err
 		}
@@ -470,6 +470,14 @@ var runCmd = &cobra.Command{
 		var mu sync.Mutex
 		currentSprint := 0
 		epicName := ep.Name // guarded by mu; updated after replan
+
+		// Persist exit reason so `fry status` can show why the build stopped.
+		defer func() {
+			mu.Lock()
+			lastSprint := currentSprint
+			mu.Unlock()
+			writeExitReason(projectPath, retErr, lastSprint)
+		}()
 
 		buildStart := time.Now()
 		buildReport := report.BuildReport{
@@ -1525,6 +1533,22 @@ func formatAffectedSprints(sprints []int) string {
 		parts[i] = strconv.Itoa(s)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// writeExitReason persists the reason the build stopped to .fry/build-exit-reason.txt.
+// On success (nil error), the file is removed so status doesn't show stale reasons.
+func writeExitReason(projectDir string, buildErr error, sprintNum int) {
+	path := filepath.Join(projectDir, config.BuildExitReasonFile)
+	if buildErr == nil {
+		os.Remove(path)
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	reason := buildErr.Error()
+	if sprintNum > 0 {
+		reason = fmt.Sprintf("After sprint %d: %s", sprintNum, reason)
+	}
+	_ = os.WriteFile(path, []byte(reason), 0o644)
 }
 
 // resolveMode reconciles the --mode flag with the legacy --planning bool flag.

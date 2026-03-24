@@ -18,6 +18,13 @@ func FormatReport(state *BuildState) string {
 	b.WriteString(fmt.Sprintf("## Epic: %s (%d sprints, engine: %s, effort: %s, mode: %s)\n\n",
 		state.EpicName, state.TotalSprints, state.Engine, state.EffortLevel, modeDisplay))
 
+	// Build exit reason (why the last run stopped)
+	if state.ExitReason != "" {
+		b.WriteString("## Last Run Stopped\n")
+		b.WriteString(state.ExitReason)
+		b.WriteString("\n\n")
+	}
+
 	// Completed sprints
 	b.WriteString("## Completed Sprints\n")
 	if len(state.CompletedSprints) == 0 {
@@ -28,6 +35,15 @@ func FormatReport(state *BuildState) string {
 		}
 	}
 	b.WriteByte('\n')
+
+	// Failed sprints
+	if len(state.FailedSprints) > 0 {
+		b.WriteString("## Failed Sprints\n")
+		for _, fs := range state.FailedSprints {
+			b.WriteString(fmt.Sprintf("- Sprint %d: %s \u2014 %s\n", fs.Number, fs.Name, fs.Status))
+		}
+		b.WriteByte('\n')
+	}
 
 	// Next sprint
 	next := findNextSprint(state.CompletedSprints, state.TotalSprints)
