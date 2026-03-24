@@ -92,6 +92,11 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		// This prevents platform-specific formatting (e.g., macOS wc -w
 		// producing "  42" instead of "42") from causing false negatives.
 		trimmed := trimOutputLines(stdout.String())
+		// When the command produces no output at all, ensure grep still has
+		// one empty line to match against so that patterns like ^$ work.
+		if trimmed == "" {
+			trimmed = "\n"
+		}
 		grep := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s", textutil.ShellQuote(check.Pattern)))
 		grep.Stdin = strings.NewReader(trimmed)
 		result.Passed = grep.Run() == nil

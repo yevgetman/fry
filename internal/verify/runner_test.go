@@ -260,6 +260,22 @@ func TestRunChecksCmdOutputTrimsWhitespace(t *testing.T) {
 	assert.True(t, results[1].Passed, "per-line trimming should work across multiple lines")
 }
 
+func TestRunChecksCmdOutputEmptyMatchesCaretDollar(t *testing.T) {
+	t.Parallel()
+
+	// When a command produces no output, ^$ (empty line) should match.
+	// This is the pattern used to assert "no diff" via git diff HEAD -- file.
+	checks := []Check{
+		{Sprint: 1, Type: CheckCmdOutput, Command: "true", Pattern: "^$"},
+	}
+
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, t.TempDir())
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, passCount)
+	assert.Equal(t, 1, totalCount)
+	assert.True(t, results[0].Passed, "empty command output should match ^$")
+}
+
 func TestTrimOutputLines(t *testing.T) {
 	t.Parallel()
 
