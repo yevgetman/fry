@@ -1019,7 +1019,6 @@ func TestWarnOutOfRangeChecks(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			var buf strings.Builder
 			frylog.SetStdout(&buf)
 			t.Cleanup(func() { frylog.SetStdout(nil) })
