@@ -386,6 +386,12 @@ var runCmd = &cobra.Command{
 			return printDryRunReport(cmd.OutOrStdout(), projectPath, epicPath, ep, engineName, startSprint, endSprint)
 		}
 
+		// Ensure git is initialised before strategy setup; branch/worktree
+		// strategies require an existing repository.
+		if err := git.InitGit(ctx, projectPath); err != nil {
+			return err
+		}
+
 		// --- Git strategy setup ---
 		if strategySetup == nil && gitStrategy != git.StrategyCurrent {
 			// Resolve "auto" strategy
@@ -507,10 +513,6 @@ var runCmd = &cobra.Command{
 		}); err != nil {
 			return err
 		}
-		if err := git.InitGit(ctx, projectPath); err != nil {
-			return err
-		}
-
 		reviewSummary := review.DeviationSummary{
 			TotalSprints: startSprintCount(startSprint, endSprint),
 			AllLowRisk:   true,
