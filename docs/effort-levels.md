@@ -66,6 +66,7 @@ For high-stakes projects where correctness is paramount. Same sprint count as `h
   - **Part 9: Quality Gates** — explicit quality criteria beyond verification (performance targets, security considerations, code review checklist items)
 - Automatically enables `@review_between_sprints` and `@compact_with_agent`
 - Healing uses unlimited progress-based attempts (no hard cap; exits when stuck after 3 consecutive no-progress attempts or when ≤10% of checks fail after ≥10 attempts). See [Self-Healing](self-healing.md) for full effort-level healing behavior
+- Deviation scope covers the entire epic — the replanner can adjust any remaining sprint, not just the next 3 (the default `@max_deviation_scope` is overridden to `totalSprints`)
 - Review bias shifts from CONTINUE to THOROUGH REVIEW — the reviewer applies heightened scrutiny and recommends DEVIATE for any deviation that could affect system correctness
 - No-op detection threshold is raised from 2 to 3 consecutive iterations, giving the agent more room to iterate
 - A quality directive is injected into every sprint prompt, instructing the agent to handle all edge cases, write defensive code, and validate assumptions

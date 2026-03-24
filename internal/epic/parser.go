@@ -257,6 +257,11 @@ func ParseEpic(path string) (*Epic, error) {
 	}
 	ep.TotalSprints = len(ep.Sprints)
 
+	// Max effort allows deviations to touch any remaining sprint in the epic.
+	if ep.EffortLevel == EffortMax && ep.MaxDeviationScope < ep.TotalSprints {
+		ep.MaxDeviationScope = ep.TotalSprints
+	}
+
 	return ep, nil
 }
 

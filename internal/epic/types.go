@@ -131,6 +131,12 @@ func (e EffortLevel) HealHasHardCap() bool {
 	return e != EffortMax
 }
 
+// DeviationScopeUnlimited returns whether this effort level allows deviations
+// to touch any remaining sprint in the epic.
+func (e EffortLevel) DeviationScopeUnlimited() bool {
+	return e == EffortMax
+}
+
 type Epic struct {
 	Name                 string
 	Engine               string

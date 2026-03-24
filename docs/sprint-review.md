@@ -26,7 +26,7 @@ See [Effort Levels](effort-levels.md) for full details.
 @review_between_sprints         # Enable the feature
 @review_engine claude           # Use a specific engine for the reviewer (optional)
 @review_model claude-sonnet-4-6 # Use a specific model for the reviewer (optional)
-@max_deviation_scope 3          # Max sprints a single deviation can touch (default: 3)
+@max_deviation_scope 3          # Max sprints a single deviation can touch (default: 3; max effort overrides to totalSprints)
 ```
 
 ### Disabling at Runtime

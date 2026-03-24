@@ -743,9 +743,12 @@ var runCmd = &cobra.Command{
 							if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
 								frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
 							}
+							failStatus := fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
 							mu.Lock()
-							results[sprintNum-startSprint].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
+							results[sprintNum-startSprint].Status = failStatus
 							mu.Unlock()
+							_ = sprint.AppendToEpicProgress(projectPath,
+								fmt.Sprintf("## Sprint %d: %s \u2014 %s\n\n", spr.Number, spr.Name, failStatus))
 							fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
 							fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
 							fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
@@ -938,6 +941,8 @@ var runCmd = &cobra.Command{
 				continue
 			}
 
+			_ = sprint.AppendToEpicProgress(projectPath,
+				fmt.Sprintf("## Sprint %d: %s \u2014 %s\n\n", spr.Number, spr.Name, result.Status))
 			fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
 			fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
 			fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")

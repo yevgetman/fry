@@ -219,7 +219,7 @@ The user has indicated this is a maximum-effort, mission-critical task. You MUST
 - Specify exact error messages, log formats, and observability requirements
 - Add the @effort max directive to the epic header
 - Enable @review_between_sprints and @compact_with_agent
-- Set @max_heal_attempts to 5 (increased from default 3)
+- Do NOT set @max_heal_attempts — max effort uses unlimited progress-based healing automatically
 `
 	default: // auto-detect
 		return `

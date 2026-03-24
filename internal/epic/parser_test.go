@@ -175,6 +175,51 @@ Prompt.
 	assert.Contains(t, stderr, "@max_heal_attempts ignored for max effort")
 }
 
+func TestParseMaxEffortDeviationScopeCoversAllSprints(t *testing.T) {
+	t.Parallel()
+
+	input := `
+@epic Wide Deviation
+@effort max
+@max_deviation_scope 3
+@sprint 1
+@name One
+@max_iterations 1
+@promise ONE
+@prompt
+Prompt one.
+
+@sprint 2
+@name Two
+@max_iterations 1
+@promise TWO
+@prompt
+Prompt two.
+
+@sprint 3
+@name Three
+@max_iterations 1
+@promise THREE
+@prompt
+Prompt three.
+
+@sprint 4
+@name Four
+@max_iterations 1
+@promise FOUR
+@prompt
+Prompt four.
+`
+	var ep *Epic
+	captureStderr(t, func() {
+		ep = parseTempEpic(t, input)
+	})
+
+	// Max effort overrides deviation scope to cover all sprints.
+	assert.Equal(t, 4, ep.TotalSprints)
+	assert.Equal(t, 4, ep.MaxDeviationScope)
+}
+
 func TestParsePromptBleedStripping(t *testing.T) {
 	t.Parallel()
 
