@@ -7,7 +7,7 @@ Fry supports independent verification of each sprint's deliverables. When a `.fr
 | Primitive | Example | Passes when |
 |---|---|---|
 | `@check_file <path>` | `@check_file src/index.ts` | File exists and is non-empty |
-| `@check_file_contains <path> <pattern>` | `@check_file_contains package.json "typescript"` | File contains pattern (grep -E) |
+| `@check_file_contains <path> <pattern>` | `@check_file_contains package.json "typescript"` | File contains pattern (grep -E / ERE). For alternation use `|`: `"foo|bar"` matches foo OR bar. |
 | `@check_cmd <command>` | `@check_cmd npm run build` | Command exits 0 |
 | `@check_cmd_output <cmd> \| <pattern>` | `@check_cmd_output curl -s /health \| "ok"` | stdout matches pattern |
 | `@check_test <command>` | `@check_test go test ./...` | Command exits 0 **and** zero test failures detected |

@@ -273,6 +273,7 @@ Generate the verification file and write it to .fry/verification.md.
 CRITICAL RULES:
 - Output ONLY the verification.md file content — write it directly to .fry/verification.md.
 - Use ONLY these four check primitives: @check_file, @check_file_contains, @check_cmd, @check_cmd_output
+- @check_file_contains uses grep -E (extended regex / ERE). For alternation use | not \| (e.g. "foo|bar" matches foo OR bar). Using \| will search for a literal pipe character.
 - Every @sprint block in the epic must have a corresponding @sprint block in verification.md.
 - Every check must be a concrete, executable assertion. No prose. No subjective criteria.
 - Derive checks from SPECIFIC deliverables in the plan and epic: exact filenames, build commands, required config values, API endpoints.

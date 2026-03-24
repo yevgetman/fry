@@ -760,6 +760,29 @@ func TestRunChecksFileContainsRegex(t *testing.T) {
 	assert.False(t, results[1].Passed, "^# Foo should not match '# Introduction'")
 }
 
+func TestRunChecksFileContainsBREAlternation(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "view.swift"), []byte("let progress = animationProgress\n"), 0o644))
+
+	checks := []Check{
+		// BRE-style \| should be normalized to ERE | for alternation.
+		{Sprint: 1, Type: CheckFileContains, Path: "view.swift", Pattern: `trim\|animationProgress`},
+		// ERE-style | should continue to work.
+		{Sprint: 1, Type: CheckFileContains, Path: "view.swift", Pattern: "trim|animationProgress"},
+		// Pattern with no alternation should be unaffected.
+		{Sprint: 1, Type: CheckFileContains, Path: "view.swift", Pattern: "animationProgress"},
+	}
+
+	results, passCount, _ := RunChecks(context.Background(), checks, 1, projectDir)
+	require.Len(t, results, 3)
+	assert.Equal(t, 3, passCount)
+	assert.True(t, results[0].Passed, `BRE-style \| should match as alternation`)
+	assert.True(t, results[1].Passed, "ERE-style | should match as alternation")
+	assert.True(t, results[2].Passed, "plain pattern should match")
+}
+
 func writeVerificationFile(t *testing.T, contents string) string {
 	t.Helper()
 

@@ -52,7 +52,11 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		checkCtx, checkCancel := context.WithTimeout(ctx, defaultCheckTimeout)
 		defer checkCancel()
 		targetPath := filepath.Join(projectDir, check.Path)
-		cmd := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", textutil.ShellQuote(check.Pattern), textutil.ShellQuote(targetPath)))
+		// Normalize BRE-style \| to ERE-style | since we use grep -E.
+		// LLMs frequently generate \| for alternation, which in ERE means
+		// a literal pipe character rather than OR.
+		pattern := strings.ReplaceAll(check.Pattern, `\|`, "|")
+		cmd := exec.CommandContext(checkCtx, "bash", "-c", fmt.Sprintf("grep -qE -- %s %s", textutil.ShellQuote(pattern), textutil.ShellQuote(targetPath)))
 		var stderrBuf cappedBuffer
 		cmd.Stderr = &stderrBuf
 		result.Passed = cmd.Run() == nil

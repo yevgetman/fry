@@ -31,9 +31,11 @@
 #   @check_file_contains <path> <pattern>
 #     File contains a string or regex pattern.
 #     Passes when: grep -qE <pattern> <path>
-#     The pattern is passed to grep -E (extended regex).
+#     The pattern is passed to grep -E (extended regex / ERE).
+#     For alternation use | not \| (ERE syntax: "foo|bar" matches foo OR bar).
 #     Example: @check_file_contains package.json "typescript"
 #     Example: @check_file_contains tsconfig.json "\"strict\":\\s*true"
+#     Example: @check_file_contains src/app.ts "express|fastify"
 #
 #   @check_cmd <command>
 #     Run a shell command.
