@@ -84,9 +84,15 @@ func ParseEpic(path string) (*Epic, error) {
 					ep.PreSprintCmd = value
 				case "@pre_iteration":
 					ep.PreIterationCmd = value
-				case "@model", "@codex_model":
+				case "@model":
 					ep.AgentModel = value
-				case "@engine_flags", "@codex_flags":
+				case "@codex_model":
+					fmt.Fprintf(os.Stderr, "fry: warning: @codex_model is deprecated; use @model instead\n")
+					ep.AgentModel = value
+				case "@engine_flags":
+					ep.AgentFlags = value
+				case "@codex_flags":
+					fmt.Fprintf(os.Stderr, "fry: warning: @codex_flags is deprecated; use @engine_flags instead\n")
 					ep.AgentFlags = value
 				case "@verification":
 					ep.VerificationFile = value
