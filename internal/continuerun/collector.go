@@ -41,7 +41,7 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*
 
 	// Parse completed and failed sprints from epic-progress.txt
 	epicData := readEpicProgress(projectDir)
-	state.CompletedSprints = parseCompletedSprints(epicData)
+	state.CompletedSprints = ParseCompletedSprints(epicData)
 	for _, cs := range state.CompletedSprints {
 		if cs.Number > state.HighestCompleted {
 			state.HighestCompleted = cs.Number
@@ -109,8 +109,8 @@ func readEpicProgress(projectDir string) string {
 	return string(data)
 }
 
-// parseCompletedSprints extracts completed sprint entries from epic-progress content.
-func parseCompletedSprints(content string) []CompletedSprint {
+// ParseCompletedSprints extracts completed sprint entries from epic-progress content.
+func ParseCompletedSprints(content string) []CompletedSprint {
 	matches := completedSprintRe.FindAllStringSubmatch(content, -1)
 	var completed []CompletedSprint
 	for _, m := range matches {

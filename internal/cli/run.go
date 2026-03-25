@@ -1000,8 +1000,11 @@ var runCmd = &cobra.Command{
 
 		// Run final build audit once the entire epic has completed successfully.
 		// This runs BEFORE the build summary so that audit results can be included in the summary.
+		// The audit runs when all sprints are complete — either from a full run (sprint 1 to last)
+		// or from a resumed/continued run where prior sprints are recorded in epic-progress.txt.
 		var buildAuditResult *audit.AuditResult
-		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
+		fullBuildComplete := startSprint == 1 || allSprintsCompleted(projectPath, ep.TotalSprints, startSprint, summaryCopy)
+		if exitErr == nil && fullBuildComplete && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
 			deferredContent := readDeferredFailuresArtifact(projectPath)
 			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
 			if err != nil {
@@ -1570,6 +1573,43 @@ func formatAffectedSprints(sprints []int) string {
 		parts[i] = strconv.Itoa(s)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// allSprintsCompleted checks whether all sprints prior to startSprint are recorded
+// as completed in epic-progress.txt. Combined with the current run completing through
+// endSprint == totalSprints, this confirms the full codebase was built — enabling the
+// build audit to run even on resumed/continued builds.
+func allSprintsCompleted(projectDir string, totalSprints, startSprint int, currentResults []sprint.SprintResult) bool {
+	if startSprint == 1 {
+		return true // full run from the start
+	}
+
+	// Check epic-progress.txt for completed sprints before our start point.
+	progressPath := filepath.Join(projectDir, config.EpicProgressFile)
+	data, err := os.ReadFile(progressPath)
+	if err != nil {
+		return false
+	}
+
+	// Build set of completed sprints from epic-progress.txt (prior runs)
+	// and from the current run's results.
+	completed := make(map[int]bool, totalSprints)
+	for _, cs := range continuerun.ParseCompletedSprints(string(data)) {
+		completed[cs.Number] = true
+	}
+	for _, r := range currentResults {
+		if strings.HasPrefix(r.Status, "PASS") {
+			completed[r.Number] = true
+		}
+	}
+
+	// All sprints 1..totalSprints must be accounted for.
+	for i := 1; i <= totalSprints; i++ {
+		if !completed[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // writeExitReason persists the reason the build stopped to .fry/build-exit-reason.txt.
