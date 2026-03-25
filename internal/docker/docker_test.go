@@ -130,6 +130,9 @@ func TestContainersAlreadyRunning(t *testing.T) {
 	assert.True(t, containersAlreadyRunning("NAME\napp  Up 5 minutes"))
 	assert.False(t, containersAlreadyRunning("NAME\napp  Exited (1)"))
 	assert.False(t, containersAlreadyRunning("NAME\napp  Restarting (1)"))
+	// Mixed state: one container Up, one still Starting — returns true because any ready = skip startup.
+	// This documents a known asymmetry with composeHealthy (which requires all containers ready).
+	assert.True(t, containersAlreadyRunning("NAME\napp1  Up 5 minutes\napp2  Starting"))
 }
 
 // P3: composeHealthy
