@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,4 +144,188 @@ func TestComposeHealthy(t *testing.T) {
 	assert.False(t, composeHealthy("NAME  STATUS\napp  Exited (1)"))
 	assert.False(t, composeHealthy("NAME  STATUS\napp  Created"))
 	assert.False(t, composeHealthy(""))
+}
+
+func TestEnsureDockerUp_ContainersAlreadyRunning(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "docker-compose.yml"), []byte("services:\n"), 0o644))
+
+	callCount := 0
+	deps := dockerDeps{
+		lookPath: func(file string) (string, error) {
+			if file == "docker" {
+				return "/usr/bin/docker", nil
+			}
+			return "", errors.New("not found")
+		},
+		execCommandContext: func(_ context.Context, _ string, args ...string) *exec.Cmd {
+			callCount++
+			if callCount == 1 {
+				return exec.Command("bash", "-c", "exit 0")
+			}
+			return exec.Command("bash", "-c", `printf "NAME  STATUS\napp  Up 5 minutes"`)
+		},
+		sleep: func(d time.Duration) {},
+		now:   time.Now,
+	}
+
+	err := ensureDockerUp(context.Background(), projectDir, "", 10, deps)
+	require.NoError(t, err)
+}
+
+func TestEnsureDockerUp_StartupWithReadyCommand(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "docker-compose.yml"), []byte("services:\n"), 0o644))
+
+	callCount := 0
+	deps := dockerDeps{
+		lookPath: func(file string) (string, error) {
+			if file == "docker" {
+				return "/usr/bin/docker", nil
+			}
+			return "", errors.New("not found")
+		},
+		execCommandContext: func(_ context.Context, _ string, args ...string) *exec.Cmd {
+			callCount++
+			switch callCount {
+			case 1:
+				return exec.Command("bash", "-c", "exit 0") // detect compose
+			case 2:
+				return exec.Command("bash", "-c", `echo "NAME  STATUS"`) // ps → not running
+			case 3:
+				return exec.Command("bash", "-c", "exit 0") // up -d
+			default:
+				return exec.Command("bash", "-c", "exit 0") // readyCmd → success
+			}
+		},
+		sleep: func(d time.Duration) {},
+		now:   time.Now,
+	}
+
+	err := ensureDockerUp(context.Background(), projectDir, "ready", 10, deps)
+	require.NoError(t, err)
+}
+
+func TestEnsureDockerUp_StartupWithHealthCheckPolling(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "docker-compose.yml"), []byte("services:\n"), 0o644))
+
+	callCount := 0
+	deps := dockerDeps{
+		lookPath: func(file string) (string, error) {
+			if file == "docker" {
+				return "/usr/bin/docker", nil
+			}
+			return "", errors.New("not found")
+		},
+		execCommandContext: func(_ context.Context, _ string, args ...string) *exec.Cmd {
+			callCount++
+			switch callCount {
+			case 1:
+				return exec.Command("bash", "-c", "exit 0") // detect compose
+			case 2:
+				return exec.Command("bash", "-c", `echo "NAME  STATUS"`) // ps → not running
+			case 3:
+				return exec.Command("bash", "-c", "exit 0") // up -d
+			case 4:
+				return exec.Command("bash", "-c", `printf "NAME  STATUS\napp  Starting"`) // ps poll 1 → not healthy
+			default:
+				return exec.Command("bash", "-c", `printf "NAME  STATUS\napp  Up 5 minutes (healthy)"`) // ps poll 2 → healthy
+			}
+		},
+		sleep: func(d time.Duration) {},
+		now:   time.Now,
+	}
+
+	err := ensureDockerUp(context.Background(), projectDir, "", 10, deps)
+	require.NoError(t, err)
+}
+
+func TestEnsureDockerUp_TimeoutExceeded(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "docker-compose.yml"), []byte("services:\n"), 0o644))
+
+	startTime := time.Now()
+	nowCallCount := 0
+	callCount := 0
+	deps := dockerDeps{
+		lookPath: func(file string) (string, error) {
+			if file == "docker" {
+				return "/usr/bin/docker", nil
+			}
+			return "", errors.New("not found")
+		},
+		execCommandContext: func(_ context.Context, _ string, args ...string) *exec.Cmd {
+			callCount++
+			switch callCount {
+			case 1:
+				return exec.Command("bash", "-c", "exit 0") // detect compose
+			case 2:
+				return exec.Command("bash", "-c", `echo "NAME  STATUS"`) // ps → not running
+			case 3:
+				return exec.Command("bash", "-c", "exit 0") // up -d
+			default:
+				return exec.Command("bash", "-c", `printf "NAME  STATUS\napp  Starting"`) // ps poll → not healthy
+			}
+		},
+		sleep: func(d time.Duration) {},
+		now: func() time.Time {
+			nowCallCount++
+			if nowCallCount == 1 {
+				return startTime
+			}
+			return startTime.Add(1000 * time.Second)
+		},
+	}
+
+	err := ensureDockerUp(context.Background(), projectDir, "", 1, deps)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timeout")
+}
+
+func TestEnsureDockerUp_ContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "docker-compose.yml"), []byte("services:\n"), 0o644))
+
+	callCount := 0
+	deps := dockerDeps{
+		lookPath: func(file string) (string, error) {
+			if file == "docker" {
+				return "/usr/bin/docker", nil
+			}
+			return "", errors.New("not found")
+		},
+		execCommandContext: func(_ context.Context, _ string, args ...string) *exec.Cmd {
+			callCount++
+			switch callCount {
+			case 1:
+				return exec.Command("bash", "-c", "exit 0") // detect compose
+			case 2:
+				return exec.Command("bash", "-c", `echo "NAME  STATUS"`) // ps → not running
+			case 3:
+				return exec.Command("bash", "-c", "exit 0") // up -d
+			default:
+				return exec.Command("bash", "-c", `printf "NAME  STATUS\napp  Starting"`) // ps poll → not healthy
+			}
+		},
+		sleep: func(d time.Duration) {},
+		now:   time.Now,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := ensureDockerUp(ctx, projectDir, "", 10, deps)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
 }

@@ -135,6 +135,8 @@ func CollectStateWith(ctx context.Context, projectDir string, ex Executor) (bool
 	status, err := ex.StatusPorcelain(ctx, projectDir)
 	if err == nil {
 		clean = strings.TrimSpace(status) == ""
+	} else {
+		frylog.Log("WARNING: git status --porcelain failed: %v", err)
 	}
 
 	branch := ex.CurrentBranch(ctx, projectDir)
