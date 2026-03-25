@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -461,4 +462,31 @@ func TestCleanup_Nil(t *testing.T) {
 
 	var setup *StrategySetup
 	require.NoError(t, setup.Cleanup())
+}
+
+// #32: CheckoutBranchWith tests
+
+func TestCheckoutBranchWith_Success(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		CheckoutFn: func(_ context.Context, _ string, _ string) error {
+			return nil
+		},
+	}
+	err := CheckoutBranchWith(context.Background(), t.TempDir(), "fry/my-branch", ex)
+	require.NoError(t, err)
+}
+
+func TestCheckoutBranchWith_Error(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		CheckoutFn: func(_ context.Context, _ string, _ string) error {
+			return errors.New("branch not found")
+		},
+	}
+	err := CheckoutBranchWith(context.Background(), t.TempDir(), "fry/nonexistent", ex)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "branch not found")
 }
