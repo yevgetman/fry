@@ -78,7 +78,9 @@ func Classify(ctx context.Context, opts TriageOpts) *TriageDecision {
 	// Remove stale decision file from a prior run so it doesn't get read back
 	// if the current engine invocation writes output elsewhere.
 	decisionPath := filepath.Join(opts.ProjectDir, config.TriageDecisionFile)
-	os.Remove(decisionPath)
+	if err := os.Remove(decisionPath); err != nil && !os.IsNotExist(err) {
+		frylog.Log("WARNING: triage: remove stale decision: %v", err)
+	}
 
 	frylog.Log("▶ TRIAGE  classifying task complexity...  engine=%s  model=%s", opts.Engine.Name(), opts.Model)
 
