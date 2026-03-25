@@ -144,6 +144,31 @@ func TestWriteAtomicRename(t *testing.T) {
 	}
 }
 
+func TestWriteCleansTempOnRenameFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Place a non-empty directory at the target path. os.Rename from a file
+	// to a non-empty directory fails, which exercises the cleanup path at
+	// the Rename error branch (line 87).
+	target := filepath.Join(dir, "build-report.json")
+	require.NoError(t, os.MkdirAll(target, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(target, "blocker"), []byte("x"), 0o644))
+
+	err := Write(target, BuildReport{EpicName: "Rename Fail"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "report:")
+
+	// Verify no leftover temp files in dir.
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		assert.False(t, strings.HasPrefix(e.Name(), ".build-report-"),
+			"temp file should be cleaned up but found: %s", e.Name())
+	}
+}
+
 func TestWriteZeroReport(t *testing.T) {
 	t.Parallel()
 

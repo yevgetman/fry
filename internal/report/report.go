@@ -67,24 +67,24 @@ func Write(path string, r BuildReport) error {
 	tmpName := tmp.Name()
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("report: write temp file: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("report: sync temp file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("report: close temp file: %w", err)
 	}
 	if err := os.Chmod(tmpName, 0o644); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("report: chmod temp file: %w", err)
 	}
 	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("report: rename temp file: %w", err)
 	}
 	return nil

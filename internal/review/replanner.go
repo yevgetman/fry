@@ -91,7 +91,7 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
 		return fmt.Errorf("run replan: write prompt: %w", err)
 	}
-	defer os.Remove(promptPath)
+	defer func() { _ = os.Remove(promptPath) }()
 
 	frylog.Log("  Running replanner agent...  engine=%s  model=%s", opts.Engine.Name(), opts.Model)
 	runOpts := engine.RunOpts{
@@ -323,7 +323,7 @@ func parseEpicContent(content string) (*epic.Epic, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.WriteString(content); err != nil {
 		tmp.Close()
 		return nil, err
