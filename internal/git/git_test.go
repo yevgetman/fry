@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -271,4 +272,247 @@ func TestGitCheckpoint_SpecialChars(t *testing.T) {
 	output, err := cmd.Output()
 	require.NoError(t, err)
 	assert.Contains(t, strings.TrimSpace(string(output)), "Epic's")
+}
+
+// mockExecutor is a test double for the Executor interface.
+// Set only the function fields you need; unset fields return zero values and nil errors.
+type mockExecutor struct {
+	IsRepoFn            func(ctx context.Context, dir string) bool
+	HasHeadFn           func(ctx context.Context, dir string) bool
+	CurrentBranchFn     func(ctx context.Context, dir string) string
+	BranchExistsFn      func(ctx context.Context, dir string, name string) bool
+	InitFn              func(ctx context.Context, dir string) error
+	ConfigGetFn         func(ctx context.Context, dir string, key string) string
+	ConfigSetFn         func(ctx context.Context, dir string, key, value string) error
+	AddAllFn            func(ctx context.Context, dir string) error
+	AddIntentFn         func(ctx context.Context, dir string, paths []string) error
+	CommitAllowEmptyFn  func(ctx context.Context, dir string, message string) error
+	ResetFn             func(ctx context.Context, dir string, paths []string) error
+	CheckoutFn          func(ctx context.Context, dir string, name string) error
+	CreateAndCheckoutFn func(ctx context.Context, dir string, name string) error
+	DiffHeadFn          func(ctx context.Context, dir string, excludePathspecs []string) (string, error)
+	DiffStatFn          func(ctx context.Context, dir string, excludePathspecs []string) (string, error)
+	ListUntrackedFn     func(ctx context.Context, dir string, excludePathspecs []string) ([]string, error)
+	StatusPorcelainFn   func(ctx context.Context, dir string) (string, error)
+	LogGrepFn           func(ctx context.Context, dir string, grepPattern string, maxCount int, format string) (string, error)
+	WorktreeListFn      func(ctx context.Context, dir string) ([]string, error)
+	WorktreeAddFn       func(ctx context.Context, dir string, worktreePath, branchName string, createBranch bool) error
+	WorktreePruneFn     func(ctx context.Context, dir string) error
+}
+
+func (m *mockExecutor) IsRepo(ctx context.Context, dir string) bool {
+	if m.IsRepoFn != nil {
+		return m.IsRepoFn(ctx, dir)
+	}
+	return false
+}
+func (m *mockExecutor) HasHead(ctx context.Context, dir string) bool {
+	if m.HasHeadFn != nil {
+		return m.HasHeadFn(ctx, dir)
+	}
+	return false
+}
+func (m *mockExecutor) CurrentBranch(ctx context.Context, dir string) string {
+	if m.CurrentBranchFn != nil {
+		return m.CurrentBranchFn(ctx, dir)
+	}
+	return ""
+}
+func (m *mockExecutor) BranchExists(ctx context.Context, dir string, name string) bool {
+	if m.BranchExistsFn != nil {
+		return m.BranchExistsFn(ctx, dir, name)
+	}
+	return false
+}
+func (m *mockExecutor) Init(ctx context.Context, dir string) error {
+	if m.InitFn != nil {
+		return m.InitFn(ctx, dir)
+	}
+	return nil
+}
+func (m *mockExecutor) ConfigGet(ctx context.Context, dir string, key string) string {
+	if m.ConfigGetFn != nil {
+		return m.ConfigGetFn(ctx, dir, key)
+	}
+	return ""
+}
+func (m *mockExecutor) ConfigSet(ctx context.Context, dir string, key, value string) error {
+	if m.ConfigSetFn != nil {
+		return m.ConfigSetFn(ctx, dir, key, value)
+	}
+	return nil
+}
+func (m *mockExecutor) AddAll(ctx context.Context, dir string) error {
+	if m.AddAllFn != nil {
+		return m.AddAllFn(ctx, dir)
+	}
+	return nil
+}
+func (m *mockExecutor) AddIntent(ctx context.Context, dir string, paths []string) error {
+	if m.AddIntentFn != nil {
+		return m.AddIntentFn(ctx, dir, paths)
+	}
+	return nil
+}
+func (m *mockExecutor) CommitAllowEmpty(ctx context.Context, dir string, message string) error {
+	if m.CommitAllowEmptyFn != nil {
+		return m.CommitAllowEmptyFn(ctx, dir, message)
+	}
+	return nil
+}
+func (m *mockExecutor) Reset(ctx context.Context, dir string, paths []string) error {
+	if m.ResetFn != nil {
+		return m.ResetFn(ctx, dir, paths)
+	}
+	return nil
+}
+func (m *mockExecutor) Checkout(ctx context.Context, dir string, name string) error {
+	if m.CheckoutFn != nil {
+		return m.CheckoutFn(ctx, dir, name)
+	}
+	return nil
+}
+func (m *mockExecutor) CreateAndCheckout(ctx context.Context, dir string, name string) error {
+	if m.CreateAndCheckoutFn != nil {
+		return m.CreateAndCheckoutFn(ctx, dir, name)
+	}
+	return nil
+}
+func (m *mockExecutor) DiffHead(ctx context.Context, dir string, excludePathspecs []string) (string, error) {
+	if m.DiffHeadFn != nil {
+		return m.DiffHeadFn(ctx, dir, excludePathspecs)
+	}
+	return "", nil
+}
+func (m *mockExecutor) DiffStat(ctx context.Context, dir string, excludePathspecs []string) (string, error) {
+	if m.DiffStatFn != nil {
+		return m.DiffStatFn(ctx, dir, excludePathspecs)
+	}
+	return "", nil
+}
+func (m *mockExecutor) ListUntracked(ctx context.Context, dir string, excludePathspecs []string) ([]string, error) {
+	if m.ListUntrackedFn != nil {
+		return m.ListUntrackedFn(ctx, dir, excludePathspecs)
+	}
+	return nil, nil
+}
+func (m *mockExecutor) StatusPorcelain(ctx context.Context, dir string) (string, error) {
+	if m.StatusPorcelainFn != nil {
+		return m.StatusPorcelainFn(ctx, dir)
+	}
+	return "", nil
+}
+func (m *mockExecutor) LogGrep(ctx context.Context, dir string, grepPattern string, maxCount int, format string) (string, error) {
+	if m.LogGrepFn != nil {
+		return m.LogGrepFn(ctx, dir, grepPattern, maxCount, format)
+	}
+	return "", nil
+}
+func (m *mockExecutor) WorktreeList(ctx context.Context, dir string) ([]string, error) {
+	if m.WorktreeListFn != nil {
+		return m.WorktreeListFn(ctx, dir)
+	}
+	return nil, nil
+}
+func (m *mockExecutor) WorktreeAdd(ctx context.Context, dir string, worktreePath, branchName string, createBranch bool) error {
+	if m.WorktreeAddFn != nil {
+		return m.WorktreeAddFn(ctx, dir, worktreePath, branchName, createBranch)
+	}
+	return nil
+}
+func (m *mockExecutor) WorktreePrune(ctx context.Context, dir string) error {
+	if m.WorktreePruneFn != nil {
+		return m.WorktreePruneFn(ctx, dir)
+	}
+	return nil
+}
+
+// #31: DiffStatForNoopDetectionWith tests
+
+func TestDiffStatForNoopDetectionWith_Success(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		DiffStatFn: func(_ context.Context, _ string, _ []string) (string, error) {
+			return "file.go | 3 +++", nil
+		},
+	}
+	result := DiffStatForNoopDetectionWith(context.Background(), t.TempDir(), ex)
+	assert.Equal(t, "file.go | 3 +++", result)
+}
+
+func TestDiffStatForNoopDetectionWith_DiffStatError(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		DiffStatFn: func(_ context.Context, _ string, _ []string) (string, error) {
+			return "", errors.New("git error")
+		},
+	}
+	result := DiffStatForNoopDetectionWith(context.Background(), t.TempDir(), ex)
+	assert.True(t, strings.HasPrefix(result, "__git_error_"), "expected __git_error_ prefix, got %q", result)
+}
+
+func TestDiffStatForNoopDetectionWith_EmptyDiff(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		DiffStatFn: func(_ context.Context, _ string, _ []string) (string, error) {
+			return "", nil
+		},
+	}
+	result := DiffStatForNoopDetectionWith(context.Background(), t.TempDir(), ex)
+	assert.Equal(t, "", result)
+}
+
+// #31: CollectStateWith tests
+
+func TestCollectStateWith_AllSucceed(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		StatusPorcelainFn: func(_ context.Context, _ string) (string, error) {
+			return "", nil
+		},
+		CurrentBranchFn: func(_ context.Context, _ string) string {
+			return "main"
+		},
+		LogGrepFn: func(_ context.Context, _ string, _ string, _ int, _ string) (string, error) {
+			return "Epic: Sprint 3 complete [automated]", nil
+		},
+	}
+	clean, branch, lastCommit := CollectStateWith(context.Background(), t.TempDir(), ex)
+	assert.True(t, clean)
+	assert.Equal(t, "main", branch)
+	assert.Contains(t, lastCommit, "Sprint 3")
+}
+
+func TestCollectStateWith_StatusPorcelainFails(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		StatusPorcelainFn: func(_ context.Context, _ string) (string, error) {
+			return "", errors.New("porcelain error")
+		},
+	}
+	clean, _, _ := CollectStateWith(context.Background(), t.TempDir(), ex)
+	assert.True(t, clean)
+}
+
+func TestCollectStateWith_LogGrepFails(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		StatusPorcelainFn: func(_ context.Context, _ string) (string, error) {
+			return "", nil
+		},
+		CurrentBranchFn: func(_ context.Context, _ string) string {
+			return "main"
+		},
+		LogGrepFn: func(_ context.Context, _ string, _ string, _ int, _ string) (string, error) {
+			return "", errors.New("log error")
+		},
+	}
+	_, _, lastCommit := CollectStateWith(context.Background(), t.TempDir(), ex)
+	assert.Equal(t, "", lastCommit)
 }
