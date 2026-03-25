@@ -80,6 +80,7 @@ func Classify(ctx context.Context, opts TriageOpts) *TriageDecision {
 	decisionPath := filepath.Join(opts.ProjectDir, config.TriageDecisionFile)
 	if err := os.Remove(decisionPath); err != nil && !os.IsNotExist(err) {
 		frylog.Log("WARNING: triage: remove stale decision: %v", err)
+		return &TriageDecision{Complexity: ComplexityComplex, Reason: "filesystem error"}
 	}
 
 	frylog.Log("▶ TRIAGE  classifying task complexity...  engine=%s  model=%s", opts.Engine.Name(), opts.Model)
