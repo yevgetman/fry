@@ -1187,7 +1187,7 @@ func TestRunAuditLoopProgressStopsOnStale(t *testing.T) {
 func TestRunAuditLoopProgressContinues(t *testing.T) {
 	t.Parallel()
 
-	// Max effort: different findings each cycle → progress always made → runs full cap.
+	// Max effort with explicit cap: different findings each cycle → progress always made → runs full cap.
 	eng := &stubEngine{
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
@@ -1198,14 +1198,15 @@ func TestRunAuditLoopProgressContinues(t *testing.T) {
 	}
 	opts := makeOpts(t, eng)
 	opts.Epic.EffortLevel = epic.EffortMax
-	opts.Epic.MaxAuditIterationsSet = false
+	opts.Epic.MaxAuditIterationsSet = true
+	opts.Epic.MaxAuditIterations = 20
 
 	result, err := RunAuditLoop(context.Background(), opts)
 	require.NoError(t, err)
 	assert.False(t, result.Passed)
 	assert.True(t, result.Blocking)
 
-	// MaxOuterCyclesMaxCap=20, MaxInnerFixIterMax=10
+	// 20 explicit cycles, MaxInnerFixIterMax=10
 	// Each cycle: audit + (fix+verify)*2 (inner stale since same content every call) = 5
 	// Except: findings are DIFFERENT each time because callIndex varies.
 	// The inner verify also writes unique findings, so verify parser finds no Issue/Status format.
@@ -1462,4 +1463,76 @@ func TestRunAuditLoopMediumEffortIgnoresLow(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result.Passed)
 	assert.Equal(t, 2, result.Iterations)
+}
+
+func TestRunAuditLoopLowOnlyMaxEffortRunsOneFix(t *testing.T) {
+	t.Parallel()
+
+	lowOnlyFindings := "## Findings\n- **Description:** Variable naming\n- **Severity:** LOW\n\n## Verdict\nPASS\n"
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			path := filepath.Join(projectDir, config.SprintAuditFile)
+			switch callIndex {
+			case 0: // cycle 1 audit → LOW only
+				writeFile(t, path, lowOnlyFindings)
+			case 1: // fix pass (single LOW fix attempt)
+			}
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortMax
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.True(t, result.Passed)
+	assert.Equal(t, 1, result.Iterations)
+	// Expect: audit + fix = 2 calls. No re-audit after fix.
+	assert.Len(t, eng.prompts, 2)
+	assert.Equal(t, config.AuditInvocationPrompt, eng.prompts[0])
+	assert.Equal(t, config.AuditFixInvocationPrompt, eng.prompts[1])
+}
+
+func TestRunAuditLoopLowOnlyNonMaxExitsImmediately(t *testing.T) {
+	t.Parallel()
+
+	lowOnlyFindings := "## Findings\n- **Description:** Variable naming\n- **Severity:** LOW\n\n## Verdict\nPASS\n"
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), lowOnlyFindings)
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortMedium
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.True(t, result.Passed)
+	assert.Equal(t, 1, result.Iterations)
+	// Only audit called, no fix agent
+	assert.Len(t, eng.prompts, 1)
+	assert.Equal(t, config.AuditInvocationPrompt, eng.prompts[0])
+}
+
+func TestRunAuditLoopMaxEffortHighFindingsStillLoops(t *testing.T) {
+	t.Parallel()
+
+	// Max effort with MODERATE findings should loop normally, not exit early.
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), moderateFindings)
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortMax
+	opts.Epic.MaxAuditIterationsSet = true
+	opts.Epic.MaxAuditIterations = 2
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed, "MODERATE findings should not pass")
 }

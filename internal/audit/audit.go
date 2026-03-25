@@ -160,6 +160,14 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		maxSev := parseAuditSeverity(string(content))
 		counts := countAuditSeverities(string(content))
 		if isAuditPass(maxSev) {
+			// LOW-only at max effort: attempt one fix pass before accepting.
+			if maxSev == "LOW" && opts.Epic.EffortLevel == epic.EffortMax {
+				lowFindings := parseFindings(string(content))
+				if len(lowFindings) > 0 {
+					frylog.Log("  AUDIT: LOW-only at max effort — running single fix pass before accepting")
+					_ = runSingleLowFixPass(ctx, opts, lowFindings, cycle, buildLogsDir)
+				}
+			}
 			frylog.Log("  AUDIT: pass (%s)", formatSeverityCounts(counts))
 			return &AuditResult{
 				Passed: true, Iterations: cycle,
@@ -200,9 +208,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			activeFindings = currentFindings
 		}
 
-		// Check actionable count
+		// Check actionable count (HIGH/MODERATE/CRITICAL only)
 		actionable := countActionableFindings(activeFindings)
 		if actionable == 0 {
+			// No actionable issues but unresolved LOWs may exist.
+			// At max effort, attempt one fix pass before accepting.
+			if opts.Epic.EffortLevel == epic.EffortMax {
+				lowRemaining := filterLowUnresolved(activeFindings)
+				if len(lowRemaining) > 0 {
+					frylog.Log("  AUDIT: LOW-only at max effort — running single fix pass before accepting")
+					_ = runSingleLowFixPass(ctx, opts, lowRemaining, cycle, buildLogsDir)
+				}
+			}
 			frylog.Log("  AUDIT: pass (no actionable issues)")
 			return &AuditResult{
 				Passed: true, Iterations: cycle,
@@ -382,6 +399,46 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		SeverityCounts:     finalCounts,
 		UnresolvedFindings: parseFindings(string(content)),
 	}, nil
+}
+
+// runSingleLowFixPass runs one fix agent pass targeting LOW findings without
+// re-auditing. Used at max effort when only LOW findings remain — gives the
+// agent one chance to fix them before accepting the audit as passed.
+func runSingleLowFixPass(ctx context.Context, opts AuditOpts, findings []Finding, cycle int, buildLogsDir string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	sortFindingsFIFO(findings)
+
+	fixModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditFix)
+	frylog.Log("  AUDIT FIX  cycle %d  LOW-only fix — targeting %d issues  engine=%s  model=%s",
+		cycle, len(findings), opts.Engine.Name(), fixModel)
+
+	promptPath := filepath.Join(opts.ProjectDir, config.AuditPromptFile)
+	fixPrompt := buildAuditFixPrompt(opts, findings)
+	if err := writePromptFile(promptPath, fixPrompt); err != nil {
+		return fmt.Errorf("run single low fix pass: write fix prompt: %w", err)
+	}
+
+	fixLogPath := filepath.Join(buildLogsDir,
+		fmt.Sprintf("sprint%d_auditfix_low_%d_%s.log", opts.Sprint.Number, cycle, time.Now().Format("20060102_150405")),
+	)
+	_, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel)
+	return err
+}
+
+// filterLowUnresolved returns unresolved LOW findings from the given slice.
+func filterLowUnresolved(findings []Finding) []Finding {
+	var result []Finding
+	for _, f := range findings {
+		if f.Severity == "LOW" && !f.Resolved {
+			result = append(result, f)
+		}
+	}
+	return result
 }
 
 // --- Prompt builders ---

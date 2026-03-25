@@ -36,6 +36,7 @@ import (
 	"github.com/yevgetman/fry/internal/shellhook"
 	"github.com/yevgetman/fry/internal/sprint"
 	"github.com/yevgetman/fry/internal/summary"
+	"github.com/yevgetman/fry/internal/textutil"
 	"github.com/yevgetman/fry/internal/triage"
 	"github.com/yevgetman/fry/internal/verify"
 )
@@ -866,10 +867,19 @@ var runCmd = &cobra.Command{
 					}
 
 					if observerEnabled {
+						reviewData := map[string]string{"verdict": string(reviewResult.Verdict)}
+						if reviewResult.Deviation != nil {
+							reviewData["trigger"] = reviewResult.Deviation.Trigger
+							reviewData["risk_assessment"] = reviewResult.Deviation.RiskAssessment
+							reviewData["affected_sprints"] = formatAffectedSprints(reviewResult.Deviation.AffectedSprints)
+							if reviewResult.Deviation.Details != "" {
+								reviewData["deviation_details"] = textutil.TruncateUTF8(reviewResult.Deviation.Details, 500)
+							}
+						}
 						_ = observer.EmitEvent(projectPath, observer.Event{
 							Type:   observer.EventReviewComplete,
 							Sprint: spr.Number,
-							Data:   map[string]string{"verdict": string(reviewResult.Verdict)},
+							Data:   reviewData,
 						})
 					}
 

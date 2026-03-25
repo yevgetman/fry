@@ -342,7 +342,7 @@ Key flags:
 | `DefaultMaxOuterAuditCycles` | `3` | Outer audit cycles per sprint (medium/default) |
 | `DefaultMaxInnerFixIter` | `3` | Inner fix iterations per audit report (medium/default) |
 | `MaxOuterCyclesHighCap` | `12` | Outer audit cycles at high effort |
-| `MaxOuterCyclesMaxCap` | `20` | Outer audit cycles at max effort |
+| `MaxOuterCyclesMaxCap` | `100` | Outer audit cycles at max effort (safety valve; stale detection governs actual exit) |
 | `MaxInnerFixIterHigh` | `7` | Inner fix iterations at high effort |
 | `MaxInnerFixIterMax` | `10` | Inner fix iterations at max effort |
 | `DefaultDockerReadyTimeout` | `30` | Seconds for Docker health check |

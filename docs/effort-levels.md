@@ -60,7 +60,7 @@ fry --engine claude
 For high-stakes projects where correctness is paramount. Same sprint count as `high`, but with significantly more rigor per sprint.
 
 - Same sprint count as `high` (4-10), but with higher iteration budgets (30-50 per sprint)
-- Sprint audits use progress-based iteration (same as `high`): continue while the fix agent is making progress, up to a safety cap of 20 outer cycles with 10 inner fix iterations per cycle
+- Sprint audits use progress-based iteration (same as `high`): continue while the fix agent is making progress, up to a safety cap of 100 outer cycles with 10 inner fix iterations per cycle. When only LOW findings remain, one fix attempt is made before accepting (prevents indefinite cycling on acknowledged LOWs)
 - Sprint prompts are extended beyond the standard 7-part structure:
   - **Part 8: Analysis & Edge Cases** — enumerates every edge case, race condition, error scenario, and boundary condition
   - **Part 9: Quality Gates** — explicit quality criteria beyond verification (performance targets, security considerations, code review checklist items)
@@ -197,7 +197,7 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | Prompt structure | Concise | Moderate 7-part | Full 7-part | Extended 9-part |
 | Scaffolding sprint | Merged into Sprint 1 | Normal | Normal | Normal |
 | Review behavior | Skipped | Normal | Normal | Thorough (lower DEVIATE threshold) |
-| Sprint audit | Skipped | 3 outer cycles, 3 inner fix (bounded); LOW ignored | Progress-based (12 outer, 7 inner); LOW included in fix | Progress-based (20 outer, 10 inner); LOW included in fix |
+| Sprint audit | Skipped | 3 outer cycles, 3 inner fix (bounded); LOW ignored | Progress-based (12 outer, 7 inner); LOW included in fix | Progress-based (100 outer, 10 inner); LOW included in fix; LOW-only → 1 fix then accept |
 | Build audit | Skipped | Runs on full epic completion | Runs on full epic completion | Runs on full epic completion |
 | No-op threshold | 2 iterations | 2 iterations | 2 iterations | 3 iterations |
 | Quality directive | No | No | No | Yes (injected into every prompt) |

@@ -78,7 +78,7 @@ After the audit loop exhausts its cycles, the outcome depends on the highest rem
 
 - **CRITICAL or HIGH** -- The sprint **fails** and the epic stops. The build summary shows `FAIL (audit: CRITICAL)` or `FAIL (audit: HIGH)`. You can resume with `fry run <epic> <sprint>` after fixing the issues.
 - **MODERATE** -- The sprint **continues** with an advisory warning logged to the build output and build summary. This prevents moderate semantic disagreements between two AI agents from stalling the entire build.
-- **LOW or none** -- The audit passes cleanly.
+- **LOW or none** -- The audit passes cleanly. At **max** effort, LOW-only findings trigger one fix agent attempt before accepting (see below). At all other effort levels, LOW-only is an immediate pass.
 
 ```
 # Blocking (CRITICAL/HIGH) — exact severity counts:
@@ -87,6 +87,17 @@ After the audit loop exhausts its cycles, the outcome depends on the highest rem
 # Advisory (MODERATE) — exact severity counts:
 [2026-03-10 12:20:00]   AUDIT: 2 MODERATE remain after 3 audit cycles (advisory)
 ```
+
+## LOW-Only Exit Behavior
+
+When an audit finds only LOW-severity issues (no CRITICAL, HIGH, or MODERATE), the behavior depends on effort level:
+
+| Effort | LOW-only result | Behavior |
+|---|---|---|
+| low / medium / high | Immediate pass | No fix attempt; LOW findings are non-blocking |
+| max | Single fix attempt, then pass | One fix agent pass targets the LOW findings. No re-audit after — the result is accepted regardless of whether the fix succeeded. This prevents the audit loop from cycling indefinitely on acknowledged LOWs while still giving max effort one chance to resolve them. |
+
+The max effort audit iteration cap is set high (100) as a safety valve. The actual exit is governed by stale detection (3 consecutive cycles without progress) and the LOW-only exit condition above.
 
 ## Configuration
 

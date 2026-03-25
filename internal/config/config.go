@@ -57,7 +57,7 @@ const (
 	DefaultMaxOuterAuditCycles = 3  // outer audit cycles (medium/default)
 	DefaultMaxInnerFixIter     = 3  // fix attempts per audit report (medium/default)
 	MaxOuterCyclesHighCap      = 12 // outer audit cycles at high effort
-	MaxOuterCyclesMaxCap       = 20 // outer audit cycles at max effort
+	MaxOuterCyclesMaxCap       = 100 // outer audit cycles at max effort (safety valve; stale detection governs actual exit)
 	MaxInnerFixIterHigh        = 7  // inner fix cap at high effort
 	MaxInnerFixIterMax         = 10 // inner fix cap at max effort
 
