@@ -1617,15 +1617,20 @@ func allSprintsCompleted(projectDir string, totalSprints, startSprint int, curre
 func writeExitReason(projectDir string, buildErr error, sprintNum int) {
 	path := filepath.Join(projectDir, config.BuildExitReasonFile)
 	if buildErr == nil {
-		os.Remove(path)
+		_ = os.Remove(path)
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "fry: warning: write exit reason: %v\n", err)
+		return
+	}
 	reason := buildErr.Error()
 	if sprintNum > 0 {
 		reason = fmt.Sprintf("After sprint %d: %s", sprintNum, reason)
 	}
-	_ = os.WriteFile(path, []byte(reason), 0o644)
+	if err := os.WriteFile(path, []byte(reason), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "fry: warning: write exit reason: %v\n", err)
+	}
 }
 
 // resolveMode reconciles the --mode flag with the legacy --planning bool flag.
