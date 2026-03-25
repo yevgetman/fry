@@ -101,10 +101,9 @@ func ensureDockerUp(ctx context.Context, projectDir string, readyCmd string, tim
 		if deps.now().After(deadline) {
 			return fmt.Errorf("docker readiness timeout after %d seconds", waitSeconds)
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(1 * time.Second):
+		deps.sleep(time.Second)
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 	}
 }
