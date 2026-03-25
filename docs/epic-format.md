@@ -30,7 +30,7 @@ Placed before any `@sprint` block:
 | Directive | Description |
 |---|---|
 | `@epic <name>` | Display name for logs and summaries |
-| `@engine <codex\|claude>` | AI engine (default: claude). See [AI Engines](engines.md). |
+| `@engine <codex\|claude\|ollama>` | AI engine (default: claude). See [AI Engines](engines.md). |
 | `@effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `@docker_from_sprint <N>` | Start docker-compose from sprint N |
 | `@docker_ready_cmd <cmd>` | Custom health check after docker-compose up |
@@ -46,13 +46,13 @@ Placed before any `@sprint` block:
 | `@max_fail_percent <N>` | Maximum percentage of checks that can fail while still passing the sprint (default: 20; 0 = strict, 100 = always pass). See [Verification](verification.md). |
 | `@compact_with_agent` | Use AI agent to summarize sprint progress (default: mechanical extraction) |
 | `@review_between_sprints` | Enable mid-build sprint review (default: disabled) |
-| `@review_engine <codex\|claude>` | AI engine for reviewer session (default: same as `@engine`) |
+| `@review_engine <codex\|claude\|ollama>` | AI engine for reviewer session (default: same as `@engine`) |
 | `@review_model <model>` | Model override for the reviewer session |
 | `@max_deviation_scope <N>` | Maximum sprints a single deviation can touch (default: 3; auto-expanded to `totalSprints` for all non-low effort levels, capped at 10) |
 | `@audit_after_sprint` | Enable post-sprint semantic audit (default: enabled). See [Sprint Audit](sprint-audit.md). |
 | `@no_audit` | Disable post-sprint semantic audit. See [Sprint Audit](sprint-audit.md). |
 | `@max_audit_iterations <N>` | Maximum audit→fix cycles per sprint (default: 3) |
-| `@audit_engine <codex\|claude>` | AI engine for audit/fix sessions (default: same as `@engine`) |
+| `@audit_engine <codex\|claude\|ollama>` | AI engine for audit/fix sessions (default: same as `@engine`) |
 | `@audit_model <model>` | Model override for audit/fix sessions |
 
 ## Sprint Blocks

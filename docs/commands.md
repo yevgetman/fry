@@ -44,11 +44,11 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
-| `--engine <codex\|claude>` | AI engine to use (default: claude) |
+| `--engine <codex\|claude\|ollama>` | AI engine to use (default: claude) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
 | `--model <model>` | Override the agent model for sprints, healing, review, and replan sessions (e.g. `opus[1m]`, `sonnet`, `haiku`). Takes precedence over `@model` in the epic and the effort-based automatic model selection. Use this to pair a lower effort level (fewer sprints) with a more capable model. |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). `planning` generates structured documents; `writing` generates human-language content (books, guides, reports). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
-| `--prepare-engine <codex\|claude>` | Engine for auto-generating the epic (defaults to `--engine`, `FRY_ENGINE`, or claude) |
+| `--prepare-engine <codex\|claude\|ollama>` | Engine for auto-generating the epic (defaults to `--engine`, `FRY_ENGINE`, or claude) |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
@@ -128,7 +128,7 @@ fry prepare [epic_filename] [flags]
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
-| `--engine <codex\|claude>` | AI engine for generation (default: claude, or `FRY_ENGINE`) |
+| `--engine <codex\|claude\|ollama>` | AI engine for generation (default: claude, or `FRY_ENGINE`) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--user-prompt <text>` | Top-level directive to guide artifact generation. Can bootstrap the entire project when no plan files exist (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
@@ -187,7 +187,7 @@ fry replan <deviation_spec> [flags]
 | `--epic <path>` | Epic file to update (default: `.fry/epic.md`) |
 | `--completed <N>` | Completed sprint count |
 | `--max-scope <N>` | Maximum deviation scope (default: 3) |
-| `--engine <codex\|claude>` | Replanning engine |
+| `--engine <codex\|claude\|ollama>` | Replanning engine |
 | `--model <model>` | Model override |
 | `--dry-run` | Preview replanning prompt without executing |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
@@ -305,4 +305,4 @@ fry version
 
 | Variable | Description |
 |---|---|
-| `FRY_ENGINE` | Default engine (`codex` or `claude`). Overridden by `--engine` flag and `@engine` directive. |
+| `FRY_ENGINE` | Default engine (`codex`, `claude`, or `ollama`). Overridden by `--engine` flag and `@engine` directive. |
