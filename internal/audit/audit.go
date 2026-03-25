@@ -165,7 +165,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				lowFindings := parseFindings(string(content))
 				if len(lowFindings) > 0 {
 					frylog.Log("  AUDIT: LOW-only at max effort — running single fix pass before accepting")
-					_ = runSingleLowFixPass(ctx, opts, lowFindings, cycle, buildLogsDir)
+					if err := runSingleLowFixPass(ctx, opts, lowFindings, cycle, buildLogsDir); err != nil {
+						frylog.Log("AUDIT: low-fix pass failed: %v", err)
+					}
 				}
 			}
 			frylog.Log("  AUDIT: pass (%s)", formatSeverityCounts(counts))
@@ -217,7 +219,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				lowRemaining := filterLowUnresolved(activeFindings)
 				if len(lowRemaining) > 0 {
 					frylog.Log("  AUDIT: LOW-only at max effort — running single fix pass before accepting")
-					_ = runSingleLowFixPass(ctx, opts, lowRemaining, cycle, buildLogsDir)
+					if err := runSingleLowFixPass(ctx, opts, lowRemaining, cycle, buildLogsDir); err != nil {
+						frylog.Log("AUDIT: low-fix pass failed: %v", err)
+					}
 				}
 			}
 			frylog.Log("  AUDIT: pass (no actionable issues)")
