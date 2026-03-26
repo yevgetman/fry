@@ -11,7 +11,6 @@ import (
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
-	frylog "github.com/yevgetman/fry/internal/log"
 )
 
 // SprintOutcome is a lightweight summary of a sprint result used for
@@ -95,10 +94,10 @@ func SummarizeExperience(ctx context.Context, opts SummarizeOpts) (string, error
 	invocationPrompt := "Read and execute ALL instructions in " + config.ConsciousnessPromptFile + ". Do not create or modify any files."
 	output, _, runErr := opts.Engine.Run(ctx, invocationPrompt, runOpts)
 	if runErr != nil {
-		if ctx.Err() != nil {
+		if strings.TrimSpace(output) == "" {
 			return "", fmt.Errorf("summarize experience: %w", runErr)
 		}
-		frylog.Log("  CONSCIOUSNESS: agent exited with error (non-fatal): %v", runErr)
+		return "", fmt.Errorf("summarize experience: engine error with partial output: %w", runErr)
 	}
 
 	// Cleanup prompt file
