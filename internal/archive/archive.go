@@ -36,6 +36,7 @@ func Archive(projectDir string) (string, error) {
 		if _, err := os.Stat(src); os.IsNotExist(err) {
 			continue
 		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "fry: warning: stat %s: %v\n", name, err)
 			continue
 		}
 		dst := filepath.Join(destPath, name)
