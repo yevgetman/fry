@@ -17,28 +17,102 @@ func TestPlanningPromptBuilders(t *testing.T) {
 		marker string
 	}{
 		{
-			"Step0",
+			"Step0_mode_marker",
 			func() string { return PlanningStep0Prompt("executive content", "", "") },
-			"executive",
+			"strategic planner",
 		},
 		{
-			"Step1",
+			"Step0_input_propagation",
+			func() string { return PlanningStep0Prompt("executive content", "", "") },
+			"executive content",
+		},
+		{
+			"Step0_with_media",
+			func() string { return PlanningStep0Prompt("exec", "img.png - logo", "") },
+			"media/",
+		},
+		{
+			"Step0_with_assets",
+			func() string { return PlanningStep0Prompt("exec", "", "Asset supplement text") },
+			"Asset supplement text",
+		},
+		{
+			"Step1_structural",
 			func() string { return PlanningStep1Prompt("plan content", "executive content", "") },
 			"AGENTS.md",
 		},
 		{
-			"Step2",
+			"Step1_plan_input",
+			func() string { return PlanningStep1Prompt("plan content", "executive content", "") },
+			"plan content",
+		},
+		{
+			"Step1_executive_input",
+			func() string { return PlanningStep1Prompt("plan content", "executive content", "") },
+			"executive content",
+		},
+		{
+			"Step2_mode_marker",
 			func() string {
 				return PlanningStep2Prompt("plan content", "agents content", "epic-example.md", "", epic.EffortHigh, false, "", "")
 			},
-			"epic.md",
+			"PLANNING project",
 		},
 		{
-			"Step3",
+			"Step2_plan_input",
+			func() string {
+				return PlanningStep2Prompt("plan content", "agents content", "epic-example.md", "", epic.EffortHigh, false, "", "")
+			},
+			"plan content",
+		},
+		{
+			"Step2_agents_input",
+			func() string {
+				return PlanningStep2Prompt("plan content", "agents content", "epic-example.md", "", epic.EffortHigh, false, "", "")
+			},
+			"agents content",
+		},
+		{
+			"Step2_with_user_prompt",
+			func() string {
+				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "analyze the market", epic.EffortHigh, false, "", "")
+			},
+			"analyze the market",
+		},
+		{
+			"Step2_with_review",
+			func() string {
+				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortHigh, true, "", "")
+			},
+			"@review_between_sprints",
+		},
+		{
+			"Step3_structural",
 			func() string {
 				return PlanningStep3Prompt("plan content", "epic content", "verification-example.md", "", "")
 			},
-			"verification",
+			"@check_file",
+		},
+		{
+			"Step3_plan_input",
+			func() string {
+				return PlanningStep3Prompt("plan content", "epic content", "verification-example.md", "", "")
+			},
+			"plan content",
+		},
+		{
+			"Step3_epic_input",
+			func() string {
+				return PlanningStep3Prompt("plan content", "epic content", "verification-example.md", "", "")
+			},
+			"epic content",
+		},
+		{
+			"Step3_with_user_prompt",
+			func() string {
+				return PlanningStep3Prompt("plan", "epic", "ver-ex.md", "user directive here", "")
+			},
+			"user directive here",
 		},
 	}
 
