@@ -140,6 +140,45 @@ func TestCollector_ConcurrentAdd(t *testing.T) {
 	assert.Equal(t, goroutines, c.ObservationCount())
 }
 
+func TestSetSummary(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	c := NewCollector("claude", "high", 3)
+	c.outDir = dir
+
+	c.AddObservation("Some thoughts.", "after_sprint", 1)
+	c.SetSummary("This build went smoothly with no surprises.")
+
+	err := c.Finalize("success")
+	require.NoError(t, err)
+
+	filename := "build-" + c.BuildID() + ".json"
+	data, err := os.ReadFile(filepath.Join(dir, filename))
+	require.NoError(t, err)
+
+	var record BuildRecord
+	require.NoError(t, json.Unmarshal(data, &record))
+	assert.Equal(t, "This build went smoothly with no surprises.", record.Summary)
+}
+
+func TestGetRecord(t *testing.T) {
+	t.Parallel()
+
+	c := NewCollector("claude", "medium", 2)
+	c.AddObservation("First.", "after_sprint", 1)
+
+	record := c.GetRecord()
+	assert.Equal(t, c.BuildID(), record.ID)
+	assert.Equal(t, "claude", record.Engine)
+	assert.Equal(t, 1, len(record.Observations))
+
+	// GetRecord returns a snapshot — adding more observations doesn't affect it
+	c.AddObservation("Second.", "build_end", 2)
+	assert.Equal(t, 1, len(record.Observations))
+	assert.Equal(t, 2, c.ObservationCount())
+}
+
 func TestFinalize_EmptyObservations(t *testing.T) {
 	t.Parallel()
 

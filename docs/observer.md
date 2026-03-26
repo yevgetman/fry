@@ -30,7 +30,12 @@ Short LLM sessions at natural breakpoints. Each wake-up reads the identity, scra
 
 ### Experience collection
 
-At each wake-up, the observer's thoughts are collected in-memory by the consciousness pipeline. At build end, all observations are written to `~/.fry/experiences/build-<id>.json` as a structured build record. This is the raw input for the downstream memory pipeline (Stages 3+).
+At each wake-up, the observer's thoughts are collected in-memory by the consciousness pipeline. At build end:
+
+1. An LLM call synthesizes all observations into a coherent **experience summary** — a 200-500 word narrative capturing what happened, what was surprising, and generalizable lessons
+2. The summary and raw observations are written together to `~/.fry/experiences/build-<id>.json`
+
+The experience summary is the document that will eventually feed the downstream memory pipeline.
 
 ## Event Types
 

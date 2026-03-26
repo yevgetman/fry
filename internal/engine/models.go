@@ -43,7 +43,8 @@ const (
 	SessionSanityCheck  SessionType = "sanity-check"
 	SessionPrepare      SessionType = "prepare"
 	SessionTriage       SessionType = "triage"
-	SessionObserver     SessionType = "observer"
+	SessionObserver           SessionType = "observer"
+	SessionExperienceSummary SessionType = "experience-summary"
 )
 
 // Tier-to-model mapping tables.
@@ -221,6 +222,9 @@ func TierForSession(engineName, effort string, session SessionType) ModelTier {
 		if e == "high" || e == "max" {
 			return TierStandard
 		}
+		return TierMini
+
+	case SessionExperienceSummary:
 		return TierMini
 
 	default:

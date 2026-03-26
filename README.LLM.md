@@ -94,7 +94,8 @@ fry/
 │   ├── summary/summary.go       # AI-generated build summary
 │   ├── consciousness/
 │   │   ├── identity.go          # Identity loading from go:embed: LoadCoreIdentity, LoadDisposition, LoadFullIdentity
-│   │   └── collector.go         # Build observation collection: Collector, BuildRecord, BuildObservation
+│   │   ├── collector.go         # Build observation collection: Collector, BuildRecord, BuildObservation
+│   │   └── summarize.go         # End-of-build experience synthesis: SummarizeExperience, SprintOutcome
 │   ├── observer/
 │   │   ├── observer.go          # Observer lifecycle: InitBuild, WakeUp, ShouldWakeUp, scratchpad I/O
 │   │   ├── event.go             # Event types, EmitEvent, ReadEvents, ReadRecentEvents
@@ -373,6 +374,7 @@ Key flags:
 | `IdentityDispositionFile` | `identity/disposition.md` | Disposition (go:embed path) |
 | `IdentityDomainsDir` | `identity/domains` | Domain files directory (go:embed path) |
 | `ExperiencesDir` | `.fry/experiences` | Build experience records |
+| `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient) |
 
 ---
 

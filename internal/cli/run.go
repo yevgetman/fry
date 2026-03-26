@@ -1200,6 +1200,43 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Synthesize observations into experience summary
+		if collector != nil && collector.ObservationCount() > 0 {
+			consciousnessEngine, cErr := engine.NewEngine(engineName)
+			if cErr != nil {
+				frlog.Log("WARNING: could not create engine for experience summary: %v", cErr)
+			} else {
+				cModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionExperienceSummary)
+				frlog.Log("  CONSCIOUSNESS: synthesizing experience summary...  model=%s", cModel)
+
+				sprintOutcomes := make([]consciousness.SprintOutcome, len(summaryCopy))
+				for i, r := range summaryCopy {
+					sprintOutcomes[i] = consciousness.SprintOutcome{
+						Number:       r.Number,
+						Name:         r.Name,
+						Status:       r.Status,
+						HealAttempts: r.HealAttempts,
+					}
+				}
+
+				expSummary, sErr := consciousness.SummarizeExperience(ctx, consciousness.SummarizeOpts{
+					ProjectDir:    projectPath,
+					Engine:        consciousnessEngine,
+					Model:         cModel,
+					Record:        collector.GetRecord(),
+					SprintResults: sprintOutcomes,
+					BuildOutcome:  buildOutcome,
+					Verbose:       frlog.Verbose,
+				})
+				if sErr != nil {
+					frlog.Log("WARNING: experience summary failed (non-fatal): %v", sErr)
+				} else {
+					collector.SetSummary(expSummary)
+					frlog.Log("  CONSCIOUSNESS: experience summary complete (%d bytes)", len(expSummary))
+				}
+			}
+		}
+
 		// Finalize and write the build experience record
 		if collector != nil {
 			if finalizeErr := collector.Finalize(buildOutcome); finalizeErr != nil {

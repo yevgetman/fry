@@ -28,6 +28,7 @@ type BuildRecord struct {
 	TotalSprints int                `json:"total_sprints"`
 	Outcome      string             `json:"outcome"`
 	Observations []BuildObservation `json:"observations"`
+	Summary      string             `json:"summary,omitempty"`
 }
 
 // Collector accumulates observer observations throughout a build and writes
@@ -107,6 +108,20 @@ func (c *Collector) ObservationCount() int {
 // BuildID returns the collector's build ID.
 func (c *Collector) BuildID() string {
 	return c.record.ID
+}
+
+// SetSummary stores the experience summary on the build record.
+func (c *Collector) SetSummary(summary string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.record.Summary = summary
+}
+
+// GetRecord returns a snapshot of the current build record without finalizing.
+func (c *Collector) GetRecord() BuildRecord {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.record
 }
 
 func (c *Collector) experiencesDir() (string, error) {
