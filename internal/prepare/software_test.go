@@ -92,6 +92,34 @@ func TestSoftwarePromptBuilders(t *testing.T) {
 			"@review_between_sprints",
 		},
 		{
+			"Step2_effort_low",
+			func() string {
+				return SoftwareStep2Prompt("plan", "agents", "epic-ex.md", "gen-epic.md", "", epic.EffortLow, false, "", "")
+			},
+			"EFFORT LEVEL: LOW",
+		},
+		{
+			"Step2_effort_medium",
+			func() string {
+				return SoftwareStep2Prompt("plan", "agents", "epic-ex.md", "gen-epic.md", "", epic.EffortMedium, false, "", "")
+			},
+			"EFFORT LEVEL: MEDIUM",
+		},
+		{
+			"Step2_effort_max",
+			func() string {
+				return SoftwareStep2Prompt("plan", "agents", "epic-ex.md", "gen-epic.md", "", epic.EffortMax, false, "", "")
+			},
+			"EFFORT LEVEL: MAX",
+		},
+		{
+			"Step2_effort_auto",
+			func() string {
+				return SoftwareStep2Prompt("plan", "agents", "epic-ex.md", "gen-epic.md", "", epic.EffortLevel(""), false, "", "")
+			},
+			"EFFORT LEVEL: AUTO-DETECT",
+		},
+		{
 			"Step3_structural",
 			func() string {
 				return SoftwareStep3Prompt("plan content", "epic content", "verification-example.md", "", "")
@@ -130,4 +158,10 @@ func TestSoftwarePromptBuilders(t *testing.T) {
 			assert.Contains(t, result, tc.marker)
 		})
 	}
+
+	t.Run("Step1_empty_executive_omits_context", func(t *testing.T) {
+		t.Parallel()
+		result := SoftwareStep1Prompt("plan", "", "")
+		assert.NotContains(t, result, "Also read plans/executive.md")
+	})
 }
