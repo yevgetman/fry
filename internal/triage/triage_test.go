@@ -1,6 +1,8 @@
 package triage
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,10 +11,22 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/prepare"
 	"github.com/yevgetman/fry/internal/verify"
 )
+
+type stubEngine struct {
+	output string
+	err    error
+}
+
+func (s *stubEngine) Run(_ context.Context, _ string, _ engine.RunOpts) (string, int, error) {
+	return s.output, 0, s.err
+}
+
+func (s *stubEngine) Name() string { return "stub" }
 
 func TestParseClassification(t *testing.T) {
 	t.Parallel()
@@ -910,4 +924,82 @@ func TestTruncateReason(t *testing.T) {
 	assert.Equal(t, "hello", truncateReason("hello", 6))
 	// Multi-byte runes: 4 runes "abcd" in 4-byte chars, maxLen=5 runes truncates to 2 runes + "..."
 	assert.Equal(t, "ab...", truncateReason("abcdefgh", 5))
+}
+
+func TestClassify(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		output         string
+		engineErr      error
+		wantComplexity Complexity
+		wantEffort     epic.EffortLevel
+		wantSprints    int
+	}{
+		{
+			name: "simple classification yields LOW effort and 1 sprint",
+			output: `<complexity>SIMPLE</complexity>
+<effort>low</effort>
+<sprints>1</sprints>
+<reason>Single config file change.</reason>`,
+			wantComplexity: ComplexitySimple,
+			wantEffort:     epic.EffortLow,
+			wantSprints:    1,
+		},
+		{
+			name: "moderate classification yields MEDIUM effort and 2 sprints",
+			output: `<complexity>MODERATE</complexity>
+<effort>medium</effort>
+<sprints>2</sprints>
+<reason>Multi-file REST endpoint with tests.</reason>`,
+			wantComplexity: ComplexityModerate,
+			wantEffort:     epic.EffortMedium,
+			wantSprints:    2,
+		},
+		{
+			name: "complex classification",
+			output: `<complexity>COMPLEX</complexity>
+<effort>high</effort>
+<sprints>0</sprints>
+<reason>Full-stack app with Docker and database.</reason>`,
+			wantComplexity: ComplexityComplex,
+			wantEffort:     epic.EffortHigh,
+			wantSprints:    0,
+		},
+		{
+			name:           "engine error with no output defaults to complex",
+			output:         "",
+			engineErr:      errors.New("engine failed"),
+			wantComplexity: ComplexityComplex,
+		},
+		{
+			name:           "malformed XML output defaults to complex",
+			output:         "I think this is a medium-sized task.",
+			wantComplexity: ComplexityComplex,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			stub := &stubEngine{output: tc.output, err: tc.engineErr}
+
+			decision := Classify(context.Background(), TriageOpts{
+				ProjectDir: dir,
+				UserPrompt: "test task",
+				Engine:     stub,
+			})
+
+			require.NotNil(t, decision)
+			assert.Equal(t, tc.wantComplexity, decision.Complexity)
+			if tc.wantEffort != "" {
+				assert.Equal(t, tc.wantEffort, decision.EffortLevel)
+			}
+			assert.Equal(t, tc.wantSprints, decision.SprintCount)
+		})
+	}
 }
