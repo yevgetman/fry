@@ -83,7 +83,7 @@ Everything flows from **identity** (needed first because the observer reads it) 
 
 ---
 
-## Stage 4: Memory Store + Upload
+## Stage 4: Memory Store + Upload — COMPLETE (2026-03-26)
 
 **What it delivers:** Experience summaries leave the local machine and reach Turso. The infrastructure exists for the memory pipeline, even if transmutation isn't built yet.
 
@@ -205,7 +205,7 @@ Everything flows from **identity** (needed first because the observer reads it) 
 | 1. Layered Identity | Personality in builds | nothing | no | none | **DONE** |
 | 2. Observation Collection | Structured build records | Stage 1 | no | none | **DONE** |
 | 3. Experience Summary | Per-build narratives | Stage 2 | no | none | **DONE** |
-| 4. Memory Store + Upload | Central pipeline | Stage 3 | **yes** | none (plain HTTP) | |
+| 4. Memory Store + Upload | Central pipeline | Stage 3 | **yes** | none (plain HTTP) | **DONE** |
 | 5. Transmutation | Atomized memories | Stage 4 | no (server-side) | canonical embedding API | |
 | 6. Reflection | Loop closes | Stage 5 | no | none | |
 | 7. Embeddings | Quality improvement | Stage 6 | no | none | |
