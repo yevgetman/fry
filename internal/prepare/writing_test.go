@@ -28,8 +28,8 @@ func TestWritingPromptBuilders(t *testing.T) {
 		},
 		{
 			"Step0_with_media",
-			func() string { return WritingStep0Prompt("exec", "img.png - logo", "") },
-			"media/",
+			func() string { return WritingStep0Prompt("exec", "MEDIA_SENTINEL", "") },
+			"MEDIA_SENTINEL",
 		},
 		{
 			"Step0_with_assets",
@@ -50,6 +50,16 @@ func TestWritingPromptBuilders(t *testing.T) {
 			"Step1_executive_input",
 			func() string { return WritingStep1Prompt("plan content", "executive content", "") },
 			"executive content",
+		},
+		{
+			"Step1_writing_mode_marker",
+			func() string { return WritingStep1Prompt("plan", "", "") },
+			"WRITING project",
+		},
+		{
+			"Step1_media_injection",
+			func() string { return WritingStep1Prompt("plan", "", "MEDIA_SENTINEL") },
+			"MEDIA_SENTINEL",
 		},
 		{
 			"Step2_mode_marker",

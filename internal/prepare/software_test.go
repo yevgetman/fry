@@ -28,8 +28,8 @@ func TestSoftwarePromptBuilders(t *testing.T) {
 		},
 		{
 			"Step0_with_media",
-			func() string { return SoftwareStep0Prompt("exec", "img.png - logo", "") },
-			"media/",
+			func() string { return SoftwareStep0Prompt("exec", "MEDIA_SENTINEL", "") },
+			"MEDIA_SENTINEL",
 		},
 		{
 			"Step0_with_assets",
@@ -50,6 +50,11 @@ func TestSoftwarePromptBuilders(t *testing.T) {
 			"Step1_executive_input",
 			func() string { return SoftwareStep1Prompt("plan content", "executive content", "") },
 			"executive content",
+		},
+		{
+			"Step1_media_injection",
+			func() string { return SoftwareStep1Prompt("plan", "", "MEDIA_SENTINEL") },
+			"MEDIA_SENTINEL",
 		},
 		{
 			"Step2_structural",
