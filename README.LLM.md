@@ -374,7 +374,7 @@ Key flags:
 | `IdentityDispositionFile` | `identity/disposition.md` | Disposition (go:embed path) |
 | `IdentityDomainsDir` | `identity/domains` | Domain files directory (go:embed path) |
 | `ExperiencesDir` | `.fry/experiences` | Build experience records |
-| `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient) |
+| `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient, deleted after use) |
 
 ---
 

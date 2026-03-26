@@ -92,7 +92,8 @@ func SummarizeExperience(ctx context.Context, opts SummarizeOpts) (string, error
 		runOpts.Stderr = logFile
 	}
 
-	output, _, runErr := opts.Engine.Run(ctx, config.ConsciousnessInvocationText, runOpts)
+	invocationPrompt := "Read and execute ALL instructions in " + config.ConsciousnessPromptFile + ". Do not create or modify any files."
+	output, _, runErr := opts.Engine.Run(ctx, invocationPrompt, runOpts)
 	if runErr != nil {
 		if ctx.Err() != nil {
 			return "", fmt.Errorf("summarize experience: %w", runErr)

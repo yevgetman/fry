@@ -117,7 +117,6 @@ const (
 	IdentityDomainsDir      = "identity/domains"
 
 	// Experience collection constants
-	ExperiencesDir              = ".fry/experiences"
-	ConsciousnessPromptFile     = ".fry/consciousness-prompt.md"
-	ConsciousnessInvocationText = "Read and execute ALL instructions in .fry/consciousness-prompt.md. Write your experience summary directly to stdout. Do not create or modify any files."
+	ExperiencesDir          = ".fry/experiences"
+	ConsciousnessPromptFile = ".fry/consciousness-prompt.md"
 )
