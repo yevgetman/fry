@@ -7,35 +7,64 @@ Fry is a single static Go binary organized into focused internal packages. This 
 ```
 cmd/fry/                 Entry point — calls cli.Execute()
 internal/
+  agentrun/              Shared dual-log execution harness for sprint and heal phases
+  archive/               Timestamped snapshots of .fry/ and build outputs into .fry-archive/
   assets/                Supplementary assets scanner and content builder (prepare-only)
   audit/                 Post-sprint and post-build semantic audit (sprint audit loop + build audit)
-  cli/                   Cobra command definitions (root, run, prepare, replan, version)
+  cli/                   Cobra command definitions (run, prepare, replan, init, clean, status, identity, version)
+  color/                 ANSI color output with TTY detection and NO_COLOR support
   config/                Constants: file paths, defaults, version string
+  consciousness/         End-of-build experience synthesis and BuildRecord collection
   continuerun/           Build state collection, LLM analysis, and resume logic for --continue
   docker/                Docker Compose lifecycle management
-  engine/                AI engine abstraction (Codex and Claude), tier-based model selection, validation
+  engine/                AI engine abstraction (Claude, Codex, Ollama), tier-based model selection, validation
   epic/                  Epic file parser, types (Epic, Sprint, EffortLevel), and validator
   git/                   Git operations (init, checkpoint, commit)
   heal/                  Self-healing loop (re-run agent on verification failure)
   lock/                  File-based concurrency lock (PID-based)
   log/                   Timestamped logging with verbose mode
   media/                 Media directory scanner and manifest builder
+  metrics/               Token usage parsing for Claude and Codex engines
+  observer/              Metacognitive event recording, identity, and wake-up points
   preflight/             Pre-build validation checks
   prepare/               Artifact generation (Steps 0-3), mode handling, sanity check
+  report/                BuildReport JSON serialization
   review/                Dynamic sprint review, replanning, deviation tracking
   shellhook/             Shell command execution for hooks
   sprint/                Sprint execution loop, prompt assembly, progress tracking
   summary/               Build summary generation (post-epic agent session)
   textutil/              Text utilities (markdown stripping, file timestamps, artifact resolution)
+  triage/                Task complexity classification and programmatic epic generation
   verify/                Verification check parsing, execution, and diagnostic collection
 templates/               Embedded templates (AGENTS.md, epic-example, verification-example, etc.)
 ```
+
+## CLI Commands
+
+| Command | Description |
+|---|---|
+| `fry run` | Execute the build: parse epic, run sprints, verify, heal, audit |
+| `fry prepare` | Generate `.fry/AGENTS.md`, `epic.md`, and `verification.md` from `plans/` |
+| `fry init` | Scaffold `plans/`, `assets/`, `media/` directories and initialize git |
+| `fry clean` | Archive `.fry/` and root-level build outputs to `.fry-archive/` |
+| `fry status` | Show current build state (sprints, progress) without an LLM call |
+| `fry identity` | Print Fry's current identity (core or full with `--full`) |
+| `fry replan` | Re-run the sprint review and replanning pass |
+| `fry version` | Print the Fry version |
+
+## Supported Engines
+
+| Engine | Description |
+|---|---|
+| `claude` | Anthropic Claude Code CLI (`claude`). Default engine. |
+| `codex` | OpenAI Codex CLI (`codex`). |
+| `ollama` | Local Ollama server. Requires `ollama` running locally; defaults to `llama3`. |
 
 ## Key Interfaces
 
 ### Engine Interface
 
-Both AI engines implement a common interface, making them interchangeable:
+All AI engines implement a common interface, making them interchangeable:
 
 ```go
 type Engine interface {
@@ -77,9 +106,10 @@ User Input (plans/, media/, assets/, or --user-prompt)
        │   ├─ Docker up (docker/)
        │   ├─ Shell hooks (shellhook/)
        │   ├─ Assemble prompt (sprint/prompt.go)
-       │   ├─ Agent loop (sprint/runner.go → engine/)
+       │   ├─ Agent loop (sprint/runner.go → agentrun/ → engine/)
+       │   ├─ Observer event recording (observer/)
        │   ├─ Verification (verify/)
-       │   ├─ Heal loop (heal/ → engine/ → verify/)
+       │   ├─ Heal loop (heal/ → agentrun/ → engine/ → verify/)
        │   ├─ Resume mode (sprint/runner.go → verify/ → heal/, --resume flag)
        │   ├─ Sprint audit (audit/ → engine/)
        │   ├─ Git checkpoint (git/)
@@ -88,6 +118,9 @@ User Input (plans/, media/, assets/, or --user-prompt)
        │
        ├─ Build summary (summary/)
        ├─ Build audit (audit/ → engine/)
+       ├─ Consciousness synthesis (consciousness/ → engine/) — non-fatal
+       ├─ Build report generation (report/) — writes .fry/build-report.json
+       ├─ Archive on success (archive/) — writes .fry-archive/
        └─ Release lock
 ```
 
