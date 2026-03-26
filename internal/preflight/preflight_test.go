@@ -219,6 +219,45 @@ func TestPreflightDockerNotNeeded(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestRunPreflight_AllValid(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, config.PlansDir), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, config.PlanFile), []byte("# plan content\nline2\n"), 0o644))
+
+	err := RunPreflight(PreflightConfig{
+		ProjectDir: projectDir,
+		Engine:     "bash",
+	})
+	require.NoError(t, err)
+}
+
+func TestRunPreflight_MissingPlansDir(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	// No plans/ directory created
+
+	err := RunPreflight(PreflightConfig{
+		ProjectDir: projectDir,
+		Engine:     "bash",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "plans")
+}
+
+func TestRunPreflight_EmptyProjectDir(t *testing.T) {
+	t.Parallel()
+
+	err := RunPreflight(PreflightConfig{
+		ProjectDir: "",
+		Engine:     "bash",
+	})
+	require.Error(t, err)
+}
+
 func validProjectDir(t *testing.T) string {
 	t.Helper()
 	projectDir := t.TempDir()

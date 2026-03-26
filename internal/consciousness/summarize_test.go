@@ -1,7 +1,9 @@
 package consciousness
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -151,4 +153,55 @@ func TestSummarizeExperience_EmptyOutput(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty output")
+}
+
+func TestSummarizeExperience_EngineErrorEmptyOutput(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	eng := &stubEngine{output: "", err: errors.New("engine down")}
+
+	result, err := SummarizeExperience(context.Background(), SummarizeOpts{
+		ProjectDir: dir,
+		Engine:     eng,
+	})
+
+	assert.Equal(t, "", result)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "engine down")
+}
+
+func TestSummarizeExperience_EngineErrorWithOutput(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	eng := &stubEngine{output: "partial output", err: errors.New("engine degraded")}
+
+	result, err := SummarizeExperience(context.Background(), SummarizeOpts{
+		ProjectDir: dir,
+		Engine:     eng,
+	})
+
+	// Sprint 1 fix: partial output must be rejected when engine returns an error.
+	assert.Equal(t, "", result)
+	require.Error(t, err)
+}
+
+func TestSummarizeExperience_Verbose(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	eng := &stubEngine{output: "summary text"}
+	var buf bytes.Buffer
+
+	result, err := SummarizeExperience(context.Background(), SummarizeOpts{
+		ProjectDir: dir,
+		Engine:     eng,
+		Verbose:    true,
+		Stdout:     &buf,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "summary text", result)
+	assert.NotEmpty(t, buf.String())
 }

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,6 +114,41 @@ func TestFileSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "f.txt")
 	require.NoError(t, os.WriteFile(path, []byte("hello"), 0o644))
 	assert.Equal(t, int64(5), FileSize(path))
+}
+
+func TestTruncateUTF8(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input string
+		limit int
+		want  string
+	}{
+		{"empty string", "", 10, ""},
+		{"shorter than limit", "hello", 10, "hello"},
+		{"exactly at limit", "hello", 5, "hello"},
+		{"longer than limit", "hello world", 5, "hello"},
+		{"limit zero", "anything", 0, ""},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			result := TruncateUTF8(tc.input, tc.limit)
+			assert.Equal(t, tc.want, result)
+		})
+	}
+
+	// Multi-byte: "héllo" is 6 bytes (h=1, é=2, l=1, l=1, o=1).
+	// Truncating to 3 bytes must not split the 'é' rune — result is "hé".
+	t.Run("multibyte no split rune", func(t *testing.T) {
+		t.Parallel()
+		result := TruncateUTF8("héllo", 3)
+		assert.LessOrEqual(t, len(result), 3)
+		assert.True(t, utf8.ValidString(result), "result must be valid UTF-8")
+	})
 }
 
 func TestStripMarkdownFences(t *testing.T) {
