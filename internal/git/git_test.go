@@ -29,13 +29,28 @@ func TestGitCheckpoint(t *testing.T) {
 	projectDir := t.TempDir()
 	require.NoError(t, InitGit(context.Background(), projectDir))
 	require.NoError(t, os.WriteFile(projectDir+"/file.txt", []byte("data\n"), 0o644))
-	require.NoError(t, GitCheckpoint(context.Background(), projectDir, "Epic Name", 2, "complete"))
+	require.NoError(t, GitCheckpoint(context.Background(), projectDir, "Epic Name", 2, "Add login page", "complete"))
 
 	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
 	cmd.Dir = projectDir
 	output, err := cmd.Output()
 	require.NoError(t, err)
-	assert.Equal(t, "Epic Name: Sprint 2 complete [automated]", strings.TrimSpace(string(output)))
+	assert.Equal(t, "Epic Name — Add login page: Sprint 2 complete [automated]", strings.TrimSpace(string(output)))
+}
+
+func TestGitCheckpoint_EmptySprintName(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitGit(context.Background(), projectDir))
+	require.NoError(t, os.WriteFile(projectDir+"/file.txt", []byte("data\n"), 0o644))
+	require.NoError(t, GitCheckpoint(context.Background(), projectDir, "Epic Name", 3, "", "build-audit"))
+
+	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
+	cmd.Dir = projectDir
+	output, err := cmd.Output()
+	require.NoError(t, err)
+	assert.Equal(t, "Epic Name: Sprint 3 build-audit [automated]", strings.TrimSpace(string(output)))
 }
 
 func TestInitGitIdempotent(t *testing.T) {
@@ -130,13 +145,13 @@ func TestCommitPartialWork(t *testing.T) {
 	projectDir := t.TempDir()
 	require.NoError(t, InitGit(context.Background(), projectDir))
 	require.NoError(t, os.WriteFile(projectDir+"/partial.txt", []byte("wip\n"), 0o644))
-	require.NoError(t, CommitPartialWork(context.Background(), projectDir, "TestEpic", 3))
+	require.NoError(t, CommitPartialWork(context.Background(), projectDir, "TestEpic", 3, "Fix auth (#42)"))
 
 	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
 	cmd.Dir = projectDir
 	output, err := cmd.Output()
 	require.NoError(t, err)
-	assert.Equal(t, "TestEpic: Sprint 3 failed-partial [automated]", strings.TrimSpace(string(output)))
+	assert.Equal(t, "TestEpic — Fix auth (#42): Sprint 3 failed-partial [automated]", strings.TrimSpace(string(output)))
 }
 
 // P1: ensureLocalIdentity
@@ -265,7 +280,7 @@ func TestGitCheckpoint_SpecialChars(t *testing.T) {
 	projectDir := t.TempDir()
 	require.NoError(t, InitGit(context.Background(), projectDir))
 	require.NoError(t, os.WriteFile(projectDir+"/file.txt", []byte("data\n"), 0o644))
-	require.NoError(t, GitCheckpoint(context.Background(), projectDir, "Epic's \"Name\" (v2)", 1, "complete"))
+	require.NoError(t, GitCheckpoint(context.Background(), projectDir, "Epic's \"Name\" (v2)", 1, "Sprint One", "complete"))
 
 	cmd := exec.Command("bash", "-c", "git log -1 --pretty=%s")
 	cmd.Dir = projectDir

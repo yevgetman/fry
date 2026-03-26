@@ -76,7 +76,7 @@ fry/
 │   │   ├── planning.go          # Planning-mode prompt builders
 │   │   └── writing.go           # Writing-mode prompt builders
 │   ├── git/
-│   │   ├── git.go               # Git init, checkpoints, diff capture
+│   │   ├── git.go               # Git init, checkpoints (commit format: "EpicName — SprintName: Sprint N label [automated]"), diff capture
 │   │   ├── types.go             # GitStrategy type, StrategySetup, ParseGitStrategy
 │   │   └── strategy.go          # SetupStrategy, ResolveAutoStrategy, GenerateBranchName, worktree/branch helpers
 │   ├── docker/docker.go         # Docker Compose lifecycle, health checks

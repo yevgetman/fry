@@ -652,7 +652,7 @@ var runCmd = &cobra.Command{
 					name := epicName
 					mu.Unlock()
 					if activeSprint > 0 {
-						_ = git.CommitPartialWork(ctx, projectPath, name, activeSprint)
+						_ = git.CommitPartialWork(ctx, projectPath, name, activeSprint, spr.Name)
 					}
 					exitErr = fmt.Errorf("interrupted by signal")
 					break
@@ -830,7 +830,7 @@ var runCmd = &cobra.Command{
 				}
 
 				frlog.Log("  GIT: checkpoint — sprint %d complete", spr.Number)
-				if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, "complete"); err != nil {
+				if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, spr.Name, "complete"); err != nil {
 					return err
 				}
 
@@ -847,7 +847,7 @@ var runCmd = &cobra.Command{
 					return err
 				}
 				frlog.Log("  GIT: checkpoint — sprint %d compacted", spr.Number)
-				if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, "compacted"); err != nil {
+				if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, spr.Name, "compacted"); err != nil {
 					return err
 				}
 
@@ -958,7 +958,7 @@ var runCmd = &cobra.Command{
 							return err
 						}
 						frlog.Log("  GIT: checkpoint — sprint %d reviewed-deviate", spr.Number)
-						if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, "reviewed-deviate"); err != nil {
+						if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, spr.Name, "reviewed-deviate"); err != nil {
 							return err
 						}
 					}
@@ -1051,7 +1051,7 @@ var runCmd = &cobra.Command{
 						frlog.Log("  BUILD AUDIT: %s remain (advisory)", audit.FormatCounts(result.SeverityCounts))
 					}
 					frlog.Log("  GIT: checkpoint — build-audit")
-					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
+					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "", "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
 					}
 				}
@@ -1102,7 +1102,7 @@ var runCmd = &cobra.Command{
 					} else {
 						frlog.Log("  BUILD AUDIT: %s (advisory)", audit.FormatCounts(result.SeverityCounts))
 					}
-					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "build-audit"); gitErr != nil {
+					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "", "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
 					}
 				}

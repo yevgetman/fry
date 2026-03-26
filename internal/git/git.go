@@ -45,13 +45,18 @@ func InitGitWith(ctx context.Context, projectDir string, ex Executor) error {
 }
 
 // GitCheckpoint creates a git commit capturing all current changes.
-func GitCheckpoint(ctx context.Context, projectDir, epicName string, sprintNum int, label string) error {
-	return GitCheckpointWith(ctx, projectDir, epicName, sprintNum, label, DefaultExecutor)
+func GitCheckpoint(ctx context.Context, projectDir, epicName string, sprintNum int, sprintName, label string) error {
+	return GitCheckpointWith(ctx, projectDir, epicName, sprintNum, sprintName, label, DefaultExecutor)
 }
 
 // GitCheckpointWith is like GitCheckpoint but uses the provided Executor.
-func GitCheckpointWith(ctx context.Context, projectDir, epicName string, sprintNum int, label string, ex Executor) error {
-	message := fmt.Sprintf("%s: Sprint %d %s [automated]", epicName, sprintNum, label)
+func GitCheckpointWith(ctx context.Context, projectDir, epicName string, sprintNum int, sprintName, label string, ex Executor) error {
+	var message string
+	if sprintName != "" {
+		message = fmt.Sprintf("%s — %s: Sprint %d %s [automated]", epicName, sprintName, sprintNum, label)
+	} else {
+		message = fmt.Sprintf("%s: Sprint %d %s [automated]", epicName, sprintNum, label)
+	}
 	if err := ex.AddAll(ctx, projectDir); err != nil {
 		return fmt.Errorf("git checkpoint: add: %w", err)
 	}
@@ -62,13 +67,13 @@ func GitCheckpointWith(ctx context.Context, projectDir, epicName string, sprintN
 }
 
 // CommitPartialWork commits partial work from a failed sprint.
-func CommitPartialWork(ctx context.Context, projectDir, epicName string, sprintNum int) error {
-	return GitCheckpoint(ctx, projectDir, epicName, sprintNum, "failed-partial")
+func CommitPartialWork(ctx context.Context, projectDir, epicName string, sprintNum int, sprintName string) error {
+	return GitCheckpoint(ctx, projectDir, epicName, sprintNum, sprintName, "failed-partial")
 }
 
 // CommitPartialWorkWith is like CommitPartialWork but uses the provided Executor.
-func CommitPartialWorkWith(ctx context.Context, projectDir, epicName string, sprintNum int, ex Executor) error {
-	return GitCheckpointWith(ctx, projectDir, epicName, sprintNum, "failed-partial", ex)
+func CommitPartialWorkWith(ctx context.Context, projectDir, epicName string, sprintNum int, sprintName string, ex Executor) error {
+	return GitCheckpointWith(ctx, projectDir, epicName, sprintNum, sprintName, "failed-partial", ex)
 }
 
 // GitDiffForAudit returns a full diff including untracked files, excluding .fry/.
