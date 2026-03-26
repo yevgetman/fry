@@ -138,7 +138,9 @@ func (c *Collector) experiencesDir() (string, error) {
 // generateBuildID creates a UUID v4 string using crypto/rand.
 func generateBuildID() string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%x", time.Now().UnixNano())
+	}
 	// Set version 4 and variant bits per RFC 4122
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
