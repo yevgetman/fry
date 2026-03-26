@@ -5,38 +5,37 @@ Fry is a single static Go binary organized into focused internal packages. This 
 ## Package Overview
 
 ```
-cmd/fry/                 Entry point — calls cli.Execute()
-internal/
-  agentrun/              Shared dual-log execution harness for sprint and heal phases
-  archive/               Timestamped snapshots of .fry/ and build outputs into .fry-archive/
-  assets/                Supplementary assets scanner and content builder (prepare-only)
-  audit/                 Post-sprint and post-build semantic audit (sprint audit loop + build audit)
-  cli/                   Cobra command definitions (run, prepare, replan, init, clean, status, identity, version)
-  color/                 ANSI color output with TTY detection and NO_COLOR support
-  config/                Constants: file paths, defaults, version string
-  consciousness/         End-of-build experience synthesis and BuildRecord collection
-  continuerun/           Build state collection, LLM analysis, and resume logic for --continue
-  docker/                Docker Compose lifecycle management
-  engine/                AI engine abstraction (Claude, Codex, Ollama), tier-based model selection, validation
-  epic/                  Epic file parser, types (Epic, Sprint, EffortLevel), and validator
-  git/                   Git operations (init, checkpoint, commit)
-  heal/                  Self-healing loop (re-run agent on verification failure)
-  lock/                  File-based concurrency lock (PID-based)
-  log/                   Timestamped logging with verbose mode
-  media/                 Media directory scanner and manifest builder
-  metrics/               Token usage parsing for Claude and Codex engines
-  observer/              Metacognitive event recording, identity, and wake-up points
-  preflight/             Pre-build validation checks
-  prepare/               Artifact generation (Steps 0-3), mode handling, sanity check
-  report/                BuildReport JSON serialization
-  review/                Dynamic sprint review, replanning, deviation tracking
-  shellhook/             Shell command execution for hooks
-  sprint/                Sprint execution loop, prompt assembly, progress tracking
-  summary/               Build summary generation (post-epic agent session)
-  textutil/              Text utilities (markdown stripping, file timestamps, artifact resolution)
-  triage/                Task complexity classification and programmatic epic generation
-  verify/                Verification check parsing, execution, and diagnostic collection
-templates/               Embedded templates (AGENTS.md, epic-example, verification-example, etc.)
+cmd/fry/                    Entry point — calls cli.Execute()
+internal/agentrun/          Shared dual-log execution harness for sprint and heal phases
+internal/archive/           Timestamped snapshots of .fry/ and build outputs into .fry-archive/
+internal/assets/            Supplementary assets scanner and content builder (prepare-only)
+internal/audit/             Post-sprint and post-build semantic audit (sprint audit loop + build audit)
+internal/cli/               Cobra command definitions (run, prepare, replan, init, clean, status, identity, version)
+internal/color/             ANSI color output with TTY detection and NO_COLOR support
+internal/config/            Constants: file paths, defaults, version string
+internal/consciousness/     End-of-build experience synthesis and BuildRecord collection
+internal/continuerun/       Build state collection, LLM analysis, and resume logic for --continue
+internal/docker/            Docker Compose lifecycle management
+internal/engine/            AI engine abstraction (Claude, Codex, Ollama), tier-based model selection, validation
+internal/epic/              Epic file parser, types (Epic, Sprint, EffortLevel), and validator
+internal/git/               Git operations (init, checkpoint, commit)
+internal/heal/              Self-healing loop (re-run agent on verification failure)
+internal/lock/              File-based concurrency lock (PID-based)
+internal/log/               Timestamped logging with verbose mode
+internal/media/             Media directory scanner and manifest builder
+internal/metrics/           Token usage parsing for Claude and Codex engines
+internal/observer/          Metacognitive event recording, identity, and wake-up points
+internal/preflight/         Pre-build validation checks
+internal/prepare/           Artifact generation (Steps 0-3), mode handling, sanity check
+internal/report/            BuildReport JSON serialization
+internal/review/            Dynamic sprint review, replanning, deviation tracking
+internal/shellhook/         Shell command execution for hooks
+internal/sprint/            Sprint execution loop, prompt assembly, progress tracking
+internal/summary/           Build summary generation (post-epic agent session)
+internal/textutil/          Text utilities (markdown stripping, file timestamps, artifact resolution)
+internal/triage/            Task complexity classification and programmatic epic generation
+internal/verify/            Verification check parsing, execution, and diagnostic collection
+templates/                  Embedded templates (AGENTS.md, epic-example, verification-example, etc.)
 ```
 
 ## CLI Commands

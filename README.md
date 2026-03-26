@@ -242,6 +242,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Git Strategy](docs/git-strategy.md) | Branch and worktree isolation strategies for builds |
 | [Self-Improvement](docs/self-improvement.md) | Automated self-improvement pipeline: roadmap, orchestrator, planning, build, healing |
 | [Observer](docs/observer.md) | Metacognitive layer: event stream, identity, wake-ups, effort-level gating |
+| [Consciousness](docs/consciousness.md) | Experience synthesis and identity pipeline |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
 
 ## License
