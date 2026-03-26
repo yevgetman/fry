@@ -43,7 +43,6 @@ your-project/
     continue-report.md                   #   Programmatic build state report for --continue (transient)
     observer/                            #   Observer metacognitive layer
       events.jsonl                       #     Structured event stream (JSONL)
-      identity.md                        #     Persistent self-description (survives across builds)
       scratchpad.md                      #     Working memory (reset each build)
       wake-prompt.md                     #     Transient wake-up prompt (deleted after use)
     build-logs/                          #   Per-iteration logs
@@ -94,9 +93,9 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `build-audit.md` | Build audit report (persisted in project root) | `fry run` at runtime |
 | `.fry-archive/` | Archived builds (timestamped snapshots of `.fry/` + root outputs) | `fry clean` or auto-archive after successful full build |
 | `.fry/observer/events.jsonl` | Observer event stream (JSONL, reset per build) | `fry run` at runtime |
-| `.fry/observer/identity.md` | Observer identity document (persists across builds) | `fry run` at runtime |
 | `.fry/observer/scratchpad.md` | Observer working memory (reset per build) | `fry run` at runtime |
 | `.fry/observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) | `fry run` at runtime |
+| `~/.fry/experiences/build-<id>.json` | Build experience record (observations + metadata) | `fry run` at runtime |
 | `.fry/build-logs/` | Per-iteration, per-sprint, resume, audit, and continue logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 

@@ -43,7 +43,6 @@ type ObserverOpts struct {
 type Observation struct {
 	Thoughts        string
 	ScratchpadDelta string
-	IdentityEdited  bool
 	Directives      []Directive
 }
 
@@ -68,7 +67,7 @@ func ShouldWakeUp(effort epic.EffortLevel, point WakePoint) bool {
 }
 
 // InitBuild initializes the observer for a new build.
-// Creates directory, resets scratchpad, ensures identity, emits build_start.
+// Creates directory, resets scratchpad, emits build_start.
 func InitBuild(projectDir string, epicName string, effort string, totalSprints int) error {
 	dir := filepath.Join(projectDir, config.ObserverDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -81,11 +80,6 @@ func InitBuild(projectDir string, epicName string, effort string, totalSprints i
 	}
 	eventsPath := filepath.Join(projectDir, config.ObserverEventsFile)
 	_ = os.Remove(eventsPath) // ignore error if file doesn't exist
-
-	// Ensure identity exists (seed from template if missing)
-	if _, err := EnsureIdentity(projectDir); err != nil {
-		return fmt.Errorf("init observer: %w", err)
-	}
 
 	// Emit build_start event
 	return EmitEvent(projectDir, Event{
@@ -157,7 +151,7 @@ func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 	frylog.Log("▶ OBSERVER  wake=%s  sprint=%d/%d", opts.WakePoint, opts.SprintNum, opts.TotalSprints)
 
 	// 1. Read identity, scratchpad, recent events
-	identity, err := ReadIdentity(opts.ProjectDir)
+	identity, err := ReadIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("observer wake-up: %w", err)
 	}
@@ -237,18 +231,6 @@ func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 	if obs.ScratchpadDelta != "" {
 		if err := AppendScratchpad(opts.ProjectDir, "\n---\n"+obs.ScratchpadDelta+"\n"); err != nil {
 			frylog.Log("  OBSERVER: scratchpad append failed: %v", err)
-		}
-	}
-
-	// 8. If identity updated, write new identity
-	if obs.IdentityEdited {
-		identityContent := extractTagContent(output, "identity_update")
-		if identityContent != "" {
-			if err := WriteIdentity(opts.ProjectDir, identityContent); err != nil {
-				frylog.Log("  OBSERVER: identity write failed: %v", err)
-			} else {
-				frylog.Log("  OBSERVER: identity document updated")
-			}
 		}
 	}
 

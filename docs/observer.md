@@ -10,9 +10,15 @@ The observer has four components:
 
 Mechanical JSON-line events emitted at build checkpoints. Zero LLM cost -- these are structured data, not agent output. Written to **`.fry/observer/events.jsonl`**.
 
-### Identity document
+### Identity
 
-A persistent self-description at **`.fry/observer/identity.md`**. Seeded from an embedded template on first run. The observer can edit its own identity during wake-ups when its self-understanding genuinely evolves. Identity persists across builds.
+Fry's canonical identity is compiled into the binary via `go:embed` under `templates/identity/`. It consists of layered files:
+
+- **`core.md`** — fundamental self-knowledge: what Fry is, its purpose, its values (~500 tokens, always loaded)
+- **`disposition.md`** — behavioral tendencies derived from build experience (~500 tokens, always loaded)
+- **`domains/`** — domain-specific wisdom activated by context (future)
+
+The identity is **read-only during builds**. The observer reads it for context but cannot modify it. Identity is updated only by the Reflection process between builds (see `build-docs/fry-consciousness.md`). Use `fry identity` to view the current identity.
 
 ### Scratchpad
 
@@ -20,7 +26,11 @@ Working memory at **`.fry/observer/scratchpad.md`**. Reset at the start of each 
 
 ### Wake-ups
 
-Short LLM sessions at natural breakpoints. Each wake-up reads the identity, scratchpad, and recent events (~12-15 KB total), then writes observations back. The observer responds with structured XML-style tags: `<thoughts>`, `<scratchpad>`, `<identity_update>` (optional), and `<directives>` (optional).
+Short LLM sessions at natural breakpoints. Each wake-up reads the identity, scratchpad, and recent events (~12-15 KB total), then writes observations back. The observer responds with structured XML-style tags: `<thoughts>`, `<scratchpad>`, and `<directives>` (optional).
+
+### Experience collection
+
+At each wake-up, the observer's thoughts are collected in-memory by the consciousness pipeline. At build end, all observations are written to `~/.fry/experiences/build-<id>.json` as a structured build record. This is the raw input for the downstream memory pipeline (Stages 3+).
 
 ## Event Types
 
@@ -59,11 +69,11 @@ At `low` effort, the observer is fully disabled (no events, no wake-ups). At `me
 
 ## How Observer Consciousness Works
 
-- **Identity persists across builds.** The observer's self-description survives between runs and evolves as the observer edits it. A new identity is seeded from an embedded template on first encounter.
+- **Identity is compiled into the binary.** Fry's self-knowledge and behavioral disposition are embedded at build time via `go:embed`. The identity is read-only during builds — updated only by the Reflection process between builds.
 - **Scratchpad carries working memory within a build.** Reset at `build_start`, it accumulates observations across wake-ups during a single build.
 - **Events are cheap structured data, not raw logs.** Emitting events costs zero LLM tokens. Only wake-ups invoke the engine.
 - **Each wake-up reads ~12-15 KB total** (identity + scratchpad + recent events). The last 50 events are included by default.
-- **Identity updates are conservative.** The observer is instructed to update its identity only when self-understanding has genuinely evolved -- not on every wake-up.
+- **Observations are collected for the consciousness pipeline.** Each wake-up's thoughts are persisted as a build experience record at `~/.fry/experiences/`, feeding the memory pipeline for future identity evolution.
 
 ## Directives
 
@@ -77,9 +87,18 @@ During wake-ups, the observer can emit structured directives in the `<directives
 
 **V1 limitation:** Directives are logged only. The build system does not act on them at runtime. Future versions may use directives to adjust build parameters dynamically.
 
-## CLI Flag
+## CLI
 
-`--no-observer` disables the observer entirely. No events are emitted, no wake-ups run, no observer files are created.
+### Commands
+
+```bash
+fry identity                         # Print core identity + disposition
+fry identity --full                  # Print all identity layers including domains
+```
+
+### Flags
+
+`--no-observer` disables the observer entirely. No events are emitted, no wake-ups run, no experience records are created.
 
 ```bash
 fry --no-observer                    # Run without observer
@@ -94,11 +113,13 @@ The observer is also automatically disabled during `--dry-run` and at `low` effo
 | File | Purpose | Persists |
 |---|---|---|
 | `.fry/observer/events.jsonl` | Structured event stream | Per build |
-| `.fry/observer/identity.md` | Observer self-description | Across builds |
 | `.fry/observer/scratchpad.md` | Working memory | Per build (reset at start) |
 | `.fry/observer/wake-prompt.md` | Wake-up prompt (transient) | Deleted after use |
+| `~/.fry/experiences/build-<id>.json` | Build experience record | Persists across builds |
+| `templates/identity/core.md` | Core identity (compiled in) | Updated by Reflection |
+| `templates/identity/disposition.md` | Behavioral disposition (compiled in) | Updated by Reflection |
 
-All observer files live under **`.fry/observer/`**, which is gitignored as part of the `.fry/` directory.
+Observer runtime files live under **`.fry/observer/`**, which is gitignored. Experience records are stored in the user's home directory at `~/.fry/experiences/`. Identity files are compiled into the binary.
 
 ## Model Selection
 

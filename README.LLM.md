@@ -20,7 +20,7 @@ Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex, Claude Code, or 
 fry/
 ├── cmd/fry/main.go              # Entry point — calls cli.Execute()
 ├── internal/
-│   ├── cli/                     # Cobra commands: root, run, init, prepare, replan, clean, version, status
+│   ├── cli/                     # Cobra commands: root, run, init, prepare, replan, clean, version, status, identity
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose, --engine, etc.)
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
 │   │   ├── init.go              # Scaffold project structure (plans/, assets/, media/, git, .gitignore)
@@ -92,21 +92,27 @@ fry/
 │   │   ├── report.go            # BuildState → human-readable markdown report
 │   │   └── analyzer.go          # LLM analysis agent for resume decisions
 │   ├── summary/summary.go       # AI-generated build summary
+│   ├── consciousness/
+│   │   ├── identity.go          # Identity loading from go:embed: LoadCoreIdentity, LoadDisposition, LoadFullIdentity
+│   │   └── collector.go         # Build observation collection: Collector, BuildRecord, BuildObservation
 │   ├── observer/
 │   │   ├── observer.go          # Observer lifecycle: InitBuild, WakeUp, ShouldWakeUp, scratchpad I/O
 │   │   ├── event.go             # Event types, EmitEvent, ReadEvents, ReadRecentEvents
-│   │   ├── identity.go          # Identity document: EnsureIdentity, ReadIdentity, WriteIdentity
+│   │   ├── identity.go          # ReadIdentity (delegates to consciousness.LoadCoreIdentity)
 │   │   └── prompt.go            # Wake-up prompt builder, response parser, directive extraction
 │   ├── metrics/tokens.go        # Token usage parsing for Claude and Codex engines
 │   ├── report/report.go         # BuildReport types and JSON serialisation (--json-report)
 │   ├── shellhook/shellhook.go   # Pre-sprint/iteration shell commands
 │   └── textutil/textutil.go     # Shell quoting, file timestamps, artifact resolution
 ├── templates/
-│   ├── embed.go                 # //go:embed *.md for compile-time inclusion
+│   ├── embed.go                 # //go:embed *.md identity/*.md for compile-time inclusion
 │   ├── AGENTS.md                # Placeholder (generated via fry prepare)
 │   ├── GENERATE_EPIC.md         # LLM prompt template for epic generation
 │   ├── epic-example.md          # Fully-commented epic file example
-│   └── verification-example.md  # Verification check examples
+│   ├── verification-example.md  # Verification check examples
+│   └── identity/                # Compiled-in identity layers (read-only during builds)
+│       ├── core.md              # Fundamental self-knowledge (~500 tokens, always loaded)
+│       └── disposition.md       # Behavioral tendencies (~500 tokens, always loaded)
 ├── docs/                        # 21 user-facing documentation files (see below)
 ├── plans/                       # User-authored inputs
 │   ├── plan.md                  # Build strategy (what to build)
@@ -145,7 +151,6 @@ fry/
 | `triage-decision.txt` | Triage classifier output (complexity, effort, sprints, reason) |
 | `git-strategy.txt` | Persisted git strategy for `--continue`/`--resume` reattachment |
 | `observer/events.jsonl` | Observer event stream (JSONL, reset per build) |
-| `observer/identity.md` | Observer identity document (persists across builds) |
 | `observer/scratchpad.md` | Observer working memory (reset per build) |
 | `observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) |
 | `.fry.lock` | Concurrency lock |
@@ -361,10 +366,13 @@ Key flags:
 | `GitBranchPrefix` | `fry/` | Prefix for auto-generated branch names |
 | `ObserverDir` | `.fry/observer` | Observer files directory |
 | `ObserverEventsFile` | `.fry/observer/events.jsonl` | Structured event stream |
-| `ObserverIdentityFile` | `.fry/observer/identity.md` | Persistent self-description |
 | `ObserverScratchpadFile` | `.fry/observer/scratchpad.md` | Per-build working memory |
 | `ObserverPromptFile` | `.fry/observer/wake-prompt.md` | Transient wake-up prompt |
 | `MaxObserverEvents` | `50` | Max recent events included in wake-up prompt |
+| `IdentityCoreFile` | `identity/core.md` | Core identity (go:embed path) |
+| `IdentityDispositionFile` | `identity/disposition.md` | Disposition (go:embed path) |
+| `IdentityDomainsDir` | `identity/domains` | Domain files directory (go:embed path) |
+| `ExperiencesDir` | `.fry/experiences` | Build experience records |
 
 ---
 

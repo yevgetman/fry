@@ -12,16 +12,17 @@ import (
 )
 
 type PromptOpts struct {
-	ProjectDir         string
-	ExecutiveContent   string
-	UserPrompt         string
-	PlanPointer        string
-	SprintPrompt       string
-	SprintProgressFile string
-	EpicProgressFile   string
-	Promise            string
-	EffortLevel        epic.EffortLevel
-	Mode               string
+	ProjectDir          string
+	ExecutiveContent    string
+	UserPrompt          string
+	PlanPointer         string
+	SprintPrompt        string
+	SprintProgressFile  string
+	EpicProgressFile    string
+	Promise             string
+	EffortLevel         epic.EffortLevel
+	Mode                string
+	IdentityDisposition string // behavioral disposition from Fry's identity
 }
 
 func AssemblePrompt(opts PromptOpts) (string, error) {
@@ -52,6 +53,15 @@ func AssemblePrompt(opts PromptOpts) (string, error) {
 		b.WriteString("# The user has provided the following top-level guidance for this build.\n")
 		b.WriteString("# Treat this as a priority directive that applies to all sprints.\n\n")
 		b.WriteString(ensureTrailingNewline(strings.TrimSpace(opts.UserPrompt)))
+		b.WriteString("\n")
+	}
+
+	// Layer 1.625: Agent disposition (from Fry's identity)
+	if strings.TrimSpace(opts.IdentityDisposition) != "" {
+		b.WriteString("# ===== OPERATIONAL DISPOSITION =====\n")
+		b.WriteString("# The following behavioral tendencies are derived from accumulated build experience.\n")
+		b.WriteString("# Let them subtly guide your approach without overriding explicit instructions.\n\n")
+		b.WriteString(ensureTrailingNewline(strings.TrimSpace(opts.IdentityDisposition)))
 		b.WriteString("\n")
 	}
 

@@ -48,16 +48,17 @@ type SprintResult struct {
 }
 
 type RunConfig struct {
-	ProjectDir  string
-	Epic        *epic.Epic
-	Sprint      *epic.Sprint
-	Engine      engine.Engine
-	Verbose     bool
-	DryRun      bool
-	UserPrompt  string
-	StartSprint int
-	EndSprint   int
-	Mode        string
+	ProjectDir          string
+	Epic                *epic.Epic
+	Sprint              *epic.Sprint
+	Engine              engine.Engine
+	Verbose             bool
+	DryRun              bool
+	UserPrompt          string
+	StartSprint         int
+	EndSprint           int
+	Mode                string
+	IdentityDisposition string // behavioral disposition injected into sprint prompts
 }
 
 func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
@@ -88,14 +89,15 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	}
 
 	if _, err := AssemblePrompt(PromptOpts{
-		ProjectDir:         cfg.ProjectDir,
-		UserPrompt:         userPrompt,
-		SprintPrompt:       cfg.Sprint.Prompt,
-		SprintProgressFile: config.SprintProgressFile,
-		EpicProgressFile:   config.EpicProgressFile,
-		Promise:            cfg.Sprint.Promise,
-		EffortLevel:        cfg.Epic.EffortLevel,
-		Mode:               cfg.Mode,
+		ProjectDir:          cfg.ProjectDir,
+		UserPrompt:          userPrompt,
+		SprintPrompt:        cfg.Sprint.Prompt,
+		SprintProgressFile:  config.SprintProgressFile,
+		EpicProgressFile:    config.EpicProgressFile,
+		Promise:             cfg.Sprint.Promise,
+		EffortLevel:         cfg.Epic.EffortLevel,
+		Mode:                cfg.Mode,
+		IdentityDisposition: cfg.IdentityDisposition,
 	}); err != nil {
 		return nil, fmt.Errorf("run sprint: %w", err)
 	}

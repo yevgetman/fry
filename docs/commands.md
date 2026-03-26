@@ -301,6 +301,35 @@ fry version
 
 ---
 
+## `fry identity`
+
+Print Fry's current compiled-in identity.
+
+```
+fry identity [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--full` | Print all identity layers including domain-specific files |
+
+### Behavior
+
+- Default: prints core identity + disposition (~1000 tokens total)
+- With `--full`: also includes any domain-specific identity files (e.g., iOS/Swift, API backend)
+- Identity is compiled into the binary via `go:embed` and updated only by the Reflection process between builds
+
+### Examples
+
+```bash
+fry identity                         # Print core identity + disposition
+fry identity --full                  # Print all layers including domains
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Description |

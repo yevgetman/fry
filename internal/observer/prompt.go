@@ -80,8 +80,7 @@ func buildObserverPrompt(opts ObserverOpts, identity, scratchpad string, events 
 		b.WriteString("Consider patterns across all sprints.\n\n")
 	case WakeBuildEnd:
 		b.WriteString("You are waking up **at build end** — the final observation point.\n")
-		b.WriteString("Synthesize everything: what worked, what struggled, what you would watch for next time.\n")
-		b.WriteString("This is your chance to update your identity if you have genuinely new self-understanding.\n\n")
+		b.WriteString("Synthesize everything: what worked, what struggled, what you would watch for next time.\n\n")
 	default:
 		b.WriteString(fmt.Sprintf("Wake point: %s\n\n", opts.WakePoint))
 	}
@@ -113,10 +112,6 @@ func buildObserverPrompt(opts ObserverOpts, identity, scratchpad string, events 
 	b.WriteString("  hypotheses to verify, things to watch for in subsequent sprints.\n")
 	b.WriteString("  </scratchpad>\n\n")
 	b.WriteString("**Optional tags (omit entirely if not needed):**\n\n")
-	b.WriteString("  <identity_update>\n")
-	b.WriteString("  Only if your self-understanding has genuinely evolved — write the complete\n")
-	b.WriteString("  updated identity document here. Do not update just for the sake of updating.\n")
-	b.WriteString("  </identity_update>\n\n")
 	b.WriteString("  <directives>\n")
 	b.WriteString("  Structured directives for the build system. One per line.\n")
 	b.WriteString("  Format: TYPE: value\n")
@@ -128,7 +123,7 @@ func buildObserverPrompt(opts ObserverOpts, identity, scratchpad string, events 
 }
 
 // knownTags lists the tag names the observer response parser recognizes.
-var knownTags = []string{"thoughts", "scratchpad", "identity_update", "directives"}
+var knownTags = []string{"thoughts", "scratchpad", "directives"}
 
 // tagPatterns maps tag names to compiled regexes for extracting their content.
 var tagPatterns = buildTagPatterns(knownTags)
@@ -161,21 +156,13 @@ func parseObserverResponse(output string) (*Observation, error) {
 		obs.ScratchpadDelta = strings.TrimSpace(scratchpad)
 	}
 
-	identityUpdate, hasIdentity := tags["identity_update"]
-	if hasIdentity {
-		trimmed := strings.TrimSpace(identityUpdate)
-		if trimmed != "" {
-			obs.IdentityEdited = true
-		}
-	}
-
 	directivesRaw, hasDirectives := tags["directives"]
 	if hasDirectives {
 		obs.Directives = parseDirectives(strings.TrimSpace(directivesRaw))
 	}
 
 	// If no tags were found at all, treat entire output as thoughts (fallback)
-	if !hasThoughts && !hasScratchpad && !hasIdentity && !hasDirectives {
+	if !hasThoughts && !hasScratchpad && !hasDirectives {
 		return &Observation{Thoughts: strings.TrimSpace(output)}, fmt.Errorf("no structured tags found in response")
 	}
 
@@ -192,19 +179,6 @@ func extractAllTags(output string) map[string]string {
 		}
 	}
 	return result
-}
-
-// extractTagContent extracts the content of a specific tag from the output.
-func extractTagContent(output string, tagName string) string {
-	pattern, ok := tagPatterns[tagName]
-	if !ok {
-		return ""
-	}
-	match := pattern.FindStringSubmatch(output)
-	if len(match) < 2 {
-		return ""
-	}
-	return strings.TrimSpace(match[1])
 }
 
 // parseDirectives parses directive lines in the format "TYPE: value".

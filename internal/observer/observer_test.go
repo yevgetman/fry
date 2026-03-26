@@ -126,24 +126,18 @@ func TestInitBuild_ClearsStaleEvents(t *testing.T) {
 	assert.Equal(t, "NewEpic", events[0].Data["epic"])
 }
 
-func TestInitBuild_PreservesIdentity(t *testing.T) {
+func TestInitBuild_DoesNotWriteIdentity(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 
-	// Write a custom identity before init
-	identityPath := filepath.Join(dir, config.ObserverIdentityFile)
-	require.NoError(t, os.MkdirAll(filepath.Dir(identityPath), 0o755))
-	customIdentity := "# Custom Identity\nI have been here before.\n"
-	require.NoError(t, os.WriteFile(identityPath, []byte(customIdentity), 0o644))
-
 	err := InitBuild(dir, "TestEpic", "high", 3)
 	require.NoError(t, err)
 
-	// Verify custom identity was preserved
-	content, err := ReadIdentity(dir)
-	require.NoError(t, err)
-	assert.Equal(t, customIdentity, content)
+	// Verify no identity file is written to the project directory
+	identityPath := filepath.Join(dir, ".fry/observer/identity.md")
+	_, err = os.Stat(identityPath)
+	assert.True(t, os.IsNotExist(err), "identity.md should not be written to project dir")
 }
 
 // --- Scratchpad tests ---
@@ -234,7 +228,6 @@ Sprint 1 completed in 3 iterations. Watch for test flakiness in sprint 2.
 	require.NotNil(t, obs)
 	assert.Contains(t, obs.Thoughts, "build started cleanly")
 	assert.Contains(t, obs.ScratchpadDelta, "Sprint 1 completed")
-	assert.False(t, obs.IdentityEdited)
 }
 
 func TestWakeUp_UpdatesScratchpad(t *testing.T) {
@@ -264,20 +257,19 @@ func TestWakeUp_UpdatesScratchpad(t *testing.T) {
 	assert.Contains(t, content, "Note from wake 1")
 }
 
-func TestWakeUp_UpdatesIdentity(t *testing.T) {
+func TestWakeUp_IdentityReadOnly(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	require.NoError(t, InitBuild(dir, "TestEpic", "high", 3))
 
-	newIdentity := "# Updated Observer Identity\nI have learned things.\n"
+	// Even if the LLM returns an identity_update tag, no file should be written
 	eng := &stubObserverEngine{
-		output: fmt.Sprintf(`<thoughts>Significant learning happened.</thoughts>
-<scratchpad>Updating identity.</scratchpad>
-<identity_update>%s</identity_update>`, newIdentity),
+		output: `<thoughts>Significant learning happened.</thoughts>
+<scratchpad>Updating scratchpad.</scratchpad>`,
 	}
 
-	obs, err := WakeUp(context.Background(), ObserverOpts{
+	_, err := WakeUp(context.Background(), ObserverOpts{
 		ProjectDir:   dir,
 		Engine:       eng,
 		EpicName:     "TestEpic",
@@ -287,46 +279,11 @@ func TestWakeUp_UpdatesIdentity(t *testing.T) {
 		EffortLevel:  epic.EffortHigh,
 	})
 	require.NoError(t, err)
-	assert.True(t, obs.IdentityEdited)
 
-	content, err := ReadIdentity(dir)
-	require.NoError(t, err)
-	assert.Contains(t, content, "Updated Observer Identity")
-}
-
-func TestWakeUp_SkipsIdentityWhenEmpty(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	require.NoError(t, InitBuild(dir, "TestEpic", "high", 3))
-
-	// Get initial identity
-	initialIdentity, err := ReadIdentity(dir)
-	require.NoError(t, err)
-
-	eng := &stubObserverEngine{
-		output: `<thoughts>Nothing special.</thoughts>
-<scratchpad>No notes.</scratchpad>
-<identity_update>
-</identity_update>`,
-	}
-
-	obs, err := WakeUp(context.Background(), ObserverOpts{
-		ProjectDir:   dir,
-		Engine:       eng,
-		EpicName:     "TestEpic",
-		WakePoint:    WakeAfterSprint,
-		SprintNum:    1,
-		TotalSprints: 3,
-		EffortLevel:  epic.EffortHigh,
-	})
-	require.NoError(t, err)
-	assert.False(t, obs.IdentityEdited)
-
-	// Identity should be unchanged
-	content, err := ReadIdentity(dir)
-	require.NoError(t, err)
-	assert.Equal(t, initialIdentity, content)
+	// Verify no identity file exists in the project directory
+	identityPath := filepath.Join(dir, ".fry/observer/identity.md")
+	_, statErr := os.Stat(identityPath)
+	assert.True(t, os.IsNotExist(statErr), "identity.md should not be written during builds")
 }
 
 func TestWakeUp_EngineFailure(t *testing.T) {

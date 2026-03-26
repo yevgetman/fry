@@ -41,6 +41,7 @@ Each sprint prompt is assembled in layers, giving the AI agent structured contex
 | 1 | Executive context | `plans/executive.md` (if exists) |
 | 1.25 | Media assets | Manifest of files in `media/` (if directory exists) |
 | 1.5 | User directive | `--user-prompt`, `--user-prompt-file`, or `.fry/user-prompt.txt` |
+| 1.625 | Operational disposition | Fry's behavioral tendencies from `templates/identity/disposition.md` (compiled in) |
 | 1.75 | Quality directive | Injected at `max` effort only — instructs agent to handle all edge cases, write defensive code, validate assumptions |
 | 2 | Strategic plan reference | Pointer to `plans/plan.md` |
 | 3 | Sprint instructions | `@prompt` block from epic |

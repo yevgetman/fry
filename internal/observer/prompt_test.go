@@ -46,6 +46,7 @@ func TestBuildObserverPrompt_IncludesAllSections(t *testing.T) {
 	assert.Contains(t, prompt, "## Output Format")
 	assert.Contains(t, prompt, "<thoughts>")
 	assert.Contains(t, prompt, "<scratchpad>")
+	assert.NotContains(t, prompt, "identity_update")
 }
 
 func TestBuildObserverPrompt_TruncatesLargeIdentity(t *testing.T) {
@@ -189,7 +190,7 @@ SUGGEST: Consider lowering effort for similar tasks
 	require.NoError(t, err)
 	assert.Contains(t, obs.Thoughts, "build is progressing well")
 	assert.Contains(t, obs.ScratchpadDelta, "Watch sprint 2")
-	assert.True(t, obs.IdentityEdited)
+
 	require.Len(t, obs.Directives, 2)
 	assert.Equal(t, "NOTE", obs.Directives[0].Type)
 	assert.Contains(t, obs.Directives[0].Value, "Sprint 1 used only 3")
@@ -211,7 +212,7 @@ Nothing noteworthy yet.
 	require.NoError(t, err)
 	assert.Contains(t, obs.Thoughts, "initial thoughts")
 	assert.Contains(t, obs.ScratchpadDelta, "Nothing noteworthy")
-	assert.False(t, obs.IdentityEdited)
+
 	assert.Nil(t, obs.Directives)
 }
 
@@ -225,26 +226,7 @@ func TestParseObserverResponse_MalformedFallback(t *testing.T) {
 	assert.Contains(t, err.Error(), "no structured tags")
 	assert.Equal(t, "This is just plain text with no tags at all.", obs.Thoughts)
 	assert.Empty(t, obs.ScratchpadDelta)
-	assert.False(t, obs.IdentityEdited)
-}
 
-func TestParseObserverResponse_EmptyIdentityUpdate(t *testing.T) {
-	t.Parallel()
-
-	response := `<thoughts>
-Some observations.
-</thoughts>
-
-<scratchpad>
-Some notes.
-</scratchpad>
-
-<identity_update>
-</identity_update>`
-
-	obs, err := parseObserverResponse(response)
-	require.NoError(t, err)
-	assert.False(t, obs.IdentityEdited, "empty identity_update should not set IdentityEdited")
 }
 
 func TestParseObserverResponse_WithDirectives(t *testing.T) {
@@ -274,7 +256,7 @@ func TestParseObserverResponse_EmptyInput(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, obs.Thoughts)
 	assert.Empty(t, obs.ScratchpadDelta)
-	assert.False(t, obs.IdentityEdited)
+
 }
 
 // extractSection is a test helper that extracts text between two section headers.

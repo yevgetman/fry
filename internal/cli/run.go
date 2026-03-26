@@ -20,6 +20,7 @@ import (
 	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/color"
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/consciousness"
 	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/docker"
 	"github.com/yevgetman/fry/internal/engine"
@@ -563,6 +564,18 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Load identity disposition for sprint prompts
+		var identityDisposition string
+		if disp, dispErr := consciousness.LoadDisposition(); dispErr == nil {
+			identityDisposition = disp
+		}
+
+		// Create observation collector for the consciousness pipeline
+		var collector *consciousness.Collector
+		if observerEnabled {
+			collector = consciousness.NewCollector(engineName, string(ep.EffortLevel), ep.TotalSprints)
+		}
+
 		exitErr := error(nil)
 		for sprintNum := startSprint; sprintNum <= endSprint; sprintNum++ {
 			if sprintNum < 1 || sprintNum > len(ep.Sprints) {
@@ -605,29 +618,31 @@ var runCmd = &cobra.Command{
 			var result *sprint.SprintResult
 			if runResume && sprintNum == startSprint {
 				result, err = sprint.ResumeSprint(ctx, sprint.RunConfig{
-					ProjectDir:  projectPath,
-					Epic:        ep,
-					Sprint:      spr,
-					Engine:      buildEngine,
-					Verbose:     frlog.Verbose,
-					DryRun:      false,
-					UserPrompt:  userPrompt,
-					StartSprint: startSprint,
-					EndSprint:   endSprint,
-					Mode:        modeStr,
+					ProjectDir:          projectPath,
+					Epic:                ep,
+					Sprint:              spr,
+					Engine:              buildEngine,
+					Verbose:             frlog.Verbose,
+					DryRun:              false,
+					UserPrompt:          userPrompt,
+					StartSprint:         startSprint,
+					EndSprint:           endSprint,
+					Mode:                modeStr,
+					IdentityDisposition: identityDisposition,
 				})
 			} else {
 				result, err = sprint.RunSprint(ctx, sprint.RunConfig{
-					ProjectDir:  projectPath,
-					Epic:        ep,
-					Sprint:      spr,
-					Engine:      buildEngine,
-					Verbose:     frlog.Verbose,
-					DryRun:      false,
-					UserPrompt:  userPrompt,
-					StartSprint: startSprint,
-					EndSprint:   endSprint,
-					Mode:        modeStr,
+					ProjectDir:          projectPath,
+					Epic:                ep,
+					Sprint:              spr,
+					Engine:              buildEngine,
+					Verbose:             frlog.Verbose,
+					DryRun:              false,
+					UserPrompt:          userPrompt,
+					StartSprint:         startSprint,
+					EndSprint:           endSprint,
+					Mode:                modeStr,
+					IdentityDisposition: identityDisposition,
 				})
 			}
 			if err != nil {
@@ -953,7 +968,7 @@ var runCmd = &cobra.Command{
 				if observerEnabled && observer.ShouldWakeUp(ep.EffortLevel, observer.WakeAfterSprint) {
 					observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
 					frlog.Log("  OBSERVER: wake-up after sprint %d...  model=%s", spr.Number, observerModel)
-					if _, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+					if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
 						ProjectDir:   projectPath,
 						Engine:       observerEngine,
 						Model:        observerModel,
@@ -965,6 +980,8 @@ var runCmd = &cobra.Command{
 						Verbose:      frlog.Verbose,
 					}); obsErr != nil {
 						frlog.Log("  OBSERVER: wake-up failed (non-fatal): %v", obsErr)
+					} else if obs != nil && collector != nil {
+						collector.AddObservation(obs.Thoughts, string(observer.WakeAfterSprint), spr.Number)
 					}
 				}
 
@@ -1109,7 +1126,7 @@ var runCmd = &cobra.Command{
 			if observer.ShouldWakeUp(ep.EffortLevel, observer.WakeAfterBuildAudit) {
 				observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
 				frlog.Log("  OBSERVER: wake-up after build audit...  model=%s", observerModel)
-				if _, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+				if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
 					ProjectDir:   projectPath,
 					Engine:       observerEngine,
 					Model:        observerModel,
@@ -1121,6 +1138,8 @@ var runCmd = &cobra.Command{
 					BuildData:    buildAuditData,
 				}); obsErr != nil {
 					frlog.Log("  OBSERVER: wake-up failed (non-fatal): %v", obsErr)
+				} else if obs != nil && collector != nil {
+					collector.AddObservation(obs.Thoughts, string(observer.WakeAfterBuildAudit), ep.TotalSprints)
 				}
 			}
 		}
@@ -1147,12 +1166,14 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Determine build outcome for observer and collector
+		buildOutcome := "success"
+		if exitErr != nil {
+			buildOutcome = "failure"
+		}
+
 		// Observer: final wake-up at build end
 		if observerEnabled {
-			buildOutcome := "success"
-			if exitErr != nil {
-				buildOutcome = "failure"
-			}
 			_ = observer.EmitEvent(projectPath, observer.Event{
 				Type: observer.EventBuildEnd,
 				Data: map[string]string{"outcome": buildOutcome},
@@ -1161,7 +1182,7 @@ var runCmd = &cobra.Command{
 			if observer.ShouldWakeUp(ep.EffortLevel, observer.WakeBuildEnd) {
 				observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
 				frlog.Log("  OBSERVER: final wake-up...  model=%s", observerModel)
-				if _, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+				if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
 					ProjectDir:   projectPath,
 					Engine:       observerEngine,
 					Model:        observerModel,
@@ -1173,7 +1194,18 @@ var runCmd = &cobra.Command{
 					BuildData:    map[string]string{"outcome": buildOutcome},
 				}); obsErr != nil {
 					frlog.Log("  OBSERVER: final wake-up failed (non-fatal): %v", obsErr)
+				} else if obs != nil && collector != nil {
+					collector.AddObservation(obs.Thoughts, string(observer.WakeBuildEnd), ep.TotalSprints)
 				}
+			}
+		}
+
+		// Finalize and write the build experience record
+		if collector != nil {
+			if finalizeErr := collector.Finalize(buildOutcome); finalizeErr != nil {
+				frlog.Log("WARNING: could not write experience record: %v", finalizeErr)
+			} else {
+				frlog.Log("  CONSCIOUSNESS: experience record written to ~/.fry/experiences/")
 			}
 		}
 

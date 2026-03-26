@@ -105,7 +105,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
 - **Supplementary assets** -- optional `assets/` directory for text reference documents (specs, schemas, requirements) whose full contents are read during plan and epic generation
-- **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, plan references, sprint tasks, iteration memory, and completion signals
+- **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, operational disposition, plan references, sprint tasks, iteration memory, and completion signals
 - **Two-file progress tracking** -- per-sprint iteration log + cross-sprint compacted summary for bounded context
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
 - **Independent verification** -- machine-executable checks run after each sprint with a configurable failure threshold (`@max_fail_percent`, default 20%) — minor failures are deferred rather than blocking the build
@@ -117,7 +117,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Git strategy** -- `--git-strategy auto|current|branch|worktree` controls build isolation. Auto mode lets triage decide: complex tasks get an isolated worktree, simpler tasks get a new branch. Use `current` for the previous behavior (work on the current branch). See [Git Strategy](docs/git-strategy.md).
 - **Git checkpoints** -- automatic commits after each sprint
 - **Dynamic sprint review** -- optional mid-build review with replanning
-- **Observer** -- metacognitive layer that watches builds, notices patterns, and develops persistent self-awareness across runs. Non-fatal; effort-level gated. See [Observer](docs/observer.md).
+- **Observer** -- metacognitive layer that watches builds, notices patterns, and collects build experience records for the consciousness pipeline. Identity is compiled into the binary and read-only during builds. Non-fatal; effort-level gated. See [Observer](docs/observer.md).
 - **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
 - **Colored output** -- terminal output is colorized for readability (phase banners in cyan, PASS in green, FAIL in red, warnings in yellow). Respects `NO_COLOR`, `TERM=dumb`, and `--no-color`. Log files are always plain text.
 
@@ -184,6 +184,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry init` | Scaffold the fry project structure (`plans/`, `assets/`, `media/`, git, `.gitignore`) |
 | `fry prepare` | Generate `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan |
 | `fry replan` | Replan an epic after a deviation |
+| `fry identity` | Print Fry's compiled-in identity (core + disposition) |
 | `fry status` | Show current build state without making an LLM call |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
 | `fry version` | Print fry version |
