@@ -28,8 +28,8 @@ func TestPlanningPromptBuilders(t *testing.T) {
 		},
 		{
 			"Step0_with_media",
-			func() string { return PlanningStep0Prompt("exec", "img.png - logo", "") },
-			"media/",
+			func() string { return PlanningStep0Prompt("exec", "MEDIA_SENTINEL", "") },
+			"MEDIA_SENTINEL",
 		},
 		{
 			"Step0_with_assets",
@@ -50,6 +50,16 @@ func TestPlanningPromptBuilders(t *testing.T) {
 			"Step1_executive_input",
 			func() string { return PlanningStep1Prompt("plan content", "executive content", "") },
 			"executive content",
+		},
+		{
+			"Step1_planning_mode_marker",
+			func() string { return PlanningStep1Prompt("plan", "", "") },
+			"PLANNING project",
+		},
+		{
+			"Step1_media_injection",
+			func() string { return PlanningStep1Prompt("plan", "", "MEDIA_SENTINEL") },
+			"MEDIA_SENTINEL",
 		},
 		{
 			"Step2_mode_marker",
@@ -85,6 +95,34 @@ func TestPlanningPromptBuilders(t *testing.T) {
 				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortHigh, true, "", "")
 			},
 			"@review_between_sprints",
+		},
+		{
+			"Step2_effort_low",
+			func() string {
+				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortLow, false, "", "")
+			},
+			"EFFORT LEVEL: LOW",
+		},
+		{
+			"Step2_effort_medium",
+			func() string {
+				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortMedium, false, "", "")
+			},
+			"EFFORT LEVEL: MEDIUM",
+		},
+		{
+			"Step2_effort_max",
+			func() string {
+				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortMax, false, "", "")
+			},
+			"EFFORT LEVEL: MAX",
+		},
+		{
+			"Step2_effort_auto",
+			func() string {
+				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortLevel(""), false, "", "")
+			},
+			"EFFORT LEVEL: AUTO-DETECT",
 		},
 		{
 			"Step3_structural",
@@ -125,4 +163,10 @@ func TestPlanningPromptBuilders(t *testing.T) {
 			assert.Contains(t, result, tc.marker)
 		})
 	}
+
+	t.Run("Step1_empty_executive_omits_context", func(t *testing.T) {
+		t.Parallel()
+		result := PlanningStep1Prompt("plan", "", "")
+		assert.NotContains(t, result, "Also read plans/executive.md")
+	})
 }
