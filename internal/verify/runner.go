@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yevgetman/fry/internal/textutil"
@@ -216,10 +217,13 @@ const maxCheckOutput = 10 * 1024 * 1024 // 10 MB
 
 // cappedBuffer is a bytes.Buffer that stops accepting writes after maxCheckOutput.
 type cappedBuffer struct {
+	mu  sync.Mutex
 	buf bytes.Buffer
 }
 
 func (c *cappedBuffer) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	remaining := maxCheckOutput - c.buf.Len()
 	if remaining <= 0 {
 		return len(p), nil // discard silently
@@ -231,5 +235,14 @@ func (c *cappedBuffer) Write(p []byte) (int, error) {
 	return c.buf.Write(p)
 }
 
-func (c *cappedBuffer) String() string { return c.buf.String() }
-func (c *cappedBuffer) Len() int       { return c.buf.Len() }
+func (c *cappedBuffer) String() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.buf.String()
+}
+
+func (c *cappedBuffer) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.buf.Len()
+}
