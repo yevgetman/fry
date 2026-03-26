@@ -126,5 +126,8 @@ const (
 	ConsciousnessAPIURL  = "https://fry-consciousness-api.yevgetman.workers.dev"
 	UploadTimeoutSeconds = 10
 	TelemetryEnvVar      = "FRY_TELEMETRY"
-	APITokenEnvVar       = "FRY_API_TOKEN"
+	// ConsciousnessWriteKey is a public write-only key for the consciousness API.
+	// It only permits POSTing anonymized experience summaries — no read access.
+	// This is intentionally compiled into the binary (same pattern as Sentry DSNs).
+	ConsciousnessWriteKey = "c23060cb24e9133926314894db50089b03791731cae04d7f8ba96dc01c5330d0"
 )

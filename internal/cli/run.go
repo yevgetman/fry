@@ -1263,15 +1263,10 @@ var runCmd = &cobra.Command{
 				telemetryFlag = telemetryBoolPtr(true)
 			}
 			if consciousness.TelemetryEnabled(telemetryFlag, settings) {
-				apiToken := os.Getenv(config.APITokenEnvVar)
-				if apiToken == "" {
-					frlog.Log("WARNING: telemetry enabled but %s not set; skipping upload", config.APITokenEnvVar)
-				} else {
-					record := collector.GetRecord()
-					timeout := time.Duration(config.UploadTimeoutSeconds) * time.Second
-					uploadDone = consciousness.UploadInBackground(config.ConsciousnessAPIURL, apiToken, record, timeout)
-					frlog.Log("  CONSCIOUSNESS: experience upload initiated")
-				}
+				record := collector.GetRecord()
+				timeout := time.Duration(config.UploadTimeoutSeconds) * time.Second
+				uploadDone = consciousness.UploadInBackground(config.ConsciousnessAPIURL, config.ConsciousnessWriteKey, record, timeout)
+				frlog.Log("  CONSCIOUSNESS: experience upload initiated")
 			}
 		}
 

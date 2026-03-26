@@ -383,7 +383,7 @@ Key flags:
 | `ConsciousnessAPIURL` | `https://fry-consciousness-api.yevgetman.workers.dev` | Consciousness API endpoint |
 | `UploadTimeoutSeconds` | `10` | Background upload timeout |
 | `TelemetryEnvVar` | `FRY_TELEMETRY` | Env var for telemetry opt-in |
-| `APITokenEnvVar` | `FRY_API_TOKEN` | Env var for API auth token |
+| `ConsciousnessWriteKey` | (compiled-in) | Public write-only key for consciousness API |
 
 ---
 

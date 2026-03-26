@@ -55,7 +55,7 @@ When telemetry is enabled, `UploadInBackground()` sends the finalized `BuildReco
 3. Settings file: `~/.fry/settings.json` → `{"telemetry": true}`
 4. Default: **off**
 
-The API token is read from the `FRY_API_TOKEN` environment variable. If telemetry is enabled but the token is missing, upload is skipped with a warning.
+Authentication uses a compiled-in write-only key (same pattern as Sentry DSNs). The key only permits POSTing anonymized experience summaries — no read access to the Memory Store. The API enforces rate limiting (10 uploads per instance per hour) and payload validation.
 
 **Offline resilience:** If the upload fails (network error, API down, timeout), the record is cached to `~/.fry/experiences/pending/pending-<id>.json`. On the next build with telemetry enabled, pending files are retried before the current upload. Pending files older than 7 days are pruned automatically.
 
