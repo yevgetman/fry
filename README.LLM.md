@@ -95,7 +95,10 @@ fry/
 │   ├── consciousness/
 │   │   ├── identity.go          # Identity loading from go:embed: LoadCoreIdentity, LoadDisposition, LoadFullIdentity
 │   │   ├── collector.go         # Build observation collection: Collector, BuildRecord, BuildObservation
-│   │   └── summarize.go         # End-of-build experience synthesis: SummarizeExperience, SprintOutcome
+│   │   ├── summarize.go         # End-of-build experience synthesis: SummarizeExperience, SprintOutcome
+│   │   ├── upload.go            # HTTP upload to consciousness API: UploadExperience, CachePendingUpload, RetryPendingUploads
+│   │   ├── settings.go          # User settings (~/.fry/settings.json): LoadSettings, TelemetryEnabled
+│   │   └── instance.go          # Anonymized machine identifier: InstanceID
 │   ├── observer/
 │   │   ├── observer.go          # Observer lifecycle: InitBuild, WakeUp, ShouldWakeUp, scratchpad I/O
 │   │   ├── event.go             # Event types, EmitEvent, ReadEvents, ReadRecentEvents
@@ -375,6 +378,12 @@ Key flags:
 | `IdentityDomainsDir` | `identity/domains` | Domain files directory (go:embed path) |
 | `ExperiencesDir` | `.fry/experiences` | Build experience records |
 | `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient, deleted after use) |
+| `SettingsFile` | `.fry/settings.json` | User settings (telemetry opt-in) |
+| `PendingUploadsDir` | `.fry/experiences/pending` | Cached uploads for retry |
+| `ConsciousnessAPIURL` | `https://fry-consciousness-api.yevgetman.workers.dev` | Consciousness API endpoint |
+| `UploadTimeoutSeconds` | `10` | Background upload timeout |
+| `TelemetryEnvVar` | `FRY_TELEMETRY` | Env var for telemetry opt-in |
+| `APITokenEnvVar` | `FRY_API_TOKEN` | Env var for API auth token |
 
 ---
 

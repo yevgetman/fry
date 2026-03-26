@@ -70,6 +70,8 @@ var (
 	runNoObserver     bool
 	runTriageOnly     bool
 	runModel          string
+	runTelemetry      bool
+	runNoTelemetry    bool
 )
 
 type deferredEntry struct {
@@ -1250,6 +1252,29 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Upload experience to consciousness API (background, bounded by timeout)
+		var uploadDone <-chan struct{}
+		if collector != nil {
+			settings := consciousness.LoadSettings()
+			var telemetryFlag *bool
+			if runNoTelemetry {
+				telemetryFlag = telemetryBoolPtr(false)
+			} else if runTelemetry {
+				telemetryFlag = telemetryBoolPtr(true)
+			}
+			if consciousness.TelemetryEnabled(telemetryFlag, settings) {
+				apiToken := os.Getenv(config.APITokenEnvVar)
+				if apiToken == "" {
+					frlog.Log("WARNING: telemetry enabled but %s not set; skipping upload", config.APITokenEnvVar)
+				} else {
+					record := collector.GetRecord()
+					timeout := time.Duration(config.UploadTimeoutSeconds) * time.Second
+					uploadDone = consciousness.UploadInBackground(config.ConsciousnessAPIURL, apiToken, record, timeout)
+					frlog.Log("  CONSCIOUSNESS: experience upload initiated")
+				}
+			}
+		}
+
 		releaseLock()
 
 		// Write JSON build report if --json-report flag is set.
@@ -1313,6 +1338,11 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Wait for upload to complete (bounded by upload timeout)
+		if uploadDone != nil {
+			<-uploadDone
+		}
+
 		return exitErr
 	},
 }
@@ -1345,6 +1375,8 @@ func init() {
 	runCmd.Flags().BoolVar(&runNoObserver, "no-observer", false, "Disable the observer metacognitive layer")
 	runCmd.Flags().BoolVar(&runTriageOnly, "triage-only", false, "Run triage classification and exit without generating artifacts")
 	runCmd.Flags().StringVar(&runModel, "model", "", "Override agent model for sprints (e.g. opus[1m], sonnet, haiku)")
+	runCmd.Flags().BoolVar(&runTelemetry, "telemetry", false, "Enable experience upload to consciousness API")
+	runCmd.Flags().BoolVar(&runNoTelemetry, "no-telemetry", false, "Disable experience upload")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -1486,6 +1518,8 @@ func printMigrationHintIfNeeded(w io.Writer, projectDir, epicArg string) {
 	fmt.Fprintln(w, "  fry now stores all generated artifacts in .fry/.")
 	fmt.Fprintln(w, "  To migrate: mv epic.md AGENTS.md verification.md sprint-progress.txt epic-progress.txt .fry/")
 }
+
+func telemetryBoolPtr(b bool) *bool { return &b }
 
 func resolvePrepareEngine(prepareFlag, runFlag string) string {
 	if strings.TrimSpace(prepareFlag) != "" {

@@ -119,4 +119,12 @@ const (
 	// Experience collection constants
 	ExperiencesDir          = ".fry/experiences"
 	ConsciousnessPromptFile = ".fry/consciousness-prompt.md"
+
+	// Telemetry / experience upload constants
+	SettingsFile         = ".fry/settings.json"
+	PendingUploadsDir    = ".fry/experiences/pending"
+	ConsciousnessAPIURL  = "https://fry-consciousness-api.yevgetman.workers.dev"
+	UploadTimeoutSeconds = 10
+	TelemetryEnvVar      = "FRY_TELEMETRY"
+	APITokenEnvVar       = "FRY_API_TOKEN"
 )

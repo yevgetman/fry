@@ -96,6 +96,8 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `.fry/observer/scratchpad.md` | Observer working memory (reset per build) | `fry run` at runtime |
 | `.fry/observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) | `fry run` at runtime |
 | `~/.fry/experiences/build-<id>.json` | Build experience record (observations + metadata) | `fry run` at runtime |
+| `~/.fry/experiences/pending/pending-<id>.json` | Cached upload for retry (created on upload failure) | `fry run` at runtime |
+| `~/.fry/settings.json` | User settings (telemetry opt-in) | Manual or first-run |
 | `.fry/build-logs/` | Per-iteration, per-sprint, resume, audit, and continue logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 | `.fry/consciousness-prompt.md` | Prompt assembled for experience synthesis invocation (transient, deleted after run) | `fry run` at runtime |

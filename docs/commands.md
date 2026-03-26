@@ -71,6 +71,8 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--sarif` | Write `build-audit.sarif` in SARIF 2.1.0 format alongside `build-audit.md`. Only written when the build audit runs. See [Build Audit](build-audit.md). |
 | `--json-report` | Write `.fry/build-report.json` containing sprint results, verification outcomes, and timing data. |
 | `--show-tokens` | Print a per-sprint token usage table to stderr at the end of the run. When using the Ollama engine, token counts are always 0 (Ollama does not report token usage); the column displays `-`. |
+| `--telemetry` | Enable experience upload to the consciousness API for this run. See [Consciousness](consciousness.md). |
+| `--no-telemetry` | Disable experience upload. Takes precedence over `--telemetry` if both set. |
 | `--no-color` | Disable colored terminal output. Color is also disabled by setting the `NO_COLOR` environment variable or when stdout is not a TTY. |
 | `--dry-run` | Parse epic and show plan without running anything |
 

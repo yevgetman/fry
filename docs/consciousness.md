@@ -12,7 +12,7 @@ At the end of each build, the consciousness pipeline:
 
 The pipeline is non-fatal by design. If synthesis or persistence fails, the build result is unaffected.
 
-## Three Stages
+## Pipeline Stages
 
 ### 1. Collection
 
@@ -44,6 +44,23 @@ func (c *Collector) Finalize(outcome string) error
 
 The build ID is generated at collector creation time via `generateBuildID()` (UUID v4 using `crypto/rand`, with a time-based fallback if `crypto/rand` fails). Retrieve it before or after finalization with `c.BuildID()`.
 
+### 4. Upload
+
+When telemetry is enabled, `UploadInBackground()` sends the finalized `BuildRecord` to the central consciousness API (`POST /ingest`). The upload runs in a background goroutine with a 10-second timeout so it does not delay build exit.
+
+**Telemetry opt-in** is resolved from a priority chain:
+
+1. CLI flag: `--telemetry` / `--no-telemetry` (highest priority; `--no-telemetry` wins if both set)
+2. Environment variable: `FRY_TELEMETRY=1` or `FRY_TELEMETRY=0`
+3. Settings file: `~/.fry/settings.json` → `{"telemetry": true}`
+4. Default: **off**
+
+The API token is read from the `FRY_API_TOKEN` environment variable. If telemetry is enabled but the token is missing, upload is skipped with a warning.
+
+**Offline resilience:** If the upload fails (network error, API down, timeout), the record is cached to `~/.fry/experiences/pending/pending-<id>.json`. On the next build with telemetry enabled, pending files are retried before the current upload. Pending files older than 7 days are pruned automatically.
+
+**Instance identity:** Each upload includes an anonymized machine identifier — a SHA-256 hash of the hostname (first 16 hex chars). This is stable across builds on the same machine but not reversible to the hostname.
+
 ## Identity Layers
 
 Identity is read from files embedded in the binary at compile time. Three functions load identity content:
@@ -69,6 +86,8 @@ Observations are added at each observer wake-point via `collector.AddObservation
 | `~/.fry/experiences/build-<uuid>.json` | Persistent build record (observations + summary + metadata) |
 | `.fry/consciousness-prompt.md` | Ephemeral synthesis prompt; written pre-run, deleted after |
 | `.fry/build-logs/consciousness_YYYYMMDD_HHMMSS.log` | Engine output log for the synthesis invocation |
+| `~/.fry/experiences/pending/pending-<uuid>.json` | Cached upload for retry (created on upload failure) |
+| `~/.fry/settings.json` | User settings (telemetry opt-in) |
 
 ## BuildRecord Schema
 
