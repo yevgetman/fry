@@ -28,6 +28,10 @@ var (
 )
 
 func RunPreflight(cfg PreflightConfig) error {
+	if cfg.ProjectDir == "" {
+		return fmt.Errorf("preflight: project dir is required")
+	}
+
 	engineName := strings.TrimSpace(cfg.Engine)
 	if engineName == "" {
 		engineName = config.DefaultEngine

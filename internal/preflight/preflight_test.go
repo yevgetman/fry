@@ -256,6 +256,7 @@ func TestRunPreflight_EmptyProjectDir(t *testing.T) {
 		Engine:     "bash",
 	})
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "project dir")
 }
 
 func validProjectDir(t *testing.T) string {
