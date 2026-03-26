@@ -779,8 +779,10 @@ var runCmd = &cobra.Command{
 							mu.Lock()
 							results[sprintNum-startSprint].Status = failStatus
 							mu.Unlock()
-							_ = sprint.AppendToEpicProgress(projectPath,
-								fmt.Sprintf("## Sprint %d: %s \u2014 %s\n\n", spr.Number, spr.Name, failStatus))
+							if err := sprint.AppendToEpicProgress(projectPath,
+								fmt.Sprintf("## Sprint %d: %s \u2014 %s\n\n", spr.Number, spr.Name, failStatus)); err != nil {
+								frlog.Log("warning: append epic progress: %v", err)
+							}
 							fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
 							fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
 							fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
@@ -988,8 +990,10 @@ var runCmd = &cobra.Command{
 				continue
 			}
 
-			_ = sprint.AppendToEpicProgress(projectPath,
-				fmt.Sprintf("## Sprint %d: %s \u2014 %s\n\n", spr.Number, spr.Name, result.Status))
+			if err := sprint.AppendToEpicProgress(projectPath,
+				fmt.Sprintf("## Sprint %d: %s \u2014 %s\n\n", spr.Number, spr.Name, result.Status)); err != nil {
+				frlog.Log("warning: append epic progress: %v", err)
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
 			fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
 			fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
