@@ -136,44 +136,53 @@ Everything flows from **identity** (needed first because the observer reads it) 
 
 ## Stage 6: Reflection
 
-**What it delivers:** The loop closes. Memories become identity. Fry's self-concept evolves based on real build experience.
+**What it delivers:** The loop closes. Memories become identity. Fry's self-concept evolves based on real build experience. Identity is the continuous weighted sum of ALL memories — not a one-time synthesis.
+
+**Key design decisions:**
+- **Identity = sum of all memories, always.** No "absorbed" flag. Every memory contributes proportional to its effective weight (significance × decay × reinforcement). Old, important, reinforced memories keep pulling. Routine ones fade.
+- **Reflection runs server-side** as a Cloudflare Worker cron. Local Fry instances are read-only.
+- **Identity format is JSON**, not markdown. Optimized for LLM consumption with structured metadata (confidence, reinforcement count per element).
+- **Forgetting:** Memories with `effective_weight < 0.05 AND reinforcement_count < 2` are pruned during Reflection. Their influence persists in the identity but they stop actively contributing.
+- **Minimum threshold:** Reflection exits early if fewer than 50 memories exist.
 
 **Scope:**
-- New `internal/consciousness/reflect.go` — the Reflection pipeline
-- Step 1: Gather unabsorbed high-universality memories from Turso
-- Step 2: Cluster by embedding similarity (brute-force cosine)
-- Step 3: For each cluster, LLM call to synthesize wisdom
-- Step 4: Apply to identity layers (add, reinforce, compress, contradict)
-- Step 5: Compress identity if over token budget
-- Step 6: Mark memories as absorbed
-- Step 7: Commit identity changes to fry repo
-- `fry reflect` CLI command
-- Integration into self-improvement orchestrator as new phase
-- Process improvement detection: tag memories as self-improvement issues
+- Extend Cloudflare Worker with `/reflect` endpoint + daily cron trigger
+- Migrate identity format: `core.md` + `disposition.md` → `identity.json`
+- Update Go binary: parse JSON identity, render to prompt text
+- Step 1: Compute effective weights for all memories
+- Step 2: Select top-200 weighted memories + corpus statistics
+- Step 3: Claude synthesizes incrementally adjusted `identity.json`
+- Step 4: Prune decayed, unreinforced memories (forgetting)
+- Step 5: Commit updated `identity.json` to GitHub via API
+- Step 6: Log reflection run to `reflection_log` table
+- GitHub Actions CI: build binary on identity commits → publish release
+- Schema migration: drop `absorbed`/`ingested_by_reflection` columns, add `reflection_log` table
 
 **How to test:**
-- Unit tests: gathering, clustering, identity update logic, compression
-- Integration test: seed Turso with known memories, run reflection, verify identity changes are correct
-- Diff review: run reflection on real memories, review the git diff — is the identity update sensible?
-- Regression: run reflection twice on the same memories — second run should be a no-op (all absorbed)
+- Seed Turso with 50+ test memories across categories
+- Trigger `/reflect` manually, verify `identity.json` committed to GitHub
+- Verify pruning: add low-weight memories, run reflection, confirm deleted
+- Verify incremental: run reflection twice, confirm identity adjusts (not rewritten from scratch)
+- Verify minimum threshold: run with <50 memories, confirm no-op
 
-**What's different for the user:** After a Reflection cycle, `fry identity` shows updated self-concept. The next binary release includes the evolved identity. Builds informed by real accumulated wisdom.
+**What's different for the user:** After a Reflection cycle, the next binary release includes evolved identity. `fry identity` shows the updated self-concept. Builds are subtly informed by accumulated wisdom from all Fry instances.
 
-**Dependency:** Stage 5 (needs memories to reflect on). Requires enough accumulated memories to be meaningful — probably wait for ~50-100 builds worth.
+**Dependency:** Stage 5 (needs memories to reflect on). Minimum 50 memories before first reflection.
 
 ---
 
 ## Stage 7: Embeddings Enhancement
 
-**What it delivers:** Better domain activation, better clustering, better reinforcement detection.
+**What it delivers:** Better domain activation using embeddings instead of keyword matching.
 
 **Scope:**
-- Integrate canonical embedding model API calls into Tier 3 and Reflection
-- Precompute domain summary embeddings, store alongside domain files
-- Replace keyword-based domain activation (Stage 1) with embedding similarity
-- Improve memory clustering quality in Reflection
+- Precompute domain summary embeddings, store in identity.json
+- Replace keyword-based domain activation (Stage 1) with embedding similarity at build start
+- Fry binary embeds the current build's plan/epic, compares against domain embeddings to select relevant domains
 
-**Dependency:** Stage 6 (Reflection already works with basic clustering; embeddings improve it).
+**Note:** Core embedding infrastructure was implemented in Stage 5 (OpenAI text-embedding-3-small, 1536 dims). This stage is about using those embeddings for domain activation in the Go binary.
+
+**Dependency:** Stage 6 (domains must exist in identity.json before activation can use them).
 
 ---
 
@@ -206,9 +215,9 @@ Everything flows from **identity** (needed first because the observer reads it) 
 | 2. Observation Collection | Structured build records | Stage 1 | no | none | **DONE** |
 | 3. Experience Summary | Per-build narratives | Stage 2 | no | none | **DONE** |
 | 4. Memory Store + Upload | Central pipeline | Stage 3 | **yes** | none (plain HTTP) | **DONE** |
-| 5. Transmutation | Atomized memories | Stage 4 | no (server-side) | canonical embedding API | **DONE** |
-| 6. Reflection | Loop closes | Stage 5 | no | none | |
-| 7. Embeddings | Quality improvement | Stage 6 | no | none | |
+| 5. Transmutation | Atomized memories | Stage 4 | no (server-side) | OpenAI embeddings, Claude API | **DONE** |
+| 6. Reflection | Loop closes | Stage 5 | no (server-side) | GitHub API | |
+| 7. Embeddings | Domain activation | Stage 6 | no | none (infra in Stage 5) | |
 | 8. Auto-Update | Distribution | independent | yes | none | |
 | 9. Meta-Loops | Self-improvement | Stage 6 | no | none | |
 
