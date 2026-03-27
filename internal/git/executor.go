@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -21,7 +22,7 @@ type Executor interface {
 
 	// Repository initialization
 	Init(ctx context.Context, dir string) error
-	ConfigGet(ctx context.Context, dir string, key string) string
+	ConfigGet(ctx context.Context, dir string, key string) (string, error)
 	ConfigSet(ctx context.Context, dir string, key, value string) error
 
 	// Staging and committing
@@ -98,14 +99,21 @@ func (e *ExecExecutor) Init(ctx context.Context, dir string) error {
 	return e.run(ctx, dir, "git", "init")
 }
 
-func (e *ExecExecutor) ConfigGet(ctx context.Context, dir string, key string) string {
+func (e *ExecExecutor) ConfigGet(ctx context.Context, dir string, key string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "config", "--get", key)
 	cmd.Dir = dir
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = nil
-	_ = cmd.Run()
-	return stdout.String()
+	err := cmd.Run()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return "", nil // key not found
+		}
+		return "", err
+	}
+	return strings.TrimSpace(stdout.String()), nil
 }
 
 func (e *ExecExecutor) ConfigSet(ctx context.Context, dir string, key, value string) error {

@@ -170,10 +170,12 @@ func TestEnsureLocalIdentity(t *testing.T) {
 
 	// After calling ensureLocalIdentity, at least one of local or global
 	// should provide user.name — verify git agrees.
-	nameVal := gitConfigValue(context.Background(), projectDir, "user.name")
+	nameVal, err := gitConfigValue(context.Background(), projectDir, "user.name")
+	require.NoError(t, err)
 	assert.NotEmpty(t, strings.TrimSpace(nameVal))
 
-	emailVal := gitConfigValue(context.Background(), projectDir, "user.email")
+	emailVal, err := gitConfigValue(context.Background(), projectDir, "user.email")
+	require.NoError(t, err)
 	assert.NotEmpty(t, strings.TrimSpace(emailVal))
 }
 
@@ -187,10 +189,12 @@ func TestEnsureLocalIdentity_PreservesExisting(t *testing.T) {
 
 	require.NoError(t, ensureLocalIdentity(context.Background(), projectDir))
 
-	name := gitConfigValue(context.Background(), projectDir, "user.name")
+	name, err := gitConfigValue(context.Background(), projectDir, "user.name")
+	require.NoError(t, err)
 	assert.Equal(t, "Custom User", strings.TrimSpace(name))
 
-	email := gitConfigValue(context.Background(), projectDir, "user.email")
+	email, err := gitConfigValue(context.Background(), projectDir, "user.email")
+	require.NoError(t, err)
 	assert.Equal(t, "custom@test.com", strings.TrimSpace(email))
 }
 
@@ -246,7 +250,8 @@ func TestGitConfigValue_MissingKey(t *testing.T) {
 	cmd.Dir = projectDir
 	require.NoError(t, cmd.Run())
 
-	val := gitConfigValue(context.Background(), projectDir, "nonexistent.key")
+	val, err := gitConfigValue(context.Background(), projectDir, "nonexistent.key")
+	require.NoError(t, err)
 	assert.Empty(t, strings.TrimSpace(val))
 }
 
@@ -297,7 +302,7 @@ type mockExecutor struct {
 	CurrentBranchFn     func(ctx context.Context, dir string) string
 	BranchExistsFn      func(ctx context.Context, dir string, name string) bool
 	InitFn              func(ctx context.Context, dir string) error
-	ConfigGetFn         func(ctx context.Context, dir string, key string) string
+	ConfigGetFn         func(ctx context.Context, dir string, key string) (string, error)
 	ConfigSetFn         func(ctx context.Context, dir string, key, value string) error
 	AddAllFn            func(ctx context.Context, dir string) error
 	AddIntentFn         func(ctx context.Context, dir string, paths []string) error
@@ -345,11 +350,11 @@ func (m *mockExecutor) Init(ctx context.Context, dir string) error {
 	}
 	return nil
 }
-func (m *mockExecutor) ConfigGet(ctx context.Context, dir string, key string) string {
+func (m *mockExecutor) ConfigGet(ctx context.Context, dir string, key string) (string, error) {
 	if m.ConfigGetFn != nil {
 		return m.ConfigGetFn(ctx, dir, key)
 	}
-	return ""
+	return "", nil
 }
 func (m *mockExecutor) ConfigSet(ctx context.Context, dir string, key, value string) error {
 	if m.ConfigSetFn != nil {
@@ -440,6 +445,56 @@ func (m *mockExecutor) WorktreePrune(ctx context.Context, dir string) error {
 		return m.WorktreePruneFn(ctx, dir)
 	}
 	return nil
+}
+
+// #52: ConfigGet error propagation tests
+
+func TestEnsureLocalIdentityWith_ConfigGetError(t *testing.T) {
+	t.Parallel()
+
+	configErr := errors.New("git config failed")
+	ex := &mockExecutor{
+		ConfigGetFn: func(_ context.Context, _ string, _ string) (string, error) {
+			return "", configErr
+		},
+	}
+	err := ensureLocalIdentityWith(context.Background(), t.TempDir(), ex)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get git user.name")
+	assert.ErrorIs(t, err, configErr)
+}
+
+func TestEnsureLocalIdentityWith_ConfigGetEmailError(t *testing.T) {
+	t.Parallel()
+
+	callCount := 0
+	configErr := errors.New("git config email failed")
+	ex := &mockExecutor{
+		ConfigGetFn: func(_ context.Context, _ string, key string) (string, error) {
+			callCount++
+			if callCount == 1 {
+				return "existing-name", nil
+			}
+			return "", configErr
+		},
+	}
+	err := ensureLocalIdentityWith(context.Background(), t.TempDir(), ex)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get git user.email")
+	assert.ErrorIs(t, err, configErr)
+}
+
+func TestConfigGet_KeyNotFound(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		ConfigGetFn: func(_ context.Context, _ string, _ string) (string, error) {
+			return "", nil // simulates exit code 1 mapped to ("", nil)
+		},
+	}
+	val, err := ex.ConfigGet(context.Background(), t.TempDir(), "nonexistent.key")
+	require.NoError(t, err)
+	assert.Equal(t, "", val)
 }
 
 // #31: DiffStatForNoopDetectionWith tests
