@@ -306,6 +306,7 @@ func TestUploadInBackground_Success(t *testing.T) {
 // Cannot use t.Parallel: t.Setenv (required to redirect HOME) is incompatible
 // with t.Parallel in Go's testing framework.
 func TestUploadInBackground_DoubleFail(t *testing.T) {
+	// t.Parallel() omitted: t.Setenv panics in parallel tests
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"error":"down"}`))
@@ -326,6 +327,7 @@ func TestUploadInBackground_DoubleFail(t *testing.T) {
 	require.NoError(t, err)
 	os.Stderr = w
 	t.Cleanup(func() {
+		w.Close()
 		os.Stderr = oldStderr
 	})
 
@@ -338,9 +340,8 @@ func TestUploadInBackground_DoubleFail(t *testing.T) {
 		t.Fatal("UploadInBackground did not complete in time")
 	}
 
-	// Restore stderr and read captured output
+	// Close write end and read captured output
 	w.Close()
-	os.Stderr = oldStderr
 	captured, readErr := io.ReadAll(r)
 	require.NoError(t, readErr)
 

@@ -241,6 +241,7 @@ func TestGitDiffForAudit_NoChanges(t *testing.T) {
 }
 
 // P1: gitConfigValue for missing key
+// This also covers the #52 exit-code-1 → ("", nil) contract in ExecExecutor.ConfigGet.
 
 func TestGitConfigValue_MissingKey(t *testing.T) {
 	t.Parallel()
@@ -482,19 +483,6 @@ func TestEnsureLocalIdentityWith_ConfigGetEmailError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get git user.email")
 	assert.ErrorIs(t, err, configErr)
-}
-
-func TestMockConfigGet_KeyNotFoundMapping(t *testing.T) {
-	t.Parallel()
-
-	ex := &mockExecutor{
-		ConfigGetFn: func(_ context.Context, _ string, _ string) (string, error) {
-			return "", nil // simulates exit code 1 mapped to ("", nil)
-		},
-	}
-	val, err := ex.ConfigGet(context.Background(), t.TempDir(), "nonexistent.key")
-	require.NoError(t, err)
-	assert.Equal(t, "", val)
 }
 
 // #31: DiffStatForNoopDetectionWith tests
