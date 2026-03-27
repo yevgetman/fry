@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -468,12 +469,11 @@ func TestEnsureLocalIdentityWith_ConfigGetError(t *testing.T) {
 func TestEnsureLocalIdentityWith_ConfigGetEmailError(t *testing.T) {
 	t.Parallel()
 
-	callCount := 0
+	var callCount atomic.Int32
 	configErr := errors.New("git config email failed")
 	ex := &mockExecutor{
 		ConfigGetFn: func(_ context.Context, _ string, key string) (string, error) {
-			callCount++
-			if callCount == 1 {
+			if callCount.Add(1) == 1 {
 				return "existing-name", nil
 			}
 			return "", configErr
