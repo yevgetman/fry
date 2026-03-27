@@ -1,15 +1,18 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/yevgetman/fry/internal/archive"
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/consciousness"
 	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
@@ -19,6 +22,19 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show current build state without making an LLM call",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		showConsciousness, _ := cmd.Flags().GetBool("consciousness")
+		if showConsciousness {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+			defer cancel()
+
+			stats, err := consciousness.FetchPipelineStats(ctx, config.ConsciousnessAPIURL)
+			if err != nil {
+				return fmt.Errorf("consciousness status: %w", err)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), consciousness.FormatPipelineStats(stats))
+			return nil
+		}
+
 		projectDir, _ := cmd.Flags().GetString("project-dir")
 
 		// If a worktree strategy was used, resolve to the worktree directory
@@ -56,5 +72,6 @@ var statusCmd = &cobra.Command{
 }
 
 func init() {
+	statusCmd.Flags().Bool("consciousness", false, "Show consciousness pipeline status")
 	rootCmd.AddCommand(statusCmd)
 }

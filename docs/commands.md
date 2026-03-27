@@ -278,6 +278,7 @@ fry status [flags]
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to inspect (default: current directory) |
+| `--consciousness` | Show consciousness pipeline status (memory count, transmutation, reflection) |
 
 ### Behavior
 
@@ -290,6 +291,7 @@ fry status [flags]
 ```bash
 fry status                              # Show build state for current directory
 fry status --project-dir /path/to/proj  # Show build state for a different project
+fry status --consciousness              # Show consciousness pipeline stats
 ```
 
 ### Example output (no active build)
