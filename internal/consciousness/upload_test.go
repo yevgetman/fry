@@ -325,6 +325,9 @@ func TestUploadInBackground_DoubleFail(t *testing.T) {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stderr = w
+	t.Cleanup(func() {
+		os.Stderr = oldStderr
+	})
 
 	record := BuildRecord{ID: "double-fail", Engine: "claude", Summary: "will double fail"}
 	done := UploadInBackground(server.URL, "token", record, 5*time.Second)

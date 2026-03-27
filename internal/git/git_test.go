@@ -484,7 +484,7 @@ func TestEnsureLocalIdentityWith_ConfigGetEmailError(t *testing.T) {
 	assert.ErrorIs(t, err, configErr)
 }
 
-func TestConfigGet_KeyNotFound(t *testing.T) {
+func TestMockConfigGet_KeyNotFoundMapping(t *testing.T) {
 	t.Parallel()
 
 	ex := &mockExecutor{

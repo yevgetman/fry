@@ -43,35 +43,35 @@ import (
 )
 
 var (
-	runEngine         string
-	runDryRun         bool
-	runUserPrompt     string
-	runUserPromptFile string
-	runNoReview       bool
-	runReview         bool
-	runSimulateReview string
-	runPrepareEngine  string
-	runPlanning       bool
-	runMode           string
-	runEffort         string
-	runNoAudit        bool
-	runResume         bool
-	runSprint         int
-	runContinue       bool
-	runNoProjectOverview  bool
-	runFullPrepare    bool
-	runGitStrategy    string
-	runBranchName     string
-	runAlwaysVerify   bool
-	runSimpleContinue bool
-	runSARIF          bool
-	runJSONReport     bool
-	runShowTokens     bool
-	runNoObserver     bool
-	runTriageOnly     bool
-	runModel          string
-	runTelemetry      bool
-	runNoTelemetry    bool
+	runEngine            string
+	runDryRun            bool
+	runUserPrompt        string
+	runUserPromptFile    string
+	runNoReview          bool
+	runReview            bool
+	runSimulateReview    string
+	runPrepareEngine     string
+	runPlanning          bool
+	runMode              string
+	runEffort            string
+	runNoAudit           bool
+	runResume            bool
+	runSprint            int
+	runContinue          bool
+	runNoProjectOverview bool
+	runFullPrepare       bool
+	runGitStrategy       string
+	runBranchName        string
+	runAlwaysVerify      bool
+	runSimpleContinue    bool
+	runSARIF             bool
+	runJSONReport        bool
+	runShowTokens        bool
+	runNoObserver        bool
+	runTriageOnly        bool
+	runModel             string
+	runTelemetry         bool
+	runNoTelemetry       bool
 )
 
 type deferredEntry struct {
@@ -193,17 +193,17 @@ var runCmd = &cobra.Command{
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
 			if runFullPrepare {
 				if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-					ProjectDir:       projectPath,
-					EpicFilename:     filepath.Base(epicPath),
-					Engine:           prepareEngineName,
-					UserPrompt:       userPrompt,
-					UserPromptSource: promptSource,
-					SkipProjectOverview:  runNoProjectOverview || runDryRun,
-					Mode:             mode,
-					EffortLevel:      effortLevel,
-					EnableReview:     runReview,
-					Stdin:            os.Stdin,
-					Stdout:           cmd.OutOrStdout(),
+					ProjectDir:          projectPath,
+					EpicFilename:        filepath.Base(epicPath),
+					Engine:              prepareEngineName,
+					UserPrompt:          userPrompt,
+					UserPromptSource:    promptSource,
+					SkipProjectOverview: runNoProjectOverview || runDryRun,
+					Mode:                mode,
+					EffortLevel:         effortLevel,
+					EnableReview:        runReview,
+					Stdin:               os.Stdin,
+					Stdout:              cmd.OutOrStdout(),
 				}); err != nil {
 					return err
 				}
@@ -655,8 +655,8 @@ var runCmd = &cobra.Command{
 					mu.Unlock()
 					if activeSprint > 0 {
 						if err := git.CommitPartialWork(ctx, projectPath, name, activeSprint, spr.Name); err != nil {
-						fmt.Fprintf(os.Stderr, "fry: warning: failed to commit partial work: %v\n", err)
-					}
+							fmt.Fprintf(os.Stderr, "fry: warning: failed to commit partial work: %v\n", err)
+						}
 					}
 					exitErr = fmt.Errorf("interrupted by signal")
 					break
@@ -673,8 +673,8 @@ var runCmd = &cobra.Command{
 					Type:   observer.EventSprintComplete,
 					Sprint: spr.Number,
 					Data: map[string]string{
-						"status":        result.Status,
-						"duration":      result.Duration.Round(time.Second).String(),
+						"status":             result.Status,
+						"duration":           result.Duration.Round(time.Second).String(),
 						"alignment_attempts": strconv.Itoa(result.HealAttempts),
 					},
 				})
@@ -1900,17 +1900,17 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 
 		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
 		if err := prepare.RunPrepare(ctx, prepare.PrepareOpts{
-			ProjectDir:       projectPath,
-			EpicFilename:     filepath.Base(epicPath),
-			Engine:           prepareEngineName,
-			UserPrompt:       userPrompt,
-			UserPromptSource: promptSource,
-			SkipProjectOverview:  runNoProjectOverview || runDryRun,
-			Mode:             mode,
-			EffortLevel:      complexEffort,
-			EnableReview:     runReview,
-			Stdin:            stdin,
-			Stdout:           stdout,
+			ProjectDir:          projectPath,
+			EpicFilename:        filepath.Base(epicPath),
+			Engine:              prepareEngineName,
+			UserPrompt:          userPrompt,
+			UserPromptSource:    promptSource,
+			SkipProjectOverview: runNoProjectOverview || runDryRun,
+			Mode:                mode,
+			EffortLevel:         complexEffort,
+			EnableReview:        runReview,
+			Stdin:               stdin,
+			Stdout:              stdout,
 		}); err != nil {
 			return nil, err
 		}
