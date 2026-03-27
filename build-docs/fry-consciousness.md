@@ -545,7 +545,7 @@ Prebuilt binaries are published as GitHub releases. The auto-update mechanism fe
 ### New commands
 
 ```
-fry reflect          -- Run the consciousness pipeline manually
+fry reflect          -- Trigger the Reflection pipeline remotely (POST to Worker /reflect endpoint)
 fry identity         -- Print current identity (core + active disposition)
 fry identity --full  -- Print all identity layers including domains
 ```
