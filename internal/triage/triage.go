@@ -55,12 +55,14 @@ func Classify(ctx context.Context, opts TriageOpts) *TriageDecision {
 	}
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
 		frylog.Log("WARNING: triage: could not write prompt file: %v", err)
+		return &TriageDecision{Complexity: ComplexityComplex, Reason: "filesystem error"}
 	}
 
 	// Create log file.
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
 		frylog.Log("WARNING: triage: could not create logs dir: %v", err)
+		return &TriageDecision{Complexity: ComplexityComplex, Reason: "filesystem error"}
 	}
 	logPath := filepath.Join(buildLogsDir, fmt.Sprintf("triage_%s.log", time.Now().Format("20060102_150405")))
 

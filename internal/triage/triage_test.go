@@ -3,11 +3,14 @@ package triage
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/prepare"
@@ -367,4 +370,55 @@ func TestClassify(t *testing.T) {
 			assert.Equal(t, tc.wantSprints, decision.SprintCount)
 		})
 	}
+}
+
+func TestClassify_WriteFileFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Create the .fry directory so MkdirAll for the prompt parent succeeds.
+	promptPath := filepath.Join(dir, config.TriagePromptFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(promptPath), 0o755))
+
+	// Create a directory at the exact prompt file path. os.WriteFile will fail
+	// with EISDIR because it cannot write to a directory.
+	require.NoError(t, os.Mkdir(promptPath, 0o755))
+
+	stub := &stubEngine{output: "<complexity>SIMPLE</complexity>"}
+	decision := Classify(context.Background(), TriageOpts{
+		ProjectDir: dir,
+		UserPrompt: "test",
+		Engine:     stub,
+	})
+
+	require.NotNil(t, decision)
+	assert.Equal(t, ComplexityComplex, decision.Complexity)
+	assert.Equal(t, "filesystem error", decision.Reason)
+}
+
+func TestClassify_MkdirAllFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Create the .fry directory so prompt file writing succeeds.
+	promptPath := filepath.Join(dir, config.TriagePromptFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(promptPath), 0o755))
+
+	// Create a regular file at the build-logs directory path. os.MkdirAll will
+	// fail because a path component is a file, not a directory.
+	buildLogsDir := filepath.Join(dir, config.BuildLogsDir)
+	require.NoError(t, os.WriteFile(buildLogsDir, []byte("blocker"), 0o644))
+
+	stub := &stubEngine{output: "<complexity>SIMPLE</complexity>"}
+	decision := Classify(context.Background(), TriageOpts{
+		ProjectDir: dir,
+		UserPrompt: "test",
+		Engine:     stub,
+	})
+
+	require.NotNil(t, decision)
+	assert.Equal(t, ComplexityComplex, decision.Complexity)
+	assert.Equal(t, "filesystem error", decision.Reason)
 }
