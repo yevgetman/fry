@@ -125,13 +125,13 @@ To update models when new ones release, change only the tier mapping table in `i
 
 | Session | low | medium | high | max |
 |---------|-----|--------|------|-----|
-| Sprint execution, Heal, Audit fix, Review, Replan | Standard | Standard | Frontier | Frontier |
+| Sprint execution, Alignment, Audit fix, Review, Replan | Standard | Standard | Frontier | Frontier |
 | Audit, Audit verify, Build audit (Claude) | Standard | Standard | Standard | Frontier |
 | Audit, Audit verify, Build audit (Codex) | Mini | Standard | Frontier | Frontier |
 | Build summary | Mini | Mini | Standard | Standard |
 | Compaction | Labor | Labor | Labor | Mini |
 | Continue analysis | Mini | Mini | Standard | Standard |
-| Sanity check | Labor | Labor | Labor | Labor |
+| Project overview | Labor | Labor | Labor | Labor |
 | Prepare | Standard | Standard | Standard | **Frontier** |
 
 Empty effort level defaults to "medium" behavior.
@@ -141,7 +141,7 @@ Empty effort level defaults to "medium" behavior.
 Epic directives override the automatic tier selection for their session group:
 
 ```
-@model opus[1m]                # Overrides sprint execution + heal + compaction + summary
+@model opus[1m]                # Overrides sprint execution + alignment + compaction + summary
 @audit_model sonnet            # Overrides audit + audit fix + audit verify + build audit + continue analysis
 @review_model claude-sonnet-4-6  # Overrides review + replan
 ```
@@ -173,4 +173,4 @@ type Engine interface {
 }
 ```
 
-This means all Fry features (sprints, verification, healing, review) work identically regardless of which engine is selected.
+This means all Fry features (sprints, sanity checks, alignment, review) work identically regardless of which engine is selected.

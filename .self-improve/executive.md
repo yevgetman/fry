@@ -31,7 +31,7 @@ GitHub Issues is the source of truth for what needs to be done. Each issue has l
 
 ### Quality gates
 
-- All verification checks must pass. This build runs with `--always-verify`.
+- All sanity checks must pass. This build runs with `--always-verify`.
 - Do not skip or weaken checks to make them pass. Fix the underlying issue.
 - If a fix requires changes beyond the scope of the current task, note this in the sprint progress rather than expanding scope.
 

@@ -169,8 +169,8 @@ func TestMechanicalCompaction(t *testing.T) {
 		"## Iteration 1 — Tue Mar 10 22:00 CDT",
 		"First pass",
 		"",
-		"--- Heal attempt 1 failed ---",
-		"Heal details",
+		"--- Alignment attempt 1 failed ---",
+		"Alignment details",
 		"",
 		"## Iteration 2 — Tue Mar 10 22:30 CDT",
 		"Second pass",
@@ -183,13 +183,13 @@ func TestMechanicalCompaction(t *testing.T) {
 func TestSprintResultStatusStrings(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, "PASS", StatusPass)
-	assert.Equal(t, "PASS (healed)", StatusPassHealed)
-	assert.Equal(t, "PASS (verification passed, no promise)", StatusPassVerificationPassedNoPromise)
-	assert.Equal(t, "PASS (healed, no promise)", StatusPassHealedNoPromise)
+	assert.Equal(t, "PASS (aligned)", StatusPassAligned)
+	assert.Equal(t, "PASS (sanity checks passed, no promise)", StatusPassSanityPassedNoPromise)
+	assert.Equal(t, "PASS (aligned, no promise)", StatusPassAlignedNoPromise)
 	assert.Equal(t, "PASS (deferred failures)", StatusPassWithDeferredFailures)
-	assert.Equal(t, "PASS (healed, deferred failures)", StatusPassHealedWithDeferredFailures)
-	assert.Equal(t, "FAIL (verification failed, heal exhausted)", StatusFailVerificationFailedHealExhausted)
-	assert.Equal(t, "FAIL (no promise, verification failed, heal exhausted)", StatusFailNoPromiseVerificationHealExhaust)
+	assert.Equal(t, "PASS (aligned, deferred failures)", StatusPassAlignedWithDeferredFailures)
+	assert.Equal(t, "FAIL (sanity checks failed, alignment exhausted)", StatusFailSanityFailedAlignmentExhausted)
+	assert.Equal(t, "FAIL (no promise, sanity checks failed, alignment exhausted)", StatusFailNoPromiseSanityFailedAlignmentExhausted)
 	assert.Equal(t, "FAIL (no prompt)", StatusFailNoPrompt)
 	assert.Equal(t, "SKIPPED", StatusSkipped)
 }
@@ -345,7 +345,7 @@ func TestRunSprintNoPromiseChecksPass(t *testing.T) {
 		Engine: mockEngine,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, StatusPassVerificationPassedNoPromise, result.Status)
+	assert.Equal(t, StatusPassSanityPassedNoPromise, result.Status)
 }
 
 func TestDetermineOutcome(t *testing.T) {
@@ -373,21 +373,21 @@ func TestDetermineOutcome(t *testing.T) {
 			wantStatus:   StatusPass,
 		},
 		{
-			name:         "promise found checks fail heal succeeds",
+			name:         "promise found checks fail alignment succeeds",
 			promiseFound: true,
 			totalCount:   1,
 			passCount:    0,
 			checks:       []verify.Check{{Sprint: 1, Type: verify.CheckFile, Path: "exists.txt"}},
 			createFile:   "exists.txt",
-			wantStatus:   StatusPassHealed,
+			wantStatus:   StatusPassAligned,
 		},
 		{
-			name:         "promise found checks fail heal exhausted",
+			name:         "promise found checks fail alignment exhausted",
 			promiseFound: true,
 			totalCount:   1,
 			passCount:    0,
 			checks:       []verify.Check{{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"}},
-			wantStatus:   StatusFailVerificationFailedHealExhausted,
+			wantStatus:   StatusFailSanityFailedAlignmentExhausted,
 		},
 		{
 			name:       "no promise no checks",
@@ -399,22 +399,22 @@ func TestDetermineOutcome(t *testing.T) {
 			name:       "no promise checks pass",
 			totalCount: 1,
 			passCount:  1,
-			wantStatus: StatusPassVerificationPassedNoPromise,
+			wantStatus: StatusPassSanityPassedNoPromise,
 		},
 		{
-			name:       "no promise checks fail heal succeeds",
+			name:       "no promise checks fail alignment succeeds",
 			totalCount: 1,
 			passCount:  0,
 			checks:     []verify.Check{{Sprint: 1, Type: verify.CheckFile, Path: "exists.txt"}},
 			createFile: "exists.txt",
-			wantStatus: StatusPassHealedNoPromise,
+			wantStatus: StatusPassAlignedNoPromise,
 		},
 		{
-			name:       "no promise checks fail heal exhausted",
+			name:       "no promise checks fail alignment exhausted",
 			totalCount: 1,
 			passCount:  0,
 			checks:     []verify.Check{{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"}},
-			wantStatus: StatusFailNoPromiseVerificationHealExhaust,
+			wantStatus: StatusFailNoPromiseSanityFailedAlignmentExhausted,
 		},
 	}
 
@@ -595,7 +595,7 @@ func TestResumeSprintPassesWhenChecksAlreadyPass(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, StatusPass, result.Status)
-	// Engine should NOT have been invoked — no iterations, no heal needed
+	// Engine should NOT have been invoked — no iterations, no alignment needed
 	assert.Empty(t, mockEngine.prompts)
 
 	// Sprint progress should be preserved (not overwritten)
@@ -631,7 +631,7 @@ func TestResumeSprintFailsWhenHealExhausted(t *testing.T) {
 		Engine: mockEngine,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, StatusFailVerificationFailedHealExhausted, result.Status)
+	assert.Equal(t, StatusFailSanityFailedAlignmentExhausted, result.Status)
 	// Resume mode should use boosted attempts: max(2*2, 6) = 6
 	assert.Len(t, mockEngine.prompts, config.ResumeMinHealAttempts)
 }
@@ -665,7 +665,7 @@ func TestResumeSprintNoChecks(t *testing.T) {
 func TestResumeSprintPreservesProgress(t *testing.T) {
 	t.Parallel()
 	projectDir := t.TempDir()
-	originalProgress := "# Sprint 3: Auth — Progress\n\n## Iteration 1\nDid auth work\n\n--- Heal attempt 1 failed ---\nSome failure\n"
+	originalProgress := "# Sprint 3: Auth — Progress\n\n## Iteration 1\nDid auth work\n\n--- Alignment attempt 1 failed ---\nSome failure\n"
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), originalProgress)
 	writeFile(t, filepath.Join(projectDir, config.DefaultVerificationFile), "@sprint 3\n@check_file auth.go\n")
 	writeFile(t, filepath.Join(projectDir, "auth.go"), "package auth\n")
@@ -695,7 +695,7 @@ func TestResumeSprintPreservesProgress(t *testing.T) {
 	// Verify original progress was preserved and resume marker appended
 	progress, err := os.ReadFile(filepath.Join(projectDir, config.SprintProgressFile))
 	require.NoError(t, err)
-	assert.Contains(t, string(progress), "Heal attempt 1 failed")
+	assert.Contains(t, string(progress), "Alignment attempt 1 failed")
 	assert.Contains(t, string(progress), "RESUME MODE")
 }
 
@@ -771,7 +771,7 @@ func TestResumeSprintBoostedAttempts(t *testing.T) {
 
 	mockEngine := &stubEngine{name: "codex"}
 
-	// With explicit heal attempts of 4, boosted = max(4*2, 6) = 8
+	// With explicit alignment attempts of 4, boosted = max(4*2, 6) = 8
 	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
@@ -790,8 +790,8 @@ func TestResumeSprintBoostedAttempts(t *testing.T) {
 		Engine: mockEngine,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, StatusFailVerificationFailedHealExhausted, result.Status)
-	// Boosted attempts are passed as MaxAttemptsOverride to heal loop.
+	assert.Equal(t, StatusFailSanityFailedAlignmentExhausted, result.Status)
+	// Boosted attempts are passed as MaxAttemptsOverride to alignment loop.
 	// Exact count depends on stuck detection, but at least some attempts are made.
 	assert.GreaterOrEqual(t, len(mockEngine.prompts), 1)
 }
@@ -805,7 +805,7 @@ func TestResumeSprintEffortLevelHealBase(t *testing.T) {
 
 	mockEngine := &stubEngine{name: "codex"}
 
-	// Effort high → default heal = 10, boosted = max(10*2, 6) = 20
+	// Effort high → default alignment = 10, boosted = max(10*2, 6) = 20
 	result, err := ResumeSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
@@ -823,7 +823,7 @@ func TestResumeSprintEffortLevelHealBase(t *testing.T) {
 		Engine: mockEngine,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, StatusFailVerificationFailedHealExhausted, result.Status)
+	assert.Equal(t, StatusFailSanityFailedAlignmentExhausted, result.Status)
 	// High effort uses progress-based detection — stub engine makes no progress,
 	// so stuck threshold (2) causes early exit. At least 1 attempt must be made.
 	assert.GreaterOrEqual(t, len(mockEngine.prompts), 1)

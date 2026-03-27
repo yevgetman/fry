@@ -401,10 +401,10 @@ func TestAlwaysVerifyWarnsWhenNoBuildSystem(t *testing.T) {
 	checks := triage.GenerateVerificationChecks(projectDir, 1)
 	assert.Empty(t, checks, "no build system files exist so checks must be empty")
 
-	// Verify the verification file is NOT written when checks are empty.
+	// Verify the sanity checks file is NOT written when checks are empty.
 	verifyPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	_, err := os.Stat(verifyPath)
-	assert.True(t, os.IsNotExist(err), "verification file must not exist when no build system is detected")
+	assert.True(t, os.IsNotExist(err), "sanity checks file must not exist when no build system is detected")
 }
 
 func runRepoCommand(t *testing.T, name string, args ...string) {

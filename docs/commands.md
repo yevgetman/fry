@@ -46,7 +46,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <codex\|claude\|ollama>` | AI engine to use (default: claude) |
 | `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
-| `--model <model>` | Override the agent model for sprints, healing, review, and replan sessions (e.g. `opus[1m]`, `sonnet`, `haiku`). Takes precedence over `@model` in the epic and the effort-based automatic model selection. Use this to pair a lower effort level (fewer sprints) with a more capable model. |
+| `--model <model>` | Override the agent model for sprints, alignment, review, and replan sessions (e.g. `opus[1m]`, `sonnet`, `haiku`). Takes precedence over `@model` in the epic and the effort-based automatic model selection. Use this to pair a lower effort level (fewer sprints) with a more capable model. |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). `planning` generates structured documents; `writing` generates human-language content (books, guides, reports). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--prepare-engine <codex\|claude\|ollama>` | Engine for auto-generating the epic (defaults to `--engine`, `FRY_ENGINE`, or claude) |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
@@ -54,22 +54,22 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. Also offered interactively during the adjust flow for medium/high effort builds. Max effort auto-enables review. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
-| `--no-sanity-check` | Skip interactive confirmations (triage classification and project summary) |
+| `--no-project-overview` | Skip interactive confirmations (triage classification and project overview) |
 | `--no-audit` | Disable sprint and build audits for this run |
 | `--no-observer` | Disable the observer metacognitive layer (event stream and wake-ups). Observer is also disabled at `low` effort and during `--dry-run`. See [Observer](observer.md). |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 | `--sprint <N>` | Start from sprint N. Alternative to the positional start sprint argument — no need to specify the epic file path. Cannot be combined with positional sprint arguments. |
-| `--resume` | Resume a failed sprint: skip iterations, go straight to verification + healing with boosted attempts (2x normal, minimum 6). Preserves existing progress for full context. Only applies to the first sprint in the range; subsequent sprints run normally. |
+| `--resume` | Resume a failed sprint: skip iterations, go straight to sanity checks + alignment with boosted attempts (2x normal, minimum 6). Preserves existing progress for full context. Only applies to the first sprint in the range; subsequent sprints run normally. |
 | `--continue` | Auto-detect where a previous build left off and resume. Uses an LLM agent to analyze `.fry/` build artifacts, determine the next sprint, and decide whether to resume or start fresh. Automatically restores the build mode (`software`, `planning`, or `writing`) from the previous run unless `--mode` is explicitly passed. Cannot be combined with `--sprint`, `--resume`, or positional sprint arguments. |
 | `--simple-continue` | Resume from the first incomplete sprint without LLM analysis. Scans sprint completion markers in the build state and resumes from the first sprint without a marker. Lightweight alternative to `--continue` — no LLM call, no cost. Cannot be combined with `--continue`, `--resume`, or `--sprint`. |
 | `--full-prepare` | Skip triage and run the full prepare pipeline when no epic exists. Equivalent to the pre-triage behavior. See [Triage](triage.md). |
-| `--triage-only` | Run the triage classifier and exit without generating any artifacts (no epic, verification, or AGENTS.md). Prints the classification result. Cannot be combined with `--full-prepare`, `--continue`, `--resume`, or `--simple-continue`. See [Triage](triage.md). |
+| `--triage-only` | Run the triage classifier and exit without generating any artifacts (no epic, sanity checks, or AGENTS.md). Prints the classification result. Cannot be combined with `--full-prepare`, `--continue`, `--resume`, or `--simple-continue`. See [Triage](triage.md). |
 | `--git-strategy <auto\|current\|branch\|worktree>` | Git isolation strategy (default: `auto`). `auto` lets triage decide (complex -> worktree, simple/moderate -> branch). `current` works on the current branch (previous behavior). See [Git Strategy](git-strategy.md). |
 | `--branch-name <name>` | Explicit branch name for `branch` or `worktree` strategies. Overrides the auto-generated `fry/<slug>` name. |
-| `--always-verify` | Force verification checks, healing, and audit to run regardless of effort level or triage complexity. Generates heuristic verification checks if none exist. Useful for CI/CD and automated builds. |
+| `--always-verify` | Force sanity checks, alignment, and audit to run regardless of effort level or triage complexity. Generates heuristic sanity checks if none exist. Useful for CI/CD and automated builds. |
 | `--sarif` | Write `build-audit.sarif` in SARIF 2.1.0 format alongside `build-audit.md`. Only written when the build audit runs. See [Build Audit](build-audit.md). |
-| `--json-report` | Write `.fry/build-report.json` containing sprint results, verification outcomes, and timing data. |
+| `--json-report` | Write `.fry/build-report.json` containing sprint results, sanity check outcomes, and timing data. |
 | `--show-tokens` | Print a per-sprint token usage table to stderr at the end of the run. When using the Ollama engine, token counts are always 0 (Ollama does not report token usage); the column displays `-`. |
 | `--telemetry` | Enable experience upload to the consciousness API for this run. See [Consciousness](consciousness.md). |
 | `--no-telemetry` | Disable experience upload. Takes precedence over `--telemetry` if both set. |
@@ -92,7 +92,7 @@ fry run epic.md 4                                 # Resume from sprint 4
 fry run --sprint 4                                # Same, without specifying the epic file
 fry run epic.md 4 4                               # Run only sprint 4
 fry run epic.md 3 5                               # Run sprints 3 through 5
-fry run --resume --sprint 4                        # Resume failed sprint 4 (verify + heal only)
+fry run --resume --sprint 4                        # Resume failed sprint 4 (sanity checks + alignment only)
 fry run --resume --sprint 4 --planning             # Resume with planning mode
 fry run --continue                                # Auto-detect and resume from where you left off
 fry run --continue --dry-run                      # Preview what --continue would do
@@ -104,11 +104,11 @@ fry --mode writing --user-prompt "Write a guide"  # Writing project (books, guid
 fry --user-prompt "focus on backend API, skip frontend"
 fry --user-prompt "build a todo app" --engine claude  # Start from just a prompt
 fry --user-prompt-file ./prompt.txt --engine claude   # Load prompt from a file
-fry --no-sanity-check                             # Skip triage confirmation and project summary
+fry --no-project-overview                             # Skip triage confirmation and project overview
 fry --git-strategy worktree                       # Force worktree isolation
 fry --git-strategy branch --branch-name feat/auth # Branch with explicit name
 fry --git-strategy current                        # Work on current branch (previous behavior)
-fry --always-verify                               # Force verification+healing+audit on all tasks
+fry --always-verify                               # Force sanity checks+alignment+audit on all tasks
 fry --model opus[1m] --effort medium               # Medium sprint count with frontier model
 fry --no-observer                                 # Disable the observer metacognitive layer
 fry --project-dir /path/to/project                # Operate on a different project
@@ -137,7 +137,7 @@ fry prepare [epic_filename] [flags]
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--validate-only` | Check that the epic is valid, then exit |
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. |
-| `--no-sanity-check` | Skip the interactive project summary confirmation |
+| `--no-project-overview` | Skip the interactive project overview confirmation |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--no-color` | Disable colored terminal output |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
@@ -150,10 +150,10 @@ All artifacts are **always regenerated** (overwritten) on each run.
 |---|---|---|
 | Bootstrap | Both files missing, `--user-prompt` provided | Generates `plans/executive.md` from user prompt (interactive review) |
 | Step 0 | `plan.md` missing, `executive.md` exists | Generates `plans/plan.md` from executive context |
-| Sanity Check | `plan.md` exists, `--no-sanity-check` not set | Displays AI-generated project summary for user confirmation |
+| Project Overview | `plan.md` exists, `--no-project-overview` not set | Displays AI-generated project overview for user confirmation |
 | Step 1 | Always | Generates `.fry/AGENTS.md` (numbered operational rules) |
 | Step 2 | Always | Generates `.fry/epic.md` (sprint definitions) |
-| Step 3 | Always | Generates `.fry/verification.md` (check primitives) |
+| Step 3 | Always | Generates `.fry/verification.md` (sanity check primitives) |
 
 ### Examples
 
@@ -168,7 +168,7 @@ fry prepare --user-prompt "no ORMs, use raw SQL only"
 fry prepare --user-prompt "build a blog engine" --engine claude  # Bootstrap from prompt
 fry prepare --user-prompt-file ./requirements.txt --engine claude # Prompt from file
 fry prepare --mode writing --user-prompt "Write a guide to Go concurrency"  # Writing mode
-fry prepare --no-sanity-check                      # Skip project summary confirmation
+fry prepare --no-project-overview                   # Skip project overview confirmation
 fry prepare --validate-only                        # Validate existing epic only
 ```
 

@@ -76,7 +76,7 @@ When strategy is `worktree`:
 
 1. **Creation** -- a git worktree is created at `.fry-worktrees/<slug>/` with a new branch `fry/<slug>`
 2. **Artifact copy** -- `.fry/` and `plans/` are copied from the original project directory into the worktree so the sprint runner finds all build artifacts
-3. **Build execution** -- all sprint operations (agent runs, verification, healing, audit) happen inside the worktree directory
+3. **Build execution** -- all sprint operations (agent runs, sanity checks, alignment, audit) happen inside the worktree directory
 4. **Preservation** -- after the build completes, the worktree is preserved (not auto-removed). Fry prints the path and a removal command:
    ```
      GIT: worktree preserved at .fry-worktrees/my-rest-api
@@ -129,5 +129,5 @@ fry --resume --sprint 4
 
 - `--continue` / `--resume`: reads persisted strategy from `.fry/git-strategy.txt`. Ignores `--git-strategy` if set (uses persisted value).
 - `--dry-run`: strategy is resolved and displayed but no branch or worktree is created.
-- `--no-sanity-check`: skips triage confirmation (including git strategy display), but auto-resolution still applies.
+- `--no-project-overview`: skips triage confirmation (including git strategy display), but auto-resolution still applies.
 - `--full-prepare`: bypasses triage but respects `--git-strategy`. When strategy is `auto` and `--full-prepare` is used, defaults to `current`.

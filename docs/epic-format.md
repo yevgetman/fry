@@ -41,9 +41,9 @@ Placed before any `@sprint` block:
 | `@pre_iteration <cmd>` | Run before each agent invocation |
 | `@model <model>` | Override the agent model (alias: `@codex_model`) |
 | `@engine_flags <flags>` | Extra CLI flags for the agent (alias: `@codex_flags`) |
-| `@verification <file>` | Verification checks file (default: `.fry/verification.md`) |
-| `@max_heal_attempts <N>` | Auto-heal attempts after verification failure (default: effort-level default or 3). When explicitly set, overrides effort-level behavior and disables progress detection. Set to 0 to disable healing. |
-| `@max_fail_percent <N>` | Maximum percentage of checks that can fail while still passing the sprint (default: 20; 0 = strict, 100 = always pass). See [Verification](verification.md). |
+| `@verification <file>` | Sanity checks file (default: `.fry/verification.md`) |
+| `@max_heal_attempts <N>` | Auto-alignment attempts after sanity check failure (default: effort-level default or 3). When explicitly set, overrides effort-level behavior and disables progress detection. Set to 0 to disable alignment. |
+| `@max_fail_percent <N>` | Maximum percentage of checks that can fail while still passing the sprint (default: 20; 0 = strict, 100 = always pass). See [Sanity Checks](sanity-checks.md). |
 | `@compact_with_agent` | Use AI agent to summarize sprint progress (default: mechanical extraction) |
 | `@review_between_sprints` | Enable mid-build sprint review (default: disabled) |
 | `@review_engine <codex\|claude\|ollama>` | AI engine for reviewer session (default: same as `@engine`) |
@@ -77,7 +77,7 @@ Build:
 4. docker-compose.yml — PostgreSQL 16
 
 Verify:
-Verification checks are defined in .fry/verification.md (sprint 1).
+Sanity checks are defined in .fry/verification.md (sprint 1).
 - npm run build succeeds
 - npm test passes
 - Docker services start and become healthy
@@ -98,7 +98,7 @@ If stuck after 10 iterations: check import paths and tsconfig paths.
 | `@name <name>` | Yes | Sprint display name |
 | `@max_iterations <N>` | Yes | Maximum agent iterations (must be > 0) |
 | `@promise <TOKEN>` | Yes | Completion signal token |
-| `@max_heal_attempts <N>` | No | Override global heal attempts for this sprint |
+| `@max_heal_attempts <N>` | No | Override global alignment attempts for this sprint |
 | `@prompt` | Yes | Begins the multi-line prompt block |
 | `@end` | Yes | Ends the prompt block |
 
@@ -108,7 +108,7 @@ If stuck after 10 iterations: check import paths and tsconfig paths.
 2. **References** — "Read .fry/AGENTS.md, then plans/plan.md [relevant sections]."
 3. **Build list** — Numbered, specific: exact filenames, function signatures, SQL DDL
 4. **Constraints** — "CRITICAL: [thing that will go wrong if ignored]."
-5. **Verification** — Reference to `.fry/verification.md` checks, plus prose summary of key outcomes
+5. **Sanity checks** — Reference to `.fry/verification.md` checks, plus prose summary of key outcomes
 6. **Stuck hint** — "If stuck after N iterations: [most likely cause + fix]."
 7. **Promise** — "Output `===PROMISE: TOKEN===` when [exit criteria]."
 

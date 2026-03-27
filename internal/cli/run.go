@@ -58,7 +58,7 @@ var (
 	runResume         bool
 	runSprint         int
 	runContinue       bool
-	runNoSanityCheck  bool
+	runNoProjectOverview  bool
 	runFullPrepare    bool
 	runGitStrategy    string
 	runBranchName     string
@@ -198,7 +198,7 @@ var runCmd = &cobra.Command{
 					Engine:           prepareEngineName,
 					UserPrompt:       userPrompt,
 					UserPromptSource: promptSource,
-					SkipSanityCheck:  runNoSanityCheck || runDryRun,
+					SkipProjectOverview:  runNoProjectOverview || runDryRun,
 					Mode:             mode,
 					EffortLevel:      effortLevel,
 					EnableReview:     runReview,
@@ -209,7 +209,7 @@ var runCmd = &cobra.Command{
 				}
 			} else {
 				var err error
-				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, promptSource, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoSanityCheck || runDryRun, runTriageOnly)
+				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, promptSource, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoProjectOverview || runDryRun, runTriageOnly)
 				if err != nil {
 					return err
 				}
@@ -217,10 +217,10 @@ var runCmd = &cobra.Command{
 		}
 
 		if runTriageOnly {
-			// When --no-sanity-check or --dry-run skipped the interactive
+			// When --no-project-overview or --dry-run skipped the interactive
 			// confirmation, the summary was never shown — display it now.
 			// Otherwise ConfirmDecision already printed it.
-			if triageDecision != nil && (runNoSanityCheck || runDryRun) {
+			if triageDecision != nil && (runNoProjectOverview || runDryRun) {
 				triage.DisplayTriageSummary(cmd.OutOrStdout(), triageDecision)
 			}
 			return nil
@@ -244,22 +244,22 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		// --always-verify: force verification, healing, and audit regardless of effort/complexity.
+		// --always-verify: force sanity checks, alignment, and audit regardless of effort/complexity.
 		if runAlwaysVerify {
 			ep.AuditAfterSprint = true
 			if ep.MaxHealAttempts == 0 {
 				ep.MaxHealAttempts = config.DefaultMaxHealAttempts
 			}
 			ep.MaxHealAttemptsSet = true
-			// Generate verification checks if none exist (simple tasks skip this).
+			// Generate sanity checks if none exist (simple tasks skip this).
 			verifyPath := filepath.Join(projectPath, config.DefaultVerificationFile)
 			if _, statErr := os.Stat(verifyPath); os.IsNotExist(statErr) {
 				checks := triage.GenerateVerificationChecks(projectPath, ep.TotalSprints)
 				if len(checks) > 0 {
 					if writeErr := triage.WriteVerificationFile(verifyPath, checks); writeErr != nil {
-						frlog.Log("WARNING: --always-verify: could not write verification file: %v", writeErr)
+						frlog.Log("WARNING: --always-verify: could not write sanity checks file: %v", writeErr)
 					} else {
-						frlog.Log("  VERIFY: generated heuristic verification checks (--always-verify)")
+						frlog.Log("  VERIFY: generated heuristic sanity checks (--always-verify)")
 					}
 				} else {
 					frlog.Log("WARNING: --always-verify: no recognized build system detected; skipping heuristic check generation")
@@ -615,7 +615,7 @@ var runCmd = &cobra.Command{
 			}
 
 			// In resume mode, the first sprint skips iterations and goes straight
-			// to verification + healing with a boosted attempt budget.
+			// to sanity checks + alignment with a boosted attempt budget.
 			sprintStart := time.Now()
 			var result *sprint.SprintResult
 			if runResume && sprintNum == startSprint {
@@ -673,12 +673,12 @@ var runCmd = &cobra.Command{
 					Data: map[string]string{
 						"status":        result.Status,
 						"duration":      result.Duration.Round(time.Second).String(),
-						"heal_attempts": strconv.Itoa(result.HealAttempts),
+						"alignment_attempts": strconv.Itoa(result.HealAttempts),
 					},
 				})
 				if result.HealAttempts > 0 {
 					_ = observer.EmitEvent(projectPath, observer.Event{
-						Type:   observer.EventHealComplete,
+						Type:   observer.EventAlignmentComplete,
 						Sprint: spr.Number,
 						Data: map[string]string{
 							"attempts": strconv.Itoa(result.HealAttempts),
@@ -741,7 +741,7 @@ var runCmd = &cobra.Command{
 					Failures:     result.DeferredFailures,
 				})
 				writeDeferredFailuresArtifact(projectPath, allDeferredFailures)
-				frlog.Log("  WARNING: %d deferred verification failures (within %d%% threshold)",
+				frlog.Log("  WARNING: %d deferred sanity check failures (within %d%% threshold)",
 					len(result.DeferredFailures), ep.MaxFailPercent)
 			}
 
@@ -1063,9 +1063,9 @@ var runCmd = &cobra.Command{
 				}
 			}
 
-			// Re-run deferred verification checks to see if the build audit fixed them
+			// Re-run deferred sanity checks to see if the build audit fixed them
 			if len(allDeferredFailures) > 0 {
-				frlog.Log("  Re-running deferred verification checks after build audit...")
+				frlog.Log("  Re-running deferred sanity checks after build audit...")
 				for _, entry := range allDeferredFailures {
 					var deferredChecks []verify.Check
 					for _, f := range entry.Failures {
@@ -1355,14 +1355,16 @@ func init() {
 	runCmd.Flags().StringVar(&runMode, "mode", "", "Execution mode: software, planning, writing")
 	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
 	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
-	runCmd.Flags().BoolVar(&runResume, "resume", false, "Resume failed sprint: skip iterations, go straight to verification + healing with boosted attempts")
+	runCmd.Flags().BoolVar(&runResume, "resume", false, "Resume failed sprint: skip iterations, go straight to sanity checks + alignment with boosted attempts")
 	runCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
 	runCmd.Flags().BoolVar(&runContinue, "continue", false, "Use an LLM agent to analyze build state and resume from where it left off")
-	runCmd.Flags().BoolVar(&runNoSanityCheck, "no-sanity-check", false, "Skip interactive confirmations (triage classification and project summary)")
+	runCmd.Flags().BoolVar(&runNoProjectOverview, "no-project-overview", false, "Skip interactive confirmations (triage classification and project overview)")
+	runCmd.Flags().BoolVar(&runNoProjectOverview, "no-sanity-check", false, "Deprecated alias for --no-project-overview")
+	_ = runCmd.Flags().MarkHidden("no-sanity-check")
 	runCmd.Flags().BoolVar(&runFullPrepare, "full-prepare", false, "Skip triage and run full prepare pipeline when no epic exists")
 	runCmd.Flags().StringVar(&runGitStrategy, "git-strategy", "", "Git branching strategy: auto, current, branch, worktree (default: auto)")
 	runCmd.Flags().StringVar(&runBranchName, "branch-name", "", "Git branch name (auto-generated from epic name if not specified)")
-	runCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force verification, healing, and audit to run regardless of effort level or triage complexity")
+	runCmd.Flags().BoolVar(&runAlwaysVerify, "always-verify", false, "Force sanity checks, alignment, and audit to run regardless of effort level or triage complexity")
 	runCmd.Flags().BoolVar(&runSimpleContinue, "simple-continue", false, "Resume from first incomplete sprint without LLM analysis (lightweight alternative to --continue)")
 	runCmd.Flags().BoolVar(&runSARIF, "sarif", false, "Write build-audit.sarif in SARIF 2.1.0 format alongside build-audit.md")
 	runCmd.Flags().BoolVar(&runJSONReport, "json-report", false, "Write build-report.json with structured sprint results")
@@ -1535,10 +1537,10 @@ func printDryRunReport(w io.Writer, projectDir, epicPath string, ep *epic.Epic, 
 	if runContinue {
 		fmt.Fprintln(w, "Mode: continue (auto-detected resume point)")
 	} else if runResume {
-		fmt.Fprintln(w, "Mode: resume (skip iterations, verify + heal only)")
+		fmt.Fprintln(w, "Mode: resume (skip iterations, sanity checks + alignment only)")
 	}
 	fmt.Fprintf(w, "Sprints: %d-%d of %d\n", startSprint, endSprint, ep.TotalSprints)
-	fmt.Fprintln(w, "Verification checks:")
+	fmt.Fprintln(w, "Sanity checks:")
 	verificationPath := ep.VerificationFile
 	if !filepath.IsAbs(verificationPath) {
 		verificationPath = filepath.Join(projectDir, verificationPath)
@@ -1597,7 +1599,7 @@ func printBuildSummary(w io.Writer, results []sprint.SprintResult) {
 			fmt.Fprintf(w, "  %s Sprint %d: %s\n", color.YellowText("⚠"), result.Number, result.AuditWarning)
 		}
 		if len(result.DeferredFailures) > 0 {
-			fmt.Fprintf(w, "  %s Sprint %d: %d deferred verification failures\n", color.YellowText("⚠"), result.Number, len(result.DeferredFailures))
+			fmt.Fprintf(w, "  %s Sprint %d: %d deferred sanity check failures\n", color.YellowText("⚠"), result.Number, len(result.DeferredFailures))
 		}
 	}
 }
@@ -1646,7 +1648,7 @@ func writeDeferredFailuresArtifact(projectDir string, entries []deferredEntry) {
 		return
 	}
 	var b strings.Builder
-	b.WriteString("# Deferred Verification Failures\n\n")
+	b.WriteString("# Deferred Sanity Check Failures\n\n")
 	for _, entry := range entries {
 		b.WriteString(fmt.Sprintf("## Sprint %d: %s\n\n", entry.SprintNumber, entry.SprintName))
 		b.WriteString(verify.CollectDeferredSummary(entry.Failures))
@@ -1749,7 +1751,7 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 
 // runTriageGate classifies task complexity and takes the appropriate execution path.
 // For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it builds
-// a programmatic epic with auto-generated verification. For COMPLEX, it falls
+// a programmatic epic with auto-generated sanity checks. For COMPLEX, it falls
 // through to full prepare.
 func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt, promptSource string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool, triageOnly bool) (*triage.TriageDecision, error) {
 	// Read available inputs.
@@ -1875,11 +1877,11 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			return nil, fmt.Errorf("triage moderate path: %w", err)
 		}
 
-		// Generate heuristic verification checks.
+		// Generate heuristic sanity checks.
 		verifyPath := filepath.Join(projectPath, config.DefaultVerificationFile)
 		checks := triage.GenerateVerificationChecks(projectPath, ep.TotalSprints)
 		if err := triage.WriteVerificationFile(verifyPath, checks); err != nil {
-			frlog.Log("WARNING: triage moderate path: could not write verification file: %v", err)
+			frlog.Log("WARNING: triage moderate path: could not write sanity checks file: %v", err)
 		}
 
 		frlog.Log("  TRIAGE: built %d-sprint moderate epic programmatically (no LLM prepare)  effort=%s", ep.TotalSprints, resolvedEffort)
@@ -1901,7 +1903,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			Engine:           prepareEngineName,
 			UserPrompt:       userPrompt,
 			UserPromptSource: promptSource,
-			SkipSanityCheck:  runNoSanityCheck || runDryRun,
+			SkipProjectOverview:  runNoProjectOverview || runDryRun,
 			Mode:             mode,
 			EffortLevel:      complexEffort,
 			EnableReview:     runReview,

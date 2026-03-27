@@ -43,7 +43,7 @@ func TestBuildExperiencePrompt(t *testing.T) {
 		},
 		SprintResults: []SprintOutcome{
 			{Number: 1, Name: "Add auth", Status: "PASS", HealAttempts: 0},
-			{Number: 2, Name: "Add tests", Status: "PASS (healed)", HealAttempts: 2},
+			{Number: 2, Name: "Add tests", Status: "PASS (aligned)", HealAttempts: 2},
 			{Number: 3, Name: "Add docs", Status: "PASS", HealAttempts: 0},
 		},
 		BuildOutcome: "success",
@@ -59,7 +59,7 @@ func TestBuildExperiencePrompt(t *testing.T) {
 
 	// Sprint results present
 	assert.Contains(t, prompt, "Add auth")
-	assert.Contains(t, prompt, "PASS (healed)")
+	assert.Contains(t, prompt, "PASS (aligned)")
 	assert.Contains(t, prompt, "Add tests")
 
 	// Observations present

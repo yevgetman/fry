@@ -1,3 +1,6 @@
+// Package verify implements the sanity check system (post-sprint checks).
+// Despite the package name, the user-facing term is "sanity checks" — not "verification."
+// The package name is retained for import stability.
 package verify
 
 type CheckType int

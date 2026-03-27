@@ -252,7 +252,7 @@ from the original plan. Make MINIMAL, TARGETED changes.
 2. Do NOT change @sprint, @name, @max_iterations, @promise, or any global directives
 3. Do NOT add or remove sprints
 4. Do NOT rewrite prompts from scratch — make surgical edits to affected lines only
-5. Preserve the 7-part prompt structure (opener, references, build list, constraints, verification, stuck hint, promise)
+5. Preserve the 7-part prompt structure (opener, references, build list, constraints, sanity checks, stuck hint, promise)
 6. Changes should be proportional: if the deviation is about import paths, only change the import paths. Don't rewrite surrounding instructions.
 7. Sprints 1 through %d are COMPLETED — do NOT modify them under any circumstances
 8. Only modify sprints explicitly listed in the Affected Sprints section of the Deviation Spec

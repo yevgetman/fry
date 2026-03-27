@@ -26,21 +26,21 @@ func TestHealPromptStructure(t *testing.T) {
 		},
 	}
 
-	report := "Verification: 2/5 checks passed.\n\nFailed checks:\n- FAILED: File missing or empty: src/auth.ts"
-	expected := "# HEAL MODE — Sprint 3: Setup Auth\n\n" +
+	report := "Sanity checks: 2/5 passed.\n\nFailed checks:\n- FAILED: File missing or empty: src/auth.ts"
+	expected := "# ALIGNMENT MODE — Sprint 3: Setup Auth\n\n" +
 		"## What happened\n" +
-		"The sprint finished its work but FAILED independent verification checks.\n" +
+		"The sprint finished its work but FAILED independent sanity checks.\n" +
 		"Your job is to fix ONLY the issues described below. Do not start the sprint over.\n" +
 		"Do not refactor or reorganize. Make the minimum changes needed to pass the checks.\n\n" +
-		"## Failed verification checks\n\n" +
+		"## Failed sanity checks\n\n" +
 		report + "\n\n" +
 		"## Instructions\n" +
 		"1. Read .fry/sprint-progress.txt for context on what was built this sprint\n" +
 		"2. Read .fry/epic-progress.txt for context on what was built in prior sprints\n" +
 		"3. Read the failed checks above carefully\n" +
 		"4. Fix each failure — create missing files, fix build errors, correct config\n" +
-		"5. After fixing, do a final sanity check (e.g., run the build command if applicable)\n" +
-		"6. Append a brief note to .fry/sprint-progress.txt about what you fixed in this heal pass\n\n" +
+		"5. After fixing, do a final spot check (e.g., run the build command if applicable)\n" +
+		"6. Append a brief note to .fry/sprint-progress.txt about what you fixed in this alignment pass\n\n" +
 		"## Context files\n" +
 		"- Read .fry/sprint-progress.txt for current sprint iteration history\n" +
 		"- Read .fry/epic-progress.txt for prior sprint summaries\n" +
@@ -66,7 +66,7 @@ func TestHealPromptWithExecutiveAndUserDirective(t *testing.T) {
 		},
 	}
 
-	report := "Verification: 1/3 checks passed."
+	report := "Sanity checks: 1/3 passed."
 	result := buildHealPrompt(opts, report)
 
 	assert.Contains(t, result, "- Read plans/executive.md for executive context\n")
@@ -87,7 +87,7 @@ func TestHealPromptWritingMode(t *testing.T) {
 		},
 	}
 
-	report := "Verification: 0/2 checks passed."
+	report := "Sanity checks: 0/2 passed."
 	result := buildHealPrompt(opts, report)
 	assert.Contains(t, result, "create missing content files")
 	assert.NotContains(t, result, "fix build errors")
@@ -262,7 +262,7 @@ func TestHealLoopReloadsVerificationFile(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.True(t, result.Healed, "should pass after engine rewrites verification file")
-	assert.Equal(t, 1, fixEngine.calls, "should only need one heal attempt")
+	assert.Equal(t, 1, fixEngine.calls, "should only need one alignment attempt")
 }
 
 func TestHealLoopWithinThreshold(t *testing.T) {
@@ -356,7 +356,7 @@ func TestHealLoopZeroThreshold(t *testing.T) {
 	assert.False(t, result.WithinThreshold)
 }
 
-// --- Effort-level-aware healing tests ---
+// --- Effort-level-aware alignment tests ---
 
 func TestHealLoopLowEffortNoAttempts(t *testing.T) {
 	t.Parallel()
@@ -368,7 +368,7 @@ func TestHealLoopLowEffortNoAttempts(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
 
 	mockEngine := &stubEngine{name: "codex"}
-	// Low effort: 1/5 checks fail = 20%, within 20% threshold → pass with no heal attempts
+	// Low effort: 1/5 checks fail = 20%, within 20% threshold → pass with no alignment attempts
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir:  projectDir,
 		Sprint:      &epic.Sprint{Number: 1, Name: "Low effort"},
@@ -386,8 +386,8 @@ func TestHealLoopLowEffortNoAttempts(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.False(t, result.Healed)
-	assert.True(t, result.WithinThreshold, "should pass via threshold with no healing")
-	assert.Empty(t, mockEngine.prompts, "low effort should make zero heal attempts")
+	assert.True(t, result.WithinThreshold, "should pass via threshold with no alignment")
+	assert.Empty(t, mockEngine.prompts, "low effort should make zero alignment attempts")
 }
 
 func TestHealLoopLowEffortExceedsThreshold(t *testing.T) {
@@ -400,7 +400,7 @@ func TestHealLoopLowEffortExceedsThreshold(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
 
 	mockEngine := &stubEngine{name: "codex"}
-	// Low effort: 2/3 checks fail = 67%, exceeds 20% → fail with no heal attempts
+	// Low effort: 2/3 checks fail = 67%, exceeds 20% → fail with no alignment attempts
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir:  projectDir,
 		Sprint:      &epic.Sprint{Number: 1, Name: "Low fail"},
@@ -417,7 +417,7 @@ func TestHealLoopLowEffortExceedsThreshold(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.Healed)
 	assert.False(t, result.WithinThreshold, "should fail — too many failures")
-	assert.Empty(t, mockEngine.prompts, "low effort should make zero heal attempts even on failure")
+	assert.Empty(t, mockEngine.prompts, "low effort should make zero alignment attempts even on failure")
 }
 
 func TestHealLoopMediumEffort(t *testing.T) {
@@ -429,7 +429,7 @@ func TestHealLoopMediumEffort(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
 
 	mockEngine := &stubEngine{name: "codex"}
-	// Medium effort: should make exactly 3 heal attempts
+	// Medium effort: should make exactly 3 alignment attempts
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir:  projectDir,
 		Sprint:      &epic.Sprint{Number: 1, Name: "Medium"},
@@ -628,7 +628,7 @@ func TestHealLoopExplicitDirectiveOverridesEffort(t *testing.T) {
 
 	mockEngine := &stubEngine{name: "codex"}
 	// High effort defaults to 10 attempts with progress detection,
-	// but explicit @max_heal_attempts 5 overrides to 5 with no progress detection
+	// but explicit @max_heal_attempts 5 overrides to 5 with no progress detection (alignment)
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir: projectDir,
 		Sprint:     &epic.Sprint{Number: 1, Name: "Override"},
@@ -908,7 +908,7 @@ func (s *stubEngine) Name() string {
 	return s.name
 }
 
-// --- D3: Targeted healing unit tests ---
+// --- D3: Targeted alignment unit tests ---
 
 func TestHealGroupSeverity(t *testing.T) {
 	t.Parallel()
@@ -965,7 +965,7 @@ func TestHighestPriorityGroupAllResolved(t *testing.T) {
 	groups := groupFailedChecks(initially)
 	require.NotEmpty(t, groups, "precondition: initial failing check should produce non-empty groups")
 
-	// After healing, the same check now passes.
+	// After alignment, the same check now passes.
 	afterHeal := []verify.CheckResult{
 		{Check: verify.Check{Type: verify.CheckFile}, Passed: true},
 	}
@@ -976,7 +976,7 @@ func TestHighestPriorityGroupAllResolved(t *testing.T) {
 func TestTargetedHealSingleGroupResolves(t *testing.T) {
 	t.Parallel()
 
-	// progressEngine creates missing.txt on first call → single-group healing succeeds
+	// progressEngine creates missing.txt on first call → single-group alignment succeeds
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "")
 	sprintLog := filepath.Join(projectDir, config.BuildLogsDir, "sprint1.log")
@@ -998,8 +998,8 @@ func TestTargetedHealSingleGroupResolves(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Healed, "single-group healing should resolve on first attempt")
-	assert.Equal(t, 1, eng.calls, "should only need one heal attempt")
+	assert.True(t, result.Healed, "single-group alignment should resolve on first attempt")
+	assert.Equal(t, 1, eng.calls, "should only need one alignment attempt")
 }
 
 func TestTargetedHealFallbackAfterStall(t *testing.T) {

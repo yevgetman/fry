@@ -190,7 +190,7 @@ func collectActiveSprintState(projectDir string, sprintNum int, ep *epic.Epic) *
 			active.IterationCount++
 		case strings.Contains(base, "_audit"):
 			active.AuditCount++
-		case strings.Contains(base, "_heal"):
+		case strings.Contains(base, "_align"):
 			active.HealCount++
 		case strings.Contains(base, "_retry") || strings.Contains(base, "_resume"):
 			active.HasResumeLog = true

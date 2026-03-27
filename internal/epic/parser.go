@@ -94,9 +94,9 @@ func ParseEpic(path string) (*Epic, error) {
 				case "@codex_flags":
 					fmt.Fprintf(os.Stderr, "fry: warning: @codex_flags is deprecated; use @engine_flags instead\n")
 					ep.AgentFlags = value
-				case "@verification":
+				case "@verification": // path to sanity checks file (directive name retained for backward compat)
 					ep.VerificationFile = value
-				case "@max_heal_attempts":
+				case "@max_heal_attempts": // max alignment attempts per sprint (directive name retained for backward compat)
 					var parseErr error
 					ep.MaxHealAttempts, parseErr = parseIntDirective(directive, value)
 					if parseErr != nil {
@@ -240,12 +240,12 @@ func ParseEpic(path string) (*Epic, error) {
 	if ep.MaxHealAttempts == 0 && !maxHealAttemptsSet {
 		ep.MaxHealAttempts = config.DefaultMaxHealAttempts
 	}
-	// Max effort uses unlimited progress-based healing. If the LLM (or user)
+	// Max effort uses unlimited progress-based alignment. If the LLM (or user)
 	// explicitly set @max_heal_attempts, clear the flag so effectiveHealConfig
 	// falls through to the effort-level default path instead of treating it as
 	// a hard cap.
 	if ep.EffortLevel == EffortMax && maxHealAttemptsSet {
-		fmt.Fprintf(os.Stderr, "fry: warning: @max_heal_attempts ignored for max effort (uses unlimited progress-based healing)\n")
+		fmt.Fprintf(os.Stderr, "fry: warning: @max_heal_attempts ignored for max effort (uses unlimited progress-based alignment)\n")
 		ep.MaxHealAttempts = 0
 		ep.MaxHealAttemptsSet = false
 	}

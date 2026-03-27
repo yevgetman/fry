@@ -125,7 +125,7 @@ Asset contents are injected into the **prepare** phase only:
 | Step 0 (executive.md to plan.md) | Yes | Assets inform plan generation |
 | Step 1 (plan.md to AGENTS.md) | No | AGENTS.md derives from the plan, which already incorporates asset context |
 | Step 2 (plan.md to epic.md) | Yes | Assets inform sprint decomposition |
-| Step 3 (epic.md to verification.md) | No | Verification derives from plan + epic |
+| Step 3 (epic.md to verification.md) | No | Sanity checks derive from plan + epic |
 
 Once `epic.md` is generated, assets are no longer needed -- their context is baked into the plan and epic. During `fry run`, sprint prompts do **not** include asset contents.
 

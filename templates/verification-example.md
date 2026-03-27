@@ -1,6 +1,6 @@
-# Verification Checks — [Project Name] [Phase Name]
+# Sanity Checks — [Project Name] [Phase Name]
 #
-# This file defines machine-executable verification checks for each sprint.
+# This file defines machine-executable sanity checks for each sprint.
 # fry.sh runs these checks independently after the AI agent signals completion.
 #
 # This file can be generated automatically:
@@ -12,7 +12,7 @@
 # ─── PURPOSE ───
 #
 # The AI agent self-reports completion via a promise token. This file provides
-# independent verification — fry.sh runs these checks to confirm the agent's
+# independent sanity checks — fry.sh runs these checks to confirm the agent's
 # claim. Think of it as the proctor grading the exam, not the student.
 #
 # Checks also run when the agent exhausts max_iterations without outputting
@@ -77,7 +77,7 @@
 #
 # ─── FAILURE THRESHOLD ───
 #
-# By default, a sprint passes if 80% or more of checks succeed (after healing).
+# By default, a sprint passes if 80% or more of checks succeed (after alignment).
 # Configure via @max_fail_percent in the epic file (default: 20).
 # Failures below the threshold are deferred to the final build audit.
 # Set @max_fail_percent 0 for strict mode (all checks must pass).
@@ -89,9 +89,9 @@
 # - Results are reported as "N/M checks passed" per sprint
 # - If this file doesn't exist, fry.sh falls back to promise-only behavior
 # - The @verification directive in epic.md can override this filename
-# - When checks fail, fry.sh automatically attempts to heal by re-running
+# - When checks fail, fry.sh automatically attempts to align by re-running
 #   the AI agent with a targeted fix prompt (up to @max_heal_attempts times,
-#   default 3). Set @max_heal_attempts 0 in the epic to disable healing.
+#   default 3). Set @max_heal_attempts 0 in the epic to disable alignment.
 #
 # =============================================================================
 

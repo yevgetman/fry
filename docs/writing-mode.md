@@ -1,6 +1,6 @@
 # Writing Mode
 
-Writing mode re-orients Fry's sprint-based pipeline to produce human-language content -- books, guides, reports, documentation -- using the same orchestration, verification, and self-healing mechanisms as software and planning modes.
+Writing mode re-orients Fry's sprint-based pipeline to produce human-language content -- books, guides, reports, documentation -- using the same orchestration, sanity check, and alignment mechanisms as software and planning modes.
 
 Pass `--mode writing` to activate writing mode. The `--mode` flag replaces the boolean `--planning` flag (which is kept as a backwards-compatible alias for `--mode planning`).
 
@@ -64,13 +64,13 @@ your-project/
 | Naming convention | Standard source paths | `{seq}--{category}--{name}.md` | `{seq}--{name}.md` |
 | Final artifact | Working software | Individual documents | `manuscript.md` |
 | Audit criteria | Correctness, Security, Performance, Code Quality, Usability, Edge Cases | Domain-specific | Coherence, Accuracy, Completeness, Tone & Voice, Structure, Depth |
-| Heal instructions | Fix code, resolve build errors | Fix document gaps | Fix content gaps, improve prose |
+| Alignment instructions | Fix code, resolve build errors | Fix document gaps | Fix content gaps, improve prose |
 
-## Verification
+## Sanity Checks
 
-The same four [verification check primitives](verification.md) work for writing-mode deliverables. Typical checks focus on file existence, heading structure, and word count minimums rather than builds or test suites.
+The same four [sanity check primitives](sanity-checks.md) work for writing-mode deliverables. Typical checks focus on file existence, heading structure, and word count minimums rather than builds or test suites.
 
-### Example verification checks
+### Example sanity checks
 
 ```
 @sprint 1
@@ -105,9 +105,9 @@ In writing mode, the audit agent evaluates each sprint's output against six cont
 
 The severity levels follow the same blocking rules as software mode: CRITICAL and HIGH block the sprint; MODERATE is advisory. See [Sprint Audit](sprint-audit.md) for the full audit mechanics.
 
-## Self-Healing
+## Alignment
 
-The [self-healing](self-healing.md) loop works identically in writing mode. When verification checks fail, the heal agent receives content-oriented fix instructions that reference the writing context (e.g., "the chapter is missing required headings" or "word count is below the minimum") rather than code-oriented messages.
+The [alignment](alignment.md) loop works identically in writing mode. When sanity checks fail, the alignment agent receives content-oriented fix instructions that reference the writing context (e.g., "the chapter is missing required headings" or "word count is below the minimum") rather than code-oriented messages.
 
 ## Effort Levels
 
@@ -137,7 +137,7 @@ fry --mode planning
 ## See Also
 
 - [Planning Mode](planning-mode.md) -- non-code document generation (analyses, strategies, plans)
-- [Verification](verification.md) -- check primitives and outcome matrix
+- [Sanity Checks](sanity-checks.md) -- check primitives and outcome matrix
 - [Sprint Audit](sprint-audit.md) -- post-sprint semantic review
 - [Effort Levels](effort-levels.md) -- sprint count and rigor control
 - [Commands](commands.md) -- full CLI reference for `--mode` flag

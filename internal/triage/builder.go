@@ -27,9 +27,9 @@ type SimpleEpicOpts struct {
 // Effort matrix for simple tasks (sprint-level settings only;
 // build audit is controlled by the CLI layer):
 //
-//	Low:    standard model, 12 iter, no healing, no sprint audit
-//	Medium: standard model, 20 iter, no healing, 1 audit+fix pass
-//	High:   frontier model, 25 iter, no healing, 1 audit+fix pass
+//	Low:    standard model, 12 iter, no alignment, no sprint audit
+//	Medium: standard model, 20 iter, no alignment, 1 audit+fix pass
+//	High:   frontier model, 25 iter, no alignment, 1 audit+fix pass
 //
 // Empty or max effort defaults to low within this function.
 // The CLI layer caps max→high before calling this function.
@@ -92,9 +92,9 @@ type ModerateEpicOpts struct {
 // Effort matrix for moderate tasks (sprint-level settings only;
 // build audit is controlled by the CLI layer):
 //
-//	Low:    standard model, 12 iter, no healing, no sprint audit, 1 sprint
-//	Medium: standard model, 20 iter, 3 heal attempts, default audit (3 outer, 3 inner), 1-2 sprints
-//	High:   frontier model, 25 iter, 10 heal + progress detection, full audit (12 outer, 7 inner), 1-2 sprints
+//	Low:    standard model, 12 iter, no alignment, no sprint audit, 1 sprint
+//	Medium: standard model, 20 iter, 3 alignment attempts, default audit (3 outer, 3 inner), 1-2 sprints
+//	High:   frontier model, 25 iter, 10 alignment + progress detection, full audit (12 outer, 7 inner), 1-2 sprints
 //
 // Empty effort defaults to medium. Max effort is capped to high.
 func BuildModerateEpic(opts ModerateEpicOpts) (*epic.Epic, error) {
@@ -185,7 +185,7 @@ func BuildModerateEpic(opts ModerateEpicOpts) (*epic.Epic, error) {
 	return ep, nil
 }
 
-// GenerateVerificationChecks produces heuristic verification checks based on
+// GenerateVerificationChecks produces heuristic sanity checks based on
 // recognized build systems in the project directory. No LLM call.
 // Checks are duplicated for each sprint number up to sprintCount.
 func GenerateVerificationChecks(projectDir string, sprintCount int) []verify.Check {
@@ -235,7 +235,7 @@ func GenerateVerificationChecks(projectDir string, sprintCount int) []verify.Che
 	return checks
 }
 
-// WriteVerificationFile serializes verification checks to the @sprint/@check_cmd
+// WriteVerificationFile serializes sanity checks to the @sprint/@check_cmd
 // format readable by verify.ParseVerification. Skips file creation if checks is empty.
 func WriteVerificationFile(path string, checks []verify.Check) error {
 	if len(checks) == 0 {
@@ -243,7 +243,7 @@ func WriteVerificationFile(path string, checks []verify.Check) error {
 	}
 
 	var b strings.Builder
-	b.WriteString("# Auto-generated verification checks\n\n")
+	b.WriteString("# Auto-generated sanity checks\n\n")
 
 	currentSprint := 0
 	for _, c := range checks {
@@ -258,10 +258,10 @@ func WriteVerificationFile(path string, checks []verify.Check) error {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("write verification file: create dir: %w", err)
+		return fmt.Errorf("write sanity checks file: create dir: %w", err)
 	}
 	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
-		return fmt.Errorf("write verification file: %w", err)
+		return fmt.Errorf("write sanity checks file: %w", err)
 	}
 	return nil
 }

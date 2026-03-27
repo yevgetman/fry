@@ -21,7 +21,7 @@ All sprints complete successfully
   Git checkpoint ("build-audit")
        |
        v
-  Re-run deferred verification checks
+  Re-run deferred sanity checks
        |
        v
   Build summary generated (includes audit results)
@@ -43,12 +43,12 @@ The agent repeats this cycle up to 12 iterations (high effort) or 20 iterations 
 
 ## Deferred Failure Resolution
 
-When sprints pass with deferred verification failures (checks that failed below the `@max_fail_percent` threshold), those failures are accumulated in `.fry/deferred-failures.md` and included in the build audit prompt. The build audit agent is instructed to fix these deferred failures as part of its remediation pass.
+When sprints pass with deferred sanity check failures (checks that failed below the `@max_fail_percent` threshold), those failures are accumulated in `.fry/deferred-failures.md` and included in the build audit prompt. The build audit agent is instructed to fix these deferred failures as part of its remediation pass.
 
-After the build audit completes, Fry automatically re-runs the deferred verification checks to determine which ones the audit agent fixed. Results are logged:
+After the build audit completes, Fry automatically re-runs the deferred sanity checks to determine which ones the audit agent fixed. Results are logged:
 
 ```
-[2026-03-10 13:15:00]   Re-running deferred verification checks after build audit...
+[2026-03-10 13:15:00]   Re-running deferred sanity checks after build audit...
 [2026-03-10 13:15:01]   Sprint 3 deferred failures: ALL FIXED by build audit
 [2026-03-10 13:15:01]   Sprint 5 deferred failures: 1/2 still failing
 ```
@@ -218,7 +218,7 @@ build_audit_20060102_150405.log
 | Aspect | Sprint Audit | Build Audit |
 |---|---|---|
 | Scope | Single sprint's changes | Entire codebase |
-| Timing | After each sprint passes verification | After all sprints complete |
+| Timing | After each sprint passes sanity checks | After all sprints complete |
 | Agent design | Two agents (audit + fix) | Single agent (audit + fix in one session) |
 | Iterations | Up to `@max_audit_iterations` (default: 3) | Up to 12 (high) or 20 (max) |
 | Blocking | CRITICAL/HIGH block the sprint | Non-blocking (advisory) |

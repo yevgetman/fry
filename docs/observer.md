@@ -46,7 +46,7 @@ Events are cheap structured data appended to the JSONL stream. Each event has a 
 | `build_start` | Build initialization |
 | `sprint_start` | Before each sprint |
 | `sprint_complete` | After sprint finishes |
-| `heal_complete` | After heal loop |
+| `heal_complete` | After alignment loop |
 | `audit_complete` | After sprint audit |
 | `review_complete` | After sprint review |
 | `build_audit_done` | After build-level audit |
@@ -86,7 +86,7 @@ During wake-ups, the observer can emit structured directives in the `<directives
 
 | Type | Purpose |
 |---|---|
-| `WARN` | Flag a potential problem (e.g., stuck heal loop) |
+| `WARN` | Flag a potential problem (e.g., stuck alignment loop) |
 | `NOTE` | Record a neutral observation |
 | `SUGGEST` | Propose an adjustment |
 

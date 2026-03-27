@@ -225,10 +225,10 @@ func TestTierForSession(t *testing.T) {
 		{"continue-claude-high", "claude", "high", SessionContinue, TierStandard},
 		{"continue-claude-max", "claude", "max", SessionContinue, TierStandard},
 
-		// SanityCheck: Labor always
-		{"sanity-claude-low", "claude", "low", SessionSanityCheck, TierLabor},
-		{"sanity-claude-max", "claude", "max", SessionSanityCheck, TierLabor},
-		{"sanity-codex-high", "codex", "high", SessionSanityCheck, TierLabor},
+		// ProjectOverview: Labor always
+		{"overview-claude-low", "claude", "low", SessionProjectOverview, TierLabor},
+		{"overview-claude-max", "claude", "max", SessionProjectOverview, TierLabor},
+		{"overview-codex-high", "codex", "high", SessionProjectOverview, TierLabor},
 
 		// Prepare: Standard for low/medium/high, Frontier for max
 		{"prepare-claude-low", "claude", "low", SessionPrepare, TierStandard},
@@ -278,8 +278,8 @@ func TestResolveModelForSession(t *testing.T) {
 	assert.Equal(t, "gpt-5.4-mini", ResolveModelForSession("codex", "low", SessionAudit))
 	// Codex sprint at max effort → frontier → gpt-5.4
 	assert.Equal(t, "gpt-5.4", ResolveModelForSession("codex", "max", SessionSprint))
-	// Claude sanity check → labor → haiku
-	assert.Equal(t, "haiku", ResolveModelForSession("claude", "max", SessionSanityCheck))
+	// Claude project overview → labor → haiku
+	assert.Equal(t, "haiku", ResolveModelForSession("claude", "max", SessionProjectOverview))
 	// Codex compaction at max → mini → gpt-5.4-mini
 	assert.Equal(t, "gpt-5.4-mini", ResolveModelForSession("codex", "max", SessionCompaction))
 }

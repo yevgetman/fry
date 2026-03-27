@@ -24,7 +24,7 @@ your-project/
   .fry/                                  # Generated artifacts (gitignored)
     AGENTS.md                            #   Operational rules for the AI agent
     epic.md                              #   Sprint definitions
-    verification.md                      #   Independent verification checks
+    verification.md                      #   Independent sanity checks
     prompt.md                            #   Assembled per sprint
     user-prompt.txt                      #   Persisted user directive (optional)
     build-mode.txt                       #   Persisted build mode for --continue
@@ -35,7 +35,7 @@ your-project/
     replan-prompt.md                     #   Assembled replanner prompt (transient)
     audit-prompt.md                      #   Assembled sprint audit prompt (transient, cleaned up after audit)
     sprint-audit.txt                     #   Sprint audit findings (transient, cleaned up after audit)
-    deferred-failures.md                 #   Accumulated deferred verification failures across sprints
+    deferred-failures.md                 #   Accumulated deferred sanity check failures across sprints
     build-audit-prompt.md                #   Assembled build audit prompt (transient, cleaned up after audit)
     summary-prompt.md                    #   Assembled build summary prompt (transient, cleaned up after summary)
     continue-prompt.md                   #   Assembled prompt for --continue analysis agent (transient)
@@ -72,7 +72,7 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 |---|---|---|
 | `.fry/AGENTS.md` | Operational rules for the AI agent | `fry prepare` (Step 1) |
 | `.fry/epic.md` | Sprint definitions | `fry prepare` (Step 2) |
-| `.fry/verification.md` | Independent verification checks | `fry prepare` (Step 3) |
+| `.fry/verification.md` | Independent sanity checks | `fry prepare` (Step 3) |
 | `.fry/prompt.md` | Assembled per-sprint prompt | `fry run` at runtime |
 | `.fry/user-prompt.txt` | Persisted user directive | `fry run` or `fry prepare` |
 | `.fry/build-mode.txt` | Persisted build mode (software/planning/writing) for `--continue` | `fry run` at runtime |
@@ -83,7 +83,7 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `.fry/replan-prompt.md` | Assembled replanner prompt (transient) | `fry run` at runtime |
 | `.fry/audit-prompt.md` | Assembled sprint audit/fix prompt (transient) | `fry run` at runtime |
 | `.fry/sprint-audit.txt` | Sprint audit findings (transient) | `fry run` at runtime |
-| `.fry/deferred-failures.md` | Accumulated deferred verification failures across sprints | `fry run` at runtime |
+| `.fry/deferred-failures.md` | Accumulated deferred sanity check failures across sprints | `fry run` at runtime |
 | `.fry/build-audit-prompt.md` | Assembled build audit prompt (transient) | `fry run` at runtime |
 | `.fry/summary-prompt.md` | Assembled build summary prompt (transient) | `fry run` at runtime |
 | `.fry/continue-prompt.md` | Assembled prompt for `--continue` analysis agent (transient) | `fry run --continue` |

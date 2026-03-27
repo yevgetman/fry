@@ -46,7 +46,7 @@ Check that documentation in `docs/`, `README.md`, `README.LLM.md`, and `CLAUDE.m
 ### J. Build Experience
 Analyze the build journal at `assets/build-journal.json` (if present) for patterns across recent self-improvement builds. Look for:
 - Recurring failure patterns (same files, same test failures across builds)
-- Effort mismatches (items estimated as "low" that required healing, or "high" items that completed easily)
+- Effort mismatches (items estimated as "low" that required alignment, or "high" items that completed easily)
 - Categories that consistently fail or succeed
 - Fragile areas of the codebase that appear in multiple failed builds
 - Process improvements for the self-improvement pipeline itself

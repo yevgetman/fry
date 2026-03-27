@@ -169,7 +169,7 @@ func TestParseObserverResponse_AllSections(t *testing.T) {
 	response := `Here are my observations:
 
 <thoughts>
-The build is progressing well. Sprint 1 completed without heal loops.
+The build is progressing well. Sprint 1 completed without alignment loops.
 </thoughts>
 
 <scratchpad>
@@ -235,7 +235,7 @@ func TestParseObserverResponse_WithDirectives(t *testing.T) {
 	response := `<thoughts>Observations here.</thoughts>
 <scratchpad>Notes here.</scratchpad>
 <directives>
-WARN: heal loop on sprint 3 appears stuck
+WARN: alignment loop on sprint 3 appears stuck
 NOTE: audit found same issue in 3 sprints
 SUGGEST: add a pre-iteration check for dependency resolution
 </directives>`
@@ -244,7 +244,7 @@ SUGGEST: add a pre-iteration check for dependency resolution
 	require.NoError(t, err)
 	require.Len(t, obs.Directives, 3)
 	assert.Equal(t, "WARN", obs.Directives[0].Type)
-	assert.Contains(t, obs.Directives[0].Value, "heal loop")
+	assert.Contains(t, obs.Directives[0].Value, "alignment loop")
 	assert.Equal(t, "NOTE", obs.Directives[1].Type)
 	assert.Equal(t, "SUGGEST", obs.Directives[2].Type)
 }

@@ -50,7 +50,7 @@ The user prompt is:
 - **Used for bootstrapping** — when no plan files exist, it generates `plans/executive.md` with interactive review, then the normal pipeline takes over
 - **Injected as Layer 1.5** in the prompt hierarchy — between executive context ("why") and strategic plan ("what"). The agent sees it as a priority directive that applies to all sprints.
 - **Passed through to prepare** — when `fry run` auto-generates the epic, the user prompt is forwarded to `fry prepare`, influencing the generation of `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md`.
-- **Included in heal prompts** — when self-healing runs, the user directive is listed as context so heal passes respect it.
+- **Included in alignment prompts** — when alignment runs, the user directive is listed as context so alignment passes respect it.
 
 ## Prompt Hierarchy
 

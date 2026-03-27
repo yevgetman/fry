@@ -26,12 +26,12 @@ type SprintResult struct {
 	StartTime    time.Time           `json:"start_time"`
 	EndTime      time.Time           `json:"end_time"`
 	Passed       bool                `json:"passed"`
-	HealAttempts int                 `json:"heal_attempts"`
+	HealAttempts int                 `json:"alignment_attempts"`
 	Verification *VerificationResult `json:"verification,omitempty"`
 	TokenUsage   *metrics.TokenUsage `json:"token_usage,omitempty"`
 }
 
-// VerificationResult summarises the verification checks run for a sprint.
+// VerificationResult summarises the sanity checks run for a sprint.
 type VerificationResult struct {
 	TotalChecks  int           `json:"total_checks"`
 	PassedChecks int           `json:"passed_checks"`
@@ -39,7 +39,7 @@ type VerificationResult struct {
 	CheckResults []CheckResult `json:"check_results,omitempty"`
 }
 
-// CheckResult records the outcome of a single verification check.
+// CheckResult records the outcome of a single sanity check.
 type CheckResult struct {
 	Name    string `json:"name"`
 	Type    string `json:"type"`

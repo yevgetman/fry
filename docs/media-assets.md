@@ -89,7 +89,7 @@ The scanner automatically skips:
 
 The media manifest flows through Fry at two levels:
 
-1. **During `fry prepare`** -- the manifest is included in all four generation steps (plan, AGENTS.md, epic, verification). This means the AI can reference media assets when designing sprint prompts and verification checks.
+1. **During `fry prepare`** -- the manifest is included in all four generation steps (plan, AGENTS.md, epic, sanity checks). This means the AI can reference media assets when designing sprint prompts and sanity checks.
 
 2. **During `fry run`** -- the manifest is injected as prompt Layer 1.25 (between executive context and user directive) for every sprint. The agent sees the full list of available assets each iteration.
 

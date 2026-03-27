@@ -1,5 +1,11 @@
 package config
 
+// Terminology mapping:
+// - "Verification" (package verify) -> user-facing: "sanity checks"
+// - "Healing" (package heal) -> user-facing: "alignment"
+// - File paths (.fry/verification.md) and epic directives (@verification,
+//   @max_heal_attempts) retain their original names for backward compatibility.
+
 const (
 	FryDir                    = ".fry"
 	PlansDir                  = "plans"
@@ -14,7 +20,7 @@ const (
 	DefaultDockerReadyTimeout = 30
 	DefaultMaxDeviationScope  = 3
 	MaxDeviationScopeCap      = 10
-	DefaultVerificationFile   = ".fry/verification.md"
+	DefaultVerificationFile   = ".fry/verification.md" // DefaultVerificationFile is the path to the sanity checks definition file (historically named "verification.md").
 	PromptFile                = ".fry/prompt.md"
 	SprintProgressFile        = ".fry/sprint-progress.txt"
 	EpicProgressFile          = ".fry/epic-progress.txt"
@@ -31,17 +37,17 @@ const (
 	AgentsFile                = ".fry/AGENTS.md"
 	Version                   = "0.1.0"
 	AgentInvocationPrompt     = "Read and execute ALL instructions in .fry/prompt.md. Before starting, read .fry/sprint-progress.txt for context from previous iterations in this sprint, and .fry/epic-progress.txt for summaries of prior sprints. Also read plans/plan.md for strategic context on how this sprint fits the overall plan. If a media/ directory exists, it contains assets (images, PDFs, etc.) that may be referenced in the plan — use or copy them as instructed. After completing your work, append your progress to .fry/sprint-progress.txt."
-	HealInvocationPrompt      = "Read and execute ALL instructions in .fry/prompt.md. This is a HEAL pass — fix the verification failures described in the prompt."
+	HealInvocationPrompt      = "Read and execute ALL instructions in .fry/prompt.md. This is an ALIGNMENT pass — fix the sanity-check failures described in the prompt."
 	DefaultEffortLevel        = "" // auto-detect
 	ResumeHealMultiplier      = 2
 	ResumeMinHealAttempts     = 6
 
-	// Effort-level heal constants
-	HealAttemptsHigh       = 10
-	HealStuckThresholdHigh = 2
+	// Effort-level alignment constants
+	HealAttemptsHigh       = 10 // alignment attempts at high effort
+	HealStuckThresholdHigh = 2  // alignment stuck threshold at high effort
 	HealStuckThresholdMax  = 3
 	HealMinAttemptsMax     = 10 // min attempts before mid-loop threshold exit in max effort
-	HealSafetyCapMax       = 50 // hard safety cap for unlimited max-effort healing
+	HealSafetyCapMax       = 50 // alignment safety cap at max effort
 	MaxFailPercentMax      = 10 // stricter threshold for max effort
 
 	// Audit constants
