@@ -207,8 +207,9 @@ func UploadInBackground(apiURL, apiToken string, record BuildRecord, timeout tim
 
 		// Upload current record
 		if _, err := UploadExperience(ctx, apiURL, apiToken, record); err != nil {
-			// Cache for retry on next build
-			_ = CachePendingUpload(record)
+			if cacheErr := CachePendingUpload(record); cacheErr != nil {
+				fmt.Fprintf(os.Stderr, "fry: warning: failed to cache experience upload: %v\n", cacheErr)
+			}
 		}
 	}()
 

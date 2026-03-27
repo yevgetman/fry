@@ -3,6 +3,7 @@ package consciousness
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -298,6 +299,49 @@ func TestUploadInBackground_Success(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("UploadInBackground did not complete in time")
 	}
+}
+
+// TestUploadInBackground_DoubleFail verifies that when both UploadExperience
+// and CachePendingUpload fail, a warning is emitted to stderr.
+// Cannot use t.Parallel: t.Setenv (required to redirect HOME) is incompatible
+// with t.Parallel in Go's testing framework.
+func TestUploadInBackground_DoubleFail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"down"}`))
+	}))
+	defer server.Close()
+
+	// Redirect HOME to a non-writable directory so CachePendingUpload also fails
+	readOnlyDir := filepath.Join(t.TempDir(), "readonly")
+	require.NoError(t, os.MkdirAll(readOnlyDir, 0o555))
+	t.Cleanup(func() {
+		_ = os.Chmod(readOnlyDir, 0o755)
+	})
+	t.Setenv("HOME", readOnlyDir)
+
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stderr = w
+
+	record := BuildRecord{ID: "double-fail", Engine: "claude", Summary: "will double fail"}
+	done := UploadInBackground(server.URL, "token", record, 5*time.Second)
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("UploadInBackground did not complete in time")
+	}
+
+	// Restore stderr and read captured output
+	w.Close()
+	os.Stderr = oldStderr
+	captured, readErr := io.ReadAll(r)
+	require.NoError(t, readErr)
+
+	assert.Contains(t, string(captured), "failed to cache experience upload")
 }
 
 func TestUploadInBackground_FailureCaches(t *testing.T) {
