@@ -67,6 +67,20 @@ func TestFetchPipelineStats_Timeout(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestFetchPipelineStats_MalformedJSON(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not json at all`))
+	}))
+	defer server.Close()
+
+	_, err := FetchPipelineStats(context.Background(), server.URL)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode")
+}
+
 func TestFormatPipelineStats_NoReflection(t *testing.T) {
 	t.Parallel()
 
