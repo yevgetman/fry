@@ -278,7 +278,7 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		buildEngine, err := engine.NewEngine(engineName)
+		buildEngine, err := newResilientEngine(engineName)
 		if err != nil {
 			return err
 		}
@@ -553,7 +553,7 @@ var runCmd = &cobra.Command{
 		observerEnabled := !runNoObserver && !runDryRun && ep.EffortLevel != epic.EffortLow
 		var observerEngine engine.Engine
 		if observerEnabled {
-			observerEngine, err = engine.NewEngine(engineName)
+			observerEngine, err = newResilientEngine(engineName)
 			if err != nil {
 				frlog.Log("WARNING: observer: could not create engine: %v", err)
 				observerEnabled = false
@@ -838,7 +838,7 @@ var runCmd = &cobra.Command{
 					return err
 				}
 
-				compactEngine, err := engine.NewEngine(engineName)
+				compactEngine, err := newResilientEngine(engineName)
 				if err != nil {
 					return err
 				}
@@ -1084,7 +1084,7 @@ var runCmd = &cobra.Command{
 		// Run a single-pass build audit for triaged tasks that skipped the main
 		// build audit gate (e.g. simple+low, moderate+low where AuditAfterSprint=false).
 		if exitErr == nil && buildAuditResult == nil && !runNoAudit && triageDecision != nil {
-			auditEngine, auditEngErr := engine.NewEngine(engineName)
+			auditEngine, auditEngErr := newResilientEngine(engineName)
 			if auditEngErr != nil {
 				frlog.Log("WARNING: could not create engine for triage build audit: %v", auditEngErr)
 			} else {
@@ -1151,7 +1151,7 @@ var runCmd = &cobra.Command{
 		}
 
 		// Generate build summary document (after build audit so results can be included)
-		summaryEngine, err := engine.NewEngine(engineName)
+		summaryEngine, err := newResilientEngine(engineName)
 		if err != nil {
 			frlog.Log("WARNING: could not create engine for build summary: %v", err)
 		} else {
@@ -1208,7 +1208,7 @@ var runCmd = &cobra.Command{
 
 		// Synthesize observations into experience summary
 		if collector != nil && collector.ObservationCount() > 0 {
-			consciousnessEngine, cErr := engine.NewEngine(engineName)
+			consciousnessEngine, cErr := newResilientEngine(engineName)
 			if cErr != nil {
 				frlog.Log("WARNING: could not create engine for experience summary: %v", cErr)
 			} else {
@@ -1626,7 +1626,7 @@ func resolveAuditEngine(buildEngineName, auditEngineName string) (engine.Engine,
 	if strings.TrimSpace(auditEngineName) != "" {
 		name = auditEngineName
 	}
-	return engine.NewEngine(name)
+	return newResilientEngine(name)
 }
 
 func resolveReviewEngine(buildEngineName, reviewEngineName string) (engine.Engine, error) {
@@ -1634,7 +1634,21 @@ func resolveReviewEngine(buildEngineName, reviewEngineName string) (engine.Engin
 	if strings.TrimSpace(reviewEngineName) != "" {
 		name = reviewEngineName
 	}
-	return engine.NewEngine(name)
+	return newResilientEngine(name)
+}
+
+func newResilientEngine(name string) (engine.Engine, error) {
+	eng, err := engine.NewEngine(name)
+	if err != nil {
+		return nil, err
+	}
+	return engine.NewResilientEngine(eng,
+		engine.WithMaxRetries(config.RateLimitMaxRetries),
+		engine.WithBaseDelay(time.Duration(config.RateLimitBaseDelaySec)*time.Second),
+		engine.WithMaxDelay(time.Duration(config.RateLimitMaxDelaySec)*time.Second),
+		engine.WithJitter(config.RateLimitJitter),
+		engine.WithLogFunc(frlog.Log),
+	), nil
 }
 
 func startSprintCount(startSprint, endSprint int) int {
@@ -1771,7 +1785,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 	if err != nil {
 		return nil, fmt.Errorf("triage: resolve engine: %w", err)
 	}
-	eng, err := engine.NewEngine(engName)
+	eng, err := newResilientEngine(engName)
 	if err != nil {
 		return nil, fmt.Errorf("triage: create engine: %w", err)
 	}

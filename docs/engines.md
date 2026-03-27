@@ -174,3 +174,50 @@ type Engine interface {
 ```
 
 This means all Fry features (sprints, sanity checks, alignment, review) work identically regardless of which engine is selected.
+
+## Rate-Limit Resilience
+
+All engine calls are automatically wrapped with retry logic that detects rate-limit errors and retries with exponential backoff. This prevents long-running builds from failing due to transient API throttling.
+
+### How It Works
+
+When an engine call fails, Fry inspects the output and error for rate-limit indicators:
+
+- `rate_limit` / `rate limit`
+- HTTP `429` status code
+- `overloaded` errors
+- `too many requests`
+- `retry-after: N` (parsed; used as the backoff delay)
+
+If a rate limit is detected, Fry waits and retries. If the output contains a `retry-after` value, that delay is used. Otherwise, exponential backoff kicks in.
+
+### Backoff Sequence
+
+| Attempt | Base Delay | With Jitter (25%) |
+|---------|-----------|-------------------|
+| 1       | 10s       | 7.5s -- 12.5s     |
+| 2       | 20s       | 15s -- 25s        |
+| 3       | 40s       | 30s -- 50s        |
+| 4       | 80s       | 60s -- 100s       |
+| 5       | 120s      | 90s -- 120s (cap) |
+
+Total maximum wait before giving up: ~4.5 minutes.
+
+### Defaults
+
+| Parameter | Value |
+|-----------|-------|
+| Max retries | 5 |
+| Base delay | 10 seconds |
+| Max delay | 120 seconds |
+| Jitter | 25% |
+
+These are defined in `internal/config/config.go` as `RateLimitMaxRetries`, `RateLimitBaseDelaySec`, `RateLimitMaxDelaySec`, and `RateLimitJitter`.
+
+### Ollama
+
+Ollama runs models locally and does not hit HTTP rate limits. Rate-limit detection is skipped for the Ollama engine.
+
+### Implementation
+
+Rate-limit resilience is implemented as a `ResilientEngine` decorator that wraps any `Engine`. The decorator is transparent -- callers (sprint execution, alignment, audit, review, etc.) are unaware of the retry layer. See `internal/engine/resilient.go` and `internal/engine/ratelimit.go`.

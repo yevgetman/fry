@@ -137,4 +137,10 @@ const (
 	// It only permits POSTing anonymized experience summaries — no read access.
 	// This is intentionally compiled into the binary (same pattern as Sentry DSNs).
 	ConsciousnessWriteKey = "c23060cb24e9133926314894db50089b03791731cae04d7f8ba96dc01c5330d0"
+
+	// Rate-limit retry constants
+	RateLimitMaxRetries   = 5
+	RateLimitBaseDelaySec = 10   // seconds; converted to time.Duration by caller
+	RateLimitMaxDelaySec  = 120  // seconds
+	RateLimitJitter       = 0.25 // fraction of delay randomized [0.0, 1.0]
 )

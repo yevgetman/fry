@@ -74,6 +74,8 @@ type Engine interface {
 
 `RunOpts` includes model override, extra flags, working directory, output streams, and log file paths.
 
+All engines are wrapped in a `ResilientEngine` decorator at creation time, adding automatic retry with exponential backoff on rate-limit errors (429, overloaded, etc.). The decorator is transparent to callers. See [engines: Rate-Limit Resilience](engines.md#rate-limit-resilience).
+
 ## Data Flow
 
 ```

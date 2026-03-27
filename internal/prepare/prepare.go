@@ -71,7 +71,9 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 	engineFactory := opts.EngineFactory
 	if engineFactory == nil {
-		engineFactory = engine.NewEngine
+		engineFactory = engine.NewResilientEngineFactory(
+			engine.WithLogFunc(logf),
+		)
 	}
 	eng, err := engineFactory(engName)
 	if err != nil {

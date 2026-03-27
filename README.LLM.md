@@ -38,7 +38,9 @@ fry/
 │   │   ├── models.go            # Tier-based model selection, validation, session types
 │   │   ├── codex.go             # Codex CLI wrapper
 │   │   ├── claude.go            # Claude Code CLI wrapper
-│   │   └── ollama.go            # Ollama engine — shells out to `ollama run <model>`, reads prompt via stdin
+│   │   ├── ollama.go            # Ollama engine — shells out to `ollama run <model>`, reads prompt via stdin
+│   │   ├── resilient.go         # ResilientEngine decorator — retry with exponential backoff on rate limits
+│   │   └── ratelimit.go         # Rate-limit detection (regex patterns for 429, overloaded, etc.)
 │   ├── epic/
 │   │   ├── types.go             # Epic, Sprint, EffortLevel types
 │   │   ├── parser.go            # State-machine .md parser for epic files
@@ -216,6 +218,8 @@ type Engine interface {
 ```
 
 Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → default (claude for all modes and stages).
+
+All engines are wrapped in a `ResilientEngine` decorator (`internal/engine/resilient.go`) that auto-retries on rate-limit errors with exponential backoff (max 5 retries, 10s base delay, 120s cap, 25% jitter). Detection patterns are in `internal/engine/ratelimit.go`. Ollama is excluded from rate-limit detection.
 
 ### Effort Levels (`internal/epic/types.go`)
 

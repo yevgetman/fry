@@ -116,6 +116,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Build archiving** -- on successful full builds, `.fry/` and root-level outputs are auto-archived to `.fry-archive/`; run `fry clean` to archive manually
 - **Git strategy** -- `--git-strategy auto|current|branch|worktree` controls build isolation. Auto mode lets triage decide: complex tasks get an isolated worktree, simpler tasks get a new branch. Use `current` for the previous behavior (work on the current branch). See [Git Strategy](docs/git-strategy.md).
 - **Git checkpoints** -- automatic commits after each sprint
+- **Rate-limit resilience** -- automatic retry with exponential backoff when engines hit API rate limits (429, overloaded, etc.); see [Engines](docs/engines.md#rate-limit-resilience)
 - **Dynamic sprint review** -- optional mid-build review with replanning
 - **Observer** -- metacognitive layer that watches builds, notices patterns, and collects build experience records for the consciousness pipeline. Identity is compiled into the binary and read-only during builds. Non-fatal; effort-level gated. See [Observer](docs/observer.md).
 - **Experience upload** -- opt-in telemetry sends anonymized build experience summaries to the central consciousness API. Offline-resilient with local caching and automatic retry. Control via `--telemetry` / `--no-telemetry`, `FRY_TELEMETRY` env var, or `~/.fry/settings.json`. See [Consciousness](docs/consciousness.md).

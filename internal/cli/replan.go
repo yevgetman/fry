@@ -40,7 +40,7 @@ var replanCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			replanner, err = engine.NewEngine(engineName)
+			replanner, err = newResilientEngine(engineName)
 			if err != nil {
 				return err
 			}
