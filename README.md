@@ -186,6 +186,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry prepare` | Generate `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan |
 | `fry replan` | Replan an epic after a deviation |
 | `fry identity` | Print Fry's compiled-in identity (core + disposition) |
+| `fry reflect` | Trigger identity reflection from accumulated memories |
 | `fry status` | Show current build state without making an LLM call |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
 | `fry version` | Print fry version |

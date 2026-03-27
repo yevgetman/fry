@@ -584,8 +584,8 @@ fry identity --full  -- Print all identity layers including domains
 
 - **URL:** `https://fry-consciousness-api.yevgetman.workers.dev`
 - **Endpoints:** `GET /health`, `POST /ingest`, `POST /transmute`, `POST /reflect`
-- **Cron triggers:** Daily at 3:00 AM UTC (transmutation + reflection)
-- **Secrets:** `TURSO_URL`, `TURSO_AUTH_TOKEN`, `API_SECRET`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GITHUB_TOKEN` (future)
+- **Cron triggers:** Daily at 3:00 AM UTC (transmutation), weekly at 4:00 AM UTC Sundays (reflection)
+- **Secrets:** `TURSO_URL`, `TURSO_AUTH_TOKEN`, `API_SECRET`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GITHUB_TOKEN`
 - **Transmutation:** Claude Haiku atomizes summaries → OpenAI embeds → reinforcement detection → writes to Turso
 - **Reflection:** Reads all memories weighted by decay → Claude synthesizes updated identity → commits to GitHub via API
 - **Resilience:** If Fry binary cannot reach the Worker, experience summaries are cached locally at `~/.fry/experiences/pending/` and retried on next build
@@ -616,13 +616,15 @@ fry identity --full  -- Print all identity layers including domains
 - Reinforcement detection via cosine similarity
 - Telemetry opt-in, offline caching, rate limiting
 
-### Phase 3: Reflection — IN PROGRESS (Stage 6)
-- Extend Cloudflare Worker with Reflection cron
-- Identity format migration: `.md` → `.json`
-- Incremental identity synthesis from weighted memory corpus
-- Memory pruning (forgetting)
-- GitHub API integration for identity commits
-- GitHub Actions CI for automated binary builds
+### Phase 3: Reflection — COMPLETE (Stage 6)
+- Extend Cloudflare Worker with `/reflect` endpoint + weekly cron (Sundays 4 AM UTC)
+- Identity format migration: `.md` → `.json` (seed identity.json with JSON-first loading, .md fallback)
+- Incremental identity synthesis: Claude Sonnet computes updated identity from top-200 weighted memories
+- Memory pruning: decayed, unreinforced memories deleted during reflection
+- GitHub API integration: commits updated `identity.json` to repo via Contents API
+- GitHub Actions CI: builds binary on identity.json changes, uploads artifact
+- `fry reflect` CLI command: remote trigger for manual reflection
+- Schema migration: dropped `absorbed`/`ingested_by_reflection` columns, added `reflection_log` table
 
 ### Phase 4: Auto-Update + Distribution (Stage 8)
 - Binary auto-update on Fry invocation

@@ -93,7 +93,9 @@ fry/
 │   │   └── analyzer.go          # LLM analysis agent for resume decisions
 │   ├── summary/summary.go       # AI-generated build summary
 │   ├── consciousness/
-│   │   ├── identity.go          # Identity loading from go:embed: LoadCoreIdentity, LoadDisposition, LoadFullIdentity
+│   │   ├── identity.go          # Identity loading (JSON-first, .md fallback): LoadCoreIdentity, LoadDisposition, LoadFullIdentity
+│   │   ├── identity_json.go     # JSON identity types + loader + renderer: IdentityJSON, LoadIdentityJSON, RenderIdentityForPrompt
+│   │   ├── reflect.go           # Remote reflection trigger: TriggerReflection (POST to /reflect)
 │   │   ├── collector.go         # Build observation collection: Collector, BuildRecord, BuildObservation
 │   │   ├── summarize.go         # End-of-build experience synthesis: SummarizeExperience, SprintOutcome
 │   │   ├── upload.go            # HTTP upload to consciousness API: UploadExperience, CachePendingUpload, RetryPendingUploads
@@ -376,6 +378,7 @@ Key flags:
 | `IdentityCoreFile` | `identity/core.md` | Core identity (go:embed path) |
 | `IdentityDispositionFile` | `identity/disposition.md` | Disposition (go:embed path) |
 | `IdentityDomainsDir` | `identity/domains` | Domain files directory (go:embed path) |
+| `IdentityJSONFile` | `identity/identity.json` | JSON identity (go:embed, produced by Reflection) |
 | `ExperiencesDir` | `.fry/experiences` | Build experience records |
 | `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient, deleted after use) |
 | `SettingsFile` | `.fry/settings.json` | User settings (telemetry opt-in) |

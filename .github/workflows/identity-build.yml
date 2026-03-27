@@ -1,0 +1,35 @@
+name: Build on Identity Update
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'templates/identity/identity.json'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run tests
+        run: go test -race ./...
+
+      - name: Build binary
+        run: go build -o bin/fry ./cmd/fry
+
+      - name: Verify identity loads
+        run: ./bin/fry identity
+
+      - name: Verify full identity loads
+        run: ./bin/fry identity --full
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fry-linux-amd64
+          path: bin/fry

@@ -121,6 +121,7 @@ const (
 	IdentityCoreFile        = "identity/core.md"
 	IdentityDispositionFile = "identity/disposition.md"
 	IdentityDomainsDir      = "identity/domains"
+	IdentityJSONFile        = "identity/identity.json"
 
 	// Experience collection constants
 	ExperiencesDir          = ".fry/experiences"

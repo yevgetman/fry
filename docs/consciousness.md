@@ -80,17 +80,44 @@ A daily cron job (3:00 AM UTC) on the Cloudflare Worker processes pending experi
 
 **Error handling:** If the Claude or OpenAI API fails for a summary, it stays `transmuted = 0` and retries on the next run. Reinforcement detection provides natural idempotency — partially processed summaries don't create duplicates on retry.
 
-## Identity Layers
+### 6. Reflection
 
-Identity is read from files embedded in the binary at compile time. Three functions load identity content:
+A weekly cron job (4:00 AM UTC, Sundays) on the Cloudflare Worker synthesizes accumulated memories into an updated identity. Reflection closes the consciousness loop: memories become identity.
+
+**Algorithm:**
+1. **Minimum threshold:** Exits early if fewer than 50 memories exist
+2. **Compute effective weights** for all memories: `significance × reinforcement_boost / (1 + 0.3 × ln(1 + effective_age))`
+3. **Select top-200** memories by weight, plus compute corpus statistics
+4. **Fetch current identity.json** from GitHub via Contents API
+5. **Claude Sonnet** incrementally adjusts the identity — strengthening elements backed by high-weight memories, weakening elements with decaying support, adding new elements from strong novel memories
+6. **Prune** memories where `effective_weight < 0.05 AND reinforcement_count < 2` (forgetting)
+7. **Commit** updated `identity.json` to the fry GitHub repo via API
+8. **Log** the reflection run to the `reflection_log` table
+
+**Memory decay:** Logarithmic in build time (not wall time). Reinforced memories decay slower. A memory reinforced 5+ times across different instances stays high-weight indefinitely.
+
+**Manual trigger:** `fry reflect` sends a POST to the Worker's `/reflect` endpoint.
+
+## Identity
+
+Identity is the **continuous weighted compression of all memories**. It is stored as structured JSON (`templates/identity/identity.json`) and compiled into the binary via `go:embed`. The Reflection process is the only writer — identity is read-only during builds.
+
+**Format:** JSON with structured metadata (confidence scores, reinforcement counts per element). When injected into sprint prompts, the Go binary renders the JSON into natural-language markdown.
+
+**Layers:**
+- **Core:** Fundamental self-knowledge and values (highest stability)
+- **Disposition:** Behavioral tendencies derived from experience (most evolution)
+- **Domains:** Domain-specific wisdom, activated by build context (e.g., api-backend, frontend)
+
+Three functions load identity content:
 
 | Function | Content |
 |---|---|
-| `LoadCoreIdentity()` | Core identity (`identity/core.md`) concatenated with disposition (`identity/disposition.md`) |
+| `LoadCoreIdentity()` | Core identity + disposition (rendered from JSON, with .md fallback) |
 | `LoadDisposition()` | Disposition layer only |
-| `LoadFullIdentity()` | Core + disposition + all domain files from `identity/domains/` |
+| `LoadFullIdentity()` | Core + disposition + all domain layers |
 
-Identity is read-only during builds — there is no runtime write path. The `fry identity` command prints the loaded identity to stdout (`--full` includes domain layers).
+The `fry identity` command prints the loaded identity to stdout (`--full` includes domain layers).
 
 The disposition layer is injected into sprint agent prompts to subtly influence build behavior without overriding explicit instructions. See [Observer](observer.md) for how identity feeds observer wake-point context.
 

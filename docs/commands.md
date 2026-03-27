@@ -332,6 +332,30 @@ fry identity --full                  # Print all layers including domains
 
 ---
 
+## `fry reflect`
+
+Trigger the Reflection pipeline on the consciousness API server. Reflection reads all memories, computes effective weights, synthesizes an updated `identity.json` via Claude, prunes decayed memories, and commits the result to the GitHub repository.
+
+```
+fry reflect
+```
+
+### Behavior
+
+- Sends a POST request to the Worker's `/reflect` endpoint
+- Requires at least 50 memories in the store before reflection runs
+- If insufficient memories, prints the skip reason and exits successfully
+- On success, prints stats: memories considered, integrated, pruned, identity version, commit SHA, and changes
+- Times out after 120 seconds
+
+### Examples
+
+```bash
+fry reflect                          # Trigger reflection
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Description |

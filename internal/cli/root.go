@@ -72,6 +72,7 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(identityCmd)
+	rootCmd.AddCommand(reflectCmd)
 }
 
 func Execute() error {
