@@ -108,7 +108,7 @@ Everything flows from **identity** (needed first because the observer reads it) 
 
 ---
 
-## Stage 5: Memory Transmutation (Tier 3)
+## Stage 5: Memory Transmutation (Tier 3) — COMPLETE (2026-03-27)
 
 **What it delivers:** Raw experience summaries become atomized memories. The Memory Store fills with generalized wisdom from builds.
 
@@ -206,7 +206,7 @@ Everything flows from **identity** (needed first because the observer reads it) 
 | 2. Observation Collection | Structured build records | Stage 1 | no | none | **DONE** |
 | 3. Experience Summary | Per-build narratives | Stage 2 | no | none | **DONE** |
 | 4. Memory Store + Upload | Central pipeline | Stage 3 | **yes** | none (plain HTTP) | **DONE** |
-| 5. Transmutation | Atomized memories | Stage 4 | no (server-side) | canonical embedding API | |
+| 5. Transmutation | Atomized memories | Stage 4 | no (server-side) | canonical embedding API | **DONE** |
 | 6. Reflection | Loop closes | Stage 5 | no | none | |
 | 7. Embeddings | Quality improvement | Stage 6 | no | none | |
 | 8. Auto-Update | Distribution | independent | yes | none | |

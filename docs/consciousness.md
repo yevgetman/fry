@@ -61,6 +61,25 @@ Authentication uses a compiled-in write-only key (same pattern as Sentry DSNs). 
 
 **Instance identity:** Each upload includes an anonymized machine identifier — a SHA-256 hash of the hostname (first 16 hex chars). This is stable across builds on the same machine but not reversible to the hostname.
 
+### 5. Transmutation
+
+A daily cron job (3:00 AM UTC) on the Cloudflare Worker processes pending experience summaries into atomized memories. For each summary:
+
+1. **Claude API call** atomizes the summary into 3-8 discrete memories, each capturing one generalizable lesson
+2. **OpenAI embeddings** (`text-embedding-3-small`, 1536 dimensions) are generated for each memory in a single batch call
+3. **Reinforcement detection** compares each new memory's embedding against existing memories in the same category (cosine similarity ≥ 0.85). If similar: the existing memory's `reinforcement_count` increments instead of creating a duplicate
+4. **Write to Turso** `memories` table with category, significance/universality scores, and embedding
+
+**Memory categories:** `process`, `tooling`, `architecture`, `testing`, `review`, `audit`, `healing`, `planning`, `domain`
+
+**Scoring:** Each memory receives:
+- `significance` (0-1): importance for future builds
+- `universality` (0-1): how broadly applicable beyond the specific build
+
+**Batch limit:** 10 summaries per cron run. Remaining summaries are picked up on subsequent runs.
+
+**Error handling:** If the Claude or OpenAI API fails for a summary, it stays `transmuted = 0` and retries on the next run. Reinforcement detection provides natural idempotency — partially processed summaries don't create duplicates on retry.
+
 ## Identity Layers
 
 Identity is read from files embedded in the binary at compile time. Three functions load identity content:
