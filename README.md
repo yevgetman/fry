@@ -128,7 +128,7 @@ Fry improves itself. An automated pipeline runs daily, scanning the Fry source c
 
 The loop uses Fry's own features — planning mode for discovery, `--always-verify` for quality gates, worktrees for isolation, and the triage gate for complexity-appropriate effort levels. A bash orchestrator (`.self-improve/orchestrate.sh`) drives the cycle, and a macOS launchd agent triggers it daily.
 
-The canonical roadmap lives at `.self-improve/roadmap.json`. To run the loop manually:
+GitHub Issues is the source of truth for the project roadmap. To run the loop manually:
 
 ```bash
 fry-improve                  # full loop (planning if needed + build + PR)
