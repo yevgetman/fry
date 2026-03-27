@@ -281,14 +281,33 @@ fry status [flags]
 
 ### Behavior
 
-- If no `.fry/epic.md` exists, prints "No active build found" and exits cleanly.
-- Otherwise, prints a full build state report including sprint completion, environment readiness, deferred failures, and deviation count.
+- If a `.fry/epic.md` exists, prints a full build state report including sprint completion, environment readiness, deferred failures, and deviation count.
+- If no active build exists, scans for archived builds in `.fry-archive/` and worktree builds in `.fry-worktrees/`, displaying a summary of each (epic name, sprint progress, exit reason). Shows up to 10 most recent archives.
+- If a worktree strategy is persisted but the worktree directory is missing, prints a message suggesting `fry run --continue`.
 
 ### Examples
 
 ```bash
 fry status                              # Show build state for current directory
 fry status --project-dir /path/to/proj  # Show build state for a different project
+```
+
+### Example output (no active build)
+
+```
+No active build found in /path/to/project
+
+Archived Builds (3)
+  2026-03-27 07:46  My Epic      (2/3 sprints passed, software)
+  2026-03-26 17:26  Other Epic   (3/4 sprints passed, 1 failed, software)
+    Exit: sprint 4 audit failed
+  2026-03-25 10:09  Planning     (1/1 sprints passed, planning)
+
+Worktree Builds (1)
+  .fry-worktrees/website/  Website Epic  (0/6 sprints passed, 1 failed, software)
+    Exit: sprint 1 audit failed
+
+Run 'fry run' to start a new build.
 ```
 
 ---

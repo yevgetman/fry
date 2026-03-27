@@ -1,9 +1,13 @@
 package continuerun
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/yevgetman/fry/internal/archive"
 )
 
 func TestFormatReport_FreshBuild(t *testing.T) {
@@ -236,4 +240,121 @@ func TestFormatReport_Environment(t *testing.T) {
 	assert.Contains(t, report, "docker (MISSING)")
 	assert.Contains(t, report, "clean")
 	assert.Contains(t, report, "master")
+}
+
+func TestFormatInactiveSummary_NoHistory(t *testing.T) {
+	t.Parallel()
+
+	result := FormatInactiveSummary("/tmp/myproject", nil, nil)
+	assert.Contains(t, result, "No active build found in /tmp/myproject")
+	assert.Contains(t, result, "Run 'fry run' to start a build.")
+	assert.NotContains(t, result, "Archived")
+	assert.NotContains(t, result, "Worktree")
+}
+
+func TestFormatInactiveSummary_ArchivesOnly(t *testing.T) {
+	t.Parallel()
+
+	archives := []archive.BuildSummary{
+		{
+			Timestamp:      time.Date(2026, 3, 27, 7, 46, 0, 0, time.Local),
+			EpicName:       "My Epic",
+			TotalSprints:   3,
+			CompletedCount: 2,
+			Mode:           "software",
+		},
+		{
+			Timestamp:      time.Date(2026, 3, 26, 12, 0, 0, 0, time.Local),
+			EpicName:       "Other Epic",
+			TotalSprints:   4,
+			CompletedCount: 3,
+			FailedCount:    1,
+			Mode:           "software",
+			ExitReason:     "sprint 4 audit failed",
+		},
+	}
+
+	result := FormatInactiveSummary("/tmp/proj", archives, nil)
+	assert.Contains(t, result, "Archived Builds (2)")
+	assert.Contains(t, result, "2026-03-27 07:46")
+	assert.Contains(t, result, "My Epic")
+	assert.Contains(t, result, "2/3 sprints passed")
+	assert.Contains(t, result, "Other Epic")
+	assert.Contains(t, result, "3/4 sprints passed, 1 failed")
+	assert.Contains(t, result, "Exit: sprint 4 audit failed")
+	assert.Contains(t, result, "Run 'fry run' to start a new build.")
+	assert.NotContains(t, result, "Worktree")
+}
+
+func TestFormatInactiveSummary_WorktreesOnly(t *testing.T) {
+	t.Parallel()
+
+	worktrees := []archive.BuildSummary{
+		{
+			Dir:            ".fry-worktrees/my-slug",
+			EpicName:       "WT Epic",
+			TotalSprints:   6,
+			CompletedCount: 0,
+			FailedCount:    1,
+			Mode:           "software",
+			ExitReason:     "sprint 1 audit failed",
+		},
+	}
+
+	result := FormatInactiveSummary("/tmp/proj", nil, worktrees)
+	assert.Contains(t, result, "Worktree Builds (1)")
+	assert.Contains(t, result, ".fry-worktrees/my-slug/")
+	assert.Contains(t, result, "WT Epic")
+	assert.Contains(t, result, "0/6 sprints passed, 1 failed")
+	assert.Contains(t, result, "Exit: sprint 1 audit failed")
+	assert.NotContains(t, result, "Archived")
+}
+
+func TestFormatInactiveSummary_Both(t *testing.T) {
+	t.Parallel()
+
+	archives := []archive.BuildSummary{
+		{
+			Timestamp:      time.Date(2026, 3, 25, 10, 0, 0, 0, time.Local),
+			EpicName:       "Archived",
+			TotalSprints:   2,
+			CompletedCount: 2,
+			Mode:           "planning",
+		},
+	}
+	worktrees := []archive.BuildSummary{
+		{
+			Dir:          ".fry-worktrees/active",
+			EpicName:     "Active WT",
+			TotalSprints: 3,
+			Mode:         "software",
+		},
+	}
+
+	result := FormatInactiveSummary("/tmp/proj", archives, worktrees)
+	assert.Contains(t, result, "Archived Builds (1)")
+	assert.Contains(t, result, "Worktree Builds (1)")
+	assert.Contains(t, result, "Archived")
+	assert.Contains(t, result, "Active WT")
+}
+
+func TestFormatInactiveSummary_ManyArchives(t *testing.T) {
+	t.Parallel()
+
+	var archives []archive.BuildSummary
+	for i := 15; i >= 1; i-- {
+		archives = append(archives, archive.BuildSummary{
+			Timestamp:    time.Date(2026, 3, i, 12, 0, 0, 0, time.Local),
+			EpicName:     fmt.Sprintf("Build %d", i),
+			TotalSprints: 2,
+			Mode:         "software",
+		})
+	}
+
+	result := FormatInactiveSummary("/tmp/proj", archives, nil)
+	assert.Contains(t, result, "Archived Builds (15)")
+	assert.Contains(t, result, "Build 15") // newest
+	assert.Contains(t, result, "Build 6")  // 10th entry
+	assert.NotContains(t, result, "Build 5")
+	assert.Contains(t, result, "... and 5 more archived builds")
 }

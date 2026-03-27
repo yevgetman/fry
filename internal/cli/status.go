@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/yevgetman/fry/internal/archive"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/epic"
@@ -35,8 +36,10 @@ var statusCmd = &cobra.Command{
 					fmt.Fprintf(cmd.OutOrStdout(), "Build worktree not found at %s\n", buildDir)
 					fmt.Fprintf(cmd.OutOrStdout(), "The worktree may have been removed. Run 'fry run --continue' to resume.\n")
 				} else {
-					fmt.Fprintf(cmd.OutOrStdout(), "No active build found in %s\n", projectDir)
-					fmt.Fprintf(cmd.OutOrStdout(), "Run 'fry run' to start a build.\n")
+					archives, _ := archive.ScanArchives(projectDir)
+					worktrees, _ := git.ScanWorktreeBuilds(projectDir)
+					summary := continuerun.FormatInactiveSummary(projectDir, archives, worktrees)
+					fmt.Fprint(cmd.OutOrStdout(), summary)
 				}
 				return nil
 			}

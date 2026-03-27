@@ -3,6 +3,8 @@ package continuerun
 import (
 	"fmt"
 	"strings"
+
+	"github.com/yevgetman/fry/internal/archive"
 )
 
 // FormatReport renders a BuildState into a human-readable markdown report
@@ -144,4 +146,73 @@ func FormatReport(state *BuildState) string {
 	}
 
 	return b.String()
+}
+
+const maxDisplayedArchives = 10
+
+// FormatInactiveSummary renders a report for when no active build exists,
+// showing archived and worktree builds if any are found.
+func FormatInactiveSummary(projectDir string, archives, worktrees []archive.BuildSummary) string {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("No active build found in %s\n", projectDir))
+
+	if len(archives) == 0 && len(worktrees) == 0 {
+		b.WriteString("Run 'fry run' to start a build.\n")
+		return b.String()
+	}
+
+	if len(archives) > 0 {
+		b.WriteString(fmt.Sprintf("\nArchived Builds (%d)\n", len(archives)))
+		limit := len(archives)
+		if limit > maxDisplayedArchives {
+			limit = maxDisplayedArchives
+		}
+		for _, a := range archives[:limit] {
+			b.WriteString(formatBuildLine(a))
+			if a.ExitReason != "" {
+				b.WriteString(fmt.Sprintf("    Exit: %s\n", a.ExitReason))
+			}
+		}
+		if len(archives) > maxDisplayedArchives {
+			b.WriteString(fmt.Sprintf("  ... and %d more archived builds\n", len(archives)-maxDisplayedArchives))
+		}
+	}
+
+	if len(worktrees) > 0 {
+		b.WriteString(fmt.Sprintf("\nWorktree Builds (%d)\n", len(worktrees)))
+		for _, w := range worktrees {
+			b.WriteString(fmt.Sprintf("  %s/  %s  %s", w.Dir, w.EpicName, formatBuildStatus(w)))
+			if w.ExitReason != "" {
+				b.WriteString(fmt.Sprintf("    Exit: %s\n", w.ExitReason))
+			}
+		}
+	}
+
+	b.WriteString("\nRun 'fry run' to start a new build.\n")
+	return b.String()
+}
+
+func formatBuildLine(s archive.BuildSummary) string {
+	ts := "(unknown date)  "
+	if !s.Timestamp.IsZero() {
+		ts = s.Timestamp.Format("2006-01-02 15:04")
+	}
+	return fmt.Sprintf("  %s  %s  %s", ts, s.EpicName, formatBuildStatus(s))
+}
+
+func formatBuildStatus(s archive.BuildSummary) string {
+	mode := s.Mode
+	if mode == "" {
+		mode = "software"
+	}
+
+	var parts []string
+	parts = append(parts, fmt.Sprintf("%d/%d sprints passed", s.CompletedCount, s.TotalSprints))
+	if s.FailedCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed", s.FailedCount))
+	}
+	parts = append(parts, mode)
+
+	return fmt.Sprintf("(%s)\n", strings.Join(parts, ", "))
 }

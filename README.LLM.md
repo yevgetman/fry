@@ -78,10 +78,13 @@ fry/
 │   ├── git/
 │   │   ├── git.go               # Git init, checkpoints (commit format: "EpicName — SprintName: Sprint N label [automated]"), diff capture
 │   │   ├── types.go             # GitStrategy type, StrategySetup, ParseGitStrategy
-│   │   └── strategy.go          # SetupStrategy, ResolveAutoStrategy, GenerateBranchName, worktree/branch helpers
+│   │   ├── strategy.go          # SetupStrategy, ResolveAutoStrategy, GenerateBranchName, worktree/branch helpers
+│   │   └── scan.go              # ScanWorktreeBuilds (scan .fry-worktrees/ for builds)
 │   ├── docker/docker.go         # Docker Compose lifecycle, health checks
 │   ├── preflight/preflight.go   # Pre-build tool/command validation
-│   ├── archive/archive.go       # Build archiving (.fry/ → .fry-archive/)
+│   ├── archive/
+│   │   ├── archive.go           # Build archiving (.fry/ → .fry-archive/)
+│   │   └── scan.go              # BuildSummary type, ScanArchives, ScanBuildDir (lightweight build scanning)
 │   ├── lock/lock.go             # File-based build concurrency lock + IsLocked check
 │   ├── log/log.go               # Verbose logging, agent banners
 │   ├── media/media.go           # Binary asset scanning (images, PDFs, fonts)
