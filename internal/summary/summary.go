@@ -101,8 +101,11 @@ func GenerateBuildSummary(ctx context.Context, opts SummaryOpts) error {
 	// Verify the summary was actually written
 	summaryPath := filepath.Join(opts.ProjectDir, config.SummaryFile)
 	if _, err := os.Stat(summaryPath); err != nil {
-		frylog.Log("  SUMMARY: WARNING — agent did not produce %s", config.SummaryFile)
-		return nil
+		if os.IsNotExist(err) {
+			frylog.Log("  SUMMARY: WARNING — agent did not produce %s", config.SummaryFile)
+			return nil
+		}
+		return fmt.Errorf("check summary file: %w", err)
 	}
 
 	frylog.Log("  SUMMARY: build summary written to %s", config.SummaryFile)
