@@ -504,7 +504,7 @@ run_planning_phase() {
         --user-prompt-file "$PLANNING_PROMPT" \
         --engine "$PLANNING_ENGINE" \
         $planning_model_flag \
-        --no-sanity-check \
+        --no-project-overview \
         --no-audit \
         --full-prepare \
         --git-strategy current \
@@ -722,14 +722,14 @@ run_build_phase() {
         --engine "$BUILD_ENGINE" \
         --always-verify \
         --full-prepare \
-        --no-sanity-check \
+        --no-project-overview \
         --git-strategy current \
         --project-dir "$WORKTREE_DIR" 2>&1 | tee -a "$LOG_FILE"; then
         log "WARNING: Fry build run failed"
         build_success=false
     fi
 
-    # Post-build verification with healing loop
+    # Post-build sanity checks with alignment loop
     if [ "$build_success" = true ]; then
         log "Running post-build verification (make test && make build)..."
         local test_output
@@ -738,7 +738,7 @@ run_build_phase() {
         if (cd "$WORKTREE_DIR" && make test && make build) >/dev/null 2>&1; then
             log "Post-build verification passed"
         else
-            log "Post-build verification failed — entering heal loop"
+            log "Post-build verification failed — entering alignment loop"
             local heal_attempt=0
             local healed=false
 
@@ -795,7 +795,7 @@ HEALPROMPT
             final_heal_rounds="$heal_attempt"
 
             if [ "$healed" != true ]; then
-                log "WARNING: Post-build healing exhausted ($MAX_POST_BUILD_HEALS attempts)"
+                log "WARNING: Post-build alignment exhausted ($MAX_POST_BUILD_HEALS attempts)"
                 build_success=false
             fi
         fi

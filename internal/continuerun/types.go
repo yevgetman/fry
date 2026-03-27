@@ -67,7 +67,7 @@ type BuildState struct {
 type CompletedSprint struct {
 	Number int
 	Name   string
-	Status string // "PASS", "PASS (healed)", etc.
+	Status string // "PASS", "PASS (aligned)", etc.
 }
 
 // FailedSprint records one sprint that was attempted but did not pass.

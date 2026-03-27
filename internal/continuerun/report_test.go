@@ -36,7 +36,7 @@ func TestFormatReport_PartialBuild(t *testing.T) {
 		EffortLevel:  "max",
 		CompletedSprints: []CompletedSprint{
 			{Number: 1, Name: "Setup", Status: "PASS"},
-			{Number: 2, Name: "Auth", Status: "PASS (healed)"},
+			{Number: 2, Name: "Auth", Status: "PASS (aligned)"},
 		},
 		HighestCompleted: 2,
 		ActiveSprints: []ActiveSprintState{
@@ -56,7 +56,7 @@ func TestFormatReport_PartialBuild(t *testing.T) {
 	report := FormatReport(state)
 	assert.Contains(t, report, "Sprint 1: Setup")
 	assert.Contains(t, report, "Sprint 2: Auth")
-	assert.Contains(t, report, "PASS (healed)")
+	assert.Contains(t, report, "PASS (aligned)")
 	assert.Contains(t, report, "Next Sprint: 3")
 	assert.Contains(t, report, "Partial Work Detected (1 incomplete sprint(s))")
 	assert.Contains(t, report, "### Sprint 3: API")
@@ -119,8 +119,8 @@ func TestFormatReport_ExitReason(t *testing.T) {
 		Engine:       "claude",
 		EffortLevel:  "max",
 		CompletedSprints: []CompletedSprint{
-			{Number: 1, Name: "Setup", Status: "PASS (healed)"},
-			{Number: 2, Name: "Models", Status: "PASS (healed)"},
+			{Number: 1, Name: "Setup", Status: "PASS (aligned)"},
+			{Number: 2, Name: "Models", Status: "PASS (aligned)"},
 		},
 		HighestCompleted: 2,
 		ExitReason:       "After sprint 2: sprint 6 is outside deviation scope (max: sprint 5)",
@@ -180,7 +180,7 @@ func TestFormatReport_MultipleActiveSprints(t *testing.T) {
 		CompletedSprints: []CompletedSprint{
 			{Number: 2, Name: "Services", Status: "PASS"},
 			{Number: 3, Name: "Projections", Status: "PASS"},
-			{Number: 4, Name: "Pages", Status: "PASS (healed)"},
+			{Number: 4, Name: "Pages", Status: "PASS (aligned)"},
 			{Number: 5, Name: "Auth", Status: "PASS"},
 		},
 		HighestCompleted: 5,

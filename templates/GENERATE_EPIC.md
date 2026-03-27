@@ -56,14 +56,14 @@ Follow this layering order (adapt to the specific project):
 | 2-3 | Data foundation | Schema, migrations, seeds, domain types, interfaces |
 | 4-6 | Implementation | Business logic, data access, engines/services |
 | 7-8 | Integration | API handlers, routes, service wiring |
-| N (always last) | Verification | DI wiring, integration tests, E2E smoke tests |
+| N (always last) | Final Checks | DI wiring, integration tests, E2E smoke tests |
 
 ### 2. Right-sizes each sprint
 
 Each sprint should:
 - Produce 5-20 files
 - Be completable in 10-35 iterations
-- Be independently verifiable (you can write a concrete checklist)
+- Be independently checkable (you can write a concrete checklist)
 - Have clear dependencies on earlier sprints (never on later ones)
 
 If a layer from the plan would produce 30+ files, split it into two sprints.
@@ -110,10 +110,10 @@ DO UPDATE, metadata merge via JSONB || operator."
 These come from patterns you observe in the plan — technology choices,
 naming conventions, security requirements, things the agent will get wrong.
 
-**VERIFICATION**: Reference .fry/verification.md for the concrete, machine-executable
+**SANITY CHECKS**: Reference .fry/verification.md for the concrete, machine-executable
 checks that fry.sh runs independently. The sprint prompt should describe what
 success looks like in prose and point to .fry/verification.md as the source of truth:
-- "Verification checks are defined in .fry/verification.md (sprint N)."
+- "Sanity checks are defined in .fry/verification.md (sprint N)."
 - Include a brief bulleted summary of key outcomes for the agent's guidance.
 NOT vague items like "code is clean" or "everything works."
 
@@ -126,7 +126,7 @@ Think about what typically goes wrong at this layer:
 - Wiring/DI: interface type mismatches
 
 **PROMISE**: "Output ===PROMISE: SPRINTN_DONE=== when [exit criteria]."
-The exit criteria should match the verification checklist.
+The exit criteria should match the sanity check list.
 
 ### 4. Configures global directives
 
@@ -139,7 +139,7 @@ Based on the plan, determine:
 - `@pre_sprint`: Dependency management command (go mod tidy, npm install, pip install, etc.)
 - `@model`: Override the AI agent model (optional, alias: `@codex_model`)
 - `@engine_flags`: Extra flags for the agent CLI (optional, alias: `@codex_flags`)
-- `@max_heal_attempts`: Override heal attempts per sprint (optional; do NOT set for `@effort max` — max effort uses unlimited progress-based healing automatically)
+- `@max_heal_attempts`: Override alignment attempts per sprint (optional; do NOT set for `@effort max` — max effort uses unlimited progress-based alignment automatically)
 - `@max_fail_percent`: Maximum percentage of checks that can fail and still pass (optional, default: 20; 0 = strict)
 - `@compact_with_agent`: Use AI agent to summarize sprint progress (optional, default: mechanical extraction)
 - `@review_between_sprints`: Enable mid-build sprint review between sprints (optional, default: disabled)
@@ -167,7 +167,7 @@ title comment) and be directly saveable as a file.
 - [ ] Every sprint has @name, @max_iterations, @promise, @prompt
 - [ ] Every prompt follows the 7-part structure
 - [ ] Build lists use exact filenames and signatures, not vague descriptions
-- [ ] Verification sections reference .fry/verification.md for concrete checks
+- [ ] Sanity check sections reference .fry/verification.md for concrete checks
 - [ ] Dependencies only flow forward (Sprint 4 never depends on Sprint 5)
 - [ ] Sprint 1 is scaffolding, final sprint is integration/E2E
 - [ ] Global directives match the project's technology stack and chosen engine

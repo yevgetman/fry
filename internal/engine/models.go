@@ -40,7 +40,7 @@ const (
 	SessionBuildSummary SessionType = "build-summary"
 	SessionCompaction   SessionType = "compaction"
 	SessionContinue     SessionType = "continue"
-	SessionSanityCheck  SessionType = "sanity-check"
+	SessionProjectOverview  SessionType = "project-overview"
 	SessionPrepare      SessionType = "prepare"
 	SessionTriage       SessionType = "triage"
 	SessionObserver           SessionType = "observer"
@@ -206,7 +206,7 @@ func TierForSession(engineName, effort string, session SessionType) ModelTier {
 		}
 		return TierMini
 
-	case SessionSanityCheck:
+	case SessionProjectOverview:
 		return TierLabor
 
 	case SessionPrepare:

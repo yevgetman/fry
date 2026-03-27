@@ -1,6 +1,6 @@
-# Verification
+# Sanity Checks
 
-Fry supports independent verification of each sprint's deliverables. When a `.fry/verification.md` file is present, Fry runs machine-executable checks after the agent signals completion.
+Fry supports independent sanity checks of each sprint's deliverables. When a `.fry/verification.md` file is present, Fry runs machine-executable checks after the agent signals completion.
 
 ## Check Primitives
 
@@ -12,7 +12,7 @@ Fry supports independent verification of each sprint's deliverables. When a `.fr
 | `@check_cmd_output <cmd> \| <pattern>` | `@check_cmd_output curl -s /health \| "ok"` | stdout matches pattern |
 | `@check_test <command>` | `@check_test go test ./...` | Command exits 0 **and** zero test failures detected |
 
-## Verification File Format
+## Sanity Check File Format
 
 `.fry/verification.md` uses the `@sprint N` block structure:
 
@@ -27,21 +27,21 @@ Fry supports independent verification of each sprint's deliverables. When a `.fr
 @check_cmd go test ./...
 ```
 
-## Custom Verification File
+## Custom Sanity Check File
 
-The `@verification` directive in the epic file can override the default path:
+The `@verification` directive (backward-compatible name) in the epic file can override the default path:
 
 ```
 @verification .fry/checks-phase2.md
 ```
 
-## Verification Primitive Guidelines
+## Sanity Check Primitive Guidelines
 
 The five primitives are designed for **basic programmatic checks**, not semantic code analysis:
 
 - **`@check_file`** — use for confirming expected files were created
 - **`@check_cmd`** — use for build commands, lint passes, or any command where exit code is the only signal
-- **`@check_test`** — use for running test suites; parses pass/fail counts from `go test`, `pytest`, and `jest` output; reports pass count, fail count, and skip count in heal prompts; fails if any test fails **or** the command exits non-zero; use this instead of `@check_cmd` when you need test-count diagnostics in the heal prompt
+- **`@check_test`** — use for running test suites; parses pass/fail counts from `go test`, `pytest`, and `jest` output; reports pass count, fail count, and skip count in alignment prompts; fails if any test fails **or** the command exits non-zero; use this instead of `@check_cmd` when you need test-count diagnostics in the alignment prompt
 - **`@check_cmd_output`** — use for checking version strings, simple counts, health endpoints
 - **`@check_file_contains`** — use for **structural** patterns: config keys, import statements, table names, module declarations. **Do not** use complex regex patterns to verify code correctness semantically — that's what the [Sprint Audit](sprint-audit.md) and [Build Audit](build-audit.md) are for.
 
@@ -58,11 +58,11 @@ The five primitives are designed for **basic programmatic checks**, not semantic
 
 > **Note:** Go pass/fail counts require `go test -v`. Without `-v`, the `--- PASS:` and `--- FAIL:` per-test lines are suppressed and counts report as 0. The check still passes or fails correctly based on exit code — only the diagnostic counts are affected.
 
-When a test fails, the heal prompt includes the pass/fail/skip counts and truncated output, giving the healing agent a precise diagnosis.
+When a test fails, the alignment prompt includes the pass/fail/skip counts and truncated output, giving the alignment agent a precise diagnosis.
 
 ## Failure Threshold
 
-By default, up to **20%** of verification checks can fail (after self-healing) without blocking the sprint. At `max` effort, this threshold is stricter at **10%**. This prevents a single minor check failure from blocking an otherwise complete sprint.
+By default, up to **20%** of sanity checks can fail (after alignment) without blocking the sprint. At `max` effort, this threshold is stricter at **10%**. This prevents a single minor check failure from blocking an otherwise complete sprint.
 
 Configure with the `@max_fail_percent` directive in the epic file (overrides effort-level default):
 
@@ -70,7 +70,7 @@ Configure with the `@max_fail_percent` directive in the epic file (overrides eff
 @max_fail_percent 20    # Default for low/medium/high effort
 @max_fail_percent 10    # Default for max effort
 @max_fail_percent 0     # Strict mode: all checks must pass
-@max_fail_percent 100   # Never fail on verification
+@max_fail_percent 100   # Never fail on sanity checks
 ```
 
 When checks fail below the threshold:
@@ -88,17 +88,17 @@ When checks fail above the threshold, the sprint fails and the build stops (same
 | Promise Token | Checks Exist | Checks Pass | Result |
 |---|---|---|---|
 | Found | Yes | All pass | **PASS** |
-| Found | Yes | Some fail, within threshold | **PASS (deferred failures)** after heal loop |
-| Found | Yes | Some fail, exceeds threshold | **FAIL** after heal loop exhausted |
+| Found | Yes | Some fail, within threshold | **PASS (deferred failures)** after alignment loop |
+| Found | Yes | Some fail, exceeds threshold | **FAIL** after alignment loop exhausted |
 | Found | No | N/A | **PASS** |
-| Not found | Yes | All pass | **PASS** (verification passed, no promise) |
-| Not found | Yes | Some fail, within threshold | **PASS (deferred failures)** after heal loop |
-| Not found | Yes | Some fail, exceeds threshold | **FAIL** after heal loop exhausted |
+| Not found | Yes | All pass | **PASS** (sanity checks passed, no promise) |
+| Not found | Yes | Some fail, within threshold | **PASS (deferred failures)** after alignment loop |
+| Not found | Yes | Some fail, exceeds threshold | **FAIL** after alignment loop exhausted |
 | Not found | No | N/A | **FAIL** (no promise after N iters) |
 
-When the heal loop is exhausted and failures exceed the threshold, Fry prints recovery commands. Use `fry run --resume` to skip iterations and re-enter the heal loop with a boosted attempt budget (2x normal, minimum 6). See [Self-Healing](self-healing.md) for details.
+When the alignment loop is exhausted and failures exceed the threshold, Fry prints recovery commands. Use `fry run --resume` to skip iterations and re-enter the alignment loop with a boosted attempt budget (2x normal, minimum 6). See [Alignment](alignment.md) for details.
 
-## Verification for Documents
+## Sanity Checks for Documents
 
 The same five check primitives work for non-code deliverables in [planning mode](planning-mode.md) and [writing mode](writing-mode.md).
 
@@ -129,19 +129,19 @@ These checks ensure documents exist, contain required headings, meet minimum wor
 
 If you need to match exact whitespace in command output, use a pattern that accounts for optional whitespace (e.g., `\s*42\s*` instead of `^42$`).
 
-## Verification Reload During Healing
+## Sanity Check Reload During Alignment
 
-When a heal pass modifies `.fry/verification.md` (e.g., fixing a broken check), Fry re-reads the file before the next verification run. This ensures on-disk edits by the healing agent take effect between attempts, rather than being ignored due to in-memory caching.
+When an alignment pass modifies `.fry/verification.md` (e.g., fixing a broken check), Fry re-reads the file before the next sanity check run. This ensures on-disk edits by the alignment agent take effect between attempts, rather than being ignored due to in-memory caching.
 
 ## Graceful Degradation
 
 - If `.fry/verification.md` does not exist, Fry falls back to promise-only behavior
 - If `fry prepare` fails to generate `.fry/verification.md`, it logs a warning and continues
 - When `--always-verify` is set, Fry probes for recognized build system markers: `go.mod`, `package.json`, `Cargo.toml`, `Makefile`, `pyproject.toml`, and `setup.py`. Python projects that use only `requirements.txt` (without `pyproject.toml` or `setup.py`) are **not** detected by the heuristic. If no recognized build system is found, Fry logs a `WARNING: no recognized build system` message and skips heuristic check generation — write a `.fry/verification.md` file manually for your project type
-- If a sprint has no checks defined, it behaves as if no verification file exists for that sprint
+- If a sprint has no checks defined, it behaves as if no sanity check file exists for that sprint
 
 ## Safety Limits
 
-- **Output cap**: Output from verification checks is capped at 10 MB to prevent unbounded memory growth.
+- **Output cap**: Output from sanity checks is capped at 10 MB to prevent unbounded memory growth.
 - **Per-check timeout**: All command-based checks (`@check_cmd`, `@check_cmd_output`, `@check_test`, and `@check_file_contains`) are killed after 120 seconds to prevent hanging builds.
-- **Diagnostic truncation**: Per-check diagnostic output in heal prompts is truncated to 20 lines for `@check_cmd` failures and 10 lines for `@check_cmd_output` failures.
+- **Diagnostic truncation**: Per-check diagnostic output in alignment prompts is truncated to 20 lines for `@check_cmd` failures and 10 lines for `@check_cmd_output` failures.

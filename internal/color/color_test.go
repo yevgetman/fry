@@ -61,7 +61,7 @@ func TestColorState(t *testing.T) {
 			},
 			{
 				name:    "fail status",
-				input:   "[2026-03-10 12:00:00] SPRINT 2 FAIL (heal exhausted)",
+				input:   "[2026-03-10 12:00:00] SPRINT 2 FAIL (alignment exhausted)",
 				contain: "\033[31mFAIL\033[0m",
 			},
 			{
@@ -114,7 +114,7 @@ func TestContainsWord(t *testing.T) {
 		want bool
 	}{
 		{"SPRINT 1 PASS (2m35s)", "PASS", true},
-		{"SPRINT 1 FAIL (heal exhausted)", "FAIL", true},
+		{"SPRINT 1 FAIL (alignment exhausted)", "FAIL", true},
 		{"PASSWORD reset required", "PASS", false},
 		{"PASSING all tests", "PASS", false},
 		{"FAIL at start", "FAIL", true},

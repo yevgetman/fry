@@ -63,9 +63,9 @@ This is not optional. When you add, modify, or remove a feature:
    - Effort levels → `docs/effort-levels.md`
    - Epic directives → `docs/epic-format.md`
    - Engine changes → `docs/engines.md`
-   - Verification → `docs/verification.md`
+   - Sanity checks → `docs/sanity-checks.md`
    - Sprint execution → `docs/sprint-execution.md`
-   - Self-healing → `docs/self-healing.md`
+   - Alignment → `docs/alignment.md`
    - Audits → `docs/sprint-audit.md`, `docs/build-audit.md`
    - Review/replan → `docs/sprint-review.md`
    - Docker → `docs/docker.md`
@@ -84,7 +84,7 @@ This is not optional. When you add, modify, or remove a feature:
 
 3. **`README.LLM.md`** — Update if the change affects the directory layout, core types, execution flow, CLI flags, key constants, or any section documented there. This file is the AI agent reference and must stay accurate.
 
-4. **Templates** — If you change epic directives, verification check syntax, or agent instructions, update the corresponding files in `templates/` (`epic-example.md`, `verification-example.md`, `GENERATE_EPIC.md`).
+4. **Templates** — If you change epic directives, sanity check syntax, or agent instructions, update the corresponding files in `templates/` (`epic-example.md`, `verification-example.md`, `GENERATE_EPIC.md`).
 
 ### Documentation style
 
@@ -327,7 +327,7 @@ These are design decisions that must be preserved:
 
 8. **Prompt assembly is layered.** The 8-layer prompt structure in `sprint/prompt.go` has a specific order (layers 1, 1.25, 1.5, 1.75, 2, 3, 4, 5). New prompt content must fit into one of the existing layers or have a clear justification for a new layer.
 
-9. **Verification is independent of the AI agent.** Checks run in a separate process, not inside the agent. This separation is by design.
+9. **Sanity checks are independent of the AI agent.** Checks run in a separate process, not inside the agent. This separation is by design.
 
 10. **Git checkpoints are automatic.** Every completed sprint gets a git commit. Do not add flags to skip this — it's a safety mechanism.
 

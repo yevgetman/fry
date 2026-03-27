@@ -98,14 +98,14 @@ Difficulty [MODERATE] (simple/moderate/complex, or Enter to keep): complex
 Effort [medium] (low/medium/high/max, or Enter to keep): high
 ```
 
-The confirmation is skipped with `--no-sanity-check` or `--dry-run`. See [Triage — Interactive Confirmation](triage.md#interactive-confirmation) for full details.
+The confirmation is skipped with `--no-project-overview` or `--dry-run`. See [Triage — Interactive Confirmation](triage.md#interactive-confirmation) for full details.
 
-### Sanity check
+### Project overview
 
-After `plan.md` is available (whether user-authored or generated), Fry shows an AI-generated project summary and asks for confirmation:
+After `plan.md` is available (whether user-authored or generated), Fry shows an AI-generated project overview and asks for confirmation:
 
 ```
-[2026-03-10 11:51:12] Sanity check: summarizing project (engine: claude, model: haiku)...
+[2026-03-10 11:51:12] Project overview: summarizing project (engine: claude, model: haiku)...
 
 ── Project summary ─────────────────────────────────────────────
 Project type:    Software (REST API)
@@ -117,7 +117,7 @@ Effort:          medium (2-4 sprints)
 Does this look right? [Y/n/a] (a = adjust) y
 ```
 
-The default is **Yes** (press Enter to accept). Use `--no-sanity-check` to skip this step for automation or CI.
+The default is **Yes** (press Enter to accept). Use `--no-project-overview` to skip this step for automation or CI.
 
 ### Adjusting the plan
 
@@ -130,7 +130,7 @@ Prompt adjustment (describe any change, or leave blank to skip): focus on backen
 Effort level [auto] (low/medium/high/max, or Enter to keep): high
 Enable sprint review? [n] (y/n, or Enter to keep):
 [2026-03-10 11:51:30] Regenerating project summary with adjustments...
-[2026-03-10 11:51:32] Sanity check: summarizing project (engine: claude, model: haiku)...
+[2026-03-10 11:51:32] Project overview: summarizing project (engine: claude, model: haiku)...
 
 ── Project summary ─────────────────────────────────────────────
 Project type:    Software (REST API)
@@ -142,7 +142,7 @@ Effort:          high (4-10 sprints)
 Does this look right? [Y/n/a] (a = adjust) y
 ```
 
-Adjustments are appended to the user prompt (or become the user prompt if none was provided) and carried through to epic and verification generation. You can adjust multiple times before accepting.
+Adjustments are appended to the user prompt (or become the user prompt if none was provided) and carried through to epic and sanity check generation. You can adjust multiple times before accepting.
 
 ### Generation steps
 
@@ -186,9 +186,9 @@ When `--continue` is used, Fry collects build state, runs an LLM analysis agent,
 [2026-03-10 11:55:00] ▶ CONTINUE  collecting build state...
 [2026-03-10 11:55:00] ▶ CONTINUE  auto-detected mode: software
 [2026-03-10 11:55:01] ▶ CONTINUE  analyzing with engine=claude  model=haiku...
-[2026-03-10 11:55:10] ▶ CONTINUE  decision: RESUME sprint 4 — "verification failed on 2 checks; code exists"
+[2026-03-10 11:55:10] ▶ CONTINUE  decision: RESUME sprint 4 — "sanity checks failed on 2 checks; code exists"
 Decision: RESUME (sprint 4)
-Reason: verification failed on 2 checks; code exists
+Reason: sanity checks failed on 2 checks; code exists
 ```
 
 When the build is already complete:
@@ -205,18 +205,18 @@ continue: blocked — Docker is required for sprint 4 but is not running
 
 ## Sprint Execution
 
-Each sprint gets a start banner (including verification check count), per-iteration agent banners with no-op detection, verification results, and a completion line:
+Each sprint gets a start banner (including sanity check count), per-iteration agent banners with no-op detection, sanity check results, and a completion line:
 
 ```
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:00] STARTING SPRINT 3: Auth & Permissions
 [2026-03-10 12:00:00] Max iterations: 25
-[2026-03-10 12:00:00] Verification checks: 4 applicable to this sprint
+[2026-03-10 12:00:00] Sanity checks: 4 applicable to this sprint
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:01] ▶ AGENT  Sprint 3/8 "Auth & Permissions"  iter 1/25  engine=claude  model=default
 [2026-03-10 12:05:12] ▶ AGENT  Sprint 3/8 "Auth & Permissions"  iter 2/25  engine=claude  model=default
-[2026-03-10 12:10:30] Running verification checks...
-[2026-03-10 12:10:35] Verification: 4/4 checks passed.
+[2026-03-10 12:10:30] Running sanity checks...
+[2026-03-10 12:10:35] Sanity checks: 4/4 checks passed.
 [2026-03-10 12:10:35] SPRINT 3 PASS (2m35s)
 [2026-03-10 12:10:36]   GIT: checkpoint — sprint 3 complete
 ```
@@ -227,29 +227,29 @@ When the agent produces no file changes, a no-op line appears:
 [2026-03-10 12:10:01]   ITER 3: no file changes detected (1 consecutive no-op)
 ```
 
-## Self-Healing
+## Alignment
 
 ```
-[2026-03-10 12:10:30] ▶ AGENT  Sprint 3/8 "Auth & Permissions"  heal 1/3  engine=claude  model=default
-[2026-03-10 12:12:00] Re-running verification after heal attempt 1...
-[2026-03-10 12:12:05] Heal attempt 1 SUCCEEDED — all checks now pass.
+[2026-03-10 12:10:30] ▶ AGENT  Sprint 3/8 "Auth & Permissions"  align 1/3  engine=claude  model=default
+[2026-03-10 12:12:00] Re-running sanity checks after alignment attempt 1...
+[2026-03-10 12:12:05] Alignment attempt 1 SUCCEEDED — all checks now pass.
 ```
 
 ## Resume Mode
 
-When `--resume` is used, the sprint banner indicates resume mode and skips straight to verification:
+When `--resume` is used, the sprint banner indicates resume mode and skips straight to sanity checks:
 
 ```
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:00] RESUMING SPRINT 4: API Integration
-[2026-03-10 12:00:00] Skipping iterations — going straight to verification + heal
+[2026-03-10 12:00:00] Skipping iterations — going straight to sanity checks + alignment
 [2026-03-10 12:00:00] =========================================
-[2026-03-10 12:00:01]   Verification: 2/5 checks passed.
-[2026-03-10 12:00:01]   Entering heal loop with 6 attempts (resume mode, was 3)...
-[2026-03-10 12:00:01] ▶ AGENT  Sprint 4/8 "API Integration"  heal 1/6  engine=claude  model=default
-[2026-03-10 12:02:30]   Re-running verification after heal attempt 1...
-[2026-03-10 12:02:35]   Heal attempt 1 SUCCEEDED — all checks now pass.
-[2026-03-10 12:02:35] SPRINT 4 RESUME PASS (healed) (2m35s)
+[2026-03-10 12:00:01]   Sanity checks: 2/5 checks passed.
+[2026-03-10 12:00:01]   Entering alignment loop with 6 attempts (resume mode, was 3)...
+[2026-03-10 12:00:01] ▶ AGENT  Sprint 4/8 "API Integration"  align 1/6  engine=claude  model=default
+[2026-03-10 12:02:30]   Re-running sanity checks after alignment attempt 1...
+[2026-03-10 12:02:35]   Alignment attempt 1 SUCCEEDED — all checks now pass.
+[2026-03-10 12:02:35] SPRINT 4 RESUME PASS (aligned) (2m35s)
 ```
 
 When all checks already pass on resume:
@@ -257,16 +257,16 @@ When all checks already pass on resume:
 ```
 [2026-03-10 12:00:00] =========================================
 [2026-03-10 12:00:00] RESUMING SPRINT 4: API Integration
-[2026-03-10 12:00:00] Skipping iterations — going straight to verification + heal
+[2026-03-10 12:00:00] Skipping iterations — going straight to sanity checks + alignment
 [2026-03-10 12:00:00] =========================================
-[2026-03-10 12:00:01]   Verification: 5/5 checks passed.
-[2026-03-10 12:00:01]   All checks pass — no healing needed.
+[2026-03-10 12:00:01]   Sanity checks: 5/5 checks passed.
+[2026-03-10 12:00:01]   All checks pass — no alignment needed.
 [2026-03-10 12:00:01] SPRINT 4 RESUME PASS (1s)
 ```
 
 ## Sprint Audit
 
-Sprint audits run by default after each sprint passes verification. The audit uses a two-level loop: outer audit cycles discover issues, inner fix loops resolve them.
+Sprint audits run by default after each sprint passes sanity checks. The audit uses a two-level loop: outer audit cycles discover issues, inner fix loops resolve them.
 
 ### Clean audit (no issues):
 ```
@@ -411,7 +411,7 @@ After all sprints complete, Fry prints a summary table with the status of each s
 Effort level: medium
 SPRINT  NAME                  STATUS        DURATION
 1       Scaffolding           PASS          2m35s
-2       Data Layer            PASS (healed) 5m12s
+2       Data Layer            PASS (aligned) 5m12s
 3       API Handlers          PASS          3m47s
 
 [2026-03-10 13:00:00] ▶ BUILD SUMMARY  generating...  engine=claude  model=haiku

@@ -157,16 +157,16 @@ Fry prioritizes higher-priority items with fewer prior attempts and avoids items
 
 1. The orchestrator queries GitHub for approved issues (excluding `max-attempts`)
 2. Exports them to `assets/approved-items.json` in the worktree
-3. Fry runs with `--full-prepare --always-verify --no-sanity-check`
+3. Fry runs with `--full-prepare --always-verify --no-project-overview`
 4. Complex tasks are auto-elevated to `effort=high` for thorough audit cycles
 5. Each item is implemented as a separate commit referencing the issue number
 6. Documentation updates are required for every change
 7. After Fry completes, `make test && make build` runs as a post-build check
-8. If tests fail, a heal agent (claude with sonnet) attempts to fix the failures (up to 3 attempts)
+8. If tests fail, an alignment agent (claude with sonnet) attempts to fix the failures (up to 3 attempts)
 9. On success with `--auto-merge`: pull latest from remote, merge locally, push. On success without: create a PR
 10. Fry writes `output/worked-items.txt` listing the issue numbers it implemented
 
-### Post-build healing
+### Post-build alignment
 
 If `make test && make build` fails after Fry completes:
 
@@ -174,14 +174,14 @@ If `make test && make build` fails after Fry completes:
 2. A claude agent runs in the worktree with the failure context and instructions to fix
 3. Tests are re-run
 4. Repeats up to 3 times
-5. If healed: the fix is committed and the build proceeds to merge/PR
+5. If aligned: the fix is committed and the build proceeds to merge/PR
 6. If exhausted: the build is marked as failed
 
 ## Build Journal
 
 After every build (success or failure), the orchestrator generates a structured journal entry capturing what happened. The journal serves two purposes:
 
-1. **Operational record** — track build outcomes, healing rounds, and merge methods over time
+1. **Operational record** — track build outcomes, alignment rounds, and merge methods over time
 2. **Pattern source** — during planning, the AI analyzes the journal to discover experience-based improvements
 
 ### Journal file
@@ -197,8 +197,8 @@ Each entry contains:
 | `run_id` | string | Orchestrator run ID (e.g., `20260322-131636`) |
 | `date` | string | Build date (YYYY-MM-DD) |
 | `outcome` | string | `success` or `failure` |
-| `items_attempted` | array | Per-item details: issue number, title, category, effort, result, heal rounds |
-| `heal_rounds_total` | number | Total post-build heal attempts used |
+| `items_attempted` | array | Per-item details: issue number, title, category, effort, result, alignment rounds |
+| `heal_rounds_total` | number | Total post-build alignment attempts used |
 | `merge_method` | string | `auto-merge`, `pr`, or `none` |
 | `files_changed` | array | List of files modified in the build |
 | `tests_passed` | boolean | Whether `make test` passed |
@@ -295,9 +295,9 @@ The self-improvement loop uses several Fry features:
 | Feature | Usage |
 |---|---|
 | `--mode planning` | Planning phase runs in planning mode (output to `output/`) |
-| `--always-verify` | Build phase forces verification on all tasks regardless of effort |
+| `--always-verify` | Build phase forces sanity checks on all tasks regardless of effort |
 | `--full-prepare` | Build phase forces full prepare so the LLM reads the approved items |
-| `--no-sanity-check` | Both phases skip interactive confirmation (automated) |
+| `--no-project-overview` | Both phases skip interactive confirmation (automated) |
 | `--no-audit` | Planning phase skips audit (analysis-only, no code to audit) |
 | `--effort medium` | Planning phase uses medium effort (sufficient for discovery) |
 | `--git-strategy current` | Both phases work on the current branch/worktree (orchestrator manages worktrees externally) |
@@ -312,7 +312,7 @@ Constants at the top of `orchestrate.sh`, overridable via `.self-improve/config`
 |---|---|---|
 | `MAX_BUILD_ITEMS` | 3 | Maximum items Fry can select per build |
 | `MAX_ATTEMPTS` | 3 | Skip items that have failed this many times |
-| `MAX_POST_BUILD_HEALS` | 3 | Heal attempts for post-build test/build failures |
+| `MAX_POST_BUILD_HEALS` | 3 | Alignment attempts for post-build test/build failures |
 | `PLANNING_THRESHOLD` | 15 | Skip planning if this many open issues exist |
 | `JOURNAL_MODEL` | sonnet | AI model for build journal summarization |
 | `MAX_JOURNAL_ENTRIES` | 30 | Maximum entries retained in build journal |
@@ -320,7 +320,7 @@ Constants at the top of `orchestrate.sh`, overridable via `.self-improve/config`
 ## Safety
 
 - **Tests always gate merges** — `make test && make build` must pass before any merge or PR
-- **Post-build healing** — test failures get 3 attempts at automated repair before giving up
+- **Post-build alignment** — test failures get 3 attempts at automated repair before giving up
 - **Lock file** — prevents concurrent orchestrator runs
 - **Max attempts** — issues that fail 3 times get the `max-attempts` label and are skipped
 - **Auto-merge safety** — pulls latest from remote before merging; falls back to PR on conflicts or pull failures

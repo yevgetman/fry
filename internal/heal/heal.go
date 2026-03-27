@@ -1,3 +1,7 @@
+// Package heal implements the alignment loop (post-sprint fix system).
+// When sanity checks fail after a sprint, this package re-invokes the AI agent
+// with targeted fix prompts. The package name is retained for import stability;
+// the user-facing term is "alignment."
 package heal
 
 import (
@@ -23,26 +27,26 @@ type HealOpts struct {
 	Epic                *epic.Epic
 	Engine              engine.Engine
 	Checks              []verify.Check     // Initial checks (used if VerificationFile is empty)
-	VerificationFile    string             // When set, re-parsed each heal attempt so on-disk edits take effect
+	VerificationFile    string             // When set, re-parsed each alignment attempt so on-disk edits take effect
 	UserPrompt          string
 	Verbose             bool
 	SprintLogFile       string
-	MaxAttemptsOverride int // When > 0, overrides epic/sprint max heal attempts (used by --resume)
+	MaxAttemptsOverride int // When > 0, overrides epic/sprint max alignment attempts (used by --resume)
 	MaxFailPercent      int // Percentage of checks allowed to fail while still passing
 	EffortLevel         epic.EffortLevel
 	Mode                string
 }
 
 type HealResult struct {
-	Healed           bool                 // all checks passed
+	Healed           bool                 // all sanity checks passed (aligned)
 	WithinThreshold  bool                 // fail percent within allowed threshold
 	DeferredFailures []verify.CheckResult // checks that failed but within threshold
-	Attempts         int                  // number of heal agent invocations
+	Attempts         int                  // number of alignment agent invocations
 	PassCount        int
 	TotalCount       int
 }
 
-// healConfig holds the resolved healing parameters for a single heal loop run.
+// healConfig holds the resolved alignment parameters for a single alignment loop run.
 type healConfig struct {
 	maxAttempts     int  // hard cap on attempts (ignored when hardCap is false)
 	hardCap         bool // when false, attempts are unlimited (max effort)
@@ -52,7 +56,7 @@ type healConfig struct {
 	minForThreshold int  // min attempts before mid-loop threshold check (max effort only)
 }
 
-// effectiveHealConfig resolves healing parameters from effort level, epic
+// effectiveHealConfig resolves alignment parameters from effort level, epic
 // directives, per-sprint overrides, and resume mode. The priority order is:
 //  1. MaxAttemptsOverride (from --resume, highest)
 //  2. Per-sprint @max_heal_attempts
@@ -127,7 +131,7 @@ func resolveFailPercent(opts HealOpts) int {
 }
 
 // healGroupSeverity returns a priority level for a check type used in targeted
-// healing. Lower values mean higher priority (addressed first).
+// alignment. Lower values mean higher priority (addressed first).
 // Severity order: file existence (0) > file contents (1) > commands (2).
 func healGroupSeverity(ct verify.CheckType) int {
 	switch ct {
@@ -198,7 +202,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 	var healAgentRuns int
 	resolvedModel := engine.ResolveModel(opts.Epic.AgentModel, opts.Engine.Name(), string(opts.EffortLevel), engine.SessionHeal)
 
-	// Targeted healing state: track resolved severity groups and stall.
+	// Targeted alignment state: track resolved severity groups and stall.
 	targetedMode := true
 	// resolvedGroups records which severity buckets have been resolved at least
 	// once. It is used exclusively by the stall detector to avoid counting the
@@ -226,7 +230,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			return &HealResult{Healed: true, Attempts: healAgentRuns, PassCount: passCount, TotalCount: totalCount}, nil
 		}
 
-		// Update group state and detect stall for targeted healing.
+		// Update group state and detect stall for targeted alignment.
 		currentGroups := groupFailedChecks(results)
 		newlyResolved := 0
 		for sev := range lastGroups {
@@ -245,7 +249,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			}
 			if targetedStall >= 2 {
 				targetedMode = false
-				frylog.Log("  Targeted healing stalled after 2 iterations without progress — falling back to all-at-once mode.")
+				frylog.Log("  Targeted alignment stalled after 2 iterations without progress — falling back to all-at-once mode.")
 			}
 		}
 		lastGroups = currentGroups
@@ -269,7 +273,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 		if cfg.hardCap {
 			frylog.Log(
-				"▶ AGENT  Sprint %d/%d \"%s\"  heal %d/%d  engine=%s  model=%s",
+				"▶ AGENT  Sprint %d/%d \"%s\"  align %d/%d  engine=%s  model=%s",
 				opts.Sprint.Number,
 				opts.Epic.TotalSprints,
 				opts.Sprint.Name,
@@ -280,7 +284,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			)
 		} else {
 			frylog.Log(
-				"▶ AGENT  Sprint %d/%d \"%s\"  heal %d (progress-based)  engine=%s  model=%s",
+				"▶ AGENT  Sprint %d/%d \"%s\"  align %d (progress-based)  engine=%s  model=%s",
 				opts.Sprint.Number,
 				opts.Epic.TotalSprints,
 				opts.Sprint.Name,
@@ -292,7 +296,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 		healLogPath := filepath.Join(
 			buildLogsDir,
-			fmt.Sprintf("sprint%d_heal%d_%s.log", opts.Sprint.Number, attempt, time.Now().Format("20060102_150405")),
+			fmt.Sprintf("sprint%d_align%d_%s.log", opts.Sprint.Number, attempt, time.Now().Format("20060102_150405")),
 		)
 		healAgentRuns++
 		if _, err := agentrun.RunWithDualLogs(ctx, config.HealInvocationPrompt, healLogPath, opts.SprintLogFile, agentrun.DualLogOpts{
@@ -309,7 +313,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			return nil, fmt.Errorf("run heal loop: pre-sprint hook: %w", err)
 		}
 
-		frylog.Log("  Re-running verification after heal attempt %d...", attempt)
+		frylog.Log("  Re-running sanity checks after alignment attempt %d...", attempt)
 		checks, reloadErr = reloadChecks(opts)
 		if reloadErr != nil {
 			return nil, fmt.Errorf("run heal loop: reload checks after attempt %d: %w", attempt, reloadErr)
@@ -320,12 +324,12 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		lastTotal = totalCount
 
 		if totalCount == passCount {
-			frylog.Log("  Heal attempt %d SUCCEEDED — all checks now pass.", attempt)
+			frylog.Log("  Alignment attempt %d SUCCEEDED — all checks now pass.", attempt)
 			return &HealResult{Healed: true, Attempts: healAgentRuns, PassCount: passCount, TotalCount: totalCount}, nil
 		}
 
 		currentFailCount := totalCount - passCount
-		frylog.Log("  Heal attempt %d — %d/%d checks still failing.", attempt, currentFailCount, totalCount)
+		frylog.Log("  Alignment attempt %d — %d/%d checks still failing.", attempt, currentFailCount, totalCount)
 
 		// Progress detection: exit early if stuck
 		if cfg.progressBased && cfg.stuckThreshold > 0 {
@@ -337,9 +341,9 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 			prevFailCount = currentFailCount
 
 			if stuckCount >= cfg.stuckThreshold {
-				frylog.Log("  No healing progress for %d consecutive attempts — stopping.", stuckCount)
+				frylog.Log("  No alignment progress for %d consecutive attempts — stopping.", stuckCount)
 				failureReport = verify.CollectFailures(results, passCount, totalCount)
-				entry := fmt.Sprintf("--- Heal attempt %d failed (stuck, stopping) ---\n\n%s\n\n", attempt, failureReport)
+				entry := fmt.Sprintf("--- Alignment attempt %d failed (stuck, stopping) ---\n\n%s\n\n", attempt, failureReport)
 				if err := appendToSprintProgress(opts.ProjectDir, entry); err != nil {
 					return nil, fmt.Errorf("run heal loop: append failure report: %w", err)
 				}
@@ -364,20 +368,20 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		}
 
 		failureReport = verify.CollectFailures(results, passCount, totalCount)
-		entry := fmt.Sprintf("--- Heal attempt %d failed ---\n\n%s\n\n", attempt, failureReport)
+		entry := fmt.Sprintf("--- Alignment attempt %d failed ---\n\n%s\n\n", attempt, failureReport)
 		if err := appendToSprintProgress(opts.ProjectDir, entry); err != nil {
 			return nil, fmt.Errorf("run heal loop: append failure report: %w", err)
 		}
 
 		// Safety cap: prevent truly infinite loops even in unlimited mode
 		if !cfg.hardCap && cfg.maxAttempts > 0 && attempt >= cfg.maxAttempts {
-			frylog.Log("  Safety cap of %d heal attempts reached.", cfg.maxAttempts)
+			frylog.Log("  Safety cap of %d alignment attempts reached.", cfg.maxAttempts)
 			break
 		}
 	}
 
 	if cfg.hardCap && cfg.maxAttempts > 0 {
-		frylog.Log("  All %d heal attempts exhausted.", cfg.maxAttempts)
+		frylog.Log("  All %d alignment attempts exhausted.", cfg.maxAttempts)
 	}
 
 	// Evaluate threshold: allow partial pass if failures are within tolerance
@@ -398,7 +402,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 }
 
 // reloadChecks re-parses the verification file from disk when VerificationFile
-// is set, so that on-disk edits by the healing agent take effect between
+// is set, so that on-disk edits by the alignment agent take effect between
 // attempts. Falls back to the pre-loaded Checks slice otherwise.
 func reloadChecks(opts HealOpts) ([]verify.Check, error) {
 	if opts.VerificationFile == "" {
@@ -417,12 +421,12 @@ func reloadChecks(opts HealOpts) ([]verify.Check, error) {
 
 func buildHealPrompt(opts HealOpts, failureReport string) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("# HEAL MODE — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
+	b.WriteString(fmt.Sprintf("# ALIGNMENT MODE — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name))
 	b.WriteString("## What happened\n")
-	b.WriteString("The sprint finished its work but FAILED independent verification checks.\n")
+	b.WriteString("The sprint finished its work but FAILED independent sanity checks.\n")
 	b.WriteString("Your job is to fix ONLY the issues described below. Do not start the sprint over.\n")
 	b.WriteString("Do not refactor or reorganize. Make the minimum changes needed to pass the checks.\n\n")
-	b.WriteString("## Failed verification checks\n\n")
+	b.WriteString("## Failed sanity checks\n\n")
 	b.WriteString(failureReport)
 	b.WriteString("\n\n")
 	b.WriteString("## Instructions\n")
@@ -437,9 +441,9 @@ func buildHealPrompt(opts HealOpts, failureReport string) string {
 	if opts.Mode == "writing" {
 		b.WriteString("5. After fixing, review the content for completeness and consistency\n")
 	} else {
-		b.WriteString("5. After fixing, do a final sanity check (e.g., run the build command if applicable)\n")
+		b.WriteString("5. After fixing, do a final spot check (e.g., run the build command if applicable)\n")
 	}
-	b.WriteString(fmt.Sprintf("6. Append a brief note to %s about what you fixed in this heal pass\n\n", config.SprintProgressFile))
+	b.WriteString(fmt.Sprintf("6. Append a brief note to %s about what you fixed in this alignment pass\n\n", config.SprintProgressFile))
 	b.WriteString("## Context files\n")
 	b.WriteString(fmt.Sprintf("- Read %s for current sprint iteration history\n", config.SprintProgressFile))
 	b.WriteString(fmt.Sprintf("- Read %s for prior sprint summaries\n", config.EpicProgressFile))

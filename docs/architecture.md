@@ -19,14 +19,14 @@ internal/docker/            Docker Compose lifecycle management
 internal/engine/            AI engine abstraction (Claude, Codex, Ollama), tier-based model selection, validation
 internal/epic/              Epic file parser, types (Epic, Sprint, EffortLevel), and validator
 internal/git/               Git operations (init, checkpoint, commit)
-internal/heal/              Self-healing loop (re-run agent on verification failure)
+internal/heal/              Alignment loop (re-run agent on sanity check failure)
 internal/lock/              File-based concurrency lock (PID-based)
 internal/log/               Timestamped logging with verbose mode
 internal/media/             Media directory scanner and manifest builder
 internal/metrics/           Token usage parsing for Claude and Codex engines
 internal/observer/          Metacognitive event recording, identity, and wake-up points
 internal/preflight/         Pre-build validation checks
-internal/prepare/           Artifact generation (Steps 0-3), mode handling, sanity check
+internal/prepare/           Artifact generation (Steps 0-3), mode handling, project overview
 internal/report/            BuildReport JSON serialization
 internal/review/            Dynamic sprint review, replanning, deviation tracking
 internal/shellhook/         Shell command execution for hooks
@@ -34,7 +34,7 @@ internal/sprint/            Sprint execution loop, prompt assembly, progress tra
 internal/summary/           Build summary generation (post-epic agent session)
 internal/textutil/          Text utilities (markdown stripping, file timestamps, artifact resolution)
 internal/triage/            Task complexity classification and programmatic epic generation
-internal/verify/            Verification check parsing, execution, and diagnostic collection
+internal/verify/            Sanity check parsing, execution, and diagnostic collection
 templates/                  Embedded templates (AGENTS.md, epic-example, verification-example, etc.)
 ```
 
@@ -42,7 +42,7 @@ templates/                  Embedded templates (AGENTS.md, epic-example, verific
 
 | Command | Description |
 |---|---|
-| `fry run` | Execute the build: parse epic, run sprints, verify, heal, audit |
+| `fry run` | Execute the build: parse epic, run sprints, sanity checks, align, audit |
 | `fry prepare` | Generate `.fry/AGENTS.md`, `epic.md`, and `verification.md` from `plans/` |
 | `fry init` | Scaffold `plans/`, `assets/`, `media/` directories and initialize git |
 | `fry clean` | Archive `.fry/` and root-level build outputs to `.fry-archive/` |
@@ -87,7 +87,7 @@ User Input (plans/, media/, assets/, or --user-prompt)
        │
        ▼
    fry prepare ──► Bootstrap: --user-prompt → plans/executive.md (interactive review)
-               ──► Sanity check: AI-generated project summary for user confirmation
+               ──► Project overview: AI-generated project summary for user confirmation
                ──► Step 0: plans/executive.md → plans/plan.md
                ──► Steps 1-3: .fry/AGENTS.md, epic.md, verification.md
                    (scans media/ for asset manifest, reads assets/ for supplementary context)
@@ -107,8 +107,8 @@ User Input (plans/, media/, assets/, or --user-prompt)
        │   ├─ Assemble prompt (sprint/prompt.go)
        │   ├─ Agent loop (sprint/runner.go → agentrun/ → engine/)
        │   ├─ Observer event recording (observer/)
-       │   ├─ Verification (verify/)
-       │   ├─ Heal loop (heal/ → agentrun/ → engine/ → verify/)
+       │   ├─ Sanity checks (verify/)
+       │   ├─ Alignment loop (heal/ → agentrun/ → engine/ → verify/)
        │   ├─ Resume mode (sprint/runner.go → verify/ → heal/, --resume flag)
        │   ├─ Sprint audit (audit/ → engine/)
        │   ├─ Git checkpoint (git/)
@@ -139,7 +139,7 @@ Templates are embedded in the binary via Go's `embed` package (`templates/embed.
 
 - `AGENTS.md` — example operational rules
 - `epic-example.md` — epic format reference
-- `verification-example.md` — verification check examples
+- `verification-example.md` — sanity check examples
 - `GENERATE_EPIC.md` — instructions for epic generation
 
 During `fry prepare`, templates are extracted to a temp directory and referenced by the AI engine.

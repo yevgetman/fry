@@ -230,7 +230,7 @@ func TestBuildModerateEpic(t *testing.T) {
 			wantAudit:        true,
 		},
 		{
-			name: "low effort forces 1 sprint no audit no heal",
+			name: "low effort forces 1 sprint no audit no alignment",
 			opts: ModerateEpicOpts{
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Quick fix",

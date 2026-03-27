@@ -196,10 +196,10 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	}
 	b.WriteString("\n")
 
-	// Deferred verification failures
+	// Deferred sanity check failures
 	if strings.TrimSpace(opts.DeferredFailures) != "" {
-		b.WriteString("## Deferred Verification Failures\n\n")
-		b.WriteString("The following verification checks failed during sprints but were below the\n")
+		b.WriteString("## Deferred Sanity Check Failures\n\n")
+		b.WriteString("The following sanity checks failed during sprints but were below the\n")
 		b.WriteString("failure threshold. Attempt to fix these as part of your audit remediation.\n\n")
 		b.WriteString(opts.DeferredFailures)
 		b.WriteString("\n\n")
@@ -260,7 +260,7 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	b.WriteString("- **Otherwise → continue to Step 5.**\n\n")
 
 	b.WriteString("### Step 5 — Remediate\n\n")
-	b.WriteString(fmt.Sprintf("Using `%s` as your plan, fix **all** issues (including LOW severity). Also fix any deferred verification failures listed above. Then return to **Step 1** and re-audit the modified codebase.\n\n", config.BuildAuditFile))
+	b.WriteString(fmt.Sprintf("Using `%s` as your plan, fix **all** issues (including LOW severity). Also fix any deferred sanity check failures listed above. Then return to **Step 1** and re-audit the modified codebase.\n\n", config.BuildAuditFile))
 
 	b.WriteString("---\n\n")
 	b.WriteString("### Guardrails\n\n")

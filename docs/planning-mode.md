@@ -1,6 +1,6 @@
 # Planning Mode
 
-Fry's execution engine is project-agnostic — the sprint loop, verification runner, and heal loop work identically regardless of whether the output is code or documents.
+Fry's execution engine is project-agnostic — the sprint loop, sanity check runner, and alignment loop work identically regardless of whether the output is code or documents.
 
 Pass `--mode planning` (or the backwards-compatible alias `--planning`) to use planning-domain prompts that generate sprints for producing structured documents instead of code. Use it for business plans, trip planning, research reports, strategic analyses, or any endeavor that requires rigorous, phased document creation.
 
@@ -33,7 +33,7 @@ In planning mode, Claude is the default engine for both the prepare and build st
 | `.fry/AGENTS.md` | Technology constraints, architecture rules, testing patterns | Domain boundaries, analytical frameworks, document quality standards |
 | Sprint phasing | Scaffolding → Schema → Logic → Integration → E2E | Research → Analysis → Strategy → Detailed Planning → Synthesis |
 | Sprint deliverables | Source files, configs, tests | Markdown documents, analyses, strategies |
-| Verification | Build succeeds, tests pass, files exist | Documents exist, contain required sections, meet minimum depth |
+| Sanity checks | Build succeeds, tests pass, files exist | Documents exist, contain required sections, meet minimum depth |
 
 ## Quick Start
 
@@ -88,9 +88,9 @@ your-project/
     5--synthesis--executive-summary.md
 ```
 
-## Verification for Documents
+## Sanity Checks for Documents
 
-The same four [verification check primitives](verification.md) work for document deliverables:
+The same four [sanity check primitives](sanity-checks.md) work for document deliverables:
 
 ```
 @check_file output/1--research--market-landscape.md
@@ -151,6 +151,6 @@ The mode is persisted to `.fry/build-mode.txt` at the start of every build and r
 ## See Also
 
 - [Writing Mode](writing-mode.md) -- human-language content (books, guides, reports, documentation)
-- [Verification](verification.md) -- check primitives and document verification examples
+- [Sanity Checks](sanity-checks.md) -- check primitives and document sanity check examples
 - [Effort Levels](effort-levels.md) -- sprint count and rigor control
 - [Commands](commands.md) -- full CLI reference for `--mode` flag

@@ -1,6 +1,6 @@
 # Effort Levels
 
-Effort levels control how many sprints Fry generates, how dense each sprint is, and how much verification rigor is applied. This prevents over-engineering simple tasks (e.g., 7 sprints for a basic HTML page) and lets you dial up thoroughness for mission-critical builds.
+Effort levels control how many sprints Fry generates, how dense each sprint is, and how much sanity check rigor is applied. This prevents over-engineering simple tasks (e.g., 7 sprints for a basic HTML page) and lets you dial up thoroughness for mission-critical builds.
 
 ## The Four Levels
 
@@ -63,9 +63,9 @@ For high-stakes projects where correctness is paramount. Same sprint count as `h
 - Sprint audits use progress-based iteration (same as `high`): continue while the fix agent is making progress, up to a safety cap of 100 outer cycles with 10 inner fix iterations per cycle. When only LOW findings remain, one fix attempt is made before accepting (prevents indefinite cycling on acknowledged LOWs)
 - Sprint prompts are extended beyond the standard 7-part structure:
   - **Part 8: Analysis & Edge Cases** — enumerates every edge case, race condition, error scenario, and boundary condition
-  - **Part 9: Quality Gates** — explicit quality criteria beyond verification (performance targets, security considerations, code review checklist items)
+  - **Part 9: Quality Gates** — explicit quality criteria beyond sanity checks (performance targets, security considerations, code review checklist items)
 - Automatically enables `@review_between_sprints` and `@compact_with_agent`
-- Healing uses unlimited progress-based attempts (no hard cap; exits when stuck after 3 consecutive no-progress attempts or when ≤10% of checks fail after ≥10 attempts). See [Self-Healing](self-healing.md) for full effort-level healing behavior
+- Alignment uses unlimited progress-based attempts (no hard cap; exits when stuck after 3 consecutive no-progress attempts or when ≤10% of checks fail after ≥10 attempts). See [Alignment](alignment.md) for full effort-level alignment behavior
 - Deviation scope covers the entire epic (same as medium and high — all non-low effort levels expand `@max_deviation_scope` to `totalSprints`, capped at 10)
 - Review bias shifts from CONTINUE to THOROUGH REVIEW — the reviewer applies heightened scrutiny and recommends DEVIATE for any deviation that could affect system correctness
 - No-op detection threshold is raised from 2 to 3 consecutive iterations, giving the agent more room to iterate
@@ -117,7 +117,7 @@ This means effort level now affects behavior within each difficulty grade. For e
 
 Effort level directly affects which AI model is used for each session type. Higher effort levels use more capable (and more expensive) models. See [AI Engines — Automatic Model Selection](engines.md#automatic-model-selection-tier-system) for the full session × effort rules matrix.
 
-In summary: `low`/`medium` builds use **Standard**-tier models (e.g., Sonnet, gpt-5.3-codex) for most sessions, while `high`/`max` builds upgrade to **Frontier**-tier models (e.g., Opus, gpt-5.4). Lightweight tasks like compaction and sanity checks always use cheaper models regardless of effort level.
+In summary: `low`/`medium` builds use **Standard**-tier models (e.g., Sonnet, gpt-5.3-codex) for most sessions, while `high`/`max` builds upgrade to **Frontier**-tier models (e.g., Opus, gpt-5.4). Lightweight tasks like compaction and project overviews always use cheaper models regardless of effort level.
 
 ## Usage
 
@@ -201,9 +201,9 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 | Build audit | Skipped | Runs on full epic completion | Runs on full epic completion | Runs on full epic completion |
 | No-op threshold | 2 iterations | 2 iterations | 2 iterations | 3 iterations |
 | Quality directive | No | No | No | Yes (injected into every prompt) |
-| Heal attempts | 0 (skip) | 3 (fixed) | Up to 10 (progress-based, stuck=2) | Unlimited (progress-based, stuck=3) |
-| Heal fail threshold | 20% | 20% | 20% | 10% |
-| Resume heal attempts | 6 | 6 | 20 | 6 (min) |
+| Alignment attempts | 0 (skip) | 3 (fixed) | Up to 10 (progress-based, stuck=2) | Unlimited (progress-based, stuck=3) |
+| Alignment fail threshold | 20% | 20% | 20% | 10% |
+| Resume alignment attempts | 6 | 6 | 20 | 6 (min) |
 | Compact with agent | Default | Default | Default | Enabled |
 | Observer wake-ups | Disabled | Build end only | After sprint + build audit + build end | After sprint + build audit + build end |
 

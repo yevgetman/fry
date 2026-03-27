@@ -218,13 +218,13 @@ The user has indicated this is a maximum-effort, mission-critical task. You MUST
 - Write EXTENDED sprint prompts that go beyond the standard 7-part structure:
   - Add an 8th section: "ANALYSIS & EDGE CASES" — enumerate every edge case, race condition,
     error scenario, and boundary condition relevant to this sprint
-  - Add a 9th section: "QUALITY GATES" — explicit quality criteria beyond verification checks
+  - Add a 9th section: "QUALITY GATES" — explicit quality criteria beyond sanity checks
     (performance targets, security considerations, code review checklist items)
 - Include exhaustive edge cases, error handling requirements, and defensive coding instructions
 - Specify exact error messages, log formats, and observability requirements
 - Add the @effort max directive to the epic header
 - Enable @review_between_sprints and @compact_with_agent
-- Do NOT set @max_heal_attempts — max effort uses unlimited progress-based healing automatically
+- Do NOT set @max_heal_attempts — max effort uses unlimited progress-based alignment automatically
 `
 	default: // auto-detect
 		return `
@@ -250,8 +250,8 @@ Common over-engineering signals to watch for:
 	}
 }
 
-func SoftwareSanityCheckPrompt(planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
-	return buildSanityCheckPrompt("senior software architect", planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
+func SoftwareOverviewPrompt(planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+	return buildOverviewPrompt("senior software architect", planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
 }
 
 func SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
@@ -260,7 +260,7 @@ func SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, user
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive: %q. If it affects what should or should not be verified, factor it in.\n", userPrompt)
 	}
 
-	return fmt.Sprintf(`You are generating a verification.md file for an autonomous AI build system.
+	return fmt.Sprintf(`You are generating a verification.md (sanity checks) file for an autonomous AI build system.
 
 Read these files carefully:
 1. %s — The FORMAT REFERENCE showing exact syntax and check primitives. Your output must match this format precisely.
@@ -268,7 +268,7 @@ Read these files carefully:
 3. .fry/epic.md — The sprint definitions. Each sprint block tells you what files and features that sprint creates. Write checks that verify those specific deliverables.
 4. .fry/AGENTS.md — Operational rules that apply to the project.
 
-Generate the verification file and write it to .fry/verification.md.
+Generate the sanity checks file and write it to .fry/verification.md.
 
 CRITICAL RULES:
 - Output ONLY the verification.md file content — write it directly to .fry/verification.md.

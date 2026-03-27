@@ -70,7 +70,7 @@ A daily cron job (3:00 AM UTC) on the Cloudflare Worker processes pending experi
 3. **Reinforcement detection** compares each new memory's embedding against existing memories in the same category (cosine similarity ≥ 0.85). If similar: the existing memory's `reinforcement_count` increments instead of creating a duplicate
 4. **Write to Turso** `memories` table with category, significance/universality scores, and embedding
 
-**Memory categories:** `process`, `tooling`, `architecture`, `testing`, `review`, `audit`, `healing`, `planning`, `domain`
+**Memory categories:** `process`, `tooling`, `architecture`, `testing`, `review`, `audit`, `alignment`, `planning`, `domain`
 
 **Scoring:** Each memory receives:
 - `significance` (0-1): importance for future builds
@@ -96,7 +96,7 @@ The disposition layer is injected into sprint agent prompts to subtly influence 
 
 ## Observer Integration
 
-Observations are added at each observer wake-point via `collector.AddObservation()`. The observer fires at configurable points during the sprint loop (post-sprint, post-heal, etc.) and writes its thoughts to the collector. See [Observer](observer.md) for the full event model, effort-level gating, and wake-point list.
+Observations are added at each observer wake-point via `collector.AddObservation()`. The observer fires at configurable points during the sprint loop (post-sprint, post-alignment, etc.) and writes its thoughts to the collector. See [Observer](observer.md) for the full event model, effort-level gating, and wake-point list.
 
 ## File Locations
 

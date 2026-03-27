@@ -33,12 +33,12 @@ In short, Fry will do its best to use whatever info you provide to generate a `p
 Before doing any of the heavy lifting, Fry runs a [triage gate](docs/triage.md) — a single cheap LLM call that classifies the task as **simple**, **moderate**, or **complex** and suggests an effort level. This determines how much preparation is needed:
 
 - **Simple** tasks (fix a typo, add a config flag) skip preparation entirely — Fry builds a 1-sprint epic programmatically and gets straight to work. Zero LLM calls wasted on planning.
-- **Moderate** tasks (add an endpoint with tests, build a small tool) also skip LLM-based preparation — Fry builds a programmatic 1-2 sprint epic with auto-generated verification checks. Zero LLM calls for planning.
+- **Moderate** tasks (add an endpoint with tests, build a small tool) also skip LLM-based preparation — Fry builds a programmatic 1-2 sprint epic with auto-generated sanity checks. Zero LLM calls for planning.
 - **Complex** tasks (multi-subsystem features, architectural changes) get the full preparation pipeline described below.
 
-After classification, Fry shows you the triage decision (difficulty, effort, reason) and asks you to confirm, decline, or adjust before the build begins. You can override both difficulty and effort at this step. Use `--no-sanity-check` to skip the confirmation prompt.
+After classification, Fry shows you the triage decision (difficulty, effort, reason) and asks you to confirm, decline, or adjust before the build begins. You can override both difficulty and effort at this step. Use `--no-project-overview` to skip the confirmation prompt.
 
-Both simple and moderate tasks respect the effort level (suggested by triage or overridden with `--effort`), which controls iteration budgets, healing, and audit depth. Max effort is reserved for complex tasks. The classifier is intentionally biased toward over-classification — it's better to over-prepare a simple task than to under-prepare a complex one. Use `--full-prepare` to bypass triage and force the full pipeline.
+Both simple and moderate tasks respect the effort level (suggested by triage or overridden with `--effort`), which controls iteration budgets, alignment, and audit depth. Max effort is reserved for complex tasks. The classifier is intentionally biased toward over-classification — it's better to over-prepare a simple task than to under-prepare a complex one. Use `--full-prepare` to bypass triage and force the full pipeline.
 
 ### Preparation
 
@@ -46,7 +46,7 @@ For complex tasks (or when `--full-prepare` is used), Fry will:
 
 1. Generate an `AGENTS.md` file (if one was not provided) establishing best practices for the agents
 2. Decompose `plan.md` into an [epic](docs/epic-format.md), delimited by sprints with each sprint broken up by specific tasks
-3. Generate a `verification.md` for [high-level checks](docs/verification.md) to run after each sprint (deep semantic checks are done as part of a separate [audit system](docs/sprint-audit.md))
+3. Generate a `verification.md` for [sanity checks](docs/sanity-checks.md) to run after each sprint (deep semantic checks are done as part of a separate [audit system](docs/sprint-audit.md))
 
 ### The Build
 
@@ -54,9 +54,9 @@ Fry deploys agents using [OpenAI Codex, Claude Code, or Ollama](docs/engines.md)
 
 A single agent carries out the work to complete a sprint (although there is a parallel mode to run multiple agents at once).
 
-Once a sprint is complete, [verification checks](docs/verification.md) run as a basic sanity check. If any verifications fail, a [self-heal system](docs/self-healing.md) deploys to fix the issues.
+Once a sprint is complete, [sanity checks](docs/sanity-checks.md) run to verify the deliverables. If any checks fail, an [alignment system](docs/alignment.md) deploys to fix the issues.
 
-If/when all verification checks pass, an [audit process](docs/sprint-audit.md) is deployed to ensure the work has been completed with no bugs, edge cases covered, etc. — basically that it was done well. The audit process is layered and iterative, making multiple passes (based on effort level) to ensure issues are fixed on a first-in-first-out basis before a follow-up audit is run to verify and/or surface new issues. The process repeats until the exit condition is met.
+If/when all sanity checks pass, an [audit process](docs/sprint-audit.md) is deployed to ensure the work has been completed with no bugs, edge cases covered, etc. — basically that it was done well. The audit process is layered and iterative, making multiple passes (based on effort level) to ensure issues are fixed on a first-in-first-out basis before a follow-up audit is run to verify and/or surface new issues. The process repeats until the exit condition is met.
 
 The build continues in this manner until complete.
 
@@ -77,9 +77,9 @@ assets/                Optional text documents (specs, schemas) read during plan
   fry run               Triage gate: cheap LLM classifies complexity + effort
                            ↓ Interactive confirmation [Y/n/a] (adjust difficulty/effort)
                            SIMPLE   → programmatic epic (0 prep calls)
-                           MODERATE → programmatic epic + auto-verification (0 prep calls)
+                           MODERATE → programmatic epic + auto-sanity-checks (0 prep calls)
                            COMPLEX  → full prepare (below)
-                         (--full-prepare skips triage, --no-sanity-check skips confirmation)
+                         (--full-prepare skips triage, --no-project-overview skips confirmation)
         |
         v
   fry prepare           Step 0 (if needed): AI generates plans/plan.md from executive.md
@@ -88,8 +88,8 @@ assets/                Optional text documents (specs, schemas) read during plan
         |
         v
      fry run             Executes sprints via AI agent loop
-        |                + runs independent verification checks
-        |                + auto-heals on verification failure
+        |                + runs independent sanity checks
+        |                + auto-aligns on sanity check failure
         v
   Working software       Git-checkpointed after each sprint
   (or output/)           Planning: 1--research--market-landscape.md
@@ -100,16 +100,16 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 
 **Key mechanisms:**
 
-- **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. After classification, an interactive confirmation prompt lets you review, accept, or adjust the difficulty and effort before the build starts (`--no-sanity-check` skips this). Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, healing, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
-- **Sanity check** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (skippable with `--no-sanity-check`)
+- **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. After classification, an interactive confirmation prompt lets you review, accept, or adjust the difficulty and effort before the build starts (`--no-project-overview` skips this). Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, alignment, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
+- **Project overview** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (skippable with `--no-project-overview`)
 - **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
 - **Supplementary assets** -- optional `assets/` directory for text reference documents (specs, schemas, requirements) whose full contents are read during plan and epic generation
 - **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, operational disposition, plan references, sprint tasks, iteration memory, and completion signals
 - **Two-file progress tracking** -- per-sprint iteration log + cross-sprint compacted summary for bounded context
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
-- **Independent verification** -- machine-executable checks run after each sprint with a configurable failure threshold (`@max_fail_percent`, default 20%) — minor failures are deferred rather than blocking the build
-- **Self-healing** -- automatic re-runs with targeted fix prompts on verification failure; `--resume` picks up where a failed build left off with boosted heal attempts; `--continue` uses an LLM agent to analyze build state and auto-resume (automatically restores the build mode from the previous run)
+- **Sanity checks** -- machine-executable checks run after each sprint with a configurable failure threshold (`@max_fail_percent`, default 20%) — minor failures are deferred rather than blocking the build
+- **Alignment** -- automatic re-runs with targeted fix prompts on sanity check failure; `--resume` picks up where a failed build left off with boosted alignment attempts; `--continue` uses an LLM agent to analyze build state and auto-resume (automatically restores the build mode from the previous run)
 - **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop (CRITICAL/HIGH block the build; MODERATE is advisory)
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
@@ -142,7 +142,7 @@ See [Self-Improvement Pipeline](docs/self-improvement.md) for the full architect
 
 - **Go 1.22+** — to build fry from source
 - **git** — for automatic sprint checkpointing
-- **bash** — used by AI engine CLIs and verification commands
+- **bash** — used by AI engine CLIs and sanity check commands
 - At least one AI engine CLI:
   - [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code): `npm i -g @anthropic-ai/claude-code` (default engine)
   - [OpenAI Codex CLI](https://www.npmjs.com/package/@openai/codex): `npm i -g @openai/codex`
@@ -197,7 +197,7 @@ fry --engine ollama                    # Use local Ollama models (no API key)
 fry --effort low                       # Simple task: 1-2 sprints, minimal overhead
 fry --effort max                       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
-fry run --resume --sprint 4             # Resume failed sprint 4 (skip iterations, heal only)
+fry run --resume --sprint 4             # Resume failed sprint 4 (skip iterations, align only)
 fry run --continue                     # Auto-detect and resume from where you left off
 fry clean                              # Archive .fry/ and build outputs (interactive)
 fry clean --force                      # Archive without confirmation prompt
@@ -208,7 +208,7 @@ fry --user-prompt "build a todo app"  # Start from just a prompt (no plan files 
 fry --user-prompt-file ./prompt.txt   # Load a longer prompt from a file
 fry --git-strategy worktree            # Force worktree isolation for the build
 fry --git-strategy branch --branch-name feat/api  # Build on a named branch
-fry --always-verify                    # Force verification+audit on all tasks
+fry --always-verify                    # Force sanity checks+audit on all tasks
 fry --no-observer                      # Disable the observer metacognitive layer
 fry prepare --effort medium            # Generate artifacts with medium effort sizing
 ```
@@ -225,8 +225,8 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Epic Format](docs/epic-format.md) | Epic file syntax: global directives, sprint blocks, validation rules, sizing guidelines |
 | [AI Engines](docs/engines.md) | Codex, Claude, and Ollama engine configuration, mixing engines, model overrides |
 | [Sprint Execution](docs/sprint-execution.md) | Agent iteration loop, prompt assembly, progress tracking, promise tokens |
-| [Verification](docs/verification.md) | Check primitives, file format, outcome matrix, graceful degradation |
-| [Self-Healing](docs/self-healing.md) | Heal loop mechanics, configuration, diagnostics |
+| [Sanity Checks](docs/sanity-checks.md) | Check primitives, file format, outcome matrix, graceful degradation |
+| [Alignment](docs/alignment.md) | Alignment loop mechanics, configuration, diagnostics |
 | [Sprint Audit](docs/sprint-audit.md) | Post-sprint semantic code review by AI, audit/fix loop, severity classification |
 | [Build Audit](docs/build-audit.md) | Final holistic codebase audit after epic completion, iterative remediation |
 | [Sprint Review](docs/sprint-review.md) | Dynamic mid-build review, replanning, deviation specs, safeguards |
@@ -241,7 +241,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Terminal Output](docs/terminal-output.md) | Status banners, verbose mode, log format |
 | [Triage](docs/triage.md) | Complexity classification with interactive confirmation — controls whether full prepare runs |
 | [Git Strategy](docs/git-strategy.md) | Branch and worktree isolation strategies for builds |
-| [Self-Improvement](docs/self-improvement.md) | Automated self-improvement pipeline: roadmap, orchestrator, planning, build, healing |
+| [Self-Improvement](docs/self-improvement.md) | Automated self-improvement pipeline: roadmap, orchestrator, planning, build, alignment |
 | [Observer](docs/observer.md) | Metacognitive layer: event stream, identity, wake-ups, effort-level gating |
 | [Consciousness](docs/consciousness.md) | Experience synthesis and identity pipeline |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |

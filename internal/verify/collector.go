@@ -31,7 +31,7 @@ func formatCheckLine(result CheckResult, prefix string, includeDetail bool) stri
 
 func CollectFailures(results []CheckResult, passCount, totalCount int) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Verification: %d/%d checks passed.\n\nFailed checks:", passCount, totalCount))
+	b.WriteString(fmt.Sprintf("Sanity checks: %d/%d passed.\n\nFailed checks:", passCount, totalCount))
 
 	for _, result := range results {
 		if result.Passed {

@@ -15,11 +15,11 @@ import (
 	"github.com/yevgetman/fry/internal/textutil"
 )
 
-// ErrSanityCheckDeclined is returned when the user declines the project summary.
-var ErrSanityCheckDeclined = fmt.Errorf("user declined project summary")
+// ErrProjectOverviewDeclined is returned when the user declines the project summary.
+var ErrProjectOverviewDeclined = fmt.Errorf("user declined project summary")
 
-// SanitySummary holds the parsed fields from the AI-generated project summary.
-type SanitySummary struct {
+// OverviewSummary holds the parsed fields from the AI-generated project summary.
+type OverviewSummary struct {
 	ProjectType    string
 	Goal           string
 	ExpectedOutput string
@@ -27,15 +27,15 @@ type SanitySummary struct {
 	EffortEstimate string
 }
 
-// SanityResult holds adjusted values from the sanity check confirmation loop.
-type SanityResult struct {
+// OverviewResult holds adjusted values from the project overview confirmation loop.
+type OverviewResult struct {
 	UserPrompt   string
 	EffortLevel  epic.EffortLevel
 	EnableReview bool
 }
 
-func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
-	planContent, executiveContent, mediaManifest, assetsSection string) (*SanityResult, error) {
+func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts,
+	planContent, executiveContent, mediaManifest, assetsSection string) (*OverviewResult, error) {
 
 	stdout := opts.Stdout
 	if stdout == nil {
@@ -52,29 +52,29 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 	scanner := bufio.NewScanner(stdin)
 
 	// scanLine reads a line from the scanner and returns the trimmed text.
-	// Returns ErrSanityCheckDeclined on EOF or wraps the scanner error.
+	// Returns ErrProjectOverviewDeclined on EOF or wraps the scanner error.
 	scanLine := func() (string, error) {
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {
 				return "", fmt.Errorf("run prepare: read input: %w", err)
 			}
-			return "", ErrSanityCheckDeclined
+			return "", ErrProjectOverviewDeclined
 		}
 		return strings.TrimSpace(scanner.Text()), nil
 	}
 
 	for {
-		sanityModel := engine.ResolveModelForSession(eng.Name(), string(effortLevel), engine.SessionSanityCheck)
-		frylog.Log("Sanity check: summarizing project (engine: %s, model: %s)...", eng.Name(), sanityModel)
+		overviewModel := engine.ResolveModelForSession(eng.Name(), string(effortLevel), engine.SessionProjectOverview)
+		frylog.Log("Project overview: summarizing project (engine: %s, model: %s)...", eng.Name(), overviewModel)
 
-		prompt := sanityCheckPrompt(opts.Mode, planContent, executiveContent, userPrompt, effortLevel, mediaManifest, assetsSection)
-		output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: sanityModel})
+		prompt := overviewPrompt(opts.Mode, planContent, executiveContent, userPrompt, effortLevel, mediaManifest, assetsSection)
+		output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: overviewModel})
 		if err != nil && strings.TrimSpace(output) == "" {
-			return nil, fmt.Errorf("run prepare: sanity check: %w", err)
+			return nil, fmt.Errorf("run prepare: project overview: %w", err)
 		}
 
-		summary := parseSanitySummary(output)
-		displaySanitySummary(stdout, summary)
+		summary := parseOverviewSummary(output)
+		displayOverviewSummary(stdout, summary)
 		fmt.Fprint(stdout, "Does this look right? [Y/n/a] (a = adjust) ")
 
 		answer, err := scanLine()
@@ -84,7 +84,7 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 		answer = strings.ToLower(answer)
 
 		if answer == "" || answer == "y" || answer == "yes" {
-			return &SanityResult{UserPrompt: userPrompt, EffortLevel: effortLevel, EnableReview: enableReview}, nil
+			return &OverviewResult{UserPrompt: userPrompt, EffortLevel: effortLevel, EnableReview: enableReview}, nil
 		}
 
 		if answer == "a" || answer == "adjust" {
@@ -148,25 +148,25 @@ func runSanityCheck(ctx context.Context, eng engine.Engine, opts PrepareOpts,
 			continue
 		}
 
-		return nil, ErrSanityCheckDeclined
+		return nil, ErrProjectOverviewDeclined
 	}
 }
 
-func sanityCheckPrompt(mode Mode, planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+func overviewPrompt(mode Mode, planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
 	switch mode {
 	case ModePlanning:
-		return PlanningSanityCheckPrompt(planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
+		return PlanningOverviewPrompt(planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
 	case ModeWriting:
-		return WritingSanityCheckPrompt(planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
+		return WritingOverviewPrompt(planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
 	default:
-		return SoftwareSanityCheckPrompt(planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
+		return SoftwareOverviewPrompt(planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
 	}
 }
 
-func parseSanitySummary(output string) SanitySummary {
+func parseOverviewSummary(output string) OverviewSummary {
 	cleaned := textutil.StripMarkdownFences(output)
 	lines := strings.Split(cleaned, "\n")
-	var s SanitySummary
+	var s OverviewSummary
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		switch {
@@ -185,7 +185,7 @@ func parseSanitySummary(output string) SanitySummary {
 	return s
 }
 
-func displaySanitySummary(w io.Writer, s SanitySummary) {
+func displayOverviewSummary(w io.Writer, s OverviewSummary) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, color.CyanText("── Project summary ─────────────────────────────────────────────"))
 	fmt.Fprintf(w, "%s    %s\n", color.CyanText("Project type:"), fieldOrUnknown(s.ProjectType))
@@ -203,7 +203,7 @@ func fieldOrUnknown(v string) string {
 	return v
 }
 
-func buildSanityCheckPrompt(persona, planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+func buildOverviewPrompt(persona, planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "You are a %s. Review the following project inputs and produce a concise structured summary.\n\n", persona)

@@ -17,7 +17,7 @@ var (
 	preparePlanning       bool
 	prepareMode           string
 	prepareEffort         string
-	prepareNoSanityCheck  bool
+	prepareNoProjectOverview  bool
 	prepareReview         bool
 )
 
@@ -80,7 +80,7 @@ var prepareCmd = &cobra.Command{
 			UserPrompt:       userPrompt,
 			UserPromptSource: promptSource,
 			ValidateOnly:     false,
-			SkipSanityCheck:  prepareNoSanityCheck,
+			SkipProjectOverview:  prepareNoProjectOverview,
 			Mode:             mode,
 			EffortLevel:      effortLevel,
 			EnableReview:     prepareReview,
@@ -98,6 +98,8 @@ func init() {
 	prepareCmd.Flags().BoolVar(&preparePlanning, "planning", false, "Use planning prepare mode (alias for --mode planning)")
 	prepareCmd.Flags().StringVar(&prepareMode, "mode", "", "Execution mode: software, planning, writing")
 	prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
-	prepareCmd.Flags().BoolVar(&prepareNoSanityCheck, "no-sanity-check", false, "Skip the interactive project summary confirmation")
+	prepareCmd.Flags().BoolVar(&prepareNoProjectOverview, "no-project-overview", false, "Skip the interactive project overview confirmation")
+	prepareCmd.Flags().BoolVar(&prepareNoProjectOverview, "no-sanity-check", false, "Deprecated alias for --no-project-overview")
+	_ = prepareCmd.Flags().MarkHidden("no-sanity-check")
 	prepareCmd.Flags().BoolVar(&prepareReview, "review", false, "Enable sprint review between sprints")
 }

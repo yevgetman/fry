@@ -57,7 +57,7 @@ func TestBuildSummaryPrompt_IncludesSprintResults(t *testing.T) {
 
 	results := []sprint.SprintResult{
 		{Number: 1, Name: "Setup", Status: "PASS", Duration: 30 * time.Second},
-		{Number: 2, Name: "Build", Status: "FAIL (heal exhausted)", Duration: 2 * time.Minute, AuditWarning: "MODERATE issues"},
+		{Number: 2, Name: "Build", Status: "FAIL (alignment exhausted)", Duration: 2 * time.Minute, AuditWarning: "MODERATE issues"},
 	}
 	prompt := buildSummaryPrompt(SummaryOpts{
 		ProjectDir: t.TempDir(),
@@ -66,7 +66,7 @@ func TestBuildSummaryPrompt_IncludesSprintResults(t *testing.T) {
 	})
 
 	assert.Contains(t, prompt, "| 1 | Setup | PASS |")
-	assert.Contains(t, prompt, "| 2 | Build | FAIL (heal exhausted) |")
+	assert.Contains(t, prompt, "| 2 | Build | FAIL (alignment exhausted) |")
 	assert.Contains(t, prompt, "MODERATE issues")
 }
 
@@ -132,7 +132,7 @@ func TestBuildSummaryPrompt_IncludesDeferredFailures(t *testing.T) {
 		EpicName:   "Test",
 	})
 
-	assert.Contains(t, prompt, "## Deferred Verification Failures")
+	assert.Contains(t, prompt, "## Deferred Sanity Check Failures")
 	assert.Contains(t, prompt, "check_file missing.txt FAIL")
 }
 
@@ -360,7 +360,7 @@ func TestBuildSummaryPrompt_NoOptionalFiles(t *testing.T) {
 	// Should NOT contain optional sections
 	assert.NotContains(t, prompt, "## Epic Definition")
 	assert.NotContains(t, prompt, "## Epic Progress")
-	assert.NotContains(t, prompt, "## Deferred Verification Failures")
+	assert.NotContains(t, prompt, "## Deferred Sanity Check Failures")
 	assert.NotContains(t, prompt, "## Deviation Log")
 	assert.NotContains(t, prompt, "## Build Audit Results")
 }

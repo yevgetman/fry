@@ -77,8 +77,8 @@ func (e EffortLevel) MaxSprintCount() int {
 	}
 }
 
-// DefaultMaxHealAttempts returns the default number of heal attempts for this
-// effort level. Returns 0 for low (no healing) and max (unlimited/progress-based).
+// DefaultMaxHealAttempts returns the default number of alignment attempts for this
+// effort level. Returns 0 for low (no alignment) and max (unlimited/progress-based).
 func (e EffortLevel) DefaultMaxHealAttempts() int {
 	switch e {
 	case EffortLow:
@@ -94,7 +94,7 @@ func (e EffortLevel) DefaultMaxHealAttempts() int {
 	}
 }
 
-// DefaultMaxFailPercent returns the default verification failure threshold
+// DefaultMaxFailPercent returns the default sanity check failure threshold
 // for this effort level.
 func (e EffortLevel) DefaultMaxFailPercent() int {
 	switch e {
@@ -106,12 +106,12 @@ func (e EffortLevel) DefaultMaxFailPercent() int {
 }
 
 // HealUsesProgressDetection returns whether this effort level uses
-// progress-based healing (exit early if stuck).
+// progress-based alignment (exit early if stuck).
 func (e EffortLevel) HealUsesProgressDetection() bool {
 	return e == EffortHigh || e == EffortMax
 }
 
-// HealStuckThreshold returns the number of consecutive no-progress heal
+// HealStuckThreshold returns the number of consecutive no-progress alignment
 // attempts before the loop exits. Only meaningful when HealUsesProgressDetection
 // returns true.
 func (e EffortLevel) HealStuckThreshold() int {
@@ -126,7 +126,7 @@ func (e EffortLevel) HealStuckThreshold() int {
 }
 
 // HealHasHardCap returns whether this effort level has a fixed upper bound on
-// heal attempts. Max effort is unlimited (progress-based), all others are capped.
+// alignment attempts. Max effort is unlimited (progress-based), all others are capped.
 func (e EffortLevel) HealHasHardCap() bool {
 	return e != EffortMax
 }

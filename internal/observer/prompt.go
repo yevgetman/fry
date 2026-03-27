@@ -72,7 +72,7 @@ func buildObserverPrompt(opts ObserverOpts, identity, scratchpad string, events 
 	switch opts.WakePoint {
 	case WakeAfterSprint:
 		b.WriteString(fmt.Sprintf("You are waking up **after sprint %d** completed.\n", opts.SprintNum))
-		b.WriteString("Reflect on the sprint's execution: iterations, heal loops, audit findings.\n")
+		b.WriteString("Reflect on the sprint's execution: iterations, alignment loops, audit findings.\n")
 		b.WriteString("Compare what happened with what was expected.\n\n")
 	case WakeAfterBuildAudit:
 		b.WriteString("You are waking up **after the build-level audit** completed.\n")
@@ -116,7 +116,7 @@ func buildObserverPrompt(opts ObserverOpts, identity, scratchpad string, events 
 	b.WriteString("  Structured directives for the build system. One per line.\n")
 	b.WriteString("  Format: TYPE: value\n")
 	b.WriteString("  Supported types: WARN, NOTE, SUGGEST\n")
-	b.WriteString("  Example: WARN: heal loop on sprint 3 appears stuck on the same error\n")
+	b.WriteString("  Example: WARN: alignment loop on sprint 3 appears stuck on the same error\n")
 	b.WriteString("  </directives>\n")
 
 	return b.String()

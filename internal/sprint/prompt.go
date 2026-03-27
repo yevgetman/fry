@@ -149,7 +149,7 @@ func AssemblePrompt(opts PromptOpts) (string, error) {
 	if opts.Promise != "" {
 		b.WriteString("\n")
 		b.WriteString("# ===== COMPLETION SIGNAL =====\n")
-		b.WriteString("# When ALL tasks described above are complete and all verifications pass,\n")
+		b.WriteString("# When ALL tasks described above are complete and all sanity checks pass,\n")
 		b.WriteString(fmt.Sprintf("# output exactly this line:\n# ===PROMISE: %s===\n", opts.Promise))
 		b.WriteString("# If tasks remain incomplete, describe what you accomplished and what remains.\n")
 	}

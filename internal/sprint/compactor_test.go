@@ -27,7 +27,7 @@ func TestMechanicalCompactionCases(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "no iteration or heal markers",
+			name:     "no iteration or alignment markers",
 			input:    "Some progress\nMore progress\nDone",
 			expected: "Some progress\nMore progress\nDone",
 		},
@@ -42,14 +42,14 @@ func TestMechanicalCompactionCases(t *testing.T) {
 			expected: "## Iteration 2\nsecond work\nmore lines",
 		},
 		{
-			name:     "mix of iteration and heal attempt entries",
-			input:    "## Iteration 1\nfirst\n--- Heal attempt 1\nheal work\n## Iteration 2\nsecond",
+			name:     "mix of iteration and alignment attempt entries",
+			input:    "## Iteration 1\nfirst\n--- Alignment attempt 1\nheal work\n## Iteration 2\nsecond",
 			expected: "## Iteration 2\nsecond",
 		},
 		{
-			name:     "last entry is heal attempt",
-			input:    "## Iteration 1\nfirst work\n--- Heal attempt 1\nheal lines\nmore heal",
-			expected: "--- Heal attempt 1\nheal lines\nmore heal",
+			name:     "last entry is alignment attempt",
+			input:    "## Iteration 1\nfirst work\n--- Alignment attempt 1\nheal lines\nmore heal",
+			expected: "--- Alignment attempt 1\nheal lines\nmore heal",
 		},
 		{
 			name:     "entry at very last line",
@@ -67,9 +67,9 @@ func TestMechanicalCompactionCases(t *testing.T) {
 			expected: "## Iteration 3 — 2026-01-03\nThird",
 		},
 		{
-			name:     "multiple heal attempts",
-			input:    "## Iteration 1 — 2026-01-01\nFirst\n\n--- Heal attempt 1\nHealing\n\n--- Heal attempt 2\nMore healing",
-			expected: "--- Heal attempt 2\nMore healing",
+			name:     "multiple alignment attempts",
+			input:    "## Iteration 1 — 2026-01-01\nFirst\n\n--- Alignment attempt 1\nAligning\n\n--- Alignment attempt 2\nMore aligning",
+			expected: "--- Alignment attempt 2\nMore aligning",
 		},
 	}
 

@@ -16,7 +16,7 @@ import (
 	"github.com/yevgetman/fry/internal/textutil"
 )
 
-// defaultCheckTimeout is the maximum time a single verification check command
+// defaultCheckTimeout is the maximum time a single sanity check command
 // is allowed to run before being killed. This prevents hanging builds.
 const defaultCheckTimeout = 120 * time.Second
 
@@ -122,7 +122,7 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 	return result
 }
 
-// parseTestOutput detects the test framework and populates test counts on result.
+// parseTestOutput detects the test framework and populates test counts on the sanity check result.
 func parseTestOutput(result *CheckResult, command, output string) {
 	cmd := strings.TrimSpace(command)
 	switch {
@@ -211,7 +211,7 @@ func trimOutputLines(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// maxCheckOutput caps the amount of output captured from verification commands
+// maxCheckOutput caps the amount of output captured from sanity check commands
 // to prevent unbounded memory growth on pathologically verbose checks.
 const maxCheckOutput = 10 * 1024 * 1024 // 10 MB
 

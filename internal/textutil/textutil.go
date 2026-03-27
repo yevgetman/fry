@@ -72,7 +72,7 @@ func TruncateUTF8(s string, maxBytes int) string {
 //
 // Known limitation: if the engine rewrites the file to exactly the same byte
 // count, the size comparison returns equal and the fallback overwrites the
-// engine's content. This is unlikely for plan, agents, epic, and verification
+// engine's content. This is unlikely for plan, agents, epic, and sanity checks
 // artifacts but is an inherent trade-off of size-based detection vs. a content
 // hash.
 func ResolveArtifact(targetPath string, beforeSize int64, engineOutput string) error {

@@ -1,11 +1,11 @@
 # Sprint Audit
 
-The sprint audit is a semantic quality gate that runs by default after each sprint passes verification. It uses a two-level loop: an outer audit cycle discovers issues, and an inner fix loop resolves them before re-auditing. Issues are tracked individually across cycles and prioritized FIFO (oldest first). This complements the syntactic verification system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
+The sprint audit is a semantic quality gate that runs by default after each sprint passes sanity checks. It uses a two-level loop: an outer audit cycle discovers issues, and an inner fix loop resolves them before re-auditing. Issues are tracked individually across cycles and prioritized FIFO (oldest first). This complements the syntactic sanity check system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
 
 ## How It Works
 
 ```
-Sprint passes verification
+Sprint passes sanity checks
        │
        ▼
   Outer audit cycle 1
@@ -40,7 +40,7 @@ Sprint passes verification
                └─ MODERATE → advisory warning, build continues
 ```
 
-The audit runs **after** verification passes but **before** the git checkpoint, so that the checkpoint commits both the sprint's work and any audit fixes in one clean commit.
+The audit runs **after** sanity checks pass but **before** the git checkpoint, so that the checkpoint commits both the sprint's work and any audit fixes in one clean commit.
 
 ## Two-Level Loop Design
 
@@ -101,7 +101,7 @@ The max effort audit iteration cap is set high (100) as a safety valve. The actu
 
 ## Configuration
 
-Sprint audits are **enabled by default**. No directive is needed -- audits will run automatically after each sprint passes verification.
+Sprint audits are **enabled by default**. No directive is needed -- audits will run automatically after each sprint passes sanity checks.
 
 To customize audit settings:
 

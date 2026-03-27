@@ -29,7 +29,7 @@
 #   BUILD LIST    → Numbered list of specific files/components to create,
 #                   with exact filenames, function signatures, behavior specs.
 #   CONSTRAINTS   → "CRITICAL: [thing that will go wrong if ignored]"
-#   VERIFICATION  → Reference to .fry/verification.md checks, plus prose summary of key outcomes.
+#   SANITY CHECKS → Reference to .fry/verification.md checks, plus prose summary of key outcomes.
 #   STUCK HINT    → "If stuck after N iterations: [most likely cause + fix]"
 #   PROMISE       → "Output ===PROMISE: TOKEN=== when [exit criteria]."
 #
@@ -40,8 +40,8 @@
 #   Too large: "Build the entire backend" (50+ iterations, context thrashing)
 #
 #   Rule of thumb: each sprint should produce 5-20 files and be testable
-#   independently of later sprints. If you can't write a verification
-#   checklist, the sprint is too vague.
+#   independently of later sprints. If you can't write a sanity check
+#   list, the sprint is too vague.
 #
 # ─── SPRINT ORDERING PRINCIPLES ───
 #
@@ -49,7 +49,7 @@
 #   Early sprints: Foundation layers (schema, types, interfaces)
 #   Middle sprints: Implementation layers (business logic, data access)
 #   Late sprints: Integration layers (API handlers, wiring, service layer)
-#   Final sprint: Always integration tests, E2E verification, wiring
+#   Final sprint: Always integration tests, E2E sanity checks, wiring
 #
 #   Dependencies flow forward only: Sprint 4 may depend on Sprint 1-3,
 #   never on Sprint 5+. Each sprint should state its dependencies.
@@ -96,8 +96,8 @@
 # @pre_iteration <cmd>            Run before every agent exec call
 # @model <model>                  Override the agent model (alias: @codex_model)
 # @engine_flags <flags>           Extra flags for agent exec (alias: @codex_flags)
-# @verification <file>            Verification checks file (default: .fry/verification.md)
-# @max_heal_attempts <N>          Auto-heal attempts after verification failure (default: 3; ignored for max effort which uses unlimited progress-based healing)
+# @verification <file>            Sanity checks file (default: .fry/verification.md)
+# @max_heal_attempts <N>          Auto-alignment attempts after sanity check failure (default: 3; ignored for max effort which uses unlimited progress-based alignment)
 # @max_fail_percent <N>           Max % of checks that can fail and still pass (default: 20; 0=strict)
 # @compact_with_agent             Use AI agent to summarize sprint progress (default: mechanical extraction)
 # @review_between_sprints         Enable mid-build sprint review (default: disabled)
@@ -140,8 +140,8 @@ Build:
 
 Dependencies to install: [list packages/modules with exact names]
 
-Verify:
-Concrete verification checks are defined in .fry/verification.md (sprint 1).
+Sanity Checks:
+Concrete sanity checks are defined in .fry/verification.md (sprint 1).
 Review those checks — they will be run independently after you signal completion.
 Additionally, confirm after each iteration:
 - [Build command succeeds — e.g., go build ./..., npm run build, pytest --collect-only]
@@ -176,10 +176,10 @@ Read .fry/AGENTS.md [relevant rules], then plans/plan.md [relevant sections].
 [Build instructions — same numbered list pattern as Sprint 1. Be specific:
  exact filenames, function signatures, SQL DDL, API shapes, etc.]
 
-Verify:
-Concrete verification checks are defined in .fry/verification.md (sprint 2).
+Sanity Checks:
+Concrete sanity checks are defined in .fry/verification.md (sprint 2).
 Review those checks — they will be run independently after you signal completion.
-- [Additional verification specific to this sprint's deliverables]
+- [Additional checks specific to this sprint's deliverables]
 
 CRITICAL: [Key constraint for this sprint]
 
@@ -204,8 +204,8 @@ Read .fry/AGENTS.md, then plans/plan.md [relevant sections].
 
 [Build instructions.]
 
-Verify:
-Concrete verification checks are defined in .fry/verification.md (sprint 3).
+Sanity Checks:
+Concrete sanity checks are defined in .fry/verification.md (sprint 3).
 - [Checklist]
 
 If stuck: [Hint]
@@ -217,12 +217,12 @@ If stuck: [Hint]
 # =============================================================================
 
 # =============================================================================
-# Sprint N (Final) — Wiring, Integration & Verification
+# Sprint N (Final) — Wiring, Integration & E2E
 # Creates: dependency injection wiring, integration tests, E2E smoke tests
 # Depends on: ALL previous sprints
 #
 # NOTE: The final sprint should ALWAYS be wiring + integration + E2E.
-# This is where you verify that everything from earlier sprints connects
+# This is where you confirm that everything from earlier sprints connects
 # correctly. It typically needs the highest max_iterations (30-35).
 # =============================================================================
 
@@ -233,7 +233,7 @@ If stuck: [Hint]
 @prompt
 Sprint N: Wire everything together, write integration tests, and verify E2E for [Project Name].
 
-This is the FINAL sprint. [Wire the entry point, build test infrastructure, write all integration tests, run full E2E verification.]
+This is the FINAL sprint. [Wire the entry point, build test infrastructure, write all integration tests, run full E2E sanity checks.]
 
 Read plans/plan.md [acceptance criteria sections].
 
@@ -249,11 +249,11 @@ PART 3 — Integration tests:
 PART 4 — End-to-end smoke test:
 [Curl commands or equivalent to verify the running application]
 
-Verify:
-Concrete verification checks are defined in .fry/verification.md (sprint N).
+Sanity Checks:
+Concrete sanity checks are defined in .fry/verification.md (sprint N).
 All acceptance criteria (ALL must pass):
 - [Exhaustive checklist from the plan document]
 
 If stuck after 15 iterations: [Most likely wiring issue — e.g., "interface mismatch in DI" or "DB connection in tests"]
 
-===PROMISE: SPRINTN_DONE=== when [the application starts, all tests pass, E2E verified].
+===PROMISE: SPRINTN_DONE=== when [the application starts, all tests pass, E2E checked].

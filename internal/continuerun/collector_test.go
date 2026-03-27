@@ -43,11 +43,11 @@ func TestParseCompletedSprints(t *testing.T) {
 			name: "multiple completed sprints",
 			content: "# Epic Progress — TestEpic\n\n" +
 				"## Sprint 1: Setup — PASS\n\nDone.\n\n" +
-				"## Sprint 2: Auth — PASS (healed)\n\nFixed.\n\n" +
+				"## Sprint 2: Auth — PASS (aligned)\n\nFixed.\n\n" +
 				"## Sprint 3: API — PASS (deferred failures)\n\nMostly done.\n",
 			expected: []CompletedSprint{
 				{Number: 1, Name: "Setup", Status: "PASS"},
-				{Number: 2, Name: "Auth", Status: "PASS (healed)"},
+				{Number: 2, Name: "Auth", Status: "PASS (aligned)"},
 				{Number: 3, Name: "API", Status: "PASS (deferred failures)"},
 			},
 		},
@@ -368,7 +368,7 @@ func TestCollectBuildState_MultipleActiveSprints(t *testing.T) {
 	epicProgress := "# Epic Progress\n\n" +
 		"## Sprint 2: Services — PASS\n\nDone.\n\n" +
 		"## Sprint 3: Projections — PASS\n\nDone.\n\n" +
-		"## Sprint 4: Pages — PASS (healed)\n\nDone.\n\n" +
+		"## Sprint 4: Pages — PASS (aligned)\n\nDone.\n\n" +
 		"## Sprint 5: Auth — PASS\n\nDone.\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, config.EpicProgressFile), []byte(epicProgress), 0o644))
 
@@ -479,7 +479,7 @@ func TestCollectDeferredFailures(t *testing.T) {
 		fryDir := filepath.Join(dir, config.FryDir)
 		require.NoError(t, os.MkdirAll(fryDir, 0o755))
 
-		content := "# Deferred Verification Failures\n\n" +
+		content := "# Deferred Sanity Check Failures\n\n" +
 			"## Sprint 2: Auth\n\n" +
 			"- DEFERRED: File missing or empty: src/lib/auth.ts\n"
 		require.NoError(t, os.WriteFile(filepath.Join(dir, config.DeferredFailuresFile), []byte(content), 0o644))

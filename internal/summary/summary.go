@@ -188,10 +188,10 @@ func buildSummaryPrompt(opts SummaryOpts) string {
 		b.WriteString("\n\n")
 	}
 
-	// Deferred verification failures
+	// Deferred sanity check failures
 	deferredPath := filepath.Join(opts.ProjectDir, config.DeferredFailuresFile)
 	if data, err := os.ReadFile(deferredPath); err == nil && len(data) > 0 {
-		b.WriteString("## Deferred Verification Failures\n")
+		b.WriteString("## Deferred Sanity Check Failures\n")
 		b.WriteString(string(data))
 		b.WriteString("\n\n")
 	}
@@ -245,19 +245,19 @@ func buildSummaryPrompt(opts SummaryOpts) string {
 	b.WriteString("- Summarize the final state of the project\n\n")
 	b.WriteString("### 3. Build Events\n")
 	b.WriteString("- Chronological account of significant events during the build\n")
-	b.WriteString("- Include: verification failures and how they were healed\n")
+	b.WriteString("- Include: sanity check failures and how they were aligned\n")
 	b.WriteString("- Include: audit findings (by severity) and their remediations\n")
 	b.WriteString("- Include: any sprint review deviations and replanning decisions\n\n")
-	b.WriteString("### 4. Audit & Verification Report\n")
+	b.WriteString("### 4. Audit & Sanity Check Report\n")
 	b.WriteString("- For each sprint: list all audit findings with severity\n")
 	b.WriteString("- Detail which findings were remediated and which remain\n")
 	b.WriteString("- Highlight any CRITICAL or HIGH issues that blocked the build\n")
 	b.WriteString("- Include the build-level audit results: overall pass/fail, severity breakdown, fixes applied, and any unresolved cross-cutting findings\n")
-	b.WriteString("- List all verification checks and their pass/fail status\n\n")
+	b.WriteString("- List all sanity checks and their pass/fail status\n\n")
 	b.WriteString("### 5. Advisory Messages\n")
 	b.WriteString("- Collect ALL advisory messages, warnings, and non-blocking issues\n")
 	b.WriteString("- Include MODERATE audit findings that were advisory-only\n")
-	b.WriteString("- Include any heal loop warnings or partial fixes\n")
+	b.WriteString("- Include any alignment loop warnings or partial fixes\n")
 	b.WriteString("- Include any review/deviation advisories\n\n")
 	b.WriteString("### 6. Final Notes\n")
 	b.WriteString("- Any recommendations for follow-up work\n")

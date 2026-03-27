@@ -4,7 +4,7 @@
 
 ## What Is Fry
 
-Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex, Claude Code, or Ollama) to autonomously build software or generate documents. It decomposes a human-authored plan into sequential "sprints," executes each sprint through an iterative AI agent loop, verifies outputs with machine-executable checks, self-heals on failure, audits quality, and git-checkpoints every sprint.
+Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex, Claude Code, or Ollama) to autonomously build software or generate documents. It decomposes a human-authored plan into sequential "sprints," executes each sprint through an iterative AI agent loop, runs sanity checks with machine-executable checks, auto-aligns on failure, audits quality, and git-checkpoints every sprint.
 
 **Version:** 0.1.0
 **Language:** Go 1.22
@@ -53,7 +53,7 @@ fry/
 │   │   ├── parser.go            # verification.md parser
 │   │   ├── runner.go            # Check execution with timeout
 │   │   └── collector.go         # Failure report aggregation
-│   ├── heal/heal.go             # Self-healing loop on verification failure
+│   ├── heal/heal.go             # Alignment loop on sanity check failure (package name `heal` is backward-compatible)
 │   ├── agentrun/agentrun.go     # Shared dual-log agent execution helper used by sprint and heal packages
 │   ├── audit/
 │   │   ├── audit.go             # Per-sprint two-level audit: outer audit cycles + inner fix loops
@@ -71,7 +71,7 @@ fry/
 │   ├── prepare/
 │   │   ├── prepare.go           # Steps 0-3 artifact generation
 │   │   ├── mode.go              # Mode type (software, planning, writing) + ParseMode
-│   │   ├── sanity.go            # Interactive project summary sanity check
+│   │   ├── overview.go          # Interactive project overview summary
 │   │   ├── software.go          # Software-mode prompt builders
 │   │   ├── planning.go          # Planning-mode prompt builders
 │   │   └── writing.go           # Writing-mode prompt builders
@@ -113,7 +113,7 @@ fry/
 │   ├── AGENTS.md                # Placeholder (generated via fry prepare)
 │   ├── GENERATE_EPIC.md         # LLM prompt template for epic generation
 │   ├── epic-example.md          # Fully-commented epic file example
-│   ├── verification-example.md  # Verification check examples
+│   ├── verification-example.md  # Sanity check examples
 │   └── identity/                # Compiled-in identity layers (read-only during builds)
 │       ├── core.md              # Fundamental self-knowledge (~500 tokens, always loaded)
 │       └── disposition.md       # Behavioral tendencies (~500 tokens, always loaded)
@@ -142,12 +142,12 @@ fry/
 | `user-prompt.txt` | Persisted user directive |
 | `build-mode.txt` | Persisted build mode (software/planning/writing) for `--continue` auto-detection |
 | `deviation-log.md` | Deviations detected during sprint reviews |
-| `deferred-failures.md` | Verification failures below threshold, deferred to build audit |
+| `deferred-failures.md` | Sanity check failures below threshold, deferred to build audit |
 | `sprint-audit.txt` | Current sprint's audit findings |
 | `audit-prompt.md` | Assembled audit prompt |
 | `review-prompt.md` | Assembled review prompt |
 | `summary-prompt.md` | Assembled summary prompt |
-| `build-logs/` | Timestamped per-iteration/heal/audit/continue logs |
+| `build-logs/` | Timestamped per-iteration/alignment/audit/continue logs |
 | `continue-prompt.md` | Assembled prompt for --continue analysis agent |
 | `continue-decision.txt` | LLM agent's resume decision (verdict, sprint, reason) |
 | `continue-report.md` | Programmatic build state report (input to analysis) |
@@ -221,7 +221,7 @@ Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → defa
 | high | 25 | 10 |
 | max | 40 | 10 |
 
-### Verification Checks (`internal/verify/types.go`)
+### Sanity Checks (`internal/verify/types.go`)
 
 Five check primitives: `@check_file` (file exists), `@check_file_contains` (regex match in file), `@check_cmd` (command exits 0), `@check_cmd_output` (command output matches regex), `@check_test` (go test command passes).
 
@@ -234,9 +234,9 @@ User Input                          Generated Artifacts
 ─────────────────────               ────────────────────
 plans/plan.md         ──┐
 plans/executive.md    ──┤  Triage Gate (1 cheap LLM call)
---user-prompt "..."   ──┤    ↓ Interactive confirmation [Y/n/a] (skipped with --no-sanity-check)
+--user-prompt "..."   ──┤    ↓ Interactive confirmation [Y/n/a] (skipped with --no-project-overview)
 assets/               ──┤    SIMPLE   → programmatic epic (0 LLM calls)
-media/                ──┘    MODERATE → programmatic epic + auto-verification (0 LLM calls)
+media/                ──┘    MODERATE → programmatic epic + auto-sanity-checks (0 LLM calls)
                                COMPLEX  → full prepare (3-4 LLM calls):
                                (manifest only)   .fry/AGENTS.md, .fry/epic.md, .fry/verification.md
                              (--full-prepare bypasses triage → always full prepare)
@@ -260,8 +260,8 @@ For each sprint (startSprint → endSprint):
      │    ├─ Append output → .fry/sprint-progress.txt
      │    ├─ Check promise token → early exit if found
      │    └─ No-op detection (no git diff) → early exit
-  8. Run verification checks
-  9. If checks fail: heal loop (effort-level-aware: low=skip, medium=3, high=up to 10 with progress detection, max=unlimited with progress detection)
+  8. Run sanity checks
+  9. If checks fail: alignment loop (effort-level-aware: low=skip, medium=3, high=up to 10 with progress detection, max=unlimited with progress detection)
  10. Sprint audit (if enabled & effort != low) — two-level loop:
      │  ├─ Outer loop (audit cycles): audit agent reviews + verifies previous issues
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
@@ -313,14 +313,14 @@ Key flags:
   --user-prompt-file path            # Load directive from file
   --dry-run                          # Validate without executing
   --sprint N                         # Start from sprint N
-  --resume                           # Skip iterations, verify + heal with boosted attempts
+  --resume                           # Skip iterations, sanity check + align with boosted attempts
   --continue                         # LLM-assisted auto-resume from where build left off
   --git-strategy auto|current|branch|worktree  # Git isolation strategy (default: auto)
   --branch-name name                 # Explicit branch name (overrides auto-generated)
-  --always-verify                    # Force verification, healing, and audit regardless of effort/complexity
+  --always-verify                    # Force sanity checks, alignment, and audit regardless of effort/complexity
   --full-prepare                     # Skip triage, run full prepare pipeline
   --triage-only                      # Classify task and exit (no artifact generation)
-  --no-sanity-check                  # Skip interactive confirmations (triage + project summary)
+  --no-project-overview              # Skip interactive confirmations (triage + project summary)
   --no-observer                      # Disable observer metacognitive layer
   --no-review                        # Skip mid-build sprint review
   --no-audit                         # Skip audits
@@ -340,13 +340,13 @@ Key flags:
 | `DefaultPlanningEngine` | `claude` | Default planning-mode engine |
 | `DefaultWritingEngine` | `claude` | Default writing-mode engine |
 | `WritingOutputDir` | `output` | Output directory for writing-mode deliverables |
-| `DefaultMaxHealAttempts` | `3` | Heal loop retries (fallback for auto effort) |
+| `DefaultMaxHealAttempts` | `3` | Alignment loop retries (fallback for auto effort) |
 | `DefaultMaxFailPercent` | `20` | Max % of checks that can fail and still pass |
-| `HealAttemptsHigh` | `10` | Heal attempts for high effort |
+| `HealAttemptsHigh` | `10` | Alignment attempts for high effort |
 | `HealStuckThresholdHigh` | `2` | Consecutive no-progress attempts before exit (high) |
 | `HealStuckThresholdMax` | `3` | Consecutive no-progress attempts before exit (max) |
 | `HealMinAttemptsMax` | `10` | Min attempts before mid-loop threshold exit (max) |
-| `HealSafetyCapMax` | `50` | Hard safety cap for unlimited max-effort healing |
+| `HealSafetyCapMax` | `50` | Hard safety cap for unlimited max-effort alignment |
 | `MaxFailPercentMax` | `10` | Stricter threshold for max effort |
 | `DefaultMaxOuterAuditCycles` | `3` | Outer audit cycles per sprint (medium/default) |
 | `DefaultMaxInnerFixIter` | `3` | Inner fix iterations per audit report (medium/default) |
@@ -358,7 +358,7 @@ Key flags:
 | `DefaultMaxDeviationScope` | `3` | Max sprints affected by replan |
 | `MaxAuditDiffBytes` | `100000` | Max diff size for audit context |
 | `ResumeHealMultiplier` | `2` | Heal iteration multiplier on resume |
-| `ResumeMinHealAttempts` | `6` | Minimum heal attempts on resume |
+| `ResumeMinHealAttempts` | `6` | Minimum alignment attempts on resume |
 | `BuildModeFile` | `.fry/build-mode.txt` | Persisted build mode for `--continue` |
 | `ArchiveDir` | `.fry-archive` | Directory for archived builds |
 | `ArchivePrefix` | `.fry--build--` | Prefix for archive folder names |
@@ -427,8 +427,8 @@ make clean     # rm -rf bin/
 | `epic-format.md` | Epic syntax, directives, validation |
 | `engines.md` | Codex/Claude/Ollama config, mixing, model overrides |
 | `sprint-execution.md` | Agent loop, prompt assembly, progress |
-| `verification.md` | Check primitives, format, outcome matrix |
-| `self-healing.md` | Heal loop mechanics |
+| `sanity-checks.md` | Check primitives, format, outcome matrix |
+| `alignment.md` | Alignment loop mechanics |
 | `sprint-audit.md` | Per-sprint semantic review |
 | `build-audit.md` | Final holistic audit |
 | `sprint-review.md` | Mid-build review, replanning, deviations |
@@ -464,7 +464,7 @@ Fry improves itself via an automated loop driven by `.self-improve/orchestrate.s
 
 The roadmap lives in GitHub Issues (labels: category/*, priority/*, effort/*, status/*). See docs/self-improvement.md for the full architecture.
 
-**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (select items → worktree → implement → test → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). After each build, a structured journal entry is written to `build-journal.json` with outcome, items, heal rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
+**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (select items → worktree → implement → test → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). After each build, a structured journal entry is written to `build-journal.json` with outcome, items, alignment rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
 
 **Key flags:** `--auto-merge` (direct merge to master), `--skip-planning`, `--skip-build`, `--dry-run`.
 
@@ -507,7 +507,7 @@ Sprint prompts follow a 7-part convention: OPENER, REFERENCES, BUILD LIST, CONST
 
 - **Two-phase progress tracking:** per-sprint log (`sprint-progress.txt`) + cross-sprint compacted summaries (`epic-progress.txt`) for bounded context
 - **Promise tokens:** agent writes `===PROMISE: TOKEN===` to signal sprint completion → early exit
-- **No-op detection:** if git diff shows no changes for 2-3 consecutive iterations and verification passes → early exit
+- **No-op detection:** if git diff shows no changes for 2-3 consecutive iterations and sanity checks pass → early exit
 - **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory, LOW included in fix at high/max effort (non-blocking)
 - **Graceful signal handling:** Ctrl+C saves partial work via git checkpoint
 - **Engine abstraction:** any CLI-based AI tool can be added by implementing `Engine` interface (2 methods: `Run`, `Name`)

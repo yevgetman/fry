@@ -16,10 +16,10 @@ FOR each sprint in range:
   │   ├─ Log output to iteration log
   │   ├─ Check for promise token
   │   ├─ No-op detection (2 consecutive iterations with no changes
-  │   │   AND all verification checks pass = early exit; 3 at max effort)
+  │   │   AND all sanity checks pass = early exit; 3 at max effort)
   │   └─ Continue until: promise found OR no-op+verified OR max iterations
-  ├─ Run verification checks
-  ├─ If checks fail: enter heal loop
+  ├─ Run sanity checks
+  ├─ If checks fail: enter alignment loop
   ├─ Sprint audit: audit→fix loop (CRITICAL/HIGH block; MODERATE advisory)
   ├─ Git checkpoint
   ├─ Compact progress
@@ -70,7 +70,7 @@ The agent should output:
 
 The agent loop exits when any of these occur:
 1. **Promise found** — the agent output contains the promise token string
-2. **No-op detection** — 2 consecutive iterations with no meaningful changes and verification passes (3 consecutive at `max` effort, to allow more rumination)
+2. **No-op detection** — 2 consecutive iterations with no meaningful changes and sanity checks pass (3 consecutive at `max` effort, to allow more rumination)
 3. **Max iterations reached** — the `@max_iterations` limit is hit
 
 ## Progress Tracking
@@ -100,16 +100,16 @@ After each sprint completes, progress is compacted:
 
 | Status | Meaning |
 |---|---|
-| `PASS` | Completed with promise token and verification passed |
-| `PASS (healed)` | Verification initially failed, then fixed via healing |
-| `PASS (verification passed, no promise)` | No promise token found, but verification passed |
-| `PASS (healed, no promise)` | Healed without promise token |
-| `PASS (deferred failures)` | Verification failures within `@max_fail_percent` threshold — deferred to build audit |
-| `PASS (healed, deferred failures)` | Healed with remaining failures within threshold — deferred to build audit |
-| `FAIL (verification failed, heal exhausted)` | All heal attempts exhausted |
-| `FAIL (no promise, verification failed, heal exhausted)` | No promise + healing failed |
+| `PASS` | Completed with promise token and sanity checks passed |
+| `PASS (aligned)` | Sanity checks initially failed, then fixed via alignment |
+| `PASS (sanity checks passed, no promise)` | No promise token found, but sanity checks passed |
+| `PASS (aligned, no promise)` | Aligned without promise token |
+| `PASS (deferred failures)` | Sanity check failures within `@max_fail_percent` threshold — deferred to build audit |
+| `PASS (aligned, deferred failures)` | Aligned with remaining failures within threshold — deferred to build audit |
+| `FAIL (sanity checks failed, alignment exhausted)` | All alignment attempts exhausted |
+| `FAIL (no promise, sanity checks failed, alignment exhausted)` | No promise + alignment failed |
 | `FAIL (audit: SEVERITY)` | Sprint audit found blocking CRITICAL or HIGH issues after all audit cycles |
-| `FAIL (no promise after N iters)` | No promise token found and no verification checks exist |
+| `FAIL (no promise after N iters)` | No promise token found and no sanity checks exist |
 | `FAIL (no prompt)` | Sprint had no prompt text |
 | `SKIPPED` | Sprint was not in the run range |
 
@@ -121,7 +121,7 @@ Build logs are written to `.fry/build-logs/`:
   sprint1_20060102_150405.log              # Per-sprint aggregate log
   sprint1_iter1_20060102_150405.log        # Per-iteration log
   sprint1_iter2_20060102_150405.log        # Per-iteration log
-  sprint1_heal1_20060102_150405.log        # Heal attempt log
+  sprint1_heal1_20060102_150405.log        # Alignment attempt log
   sprint1_resume_20060102_150405.log       # Resume mode aggregate log (--resume)
   sprint1_audit1_20060102_150405.log       # Audit pass log
   sprint1_auditfix_1_1_20060102_150405.log # Audit fix agent log (cycle_fix)
@@ -145,7 +145,7 @@ Hooks execute via `bash -c` in the project directory.
 
 ## Resuming Failed Builds
 
-When a sprint fails (after exhausting heal attempts), Fry commits partial work and prints three recovery commands:
+When a sprint fails (after exhausting alignment attempts), Fry commits partial work and prints three recovery commands:
 
 ```
 Resume:   fry run --resume --sprint 4
@@ -171,13 +171,13 @@ fry run --continue --mode software # Explicit mode override
 
 Cannot be combined with `--sprint`, `--resume`, or positional sprint arguments — `--continue` auto-detects all of these.
 
-### `--resume` (manual resume for verification failures)
+### `--resume` (manual resume for sanity check failures)
 
-The `--resume` flag skips the iteration loop entirely and goes straight to verification + healing with a boosted heal budget (2x normal attempts, minimum 6). It preserves the existing `.fry/sprint-progress.txt` so the agent retains full context from the previous failed attempt — including prior iteration logs and heal failure reports.
+The `--resume` flag skips the iteration loop entirely and goes straight to sanity checks + alignment with a boosted alignment budget (2x normal attempts, minimum 6). It preserves the existing `.fry/sprint-progress.txt` so the agent retains full context from the previous failed attempt — including prior iteration logs and alignment failure reports.
 
 Use `--resume` when:
-- The sprint's code was largely written correctly but verification checks are failing
-- The heal loop was exhausted but more attempts might fix remaining issues
+- The sprint's code was largely written correctly but sanity checks are failing
+- The alignment loop was exhausted but more attempts might fix remaining issues
 - You don't want to re-run iterations that would overwrite existing work
 
 After the resumed sprint passes, subsequent sprints in the range run normally.

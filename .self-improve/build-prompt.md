@@ -44,9 +44,9 @@ After all items are implemented, do a final documentation review: re-read the do
 - Do not add dependencies, restructure the epic parser, or break the engine interface.
 - Do not refactor surrounding code, add comments to code you didn't change, or make cosmetic improvements outside the scope of the item.
 
-## Verification
+## Sanity Checks
 
-This build runs with `--always-verify`. All verification checks must pass. If a check fails, fix the root cause — do not weaken or remove the check.
+This build runs with `--always-verify`. All sanity checks must pass. If a check fails, fix the root cause — do not weaken or remove the check.
 
 ## Manifest
 

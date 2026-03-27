@@ -369,13 +369,13 @@ func TestBootstrapExecutive_Logging(t *testing.T) {
 	})
 }
 
-func TestParseSanitySummary(t *testing.T) {
+func TestParseOverviewSummary(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name     string
 		input    string
-		expected SanitySummary
+		expected OverviewSummary
 	}{
 		{
 			name: "well-formed output",
@@ -384,7 +384,7 @@ GOAL: Build a todo app with PostgreSQL backend
 EXPECTED_OUTPUT: Go binary with REST API, database migrations, Docker setup
 KEY_TOPICS: REST API, PostgreSQL, authentication, Docker
 EFFORT: medium (3-4 sprints)`,
-			expected: SanitySummary{
+			expected: OverviewSummary{
 				ProjectType:    "Software (REST API)",
 				Goal:           "Build a todo app with PostgreSQL backend",
 				ExpectedOutput: "Go binary with REST API, database migrations, Docker setup",
@@ -395,7 +395,7 @@ EFFORT: medium (3-4 sprints)`,
 		{
 			name: "wrapped in markdown fences",
 			input: "```\nPROJECT_TYPE: Writing (guide)\nGOAL: Write a Go concurrency guide\nEXPECTED_OUTPUT: 6 chapters in output/\nKEY_TOPICS: goroutines, channels\nEFFORT: medium (3 sprints)\n```",
-			expected: SanitySummary{
+			expected: OverviewSummary{
 				ProjectType:    "Writing (guide)",
 				Goal:           "Write a Go concurrency guide",
 				ExpectedOutput: "6 chapters in output/",
@@ -407,7 +407,7 @@ EFFORT: medium (3-4 sprints)`,
 			name: "missing fields",
 			input: `PROJECT_TYPE: Planning (analysis)
 GOAL: Analyze market trends`,
-			expected: SanitySummary{
+			expected: OverviewSummary{
 				ProjectType: "Planning (analysis)",
 				Goal:        "Analyze market trends",
 			},
@@ -422,7 +422,7 @@ Some random line
 EXPECTED_OUTPUT: binary
 KEY_TOPICS: cobra, testing
 EFFORT: low (1 sprint)`,
-			expected: SanitySummary{
+			expected: OverviewSummary{
 				ProjectType:    "Software (CLI tool)",
 				Goal:           "Build a CLI",
 				ExpectedOutput: "binary",
@@ -433,24 +433,24 @@ EFFORT: low (1 sprint)`,
 		{
 			name:     "empty input",
 			input:    "",
-			expected: SanitySummary{},
+			expected: OverviewSummary{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := parseSanitySummary(tt.input)
+			result := parseOverviewSummary(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestDisplaySanitySummary(t *testing.T) {
+func TestDisplayOverviewSummary(t *testing.T) {
 	t.Parallel()
 
 	var buf strings.Builder
-	displaySanitySummary(&buf, SanitySummary{
+	displayOverviewSummary(&buf, OverviewSummary{
 		ProjectType:    "Software (REST API)",
 		Goal:           "Build a todo app",
 		ExpectedOutput: "Go binary",
@@ -466,11 +466,11 @@ func TestDisplaySanitySummary(t *testing.T) {
 	assert.Contains(t, output, "medium (3 sprints)")
 }
 
-func TestDisplaySanitySummary_UnknownFields(t *testing.T) {
+func TestDisplayOverviewSummary_UnknownFields(t *testing.T) {
 	t.Parallel()
 
 	var buf strings.Builder
-	displaySanitySummary(&buf, SanitySummary{
+	displayOverviewSummary(&buf, OverviewSummary{
 		ProjectType: "Software (app)",
 	})
 	output := buf.String()
@@ -478,14 +478,14 @@ func TestDisplaySanitySummary_UnknownFields(t *testing.T) {
 	assert.Contains(t, output, "(unknown)")
 }
 
-func TestRunSanityCheck_UserApproves(t *testing.T) {
+func TestRunProjectOverview_UserApproves(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software (CLI)\nGOAL: Build a CLI tool\nEXPECTED_OUTPUT: binary\nKEY_TOPICS: cobra\nEFFORT: low (1 sprint)"}
 	stdin := strings.NewReader("y\n")
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
@@ -498,14 +498,14 @@ func TestRunSanityCheck_UserApproves(t *testing.T) {
 	assert.Equal(t, epic.EffortLevel(""), result.EffortLevel)
 }
 
-func TestRunSanityCheck_DefaultYes(t *testing.T) {
+func TestRunProjectOverview_DefaultYes(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
 	stdin := strings.NewReader("\n") // empty line = default yes
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
@@ -515,42 +515,42 @@ func TestRunSanityCheck_DefaultYes(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
-func TestRunSanityCheck_UserDeclines(t *testing.T) {
+func TestRunProjectOverview_UserDeclines(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
 	stdin := strings.NewReader("n\n")
 	var stdout strings.Builder
 
-	_, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	_, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
 	}, "plan", "", "", "")
 
-	require.ErrorIs(t, err, ErrSanityCheckDeclined)
+	require.ErrorIs(t, err, ErrProjectOverviewDeclined)
 }
 
-func TestRunSanityCheck_EOF(t *testing.T) {
+func TestRunProjectOverview_EOF(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low"}
 	stdin := strings.NewReader("") // EOF
 	var stdout strings.Builder
 
-	_, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	_, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
 	}, "plan", "", "", "")
 
-	require.ErrorIs(t, err, ErrSanityCheckDeclined)
+	require.ErrorIs(t, err, ErrProjectOverviewDeclined)
 }
 
-func TestSoftwareSanityCheckPrompt_IncludesInputs(t *testing.T) {
+func TestSoftwareOverviewPrompt_IncludesInputs(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareSanityCheckPrompt("my plan", "my executive", "focus on backend", "medium", "media manifest", "assets section")
+	prompt := SoftwareOverviewPrompt("my plan", "my executive", "focus on backend", "medium", "media manifest", "assets section")
 	assert.Contains(t, prompt, "senior software architect")
 	assert.Contains(t, prompt, "my plan")
 	assert.Contains(t, prompt, "my executive")
@@ -560,27 +560,27 @@ func TestSoftwareSanityCheckPrompt_IncludesInputs(t *testing.T) {
 	assert.Contains(t, prompt, `"medium"`)
 }
 
-func TestSoftwareSanityCheckPrompt_OmitsMissingInputs(t *testing.T) {
+func TestSoftwareOverviewPrompt_OmitsMissingInputs(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareSanityCheckPrompt("my plan", "", "", "", "", "")
+	prompt := SoftwareOverviewPrompt("my plan", "", "", "", "", "")
 	assert.Contains(t, prompt, "my plan")
 	assert.NotContains(t, prompt, "Executive context")
 	assert.NotContains(t, prompt, "User directive")
 	assert.NotContains(t, prompt, "Media assets")
 }
 
-func TestPlanningSanityCheckPrompt(t *testing.T) {
+func TestPlanningOverviewPrompt(t *testing.T) {
 	t.Parallel()
 
-	prompt := PlanningSanityCheckPrompt("plan", "", "", "", "", "")
+	prompt := PlanningOverviewPrompt("plan", "", "", "", "", "")
 	assert.Contains(t, prompt, "senior strategic planner")
 }
 
-func TestWritingSanityCheckPrompt(t *testing.T) {
+func TestWritingOverviewPrompt(t *testing.T) {
 	t.Parallel()
 
-	prompt := WritingSanityCheckPrompt("plan", "", "", "", "", "")
+	prompt := WritingOverviewPrompt("plan", "", "", "", "", "")
 	assert.Contains(t, prompt, "senior author and content strategist")
 }
 
@@ -591,7 +591,7 @@ func TestRunPrepare_Logging(t *testing.T) {
 		return &fakeEngine{output: "1. Rule one\n@sprint 1\n@check_file foo\n"}, nil
 	}
 
-	t.Run("sanity check skipped", func(t *testing.T) {
+	t.Run("project overview skipped", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -604,14 +604,14 @@ func TestRunPrepare_Logging(t *testing.T) {
 		err := RunPrepare(context.Background(), PrepareOpts{
 			ProjectDir:      dir,
 			Engine:          "claude",
-			SkipSanityCheck: true,
+			SkipProjectOverview: true,
 			EngineFactory:   fakeFactory,
 			LogFunc:         testLogFunc(&logBuf),
 		})
 
 		require.NoError(t, err)
 		logOutput := logBuf.String()
-		assert.NotContains(t, logOutput, "Sanity check")
+		assert.NotContains(t, logOutput, "Project overview")
 	})
 
 	t.Run("plan exists without executive", func(t *testing.T) {
@@ -628,7 +628,7 @@ func TestRunPrepare_Logging(t *testing.T) {
 		err := RunPrepare(context.Background(), PrepareOpts{
 			ProjectDir:      dir,
 			Engine:          "claude",
-			SkipSanityCheck: true,
+			SkipProjectOverview: true,
 			EngineFactory:   fakeFactory,
 			LogFunc:         testLogFunc(&logBuf),
 		})
@@ -657,7 +657,7 @@ func TestRunPrepare_Logging(t *testing.T) {
 		err := RunPrepare(context.Background(), PrepareOpts{
 			ProjectDir:      dir,
 			Engine:          "claude",
-			SkipSanityCheck: true,
+			SkipProjectOverview: true,
 			EngineFactory:   fakeFactory,
 			LogFunc:         testLogFunc(&logBuf),
 		})
@@ -688,7 +688,7 @@ func TestRunPrepare_Logging(t *testing.T) {
 			ProjectDir:      dir,
 			Engine:          "claude",
 			UserPrompt:      "focus on backend",
-			SkipSanityCheck: true,
+			SkipProjectOverview: true,
 			EngineFactory:   fakeFactory,
 			LogFunc:         testLogFunc(&logBuf),
 		})
@@ -716,7 +716,7 @@ func TestRunPrepare_Logging(t *testing.T) {
 			Engine:           "claude",
 			UserPrompt:       "focus on backend",
 			UserPromptSource: "--user-prompt-file prompts/backend.txt",
-			SkipSanityCheck:  true,
+			SkipProjectOverview:  true,
 			EngineFactory:    fakeFactory,
 			LogFunc:          testLogFunc(&logBuf),
 		})
@@ -728,7 +728,7 @@ func TestRunPrepare_Logging(t *testing.T) {
 	})
 }
 
-func TestRunSanityCheck_AdjustAddsUserPrompt(t *testing.T) {
+func TestRunProjectOverview_AdjustAddsUserPrompt(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
@@ -736,7 +736,7 @@ func TestRunSanityCheck_AdjustAddsUserPrompt(t *testing.T) {
 	stdin := strings.NewReader("a\nfocus on the backend\n\n\ny\n")
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
@@ -747,14 +747,14 @@ func TestRunSanityCheck_AdjustAddsUserPrompt(t *testing.T) {
 	assert.Contains(t, stdout.String(), "adjust")
 }
 
-func TestRunSanityCheck_AdjustAppendsToExistingPrompt(t *testing.T) {
+func TestRunProjectOverview_AdjustAppendsToExistingPrompt(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: medium (2-4 sprints)"}
 	stdin := strings.NewReader("a\nalso add tests\n\n\ny\n")
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
 		UserPrompt:  "build a REST API",
 		EffortLevel: epic.EffortMedium,
@@ -767,7 +767,7 @@ func TestRunSanityCheck_AdjustAppendsToExistingPrompt(t *testing.T) {
 	assert.Equal(t, epic.EffortMedium, result.EffortLevel)
 }
 
-func TestRunSanityCheck_AdjustChangesEffort(t *testing.T) {
+func TestRunProjectOverview_AdjustChangesEffort(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: high (4-10 sprints)"}
@@ -775,7 +775,7 @@ func TestRunSanityCheck_AdjustChangesEffort(t *testing.T) {
 	stdin := strings.NewReader("a\n\nhigh\n\ny\n")
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
 		EffortLevel: epic.EffortLow,
 		Stdin:       stdin,
@@ -786,7 +786,7 @@ func TestRunSanityCheck_AdjustChangesEffort(t *testing.T) {
 	assert.Equal(t, epic.EffortHigh, result.EffortLevel)
 }
 
-func TestRunSanityCheck_AdjustInvalidEffortKeepsOld(t *testing.T) {
+func TestRunProjectOverview_AdjustInvalidEffortKeepsOld(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: medium (2-4 sprints)"}
@@ -794,7 +794,7 @@ func TestRunSanityCheck_AdjustInvalidEffortKeepsOld(t *testing.T) {
 	stdin := strings.NewReader("a\n\ngarbage\n\ny\n")
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
 		EffortLevel: epic.EffortMedium,
 		Stdin:       stdin,
@@ -806,7 +806,7 @@ func TestRunSanityCheck_AdjustInvalidEffortKeepsOld(t *testing.T) {
 	assert.Contains(t, stdout.String(), "Invalid effort level")
 }
 
-func TestRunSanityCheck_AdjustThenDecline(t *testing.T) {
+func TestRunProjectOverview_AdjustThenDecline(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
@@ -814,16 +814,16 @@ func TestRunSanityCheck_AdjustThenDecline(t *testing.T) {
 	stdin := strings.NewReader("a\nadjust text\n\nn\n")
 	var stdout strings.Builder
 
-	_, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	_, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
 	}, "plan", "", "", "")
 
-	require.ErrorIs(t, err, ErrSanityCheckDeclined)
+	require.ErrorIs(t, err, ErrProjectOverviewDeclined)
 }
 
-func TestRunSanityCheck_AdjustEOFDuringText(t *testing.T) {
+func TestRunProjectOverview_AdjustEOFDuringText(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
@@ -831,16 +831,16 @@ func TestRunSanityCheck_AdjustEOFDuringText(t *testing.T) {
 	stdin := strings.NewReader("a\n")
 	var stdout strings.Builder
 
-	_, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	_, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
 	}, "plan", "", "", "")
 
-	require.ErrorIs(t, err, ErrSanityCheckDeclined)
+	require.ErrorIs(t, err, ErrProjectOverviewDeclined)
 }
 
-func TestRunSanityCheck_AdjustEOFDuringEffort(t *testing.T) {
+func TestRunProjectOverview_AdjustEOFDuringEffort(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
@@ -848,16 +848,16 @@ func TestRunSanityCheck_AdjustEOFDuringEffort(t *testing.T) {
 	stdin := strings.NewReader("a\nsome adjustment\n")
 	var stdout strings.Builder
 
-	_, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	_, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
 	}, "plan", "", "", "")
 
-	require.ErrorIs(t, err, ErrSanityCheckDeclined)
+	require.ErrorIs(t, err, ErrProjectOverviewDeclined)
 }
 
-func TestRunSanityCheck_AdjustEnablesReview(t *testing.T) {
+func TestRunProjectOverview_AdjustEnablesReview(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: high (4-10 sprints)"}
@@ -865,7 +865,7 @@ func TestRunSanityCheck_AdjustEnablesReview(t *testing.T) {
 	stdin := strings.NewReader("a\n\n\ny\ny\n")
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
 		EffortLevel: epic.EffortHigh,
 		Stdin:       stdin,
@@ -877,7 +877,7 @@ func TestRunSanityCheck_AdjustEnablesReview(t *testing.T) {
 	assert.Contains(t, stdout.String(), "Enable sprint review?")
 }
 
-func TestRunSanityCheck_ReviewNotShownForLowEffort(t *testing.T) {
+func TestRunProjectOverview_ReviewNotShownForLowEffort(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
@@ -885,7 +885,7 @@ func TestRunSanityCheck_ReviewNotShownForLowEffort(t *testing.T) {
 	stdin := strings.NewReader("a\n\n\ny\n")
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
 		EffortLevel: epic.EffortLow,
 		Stdin:       stdin,
@@ -897,7 +897,7 @@ func TestRunSanityCheck_ReviewNotShownForLowEffort(t *testing.T) {
 	assert.NotContains(t, stdout.String(), "Enable sprint review?")
 }
 
-func TestRunSanityCheck_ReviewAutoEnabledForMaxEffort(t *testing.T) {
+func TestRunProjectOverview_ReviewAutoEnabledForMaxEffort(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: max (4-10 sprints)"}
@@ -905,7 +905,7 @@ func TestRunSanityCheck_ReviewAutoEnabledForMaxEffort(t *testing.T) {
 	stdin := strings.NewReader("a\n\n\ny\n")
 	var stdout strings.Builder
 
-	result, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
 		EffortLevel: epic.EffortMax,
 		Stdin:       stdin,
@@ -925,7 +925,7 @@ func TestSoftwareStep2Prompt_WithReviewEnabled(t *testing.T) {
 	assert.Contains(t, prompt, "@review_between_sprints")
 }
 
-func TestRunSanityCheck_ReaderErrorNotSilenced(t *testing.T) {
+func TestRunProjectOverview_ReaderErrorNotSilenced(t *testing.T) {
 	t.Parallel()
 
 	eng := &fakeEngine{output: "PROJECT_TYPE: Software\nGOAL: test\nEXPECTED_OUTPUT: test\nKEY_TOPICS: test\nEFFORT: low (1-2 sprints)"}
@@ -933,21 +933,21 @@ func TestRunSanityCheck_ReaderErrorNotSilenced(t *testing.T) {
 	stdin := &errReader{data: nil, err: readErr}
 	var stdout strings.Builder
 
-	_, err := runSanityCheck(context.Background(), eng, PrepareOpts{
+	_, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir: t.TempDir(),
 		Stdin:      stdin,
 		Stdout:     &stdout,
 	}, "plan", "", "", "")
 
 	require.Error(t, err)
-	assert.NotErrorIs(t, err, ErrSanityCheckDeclined)
+	assert.NotErrorIs(t, err, ErrProjectOverviewDeclined)
 	assert.Contains(t, err.Error(), "disk read failed")
 }
 
-func TestSanityCheckPrompt_SprintsNotHours(t *testing.T) {
+func TestOverviewPrompt_SprintsNotHours(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareSanityCheckPrompt("my plan", "", "", "", "", "")
+	prompt := SoftwareOverviewPrompt("my plan", "", "", "", "", "")
 	assert.Contains(t, prompt, "sprint count")
 	assert.Contains(t, prompt, "NEVER use hours or days")
 }

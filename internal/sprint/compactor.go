@@ -40,7 +40,7 @@ func mechanicalCompaction(progress string) string {
 	lastIndex := -1
 
 	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.HasPrefix(lines[i], "## Iteration") || strings.HasPrefix(lines[i], "--- Heal attempt") {
+		if strings.HasPrefix(lines[i], "## Iteration") || strings.HasPrefix(lines[i], "--- Alignment attempt") {
 			lastIndex = i
 			break
 		}

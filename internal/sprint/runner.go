@@ -21,16 +21,16 @@ import (
 
 const (
 	StatusPass = "PASS"
-	// PASS healed: keep this unparenthesized form in the file for regex-based verification compatibility.
-	StatusPassHealed                           = "PASS (healed)"
-	StatusPassVerificationPassedNoPromise      = "PASS (verification passed, no promise)"
-	StatusPassHealedNoPromise                  = "PASS (healed, no promise)"
-	StatusPassWithDeferredFailures             = "PASS (deferred failures)"
-	StatusPassHealedWithDeferredFailures       = "PASS (healed, deferred failures)"
-	StatusFailVerificationFailedHealExhausted  = "FAIL (verification failed, heal exhausted)"
-	StatusFailNoPromiseVerificationHealExhaust = "FAIL (no promise, verification failed, heal exhausted)"
-	StatusFailNoPrompt                         = "FAIL (no prompt)"
-	StatusSkipped                              = "SKIPPED"
+	// PASS aligned: keep this unparenthesized form in the file for regex-based sanity check compatibility.
+	StatusPassAligned                              = "PASS (aligned)"
+	StatusPassSanityPassedNoPromise                = "PASS (sanity checks passed, no promise)"
+	StatusPassAlignedNoPromise                     = "PASS (aligned, no promise)"
+	StatusPassWithDeferredFailures                 = "PASS (deferred failures)"
+	StatusPassAlignedWithDeferredFailures          = "PASS (aligned, deferred failures)"
+	StatusFailSanityFailedAlignmentExhausted       = "FAIL (sanity checks failed, alignment exhausted)"
+	StatusFailNoPromiseSanityFailedAlignmentExhausted = "FAIL (no promise, sanity checks failed, alignment exhausted)"
+	StatusFailNoPrompt                             = "FAIL (no prompt)"
+	StatusSkipped                                  = "SKIPPED"
 )
 
 type SprintResult struct {
@@ -38,12 +38,12 @@ type SprintResult struct {
 	Name                   string
 	Status                 string
 	Duration               time.Duration
-	HealAttempts           int                  // number of heal agent invocations
+	HealAttempts           int                  // number of alignment agent invocations
 	AuditWarning           string               // non-empty when MODERATE audit issues remain (advisory)
-	DeferredFailures       []verify.CheckResult  // verification failures below threshold
-	VerificationResults    []verify.CheckResult  // all check results from the final verification run
-	VerificationPassCount  int                  // pass count from final verification run
-	VerificationTotalCount int                  // total checks from final verification run
+	DeferredFailures       []verify.CheckResult  // sanity check failures below threshold
+	VerificationResults    []verify.CheckResult  // all check results from the final sanity check run
+	VerificationPassCount  int                  // pass count from final sanity check run
+	VerificationTotalCount int                  // total checks from final sanity check run
 	SprintLogPath          string               // path to combined sprint log file
 }
 
@@ -113,7 +113,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	promiseToken := "===PROMISE: " + cfg.Sprint.Promise + "==="
 	promiseFound := false
 
-	// Pre-load verification checks for no-op early exit detection
+	// Pre-load sanity checks for no-op early exit detection
 	checks, checkErr := loadVerificationChecks(cfg.ProjectDir, cfg.Epic.VerificationFile)
 	if checkErr != nil {
 		return nil, checkErr
@@ -131,7 +131,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		frylog.Log("Effort level: %s", cfg.Epic.EffortLevel)
 	}
 	if sprintCheckCount > 0 {
-		frylog.Log("Verification checks: %d applicable to this sprint", sprintCheckCount)
+		frylog.Log("Sanity checks: %d applicable to this sprint", sprintCheckCount)
 	}
 	frylog.Log("=========================================")
 
@@ -185,18 +185,18 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		if consecutiveNoop >= noopThreshold && cfg.Sprint.Promise != "" && len(checks) > 0 {
 			_, passCount, totalCount := verify.RunChecks(ctx, checks, cfg.Sprint.Number, cfg.ProjectDir)
 			if totalCount > 0 && passCount == totalCount {
-				frylog.Log("  No file changes for %d consecutive iterations and verification passes — exiting early.", consecutiveNoop)
+				frylog.Log("  No file changes for %d consecutive iterations and sanity checks pass — exiting early.", consecutiveNoop)
 				break
 			}
 		}
 	}
 
 	if len(checks) > 0 {
-		frylog.Log("  Running verification checks...")
+		frylog.Log("  Running sanity checks...")
 	}
 	results, passCount, totalCount := verify.RunChecks(ctx, checks, cfg.Sprint.Number, cfg.ProjectDir)
 	if totalCount > 0 {
-		frylog.Log("  Verification: %d/%d checks passed.", passCount, totalCount)
+		frylog.Log("  Sanity checks: %d/%d passed.", passCount, totalCount)
 	}
 
 	status, deferred, healAttempts, err := determineOutcome(ctx, cfg, checks, promiseFound, results, passCount, totalCount, sprintLogPath)
@@ -207,7 +207,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	if len(deferred) > 0 {
 		summary := verify.CollectDeferredSummary(deferred)
 		if appendErr := AppendToSprintProgress(cfg.ProjectDir,
-			fmt.Sprintf("\nDeferred verification failures (%d):\n%s\n", len(deferred), summary)); appendErr != nil {
+			fmt.Sprintf("\nDeferred sanity check failures (%d):\n%s\n", len(deferred), summary)); appendErr != nil {
 			frylog.Log("WARNING: could not write deferred failures to sprint progress: %v", appendErr)
 		}
 	}
@@ -259,33 +259,33 @@ func determineOutcome(ctx context.Context, cfg RunConfig, checks []verify.Check,
 			return "", nil, 0, err
 		}
 		if hr.Healed {
-			return StatusPassHealed, nil, hr.Attempts, nil
+			return StatusPassAligned, nil, hr.Attempts, nil
 		}
 		if hr.WithinThreshold {
 			return StatusPassWithDeferredFailures, hr.DeferredFailures, hr.Attempts, nil
 		}
-		return StatusFailVerificationFailedHealExhausted, nil, hr.Attempts, nil
+		return StatusFailSanityFailedAlignmentExhausted, nil, hr.Attempts, nil
 	case !promiseFound && !hasChecks:
 		return fmt.Sprintf("FAIL (no promise after %d iters)", cfg.Sprint.MaxIterations), nil, 0, nil
 	case !promiseFound && checksPass:
-		return StatusPassVerificationPassedNoPromise, nil, 0, nil
+		return StatusPassSanityPassedNoPromise, nil, 0, nil
 	default:
 		hr, err := heal.RunHealLoop(ctx, healOpts)
 		if err != nil {
 			return "", nil, 0, err
 		}
 		if hr.Healed {
-			return StatusPassHealedNoPromise, nil, hr.Attempts, nil
+			return StatusPassAlignedNoPromise, nil, hr.Attempts, nil
 		}
 		if hr.WithinThreshold {
-			return StatusPassHealedWithDeferredFailures, hr.DeferredFailures, hr.Attempts, nil
+			return StatusPassAlignedWithDeferredFailures, hr.DeferredFailures, hr.Attempts, nil
 		}
-		return StatusFailNoPromiseVerificationHealExhaust, nil, hr.Attempts, nil
+		return StatusFailNoPromiseSanityFailedAlignmentExhausted, nil, hr.Attempts, nil
 	}
 }
 
-// ResumeSprint skips the iteration loop and goes straight to verification + healing
-// with a boosted heal budget. It preserves existing sprint-progress.txt so the agent
+// ResumeSprint skips the iteration loop and goes straight to sanity checks + alignment
+// with a boosted alignment budget. It preserves existing sprint-progress.txt so the agent
 // retains full context from the previous failed attempt.
 func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	started := time.Now()
@@ -298,7 +298,7 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 
 	// DO NOT call InitSprintProgress — preserve existing progress with prior context
 	if err := AppendToSprintProgress(cfg.ProjectDir,
-		"\n--- RESUME MODE ---\nResuming from previous failed attempt. Skipping iteration loop, going straight to verification + healing.\n\n"); err != nil {
+		"\n--- RESUME MODE ---\nResuming from previous failed attempt. Skipping iteration loop, going straight to sanity checks + alignment.\n\n"); err != nil {
 		frylog.Log("WARNING: could not write resume marker to sprint progress: %v", err)
 	}
 
@@ -316,11 +316,11 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 
 	frylog.Log("=========================================")
 	frylog.Log("RESUMING SPRINT %d: %s", cfg.Sprint.Number, cfg.Sprint.Name)
-	frylog.Log("Skipping iterations — going straight to verification + heal")
+	frylog.Log("Skipping iterations — going straight to sanity checks + alignment")
 	frylog.Log("=========================================")
 
 	if len(checks) == 0 {
-		frylog.Log("  No verification checks defined — nothing to resume.")
+		frylog.Log("  No sanity checks defined — nothing to resume.")
 		elapsed := time.Since(started)
 		return &SprintResult{
 			Number:        cfg.Sprint.Number,
@@ -332,10 +332,10 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	}
 
 	results, passCount, totalCount := verify.RunChecks(ctx, checks, cfg.Sprint.Number, cfg.ProjectDir)
-	frylog.Log("  Verification: %d/%d checks passed.", passCount, totalCount)
+	frylog.Log("  Sanity checks: %d/%d passed.", passCount, totalCount)
 
 	if passCount == totalCount {
-		frylog.Log("  All checks pass — no healing needed.")
+		frylog.Log("  All checks pass — no alignment needed.")
 		elapsed := time.Since(started)
 		return &SprintResult{
 			Number:                 cfg.Sprint.Number,
@@ -348,7 +348,7 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 		}, nil
 	}
 
-	// Calculate boosted heal attempts for resume using effort-level-aware base
+	// Calculate boosted alignment attempts for resume using effort-level-aware base
 	maxAttempts := cfg.Epic.MaxHealAttempts
 	if cfg.Sprint.MaxHealAttempts != nil {
 		maxAttempts = *cfg.Sprint.MaxHealAttempts
@@ -363,12 +363,12 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	if boostedAttempts < config.ResumeMinHealAttempts {
 		boostedAttempts = config.ResumeMinHealAttempts
 	}
-	frylog.Log("  Entering heal loop with %d attempts (resume mode, was %d)...", boostedAttempts, maxAttempts)
+	frylog.Log("  Entering alignment loop with %d attempts (resume mode, was %d)...", boostedAttempts, maxAttempts)
 
 	if err := AppendToSprintProgress(cfg.ProjectDir,
-		fmt.Sprintf("Verification failed: %d/%d checks passing. Starting resume heal with %d attempts.\n\n",
+		fmt.Sprintf("Sanity checks failed: %d/%d passing. Starting resume alignment with %d attempts.\n\n",
 			passCount, totalCount, boostedAttempts)); err != nil {
-		frylog.Log("WARNING: could not write verification status to sprint progress: %v", err)
+		frylog.Log("WARNING: could not write sanity check status to sprint progress: %v", err)
 	}
 
 	failureReport := verify.CollectFailures(results, passCount, totalCount)
@@ -397,9 +397,9 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	}
 
 	var deferred []verify.CheckResult
-	status := StatusFailVerificationFailedHealExhausted
+	status := StatusFailSanityFailedAlignmentExhausted
 	if hr.Healed {
-		status = StatusPassHealed
+		status = StatusPassAligned
 	} else if hr.WithinThreshold {
 		status = StatusPassWithDeferredFailures
 		deferred = hr.DeferredFailures
@@ -408,7 +408,7 @@ func ResumeSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 	if len(deferred) > 0 {
 		summary := verify.CollectDeferredSummary(deferred)
 		if appendErr := AppendToSprintProgress(cfg.ProjectDir,
-			fmt.Sprintf("\nDeferred verification failures (%d):\n%s\n", len(deferred), summary)); appendErr != nil {
+			fmt.Sprintf("\nDeferred sanity check failures (%d):\n%s\n", len(deferred), summary)); appendErr != nil {
 			frylog.Log("WARNING: could not write deferred failures to sprint progress: %v", appendErr)
 		}
 	}
@@ -469,7 +469,7 @@ func warnOutOfRangeChecks(checks []verify.Check, totalSprints int) {
 	seen := make(map[int]bool)
 	for _, c := range checks {
 		if c.Sprint > totalSprints && !seen[c.Sprint] {
-			frylog.Log("WARNING: verification file defines checks for sprint %d but epic only has %d sprints — these checks will never run", c.Sprint, totalSprints)
+			frylog.Log("WARNING: sanity checks file defines checks for sprint %d but epic only has %d sprints — these checks will never run", c.Sprint, totalSprints)
 			seen[c.Sprint] = true
 		}
 	}

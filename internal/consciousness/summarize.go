@@ -128,8 +128,8 @@ func buildExperiencePrompt(opts SummarizeOpts) string {
 	// Sprint results
 	if len(opts.SprintResults) > 0 {
 		b.WriteString("## Sprint Results\n\n")
-		b.WriteString("| Sprint | Name | Status | Heal Attempts |\n")
-		b.WriteString("|--------|------|--------|---------------|\n")
+		b.WriteString("| Sprint | Name | Status | Alignment Attempts |\n")
+		b.WriteString("|--------|------|--------|--------------------|\n")
 		for _, r := range opts.SprintResults {
 			b.WriteString(fmt.Sprintf("| %d | %s | %s | %d |\n", r.Number, r.Name, r.Status, r.HealAttempts))
 		}
@@ -153,7 +153,7 @@ func buildExperiencePrompt(opts SummarizeOpts) string {
 	b.WriteString("Synthesize the observations above into a cohesive experience summary (200-500 words) that captures:\n\n")
 	b.WriteString("1. **What happened** — the narrative arc of this build\n")
 	b.WriteString("2. **What was surprising** — unexpected behaviors, failures, or successes\n")
-	b.WriteString("3. **What struggled** — heal loops, audit cycling, verification failures, and their causes\n")
+	b.WriteString("3. **What struggled** — alignment loops, audit cycling, sanity check failures, and their causes\n")
 	b.WriteString("4. **Process-level insights** — observations about how the build system performed, not what was built\n")
 	b.WriteString("5. **Generalizable lessons** — wisdom that would apply to future builds of any kind\n\n")
 	b.WriteString("**Important constraints:**\n")

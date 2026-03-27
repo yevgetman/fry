@@ -62,7 +62,7 @@ func FormatReport(state *BuildState) string {
 		b.WriteString(fmt.Sprintf("## Partial Work Detected (%d incomplete sprint(s))\n\n", len(state.ActiveSprints)))
 		for _, a := range state.ActiveSprints {
 			b.WriteString(fmt.Sprintf("### Sprint %d: %s\n", a.Number, a.Name))
-			b.WriteString(fmt.Sprintf("- %d iterations completed, %d audit passes, %d heal attempts\n",
+			b.WriteString(fmt.Sprintf("- %d iterations completed, %d audit passes, %d alignment attempts\n",
 				a.IterationCount, a.AuditCount, a.HealCount))
 			if a.HasResumeLog {
 				b.WriteString("- Has prior resume attempt\n")

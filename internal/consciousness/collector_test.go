@@ -31,7 +31,7 @@ func TestAddObservation(t *testing.T) {
 	c.AddObservation("Sprint 1 went smoothly.", "after_sprint", 1)
 	assert.Equal(t, 1, c.ObservationCount())
 
-	c.AddObservation("Sprint 2 required healing.", "after_sprint", 2)
+	c.AddObservation("Sprint 2 required alignment.", "after_sprint", 2)
 	assert.Equal(t, 2, c.ObservationCount())
 
 	c.AddObservation("Build completed successfully.", "build_end", 3)

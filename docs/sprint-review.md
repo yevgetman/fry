@@ -6,7 +6,7 @@ This is fully opt-in. When disabled (the default), Fry proceeds directly from on
 
 ## How It Works
 
-1. Sprint N completes and passes verification
+1. Sprint N completes and passes sanity checks
 2. A **reviewer** LLM session receives: what was built (progress logs), what's planned (remaining sprint prompts), the original plan, and prior deviation history
 3. The reviewer outputs a verdict: `CONTINUE` (proceed as-is) or `DEVIATE` (adjust downstream sprints)
 4. If `DEVIATE`: a **replanner** LLM session makes surgical edits to affected `@prompt` blocks in `epic.md`, within the scope cap

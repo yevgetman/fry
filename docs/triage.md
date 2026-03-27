@@ -10,13 +10,13 @@ When you run `fry run` and no `.fry/epic.md` exists:
 
 1. **Collect inputs** — reads `plans/plan.md`, `plans/executive.md`, and `--user-prompt` (same prerequisites as prepare)
 2. **Classify** — sends a single LLM call to a cheap model (haiku/gpt-5.4-mini) with the task description
-3. **Confirm** — displays the classification and asks the user to accept, decline, or adjust (see [Interactive Confirmation](#interactive-confirmation)). Skipped with `--no-sanity-check` or `--dry-run`.
+3. **Confirm** — displays the classification and asks the user to accept, decline, or adjust (see [Interactive Confirmation](#interactive-confirmation)). Skipped with `--no-project-overview` or `--dry-run`.
 4. **Route** — based on the (possibly adjusted) classification:
 
 | Classification | Execution path | LLM calls | Output |
 |---|---|---|---|
 | **SIMPLE** | Build epic programmatically (no LLM). 1 sprint, effort-aware settings. | 0 (prepare) | `.fry/epic.md` |
-| **MODERATE** | Build epic programmatically (no LLM). 1-2 sprints, auto-generated verification. | 0 (prepare) | `.fry/epic.md`, `.fry/verification.md` |
+| **MODERATE** | Build epic programmatically (no LLM). 1-2 sprints, auto-generated sanity checks. | 0 (prepare) | `.fry/epic.md`, `.fry/verification.md` |
 | **COMPLEX** | Full prepare pipeline (unchanged). | 3-4 | `.fry/epic.md`, `.fry/AGENTS.md`, `.fry/verification.md` |
 
 ## Effort Suggestion
@@ -38,17 +38,17 @@ Simple and moderate tasks are **capped at high** — `--effort max` is automatic
 |---|---|---|---|
 | **Model** | Standard | Standard | Frontier |
 | **Max iterations** | 12 | 20 | 25 |
-| **Healing** | None | None | None |
+| **Alignment** | None | None | None |
 | **Sprint audit** | None | 1 audit+fix pass | 1 audit+fix pass |
 | **Build audit** | Single pass | Single pass | Single pass |
 
-### Moderate (no prepare, auto-gen verification, 1-2 sprints)
+### Moderate (no prepare, auto-gen sanity checks, 1-2 sprints)
 
 | | Low | Medium | High |
 |---|---|---|---|
 | **Model** | Standard | Standard | Frontier |
 | **Max iterations** | 12 | 20 | 25 |
-| **Healing** | None | 3 attempts | 10 + progress detection |
+| **Alignment** | None | 3 attempts | 10 + progress detection |
 | **Sprint audit** | None | Default (3 outer, 3 inner) | Full (12 outer, 7 inner, progress-based) |
 | **Build audit** | Single pass | Single pass | Full |
 | **Sprints** | 1 | 1-2 | 1-2 |
@@ -88,7 +88,7 @@ Git strategy [branch] (auto/current/branch/worktree, or Enter to keep):
 
 Changing difficulty to COMPLEX causes the full prepare pipeline to run. Effort `max` is only allowed when difficulty is COMPLEX — typing it on SIMPLE or MODERATE triggers a warning and keeps the previous value. If you downgrade difficulty from COMPLEX to SIMPLE/MODERATE but keep `max` effort (by pressing Enter), Fry automatically downgrades the effort to `high` with a warning.
 
-The confirmation is skipped when `--no-sanity-check` or `--dry-run` is passed.
+The confirmation is skipped when `--no-project-overview` or `--dry-run` is passed.
 
 ## Bias Toward Complex
 
@@ -112,8 +112,8 @@ On any classifier failure (LLM error, unparseable output, timeout), triage defau
 For tasks classified as SIMPLE:
 - **Epic**: built programmatically in Go — no LLM call
 - **Sprint**: 1 sprint, iterations set by effort level (12/20/25)
-- **Healing**: disabled (`@max_heal_attempts 0`) at all effort levels
-- **Verification**: skipped (no `verification.md` generated)
+- **Alignment**: disabled (`@max_heal_attempts 0`) at all effort levels
+- **Sanity checks**: skipped (no `verification.md` generated)
 - **Sprint audit**: skipped at low; 1 audit+fix pass at medium/high (`@max_audit_iterations 1`)
 - **Build audit**: single pass after the sprint completes
 - **Git checkpoint**: runs normally
@@ -125,12 +125,12 @@ The sprint prompt is the content of `plans/plan.md` (or `plans/executive.md`, or
 For tasks classified as MODERATE:
 - **Epic**: built programmatically in Go — no LLM call (previously used 1 LLM call)
 - **Sprints**: 1-2 sprints (low effort forces 1 sprint)
-- **Verification**: auto-generated from detected build system (e.g. `go build && go test`, `npm test`, `cargo test`)
-- **Healing**: effort-aware (none at low, 3 at medium, 10 + progress detection at high)
+- **Sanity checks**: auto-generated from detected build system (e.g. `go build && go test`, `npm test`, `cargo test`)
+- **Alignment**: effort-aware (none at low, 3 at medium, 10 + progress detection at high)
 - **Sprint audit**: effort-aware (skipped at low, default cycles at medium, full cycles at high)
 - **Build audit**: runs after sprint completion
 
-The auto-generated verification checks are heuristic-only — they detect `go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`, `setup.py`, and `Makefile` and generate appropriate build+test commands.
+The auto-generated sanity checks are heuristic-only — they detect `go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`, `setup.py`, and `Makefile` and generate appropriate build+test commands.
 
 ## CLI Flags
 
@@ -138,7 +138,7 @@ The auto-generated verification checks are heuristic-only — they detect `go.mo
 |---|---|
 | `--full-prepare` | Skip triage and run full prepare pipeline (equivalent to pre-triage behavior) |
 | `--triage-only` | Run triage classification and exit without generating any artifacts. Prints the classification result. |
-| `--no-sanity-check` | Skip the interactive triage confirmation (and the prepare sanity check on the complex path) |
+| `--no-project-overview` | Skip the interactive triage confirmation (and the prepare project overview on the complex path) |
 
 ## Mode-Aware Classification
 
@@ -161,6 +161,6 @@ The classifier adjusts its criteria based on `--mode`:
 - `--effort`: takes precedence over triage suggestion. Capped to `high` for simple/moderate tasks (max reserved for complex).
 - `--continue` / `--resume`: require an existing epic — triage never runs.
 - `--dry-run`: skips the interactive triage confirmation. Triage runs, classification is logged, then dry-run proceeds.
-- `--triage-only`: runs only the classification (and optional interactive confirmation), prints the result, and exits. No epic, verification, or AGENTS.md files are generated. Cannot be combined with `--full-prepare`, `--continue`, `--resume`, or `--simple-continue`. Triage diagnostic files (`.fry/triage-prompt.md`, `.fry/triage-decision.txt`) are still written.
+- `--triage-only`: runs only the classification (and optional interactive confirmation), prints the result, and exits. No epic, sanity checks, or AGENTS.md files are generated. Cannot be combined with `--full-prepare`, `--continue`, `--resume`, or `--simple-continue`. Triage diagnostic files (`.fry/triage-prompt.md`, `.fry/triage-decision.txt`) are still written.
 - `--no-audit`: disables the triage-path build audit too.
-- `--no-sanity-check`: skips the interactive triage confirmation and the prepare sanity check on the complex path.
+- `--no-project-overview`: skips the interactive triage confirmation and the prepare project overview on the complex path.

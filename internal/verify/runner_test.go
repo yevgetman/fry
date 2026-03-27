@@ -183,7 +183,7 @@ func TestCollectFailures(t *testing.T) {
 		{Check: Check{Type: CheckTest, Command: "go test -v ./..."}, Output: "--- FAIL: TestFoo\n", TestFailCount: 1, TestFramework: "go"},
 	}, 0, 5)
 
-	assert.Contains(t, report, "Verification: 0/5 checks passed.\n\nFailed checks:")
+	assert.Contains(t, report, "Sanity checks: 0/5 passed.\n\nFailed checks:")
 	assert.Contains(t, report, "- FAILED: File missing or empty: missing.txt")
 	assert.Contains(t, report, "- FAILED: File 'go.mod' does not contain pattern: module x")
 	assert.Contains(t, report, "- FAILED: Command failed: go test ./...")

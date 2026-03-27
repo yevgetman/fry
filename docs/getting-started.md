@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - **git** — for automatic checkpointing
-- **bash** — required by AI engine CLIs and verification commands
+- **bash** — required by AI engine CLIs and sanity check commands
 - **Go 1.22+** — to build from source
 - One of the following AI engine CLIs:
   - **OpenAI Codex CLI**: `npm i -g @openai/codex`
@@ -100,11 +100,11 @@ Fry will automatically:
 1. Detect that `.fry/epic.md` doesn't exist and run `fry prepare`
 2. Generate `.fry/AGENTS.md` (operational rules for the AI)
 3. Generate `.fry/epic.md` (sprint definitions)
-4. Generate `.fry/verification.md` (independent checks per sprint)
+4. Generate `.fry/verification.md` (independent sanity checks per sprint)
 5. Parse the epic file and validate its structure
 6. Run preflight checks
 7. Execute each sprint until completion or max iterations
-8. Run independent verification checks after each sprint
+8. Run independent sanity checks after each sprint
 
 ### 3. Validate before running (recommended)
 
@@ -125,10 +125,10 @@ Continue: fry run --continue
 ```
 
 - **`--continue`** (recommended) — uses an LLM agent to analyze build state and automatically determine where and how to resume. Restores the build mode from the previous run. See [Sprint Execution — Resuming Failed Builds](sprint-execution.md#resuming-failed-builds).
-- **`--resume`** — skip iterations and go straight to verification + healing with more attempts. Use when the code is already written but checks are failing.
+- **`--resume`** — skip iterations and go straight to sanity checks + alignment with more attempts. Use when the code is already written but checks are failing.
 - **Resume** (no flags) — re-run the sprint from scratch if the approach was fundamentally wrong.
 
-See [Self-Healing](self-healing.md) for details.
+See [Alignment](alignment.md) for details.
 
 ## Adding Fry to an Existing Project
 

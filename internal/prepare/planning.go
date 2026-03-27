@@ -223,8 +223,8 @@ Do NOT default to HIGH — genuinely evaluate the plan's complexity.
 	}
 }
 
-func PlanningSanityCheckPrompt(planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
-	return buildSanityCheckPrompt("senior strategic planner", planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
+func PlanningOverviewPrompt(planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {
+	return buildOverviewPrompt("senior strategic planner", planContent, executiveContent, userPrompt, effort, mediaManifest, assetsSection)
 }
 
 func PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
@@ -233,17 +233,17 @@ func PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, user
 		userPromptLine = fmt.Sprintf("\nThe user has provided this top-level directive: %q. If it affects what should or should not be verified, factor it in.\n", userPrompt)
 	}
 
-	return fmt.Sprintf(`You are generating a verification.md file for an autonomous AI planning system.
+	return fmt.Sprintf(`You are generating a verification.md (sanity checks) file for an autonomous AI planning system.
 
-This is a PLANNING project — the AI agent produces structured documents, NOT code. Verification checks must validate that document deliverables exist and contain the required content.
+This is a PLANNING project — the AI agent produces structured documents, NOT code. Sanity checks must validate that document deliverables exist and contain the required content.
 
 Read these files carefully:
-1. %s — The FORMAT REFERENCE showing exact syntax and check primitives. IGNORE the software-specific examples — adapt the primitives for document verification.
+1. %s — The FORMAT REFERENCE showing exact syntax and check primitives. IGNORE the software-specific examples — adapt the primitives for document sanity checks.
 2. plans/plan.md — The high-level plan describing what is being planned.
 3. .fry/epic.md — The sprint definitions.
 4. .fry/AGENTS.md — Operational rules for the AI planning agent.
 
-Generate the verification file and write it to .fry/verification.md.
+Generate the sanity checks file and write it to .fry/verification.md.
 
 CRITICAL RULES:
 - Output ONLY the verification.md file content — write it directly to .fry/verification.md.

@@ -28,7 +28,7 @@ type PrepareOpts struct {
 	UserPrompt       string
 	UserPromptSource string // human-readable origin, e.g. "--user-prompt-file path" or "--user-prompt flag"
 	ValidateOnly     bool
-	SkipSanityCheck  bool
+	SkipProjectOverview  bool
 	EngineFactory    func(string) (engine.Engine, error)       // optional; defaults to engine.NewEngine
 	LogFunc          func(format string, args ...interface{})   // optional; defaults to frylog.Log
 	Mode             Mode
@@ -207,9 +207,9 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	planContent := string(planContentBytes)
 	executiveContent, _ := readPrepareOptional(executivePath)
 
-	// Sanity check: summarize project and ask user to confirm before generating artifacts.
-	if !opts.SkipSanityCheck {
-		result, err := runSanityCheck(ctx, eng, opts,
+	// Project overview: summarize project and ask user to confirm before generating artifacts.
+	if !opts.SkipProjectOverview {
+		result, err := runProjectOverview(ctx, eng, opts,
 			planContent, executiveContent, mediaManifest, assetsSection)
 		if err != nil {
 			return err
@@ -309,10 +309,10 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		return err
 	}
 	if err := textutil.ResolveArtifact(verificationPath, beforeSize, output); err != nil {
-		return fmt.Errorf("run prepare: write verification: %w", err)
+		return fmt.Errorf("run prepare: write sanity checks: %w", err)
 	}
 	if err := validateStep3(verificationPath); err != nil {
-		logf("WARNING: %s has no @check_* directives. Continuing without verification.", config.DefaultVerificationFile)
+		logf("WARNING: %s has no @check_* directives. Continuing without sanity checks.", config.DefaultVerificationFile)
 		return nil
 	}
 	logf("Generated %s.", config.DefaultVerificationFile)
@@ -445,7 +445,7 @@ func validateStep3(verificationPath string) error {
 		return fmt.Errorf("validate step 3: %w", err)
 	}
 	if countDirective(string(data), "@check_") == 0 {
-		return fmt.Errorf("validate step 3: verification.md contains no @check_* directives")
+		return fmt.Errorf("validate step 3: sanity checks file contains no @check_* directives")
 	}
 	return nil
 }
