@@ -30,12 +30,15 @@ var prepareCmd = &cobra.Command{
 			return err
 		}
 
-		projectPath, err := resolveProjectDir(projectDir)
+		pDir, _ := cmd.Flags().GetString("project-dir")
+		projectPath, err := resolveProjectDir(pDir)
 		if err != nil {
 			return err
 		}
 
-		userPrompt, err := resolveUserPrompt(projectPath, prepareUserPrompt, prepareUserPromptFile, true)
+		userPromptVal, _ := cmd.Flags().GetString("user-prompt")
+		userPromptFileVal, _ := cmd.Flags().GetString("user-prompt-file")
+		userPrompt, err := resolveUserPrompt(projectPath, userPromptVal, userPromptFileVal, true)
 		if err != nil {
 			return err
 		}
@@ -45,17 +48,21 @@ var prepareCmd = &cobra.Command{
 			epicArg = args[0]
 		}
 
-		effortLevel, err := epic.ParseEffortLevel(prepareEffort)
+		effortVal, _ := cmd.Flags().GetString("effort")
+		effortLevel, err := epic.ParseEffortLevel(effortVal)
 		if err != nil {
 			return err
 		}
 
-		mode, err := resolveMode(prepareMode, preparePlanning)
+		modeVal, _ := cmd.Flags().GetString("mode")
+		planningVal, _ := cmd.Flags().GetBool("planning")
+		mode, err := resolveMode(modeVal, planningVal)
 		if err != nil {
 			return err
 		}
 
-		if prepareValidateOnly {
+		validateOnly, _ := cmd.Flags().GetBool("validate-only")
+		if validateOnly {
 			epicPath, _, err := resolveEpicPath(projectPath, epicArg)
 			if err != nil {
 				return err
@@ -71,21 +78,26 @@ var prepareCmd = &cobra.Command{
 			return nil
 		}
 
-		promptSource := userPromptSource(userPrompt, prepareUserPrompt, prepareUserPromptFile)
+		promptSource := userPromptSource(userPrompt, userPromptVal, userPromptFileVal)
+
+		engineVal, _ := cmd.Flags().GetString("engine")
+		noProjectOverview, _ := cmd.Flags().GetBool("no-project-overview")
+		noSanityCheck, _ := cmd.Flags().GetBool("no-sanity-check")
+		reviewVal, _ := cmd.Flags().GetBool("review")
 
 		return prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
-			ProjectDir:       projectPath,
-			EpicFilename:     epicArg,
-			Engine:           prepareEngine,
-			UserPrompt:       userPrompt,
-			UserPromptSource: promptSource,
-			ValidateOnly:     false,
-			SkipProjectOverview:  prepareNoProjectOverview,
-			Mode:             mode,
-			EffortLevel:      effortLevel,
-			EnableReview:     prepareReview,
-			Stdin:            os.Stdin,
-			Stdout:           cmd.OutOrStdout(),
+			ProjectDir:          projectPath,
+			EpicFilename:        epicArg,
+			Engine:              engineVal,
+			UserPrompt:          userPrompt,
+			UserPromptSource:    promptSource,
+			ValidateOnly:        false,
+			SkipProjectOverview: noProjectOverview || noSanityCheck,
+			Mode:                mode,
+			EffortLevel:         effortLevel,
+			EnableReview:        reviewVal,
+			Stdin:               os.Stdin,
+			Stdout:              cmd.OutOrStdout(),
 		})
 	},
 }

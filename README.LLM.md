@@ -425,7 +425,7 @@ make install   # build + cp bin/fry /usr/local/bin/fry
 make clean     # rm -rf bin/
 ```
 
-**61 test files** covering all packages. Tests use `t.Parallel()`, temp directories, env mocking, and mock engines. No CI/CD configured — local testing only.
+**64 test files** covering all packages. Tests use temp directories, env mocking, and mock engines. Most tests call `t.Parallel()`. No CI/CD configured — local testing only.
 
 ---
 

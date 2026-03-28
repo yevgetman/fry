@@ -3,7 +3,6 @@ package cli
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,21 +18,23 @@ var cleanCmd = &cobra.Command{
 	Short: "Archive build artifacts from .fry/ to .fry-archive/",
 	Long:  "Move .fry/ and root-level build outputs (build-audit.md, build-summary.md) into a timestamped folder under .fry-archive/.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		projectPath, err := resolveProjectDir(projectDir)
+		pDir, _ := cmd.Flags().GetString("project-dir")
+		projectPath, err := resolveProjectDir(pDir)
 		if err != nil {
 			return err
 		}
 
 		if lock.IsLocked(projectPath) {
-			fmt.Fprintln(os.Stderr, "fry: warning: a build appears to be running (lock file active)")
+			fmt.Fprintln(cmd.ErrOrStderr(), "fry: warning: a build appears to be running (lock file active)")
 		}
 
-		if !cleanForce {
-			fmt.Fprint(os.Stdout, "Archive .fry/ and build outputs? [y/N] ")
-			reader := bufio.NewReader(os.Stdin)
+		force, _ := cmd.Flags().GetBool("force")
+		if !force {
+			fmt.Fprint(cmd.OutOrStdout(), "Archive .fry/ and build outputs? [y/N] ")
+			reader := bufio.NewReader(cmd.InOrStdin())
 			answer, _ := reader.ReadString('\n')
 			if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(answer)), "y") {
-				fmt.Fprintln(os.Stdout, "Aborted.")
+				fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
 				return nil
 			}
 		}
@@ -43,7 +44,7 @@ var cleanCmd = &cobra.Command{
 			return fmt.Errorf("clean: %w", err)
 		}
 
-		fmt.Fprintf(os.Stdout, "Archived to %s\n", archivePath)
+		fmt.Fprintf(cmd.OutOrStdout(), "Archived to %s\n", archivePath)
 		return nil
 	},
 }

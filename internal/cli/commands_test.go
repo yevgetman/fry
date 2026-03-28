@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,25 +19,19 @@ import (
 // cleanCmd
 // ---------------------------------------------------------------------------
 
-// t.Parallel() omitted: test mutates package-global variables (projectDir, cleanForce)
 func TestCleanCmd(t *testing.T) {
+	t.Parallel()
+
 	t.Run("force with fry dir archives successfully", func(t *testing.T) {
+		t.Parallel()
 		dir := t.TempDir()
 		fryDir := filepath.Join(dir, config.FryDir)
 		require.NoError(t, os.MkdirAll(fryDir, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte("@epic Test\n"), 0o644))
 
-		oldProjectDir := projectDir
-		oldCleanForce := cleanForce
-		t.Cleanup(func() {
-			projectDir = oldProjectDir
-			cleanForce = oldCleanForce
-		})
-		projectDir = dir
-		cleanForce = true
-
-		cmd := &cobra.Command{}
-		cmd.SetContext(context.Background())
+		cmd := newTestCmd(t, dir)
+		cmd.Flags().Bool("force", false, "")
+		_ = cmd.Flags().Set("force", "true")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 
@@ -54,22 +49,40 @@ func TestCleanCmd(t *testing.T) {
 	})
 
 	t.Run("force without fry dir returns error", func(t *testing.T) {
+		t.Parallel()
 		dir := t.TempDir()
 
-		oldProjectDir := projectDir
-		oldCleanForce := cleanForce
-		t.Cleanup(func() {
-			projectDir = oldProjectDir
-			cleanForce = oldCleanForce
-		})
-		projectDir = dir
-		cleanForce = true
-
-		cmd := &cobra.Command{}
-		cmd.SetContext(context.Background())
+		cmd := newTestCmd(t, dir)
+		cmd.Flags().Bool("force", false, "")
+		_ = cmd.Flags().Set("force", "true")
 
 		err := cleanCmd.RunE(cmd, []string{})
 		require.Error(t, err, "should error when .fry/ does not exist")
+	})
+
+	t.Run("lock warning printed with force", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, config.FryDir)
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte("@epic Test\n"), 0o644))
+
+		// Create lock file with current PID so lock.IsLocked returns true
+		lockPath := filepath.Join(dir, config.LockFile)
+		require.NoError(t, os.WriteFile(lockPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0o644))
+
+		cmd := newTestCmd(t, dir)
+		cmd.Flags().Bool("force", false, "")
+		_ = cmd.Flags().Set("force", "true")
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		var errBuf bytes.Buffer
+		cmd.SetErr(&errBuf)
+
+		err := cleanCmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		assert.Contains(t, errBuf.String(), "warning", "lock warning should be printed to stderr")
 	})
 }
 
@@ -77,48 +90,33 @@ func TestCleanCmd(t *testing.T) {
 // identityCmd
 // ---------------------------------------------------------------------------
 
-// t.Parallel() omitted: test reassigns os.Stdout (global state)
 func TestIdentityCmd(t *testing.T) {
-	t.Run("without full flag", func(t *testing.T) {
-		oldStdout := os.Stdout
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		defer r.Close()
-		os.Stdout = w
-		t.Cleanup(func() { os.Stdout = oldStdout })
+	t.Parallel()
 
+	t.Run("without full flag", func(t *testing.T) {
+		t.Parallel()
 		cmd := &cobra.Command{}
 		cmd.Flags().Bool("full", false, "")
 		cmd.SetContext(context.Background())
-
-		err = identityCmd.RunE(cmd, []string{})
-		require.NoError(t, err)
-
-		w.Close()
 		var buf bytes.Buffer
-		_, _ = buf.ReadFrom(r)
+		cmd.SetOut(&buf)
+
+		err := identityCmd.RunE(cmd, []string{})
+		require.NoError(t, err)
 		assert.NotEmpty(t, buf.String(), "identity output should be non-empty")
 	})
 
 	t.Run("with full flag", func(t *testing.T) {
-		oldStdout := os.Stdout
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		defer r.Close()
-		os.Stdout = w
-		t.Cleanup(func() { os.Stdout = oldStdout })
-
+		t.Parallel()
 		cmd := &cobra.Command{}
 		cmd.Flags().Bool("full", false, "")
 		require.NoError(t, cmd.Flags().Set("full", "true"))
 		cmd.SetContext(context.Background())
-
-		err = identityCmd.RunE(cmd, []string{})
-		require.NoError(t, err)
-
-		w.Close()
 		var buf bytes.Buffer
-		_, _ = buf.ReadFrom(r)
+		cmd.SetOut(&buf)
+
+		err := identityCmd.RunE(cmd, []string{})
+		require.NoError(t, err)
 		assert.NotEmpty(t, buf.String(), "full identity output should be non-empty")
 	})
 }
@@ -127,9 +125,11 @@ func TestIdentityCmd(t *testing.T) {
 // prepareCmd --validate-only
 // ---------------------------------------------------------------------------
 
-// t.Parallel() omitted: test mutates package-global variables (projectDir, prepareValidateOnly, etc.)
 func TestPrepareCmd_ValidateOnly(t *testing.T) {
+	t.Parallel()
+
 	t.Run("valid epic validates successfully", func(t *testing.T) {
+		t.Parallel()
 		dir := t.TempDir()
 		fryDir := filepath.Join(dir, config.FryDir)
 		require.NoError(t, os.MkdirAll(fryDir, 0o755))
@@ -143,33 +143,14 @@ func TestPrepareCmd_ValidateOnly(t *testing.T) {
 			"Do the thing.\n"
 		require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte(epicContent), 0o644))
 
-		oldProjectDir := projectDir
-		oldValidateOnly := prepareValidateOnly
-		oldPrepareUserPrompt := prepareUserPrompt
-		oldPrepareUserPromptFile := prepareUserPromptFile
-		oldPrepareEffort := prepareEffort
-		oldPrepareMode := prepareMode
-		oldPreparePlanning := preparePlanning
-		t.Cleanup(func() {
-			projectDir = oldProjectDir
-			prepareValidateOnly = oldValidateOnly
-			prepareUserPrompt = oldPrepareUserPrompt
-			prepareUserPromptFile = oldPrepareUserPromptFile
-			prepareEffort = oldPrepareEffort
-			prepareMode = oldPrepareMode
-			preparePlanning = oldPreparePlanning
-		})
-
-		projectDir = dir
-		prepareValidateOnly = true
-		prepareUserPrompt = ""
-		prepareUserPromptFile = ""
-		prepareEffort = ""
-		prepareMode = ""
-		preparePlanning = false
-
-		cmd := &cobra.Command{}
-		cmd.SetContext(context.Background())
+		cmd := newTestCmd(t, dir)
+		cmd.Flags().Bool("validate-only", false, "")
+		_ = cmd.Flags().Set("validate-only", "true")
+		cmd.Flags().String("user-prompt", "", "")
+		cmd.Flags().String("user-prompt-file", "", "")
+		cmd.Flags().String("effort", "", "")
+		cmd.Flags().String("mode", "", "")
+		cmd.Flags().Bool("planning", false, "")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 
@@ -179,35 +160,17 @@ func TestPrepareCmd_ValidateOnly(t *testing.T) {
 	})
 
 	t.Run("missing epic returns error", func(t *testing.T) {
+		t.Parallel()
 		dir := t.TempDir()
 
-		oldProjectDir := projectDir
-		oldValidateOnly := prepareValidateOnly
-		oldPrepareUserPrompt := prepareUserPrompt
-		oldPrepareUserPromptFile := prepareUserPromptFile
-		oldPrepareEffort := prepareEffort
-		oldPrepareMode := prepareMode
-		oldPreparePlanning := preparePlanning
-		t.Cleanup(func() {
-			projectDir = oldProjectDir
-			prepareValidateOnly = oldValidateOnly
-			prepareUserPrompt = oldPrepareUserPrompt
-			prepareUserPromptFile = oldPrepareUserPromptFile
-			prepareEffort = oldPrepareEffort
-			prepareMode = oldPrepareMode
-			preparePlanning = oldPreparePlanning
-		})
-
-		projectDir = dir
-		prepareValidateOnly = true
-		prepareUserPrompt = ""
-		prepareUserPromptFile = ""
-		prepareEffort = ""
-		prepareMode = ""
-		preparePlanning = false
-
-		cmd := &cobra.Command{}
-		cmd.SetContext(context.Background())
+		cmd := newTestCmd(t, dir)
+		cmd.Flags().Bool("validate-only", false, "")
+		_ = cmd.Flags().Set("validate-only", "true")
+		cmd.Flags().String("user-prompt", "", "")
+		cmd.Flags().String("user-prompt-file", "", "")
+		cmd.Flags().String("effort", "", "")
+		cmd.Flags().String("mode", "", "")
+		cmd.Flags().Bool("planning", false, "")
 
 		err := prepareCmd.RunE(cmd, []string{})
 		require.Error(t, err)
@@ -218,35 +181,27 @@ func TestPrepareCmd_ValidateOnly(t *testing.T) {
 // replanCmd --dry-run
 // ---------------------------------------------------------------------------
 
-// t.Parallel() omitted: test mutates package-global variables (projectDir, replanDryRun, replanEpic)
 func TestReplanCmd_DryRun(t *testing.T) {
+	t.Parallel()
+
 	t.Run("dry-run with deviation spec but no epic returns error", func(t *testing.T) {
+		t.Parallel()
 		dir := t.TempDir()
 
 		specPath := filepath.Join(dir, "deviation.md")
 		require.NoError(t, os.WriteFile(specPath, []byte("Some deviation text"), 0o644))
 
-		oldProjectDir := projectDir
-		oldReplanDryRun := replanDryRun
-		oldReplanEpic := replanEpic
-		t.Cleanup(func() {
-			projectDir = oldProjectDir
-			replanDryRun = oldReplanDryRun
-			replanEpic = oldReplanEpic
-		})
-
-		projectDir = dir
-		replanDryRun = true
-		replanEpic = filepath.Join(config.FryDir, "epic.md")
-
-		cmd := &cobra.Command{}
-		cmd.SetContext(context.Background())
+		cmd := newTestCmd(t, dir)
+		cmd.Flags().Bool("dry-run", false, "")
+		_ = cmd.Flags().Set("dry-run", "true")
+		cmd.Flags().String("epic", filepath.Join(config.FryDir, "epic.md"), "")
 
 		err := replanCmd.RunE(cmd, []string{specPath})
 		require.Error(t, err)
 	})
 
 	t.Run("dry-run with deviation spec and epic succeeds", func(t *testing.T) {
+		t.Parallel()
 		dir := t.TempDir()
 
 		specPath := filepath.Join(dir, "deviation.md")
@@ -257,21 +212,10 @@ func TestReplanCmd_DryRun(t *testing.T) {
 		epicContent := "@epic Test\n@sprint 1\n@name S1\n@max_iterations 1\n@promise DONE\n@prompt\nDo it.\n"
 		require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte(epicContent), 0o644))
 
-		oldProjectDir := projectDir
-		oldReplanDryRun := replanDryRun
-		oldReplanEpic := replanEpic
-		t.Cleanup(func() {
-			projectDir = oldProjectDir
-			replanDryRun = oldReplanDryRun
-			replanEpic = oldReplanEpic
-		})
-
-		projectDir = dir
-		replanDryRun = true
-		replanEpic = filepath.Join(config.FryDir, "epic.md")
-
-		cmd := &cobra.Command{}
-		cmd.SetContext(context.Background())
+		cmd := newTestCmd(t, dir)
+		cmd.Flags().Bool("dry-run", false, "")
+		_ = cmd.Flags().Set("dry-run", "true")
+		cmd.Flags().String("epic", filepath.Join(config.FryDir, "epic.md"), "")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 
