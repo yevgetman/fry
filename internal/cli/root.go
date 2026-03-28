@@ -74,6 +74,8 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(identityCmd)
 	rootCmd.AddCommand(reflectCmd)
+	rootCmd.AddCommand(agentCmd)
+	rootCmd.AddCommand(eventsCmd)
 }
 
 func Execute() error {

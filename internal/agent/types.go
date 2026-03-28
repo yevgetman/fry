@@ -1,0 +1,41 @@
+// Package agent provides the domain types and interfaces for Fry's agent
+// foundation. It is consumed by the OpenClaw extension (via CLI commands) and
+// designed so a future native Fry agent can import it directly.
+package agent
+
+import "time"
+
+// BuildState is the structured representation of a running or completed build.
+// Serialized as JSON by `fry status --json`.
+type BuildState struct {
+	Active            bool        `json:"active"`
+	ProjectDir        string      `json:"project_dir"`
+	Epic              string      `json:"epic"`
+	Effort            string      `json:"effort"`
+	Engine            string      `json:"engine"`
+	Mode              string      `json:"mode,omitempty"`
+	TotalSprints      int         `json:"total_sprints"`
+	CurrentSprint     int         `json:"current_sprint"`
+	CurrentSprintName string      `json:"current_sprint_name"`
+	Status            string      `json:"status"` // running, completed, failed, paused, idle
+	LastEvent         *BuildEvent `json:"last_event,omitempty"`
+	GitBranch         string      `json:"git_branch,omitempty"`
+	StartedAt         *time.Time  `json:"started_at,omitempty"`
+	PID               int         `json:"pid,omitempty"`
+}
+
+// BuildEvent is a structured event from the observer event stream.
+type BuildEvent struct {
+	Type      string            `json:"type"`
+	Timestamp time.Time         `json:"ts"`
+	Sprint    int               `json:"sprint,omitempty"`
+	Data      map[string]string `json:"data,omitempty"`
+}
+
+// ArtifactInfo describes a single Fry build artifact for agent prompt generation.
+type ArtifactInfo struct {
+	Path        string `json:"path"`        // relative to project dir
+	Format      string `json:"format"`      // jsonl, markdown, json, text
+	Description string `json:"description"` // what this artifact contains
+	Lifecycle   string `json:"lifecycle"`   // per-iteration, per-sprint, per-build, static
+}
