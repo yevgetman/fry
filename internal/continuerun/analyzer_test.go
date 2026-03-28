@@ -311,6 +311,7 @@ func TestHeuristicAnalyzeAllComplete(t *testing.T) {
 	}
 	decision := HeuristicAnalyze(state)
 	assert.Equal(t, VerdictAllComplete, decision.Verdict)
+	assert.Equal(t, 2, decision.StartSprint)
 }
 
 func TestHeuristicAnalyzeAuditIncomplete(t *testing.T) {
@@ -323,6 +324,42 @@ func TestHeuristicAnalyzeAuditIncomplete(t *testing.T) {
 		},
 		BuildAuditComplete: false,
 		AuditConfigured:    true,
+	}
+	decision := HeuristicAnalyze(state)
+	assert.Equal(t, VerdictAuditIncomplete, decision.Verdict)
+	assert.Equal(t, 2, decision.StartSprint)
+}
+
+// TestHeuristicAnalyzeAuditComplete is a named standalone required by acceptance criteria.
+// It mirrors the table case "all sprints complete with audit done" with a different sprint count.
+func TestHeuristicAnalyzeAuditComplete(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		TotalSprints: 3,
+		CompletedSprints: []CompletedSprint{
+			{Number: 1}, {Number: 2}, {Number: 3},
+		},
+		BuildAuditComplete: true,
+	}
+	decision := HeuristicAnalyze(state)
+	assert.Equal(t, VerdictAllComplete, decision.Verdict)
+	assert.Equal(t, 3, decision.StartSprint)
+}
+
+// TestHeuristicAnalyzeBackwardCompatNilSentinel is a named standalone required by acceptance criteria.
+// It validates the safe-default sentinel-absent path: when BuildAuditComplete is its zero value
+// (false), the analyzer returns AUDIT_INCOMPLETE regardless of whether the build predates the
+// sentinel feature or simply hasn't completed its audit yet.
+func TestHeuristicAnalyzeBackwardCompatNilSentinel(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		TotalSprints: 2,
+		CompletedSprints: []CompletedSprint{
+			{Number: 1}, {Number: 2},
+		},
+		AuditConfigured: true,
 	}
 	decision := HeuristicAnalyze(state)
 	assert.Equal(t, VerdictAuditIncomplete, decision.Verdict)

@@ -200,6 +200,28 @@ SARIF severity mapping:
 [2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce build-audit.md
 ```
 
+## Completion Sentinel
+
+When the build audit completes without blocking issues, Fry writes a sentinel file at `.fry/build-audit-complete`. This file enables `--continue` to detect whether a build was interrupted during the audit phase and resume from there instead of incorrectly reporting `ALL_COMPLETE`.
+
+**How it works:**
+
+- The sentinel is written **atomically** (write to a temp file in the same directory, then `os.Rename` to the final path) to prevent partial writes from being mistaken for a completed audit.
+- The file contains an RFC 3339 timestamp recording when the audit finished.
+- It is written for both the **full build audit** (all sprints complete) and the **triage single-pass audit**.
+- It **is** written when the audit finds only advisory (non-blocking) issues, since those do not prevent the build from being considered audited.
+- It is **not** written if the audit errors out, finds blocking issues, or is skipped with `--no-audit`.
+- When the epic is configured to skip auditing (e.g., `@no_audit` directive, or low effort without `--always-verify`), the collector sets `BuildAuditComplete = true` so the analyzer never returns `AUDIT_INCOMPLETE` in the first place.
+- When `--no-audit` is passed as a CLI flag to `fry run --continue`, the collector still sees the audit as configured (because `@audit_after_sprint` is set in the epic) and the sentinel file is absent, so `HeuristicAnalyze` returns `AUDIT_INCOMPLETE`. The run command then handles this by skipping the audit phase and returning complete, rather than re-running the audit.
+
+**Resume behavior:**
+
+When `fry run --continue` finds all sprints complete but the sentinel file is absent, the analyzer returns `AUDIT_INCOMPLETE` instead of `ALL_COMPLETE`. The run command then resumes from the build audit phase without re-running any sprints.
+
+**Backward compatibility:**
+
+A `.fry/` directory from a build that predates this feature will not contain the sentinel file. This is treated as audit-incomplete (safe default), so `--continue` will re-run the build audit rather than incorrectly declaring the build complete.
+
 ## Build Logs
 
 The build audit session is logged to `.fry/build-logs/`:
