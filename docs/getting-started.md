@@ -83,7 +83,7 @@ When both `executive.md` and `plan.md` are present, Fry feeds `executive.md` int
 ### What happens when you run
 
 ```bash
-# Uses Claude for prepare, Codex for build (defaults) — auto-detects effort level
+# Uses Claude for prepare and build (defaults) — auto-detects effort level
 fry
 
 # Or use Claude Code for both prepare and build

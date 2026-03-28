@@ -253,7 +253,7 @@ The verify agent does not look for new issues and does not modify source code.
 - **`low`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at low effort.
 - **`medium`** -- Bounded audit: runs up to `@max_audit_iterations` outer audit cycles (default: 3), each with up to 3 inner fix iterations. LOW findings are ignored by the fix agent. Stops when cycles are exhausted.
 - **`high`** -- Progress-based audit: outer loop continues as long as progress is detected. Up to 12 outer cycles, 7 inner fix iterations per cycle. **LOW findings are included** in the fix agent's scope alongside higher-severity items (non-blocking). Stops early if 3 consecutive outer cycles show no progress (same findings persisting).
-- **`max`** -- Same progress-based behavior as `high`, but with up to 20 outer cycles and 10 inner fix iterations per cycle. **LOW findings are included** in fix scope. Allows more thorough remediation for mission-critical builds.
+- **`max`** -- Same progress-based behavior as `high`, but with up to 100 outer cycles and 10 inner fix iterations per cycle. **LOW findings are included** in fix scope. Allows more thorough remediation for mission-critical builds.
 
 When `@max_audit_iterations` is explicitly set in the epic, it is always respected as the outer cycle cap regardless of effort level, and progress detection is disabled. Progress-based behavior only activates when the iteration count is not explicitly configured.
 

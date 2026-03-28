@@ -29,7 +29,7 @@ In planning mode, Claude is the default engine for both the prepare and build st
 | Aspect | Default (software) | `--planning` |
 |---|---|---|
 | Default engine (prepare) | Claude | Claude |
-| Default engine (build) | Codex | Claude |
+| Default engine (build) | Claude | Claude |
 | `.fry/AGENTS.md` | Technology constraints, architecture rules, testing patterns | Domain boundaries, analytical frameworks, document quality standards |
 | Sprint phasing | Scaffolding → Schema → Logic → Integration → E2E | Research → Analysis → Strategy → Detailed Planning → Synthesis |
 | Sprint deliverables | Source files, configs, tests | Markdown documents, analyses, strategies |

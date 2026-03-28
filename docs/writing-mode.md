@@ -57,7 +57,7 @@ your-project/
 | Aspect | `software` (default) | `planning` | `writing` |
 |---|---|---|---|
 | Default engine (prepare) | Claude | Claude | Claude |
-| Default engine (build) | Codex | Claude | Claude |
+| Default engine (build) | Claude | Claude | Claude |
 | Sprint phasing | Scaffolding, Schema, Logic, Integration, E2E | Research, Analysis, Strategy, Planning, Synthesis | Outline, Draft, Revise, Polish, Assemble |
 | Sprint deliverables | Source files, configs, tests | Analyses, strategies, plans | Chapters, sections, manuscript |
 | Output directory | Project root | `output/` | `output/` |

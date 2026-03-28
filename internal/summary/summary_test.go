@@ -429,6 +429,47 @@ func TestBuildSummaryPromptWithoutBuildAuditResult(t *testing.T) {
 	assert.NotContains(t, prompt, "## Build Audit Results")
 }
 
+func TestGenerateBuildSummary_NonNotExistError(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+
+	// Use a custom engine that removes read+execute permission on projectDir
+	// during its Run() call. This way all earlier steps (MkdirAll, WriteFile,
+	// log creation) succeed, but the os.Stat(summaryPath) call after the engine
+	// returns gets EACCES (permission denied), not ENOENT.
+	eng := &chmodEngine{dir: projectDir}
+
+	err := GenerateBuildSummary(context.Background(), SummaryOpts{
+		ProjectDir: projectDir,
+		EpicName:   "Test",
+		Engine:     eng,
+	})
+
+	// Restore permissions so t.TempDir() cleanup succeeds.
+	os.Chmod(projectDir, 0o755)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "check summary file")
+}
+
+// chmodEngine removes read+execute permission on dir during Run(),
+// causing subsequent os.Stat calls in the project directory to fail
+// with permission denied (EACCES) rather than not-exist (ENOENT).
+type chmodEngine struct {
+	dir string
+}
+
+func (e *chmodEngine) Run(_ context.Context, _ string, opts engine.RunOpts) (string, int, error) {
+	if opts.Stdout != nil {
+		_, _ = opts.Stdout.Write([]byte("done"))
+	}
+	os.Chmod(e.dir, 0o000)
+	return "done", 0, nil
+}
+
+func (e *chmodEngine) Name() string { return "chmod-stub" }
+
 func TestBuildSummaryPromptIncludesBuildAuditInstructions(t *testing.T) {
 	t.Parallel()
 

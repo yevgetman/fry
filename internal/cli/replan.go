@@ -24,19 +24,22 @@ var replanCmd = &cobra.Command{
 	Short: "Replan an epic after deviation",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		projectPath, err := resolveProjectDir(projectDir)
+		pDir, _ := cmd.Flags().GetString("project-dir")
+		projectPath, err := resolveProjectDir(pDir)
 		if err != nil {
 			return err
 		}
 
-		epicPath := replanEpic
+		epicPath, _ := cmd.Flags().GetString("epic")
 		if epicPath == "" {
 			epicPath = filepath.Join(config.FryDir, "epic.md")
 		}
 
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		var replanner engine.Engine
-		if !replanDryRun {
-			engineName, err := engine.ResolveEngine(replanEngine, "", "", config.DefaultEngine)
+		if !dryRun {
+			engineVal, _ := cmd.Flags().GetString("engine")
+			engineName, err := engine.ResolveEngine(engineVal, "", "", config.DefaultEngine)
 			if err != nil {
 				return err
 			}
@@ -46,20 +49,24 @@ var replanCmd = &cobra.Command{
 			}
 		}
 
+		completedSprint, _ := cmd.Flags().GetInt("completed")
+		maxScope, _ := cmd.Flags().GetInt("max-scope")
+		model, _ := cmd.Flags().GetString("model")
+
 		if err := review.RunReplan(cmd.Context(), review.ReplanOpts{
 			ProjectDir:        projectPath,
 			EpicPath:          epicPath,
 			DeviationSpecPath: args[0],
-			CompletedSprint:   replanCompleted,
-			MaxScope:          replanMaxScope,
+			CompletedSprint:   completedSprint,
+			MaxScope:          maxScope,
 			Engine:            replanner,
-			Model:             replanModel,
-			DryRun:            replanDryRun,
+			Model:             model,
+			DryRun:            dryRun,
 		}); err != nil {
 			return err
 		}
 
-		if replanDryRun {
+		if dryRun {
 			data, err := os.ReadFile(filepath.Join(projectPath, config.FryDir, "replan-prompt.md"))
 			if err != nil {
 				return err

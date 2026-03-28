@@ -23,7 +23,7 @@ var identityCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("load identity: %w", err)
 		}
-		fmt.Print(content)
+		fmt.Fprint(cmd.OutOrStdout(), content)
 		return nil
 	},
 }

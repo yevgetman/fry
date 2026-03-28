@@ -124,7 +124,7 @@ fry/
 │   └── identity/                # Compiled-in identity layers (read-only during builds)
 │       ├── core.md              # Fundamental self-knowledge (~500 tokens, always loaded)
 │       └── disposition.md       # Behavioral tendencies (~500 tokens, always loaded)
-├── docs/                        # 21 user-facing documentation files (see below)
+├── docs/                        # 26 user-facing documentation files (see below)
 ├── plans/                       # User-authored inputs
 │   ├── plan.md                  # Build strategy (what to build)
 │   └── executive.md             # Project context (why to build it)
@@ -232,7 +232,7 @@ All engines are wrapped in a `ResilientEngine` decorator (`internal/engine/resil
 
 ### Sanity Checks (`internal/verify/types.go`)
 
-Five check primitives: `@check_file` (file exists), `@check_file_contains` (regex match in file), `@check_cmd` (command exits 0), `@check_cmd_output` (command output matches regex), `@check_test` (go test command passes).
+Five check primitives: `@check_file` (file exists), `@check_file_contains` (regex match in file), `@check_cmd` (command exits 0), `@check_cmd_output` (command output matches regex), `@check_test` (go test command passes (exits 0 AND zero test failures detected; test count and framework are parsed from output)).
 
 ---
 
@@ -293,6 +293,7 @@ Final: build audit (if full epic completed) → deferred check re-run → build 
 | 1 | Executive context | `plans/executive.md` (optional) |
 | 1.25 | Media manifest | categorized list of `media/` files (optional) |
 | 1.5 | User directive | `--user-prompt` or `.fry/user-prompt.txt` (optional) |
+| 1.625 | Agent disposition | identity disposition loaded from `templates/identity/disposition.md` |
 | 1.75 | Quality directive | injected only at `max` effort |
 | 2 | Strategic plan | reference to `plans/plan.md` |
 | 3 | Sprint instructions | `@prompt` block from epic |
@@ -335,6 +336,14 @@ Key flags:
   --no-audit                         # Skip audits
   --verbose                          # Verbose logging
   --no-color                         # Disable colored output (also: NO_COLOR env, TERM=dumb)
+  --sarif                            # Write build-audit.sarif in SARIF 2.1.0 format alongside build-audit.md
+  --json-report                      # Write build-report.json with structured sprint results
+  --show-tokens                      # Print per-sprint token usage summary to stderr after the run
+  --telemetry                        # Enable experience upload to consciousness API
+  --no-telemetry                     # Disable experience upload
+  --simple-continue                  # Resume from first incomplete sprint without LLM analysis
+  --review                           # Enable sprint review between sprints
+  --simulate-review verdict          # Simulate review verdict: CONTINUE or DEVIATE
   --project-dir path                 # Working directory (default: .)
 ```
 
@@ -423,7 +432,7 @@ make install   # build + cp bin/fry /usr/local/bin/fry
 make clean     # rm -rf bin/
 ```
 
-**39 test files** covering all packages. Tests use `t.Parallel()`, temp directories, env mocking, and mock engines. No CI/CD configured — local testing only.
+**64 test files** covering all packages. Tests use temp directories, env mocking, and mock engines. Most tests call `t.Parallel()`. No CI/CD configured — local testing only.
 
 ---
 
@@ -455,6 +464,8 @@ make clean     # rm -rf bin/
 | `observer.md` | Metacognitive layer: events, identity, wake-ups |
 | `git-strategy.md` | Branch/worktree isolation strategies |
 | `self-improvement.md` | Automated self-improvement pipeline |
+| `consciousness.md` | Experience synthesis and identity pipeline |
+| `triage.md` | Complexity classification, interactive confirmation, effort suggestion |
 
 ---
 

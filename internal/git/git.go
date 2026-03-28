@@ -157,7 +157,7 @@ func CollectStateWith(ctx context.Context, projectDir string, ex Executor) (bool
 
 // gitConfigValue is an unexported convenience that uses DefaultExecutor.
 // Used by tests in the same package.
-func gitConfigValue(ctx context.Context, projectDir, key string) string {
+func gitConfigValue(ctx context.Context, projectDir, key string) (string, error) {
 	return DefaultExecutor.ConfigGet(ctx, projectDir, key)
 }
 
@@ -172,12 +172,20 @@ func ensureLocalIdentity(ctx context.Context, projectDir string) error {
 }
 
 func ensureLocalIdentityWith(ctx context.Context, projectDir string, ex Executor) error {
-	if strings.TrimSpace(ex.ConfigGet(ctx, projectDir, "user.name")) == "" {
+	name, err := ex.ConfigGet(ctx, projectDir, "user.name")
+	if err != nil {
+		return fmt.Errorf("get git user.name: %w", err)
+	}
+	if strings.TrimSpace(name) == "" {
 		if err := ex.ConfigSet(ctx, projectDir, "user.name", "fry"); err != nil {
 			return fmt.Errorf("set git user.name: %w", err)
 		}
 	}
-	if strings.TrimSpace(ex.ConfigGet(ctx, projectDir, "user.email")) == "" {
+	email, err := ex.ConfigGet(ctx, projectDir, "user.email")
+	if err != nil {
+		return fmt.Errorf("get git user.email: %w", err)
+	}
+	if strings.TrimSpace(email) == "" {
 		if err := ex.ConfigSet(ctx, projectDir, "user.email", "fry@automated"); err != nil {
 			return fmt.Errorf("set git user.email: %w", err)
 		}

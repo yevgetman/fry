@@ -6,7 +6,7 @@ Fry supports three interchangeable AI engines: **OpenAI Codex**, **Claude Code**
 
 ### Codex (OpenAI)
 
-The default build engine for software (coding) mode. Requires the Codex CLI:
+A supported build engine for software (coding) mode. Requires the Codex CLI:
 
 ```bash
 npm i -g @openai/codex

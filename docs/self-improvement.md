@@ -6,7 +6,7 @@ Fry is a self-improving codebase. An automated pipeline periodically scans the F
 
 The self-improvement loop has two phases:
 
-1. **Planning phase** — Fry scans its own codebase across 9 categories and produces a JSON list of new findings. The orchestrator creates GitHub Issues for each finding, with auto-approve or proposed status based on category.
+1. **Planning phase** — Fry scans its own codebase across 10 categories and produces a JSON list of new findings. The orchestrator creates GitHub Issues for each finding, with auto-approve or proposed status based on category.
 2. **Build phase** — Fry reads the approved issues, selects 2-3 items based on effort balance, implements them in a git worktree, runs the full test suite, and either merges directly or opens a pull request.
 
 An orchestrator script (`.self-improve/orchestrate.sh`) drives the loop. It can run manually, on a cron schedule via macOS launchd, or in CI via GitHub Actions.
@@ -106,7 +106,7 @@ Build fails → failure comment added
 
 ## Planning Phase
 
-The planning phase scans the codebase for new issues across 9 categories:
+The planning phase scans the codebase for new issues across 10 categories:
 
 | Category | Focus |
 |---|---|
