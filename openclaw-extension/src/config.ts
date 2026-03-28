@@ -1,3 +1,5 @@
+import { isAbsolute } from "node:path";
+
 export interface FryPluginConfig {
 	fry_binary?: string;
 	default_effort?: string;
@@ -15,9 +17,6 @@ export function getNotificationLevel(
 	return config?.notifications || "milestones";
 }
 
-import { isAbsolute } from "node:path";
-
-// Validate that a project directory path is absolute and doesn't contain traversal.
 export function validateProjectDir(dir: string): string | null {
 	if (!dir || !isAbsolute(dir)) {
 		return "project_dir must be an absolute path";
@@ -29,7 +28,6 @@ export function validateProjectDir(dir: string): string | null {
 }
 
 // Artifact paths — mirrors Go internal/config/config.go constants.
-// If the Go side changes these paths, update them here.
 export const FRY_PATHS = {
 	sprintProgress: ".fry/sprint-progress.txt",
 	epicProgress: ".fry/epic-progress.txt",

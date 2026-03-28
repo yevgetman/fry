@@ -2,6 +2,7 @@
   "id": "fry",
   "name": "Fry Build Orchestration",
   "description": "Start, monitor, and interact with Fry builds through OpenClaw's conversational interface",
+  "version": "0.2.0",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
