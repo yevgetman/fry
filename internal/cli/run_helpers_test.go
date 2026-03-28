@@ -3,7 +3,10 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -272,4 +275,129 @@ func TestTelemetryBoolPtr(t *testing.T) {
 			assert.Equal(t, tt.input, *ptr)
 		})
 	}
+}
+
+func TestWriteBuildAuditSentinel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path writes sentinel file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		err := writeBuildAuditSentinel(dir)
+		require.NoError(t, err)
+
+		sentinelPath := filepath.Join(dir, config.BuildAuditCompleteFile)
+		info, err := os.Stat(sentinelPath)
+		require.NoError(t, err)
+		assert.False(t, info.IsDir())
+		assert.True(t, info.Size() > 0, "sentinel file should not be empty")
+	})
+
+	t.Run("sentinel contains valid RFC3339 timestamp", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		before := time.Now().UTC().Add(-time.Second)
+		err := writeBuildAuditSentinel(dir)
+		require.NoError(t, err)
+		after := time.Now().UTC().Add(time.Second)
+
+		data, err := os.ReadFile(filepath.Join(dir, config.BuildAuditCompleteFile))
+		require.NoError(t, err)
+		ts, err := time.Parse(time.RFC3339, strings.TrimSpace(string(data)))
+		require.NoError(t, err, "sentinel content should be valid RFC3339")
+		assert.True(t, !ts.Before(before) && !ts.After(after), "timestamp should be recent")
+	})
+
+	t.Run("atomic rename — file exists after call", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		require.NoError(t, writeBuildAuditSentinel(dir))
+
+		sentinelPath := filepath.Join(dir, config.BuildAuditCompleteFile)
+		_, err := os.Stat(sentinelPath)
+		assert.NoError(t, err, "sentinel file must exist after successful call")
+
+		// No leftover temp files in the .fry directory
+		fryDir := filepath.Dir(sentinelPath)
+		entries, err := os.ReadDir(fryDir)
+		require.NoError(t, err)
+		for _, e := range entries {
+			assert.False(t, strings.HasPrefix(e.Name(), "fry-build-audit-sentinel-"),
+				"temp file %s should not remain after successful write", e.Name())
+		}
+	})
+
+	t.Run("creates .fry directory if missing", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		// .fry/ does not exist yet inside dir
+		err := writeBuildAuditSentinel(dir)
+		require.NoError(t, err)
+
+		sentinelPath := filepath.Join(dir, config.BuildAuditCompleteFile)
+		_, err = os.Stat(sentinelPath)
+		assert.NoError(t, err)
+	})
+
+	t.Run("error on unwritable directory", func(t *testing.T) {
+		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("chmod not effective on Windows")
+		}
+
+		dir := t.TempDir()
+		fryDir := filepath.Join(dir, ".fry")
+		require.NoError(t, os.MkdirAll(fryDir, 0o755))
+		// Make .fry read-only so temp file creation fails
+		require.NoError(t, os.Chmod(fryDir, 0o555))
+		t.Cleanup(func() { os.Chmod(fryDir, 0o755) })
+
+		err := writeBuildAuditSentinel(dir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "write build audit sentinel")
+	})
+
+	t.Run("temp file in same directory avoids cross-device rename", func(t *testing.T) {
+		t.Parallel()
+		// Verify the implementation creates the temp file in the target directory
+		// (filepath.Dir(finalPath)) rather than os.TempDir(), which prevents EXDEV
+		// errors when /tmp is on a different filesystem (e.g., Docker tmpfs).
+		dir := t.TempDir()
+
+		require.NoError(t, writeBuildAuditSentinel(dir))
+
+		// If we get here without error, the rename succeeded on the same filesystem.
+		// Additionally verify no temp files leaked to os.TempDir().
+		tmpEntries, err := os.ReadDir(os.TempDir())
+		require.NoError(t, err)
+		for _, e := range tmpEntries {
+			assert.False(t, strings.HasPrefix(e.Name(), "fry-build-audit-sentinel-"),
+				"no sentinel temp files should be in os.TempDir()")
+		}
+	})
+
+	t.Run("overwrites existing sentinel", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		require.NoError(t, writeBuildAuditSentinel(dir))
+		sentinelPath := filepath.Join(dir, config.BuildAuditCompleteFile)
+		first, err := os.ReadFile(sentinelPath)
+		require.NoError(t, err)
+		require.NotEmpty(t, first)
+
+		// Write again — should succeed and produce a valid sentinel
+		require.NoError(t, writeBuildAuditSentinel(dir))
+		second, err := os.ReadFile(sentinelPath)
+		require.NoError(t, err)
+		require.NotEmpty(t, second)
+
+		// Both should be valid RFC3339 timestamps
+		_, err = time.Parse(time.RFC3339, strings.TrimSpace(string(second)))
+		assert.NoError(t, err, "overwritten sentinel should contain valid RFC3339")
+	})
 }

@@ -1211,6 +1211,11 @@ var runCmd = &cobra.Command{
 					} else {
 						frlog.Log("  BUILD AUDIT: %s remain (advisory)", audit.FormatCounts(result.SeverityCounts))
 					}
+					if result.Passed || !result.Blocking {
+						if sentinelErr := writeBuildAuditSentinel(projectPath); sentinelErr != nil {
+							frlog.Log("WARNING: could not write build audit sentinel: %v", sentinelErr)
+						}
+					}
 					frlog.Log("  GIT: checkpoint — build-audit")
 					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "", "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
@@ -1262,6 +1267,11 @@ var runCmd = &cobra.Command{
 						frlog.Log("  BUILD AUDIT: PASS (%s)", audit.FormatCounts(result.SeverityCounts))
 					} else {
 						frlog.Log("  BUILD AUDIT: %s (advisory)", audit.FormatCounts(result.SeverityCounts))
+					}
+					if result.Passed || !result.Blocking {
+						if sentinelErr := writeBuildAuditSentinel(projectPath); sentinelErr != nil {
+							frlog.Log("WARNING: could not write build audit sentinel: %v", sentinelErr)
+						}
 					}
 					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "", "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
@@ -1839,6 +1849,32 @@ func readDeferredFailuresArtifact(projectDir string) string {
 		return ""
 	}
 	return string(data)
+}
+
+func writeBuildAuditSentinel(projectDir string) error {
+	finalPath := filepath.Join(projectDir, config.BuildAuditCompleteFile)
+	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	tmpFile, err := os.CreateTemp(filepath.Dir(finalPath), "fry-build-audit-sentinel-*")
+	if err != nil {
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	if _, err := tmpFile.WriteString(time.Now().UTC().Format(time.RFC3339) + "\n"); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	return nil
 }
 
 func formatAffectedSprints(sprints []int) string {
