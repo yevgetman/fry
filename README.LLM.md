@@ -221,6 +221,8 @@ Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → defa
 
 All engines are wrapped in a `ResilientEngine` decorator (`internal/engine/resilient.go`) that auto-retries on rate-limit errors with exponential backoff (max 5 retries, 10s base delay, 120s cap, 25% jitter). Detection patterns are in `internal/engine/ratelimit.go`. Ollama is excluded from rate-limit detection.
 
+`ClaudeEngine` accepts an optional MCP config path via `WithMCPConfig()` engine option, appending `--mcp-config <path>` to every invocation. Set via `--mcp-config` CLI flag or `@mcp_config` epic directive.
+
 ### Effort Levels (`internal/epic/types.go`)
 
 | Level | MaxIterations | MaxSprints |

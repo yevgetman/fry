@@ -221,3 +221,33 @@ Ollama runs models locally and does not hit HTTP rate limits. Rate-limit detecti
 ### Implementation
 
 Rate-limit resilience is implemented as a `ResilientEngine` decorator that wraps any `Engine`. The decorator is transparent -- callers (sprint execution, alignment, audit, review, etc.) are unaware of the retry layer. See `internal/engine/resilient.go` and `internal/engine/ratelimit.go`.
+
+## MCP Server Configuration
+
+Claude Code supports [MCP (Model Context Protocol)](https://modelcontextprotocol.io) servers that provide additional tools to the agent during execution (e.g., LSP diagnostics, AST search/replace, Python REPL).
+
+### Configuration
+
+Pass an MCP server configuration file via the `--mcp-config` flag or `@mcp_config` epic directive:
+
+```bash
+fry --mcp-config ./mcp-servers.json
+```
+
+Or in an epic file:
+
+```
+@mcp_config ./mcp-servers.json
+```
+
+### Resolution Order
+
+1. `--mcp-config` CLI flag (highest priority)
+2. `@mcp_config` epic directive
+3. Claude Code's auto-discovery of `.mcp.json` in the project directory (no Fry configuration needed)
+
+The MCP config path is resolved to an absolute path before being passed to Claude Code.
+
+### Engine Support
+
+Only the Claude engine supports MCP. The `--mcp-config` flag and `@mcp_config` directive are silently ignored when using Codex or Ollama engines.

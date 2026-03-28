@@ -17,6 +17,7 @@ var (
 	replanEngine    string
 	replanModel     string
 	replanDryRun    bool
+	replanMCPConfig string
 )
 
 var replanCmd = &cobra.Command{
@@ -43,7 +44,12 @@ var replanCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			replanner, err = newResilientEngine(engineName)
+			var mcpOpts []engine.EngineOpt
+			if replanMCPConfig != "" {
+				abs, _ := filepath.Abs(replanMCPConfig)
+				mcpOpts = append(mcpOpts, engine.WithMCPConfig(abs))
+			}
+			replanner, err = newResilientEngine(engineName, mcpOpts...)
 			if err != nil {
 				return err
 			}
@@ -85,4 +91,5 @@ func init() {
 	replanCmd.Flags().StringVar(&replanEngine, "engine", "", "Replanning engine")
 	replanCmd.Flags().StringVar(&replanModel, "model", "", "Model override")
 	replanCmd.Flags().BoolVar(&replanDryRun, "dry-run", false, "Preview replanning changes")
+	replanCmd.Flags().StringVar(&replanMCPConfig, "mcp-config", "", "Path to MCP server configuration file (Claude engine only)")
 }

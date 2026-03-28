@@ -74,6 +74,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--telemetry` | Enable experience upload to the consciousness API for this run. See [Consciousness](consciousness.md). |
 | `--no-telemetry` | Disable experience upload. Takes precedence over `--telemetry` if both set. |
 | `--no-color` | Disable colored terminal output. Color is also disabled by setting the `NO_COLOR` environment variable or when stdout is not a TTY. |
+| `--mcp-config <path>` | Path to MCP server configuration file (Claude engine only). See [Engines: MCP](engines.md#mcp-server-configuration). |
 | `--dry-run` | Parse epic and show plan without running anything |
 
 ### Examples
@@ -139,6 +140,7 @@ fry prepare [epic_filename] [flags]
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. |
 | `--no-project-overview` | Skip the interactive project overview confirmation |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
+| `--mcp-config <path>` | Path to MCP server configuration file (Claude engine only). See [Engines: MCP](engines.md#mcp-server-configuration). |
 | `--no-color` | Disable colored terminal output |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 
@@ -191,6 +193,7 @@ fry replan <deviation_spec> [flags]
 | `--max-scope <N>` | Maximum deviation scope (default: 3) |
 | `--engine <codex\|claude\|ollama>` | Replanning engine |
 | `--model <model>` | Model override |
+| `--mcp-config <path>` | Path to MCP server configuration file (Claude engine only). See [Engines: MCP](engines.md#mcp-server-configuration). |
 | `--dry-run` | Preview replanning prompt without executing |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 

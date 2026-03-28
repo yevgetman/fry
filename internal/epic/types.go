@@ -151,6 +151,7 @@ type Epic struct {
 	PreIterationCmd      string
 	AgentModel           string
 	AgentFlags           string
+	MCPConfig            string
 	VerificationFile     string
 	MaxHealAttempts      int
 	MaxHealAttemptsSet   bool

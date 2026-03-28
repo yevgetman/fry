@@ -8,10 +8,15 @@ import (
 	"strings"
 )
 
-type ClaudeEngine struct{}
+type ClaudeEngine struct {
+	mcpConfig string
+}
 
 func (e *ClaudeEngine) Run(ctx context.Context, prompt string, opts RunOpts) (string, int, error) {
 	args := claudeArgs(opts)
+	if e.mcpConfig != "" {
+		args = append(args, "--mcp-config", e.mcpConfig)
+	}
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = opts.WorkDir
 	cmd.Stdin = strings.NewReader(prompt)

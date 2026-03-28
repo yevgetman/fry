@@ -41,6 +41,7 @@ Placed before any `@sprint` block:
 | `@pre_iteration <cmd>` | Run before each agent invocation |
 | `@model <model>` | Override the agent model (alias: `@codex_model`) |
 | `@engine_flags <flags>` | Extra CLI flags for the agent (alias: `@codex_flags`) |
+| `@mcp_config <path>` | Path to MCP server configuration file (Claude engine only). See [Engines: MCP](engines.md#mcp-server-configuration). |
 | `@verification <file>` | Sanity checks file (default: `.fry/verification.md`) |
 | `@max_heal_attempts <N>` | Auto-alignment attempts after sanity check failure (default: effort-level default or 3). When explicitly set, overrides effort-level behavior and disables progress detection. Set to 0 to disable alignment. |
 | `@max_fail_percent <N>` | Maximum percentage of checks that can fail while still passing the sprint (default: 20; 0 = strict, 100 = always pass). See [Sanity Checks](sanity-checks.md). |

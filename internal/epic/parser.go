@@ -94,6 +94,8 @@ func ParseEpic(path string) (*Epic, error) {
 				case "@codex_flags":
 					fmt.Fprintf(os.Stderr, "fry: warning: @codex_flags is deprecated; use @engine_flags instead\n")
 					ep.AgentFlags = value
+				case "@mcp_config":
+					ep.MCPConfig = value
 				case "@verification": // path to sanity checks file (directive name retained for backward compat)
 					ep.VerificationFile = value
 				case "@max_heal_attempts": // max alignment attempts per sprint (directive name retained for backward compat)

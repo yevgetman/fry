@@ -18,6 +18,7 @@ type ResilientEngine struct {
 	maxDelay   time.Duration
 	jitter     float64 // 0.0–1.0 fraction of delay to randomize
 	logFunc    func(format string, args ...interface{})
+	engineOpts []EngineOpt
 }
 
 // ResilientOpt configures a ResilientEngine.
@@ -48,6 +49,12 @@ func WithLogFunc(fn func(string, ...interface{})) ResilientOpt {
 	return func(r *ResilientEngine) { r.logFunc = fn }
 }
 
+// WithEngineOpts stores EngineOpt values to forward to NewEngine when using
+// NewResilientEngineFactory.
+func WithEngineOpts(opts ...EngineOpt) ResilientOpt {
+	return func(r *ResilientEngine) { r.engineOpts = opts }
+}
+
 // NewResilientEngine wraps an engine with rate-limit retry logic.
 func NewResilientEngine(inner Engine, opts ...ResilientOpt) *ResilientEngine {
 	r := &ResilientEngine{
@@ -71,8 +78,13 @@ func NewResilientEngine(inner Engine, opts ...ResilientOpt) *ResilientEngine {
 // resilient-wrapped engines. Useful for packages that accept an
 // engine factory (e.g., prepare.PrepareOpts.EngineFactory).
 func NewResilientEngineFactory(opts ...ResilientOpt) func(string) (Engine, error) {
+	probe := &ResilientEngine{}
+	for _, opt := range opts {
+		opt(probe)
+	}
+	engineOpts := probe.engineOpts
 	return func(name string) (Engine, error) {
-		inner, err := NewEngine(name)
+		inner, err := NewEngine(name, engineOpts...)
 		if err != nil {
 			return nil, err
 		}

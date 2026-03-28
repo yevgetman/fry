@@ -72,6 +72,7 @@ var (
 	runModel             string
 	runTelemetry         bool
 	runNoTelemetry       bool
+	runMCPConfig         string
 )
 
 type deferredEntry struct {
@@ -191,6 +192,15 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("--simple-continue requires existing build artifacts; epic file not found at %s", epicArg)
 			}
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
+			// Build engine factory with MCP config for auto-prepare paths
+			var earlyPrepareFactory func(string) (engine.Engine, error)
+			if runMCPConfig != "" {
+				abs, _ := filepath.Abs(runMCPConfig)
+				earlyPrepareFactory = engine.NewResilientEngineFactory(
+					engine.WithLogFunc(frlog.Log),
+					engine.WithEngineOpts(engine.WithMCPConfig(abs)),
+				)
+			}
 			if runFullPrepare {
 				if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
 					ProjectDir:          projectPath,
@@ -204,6 +214,7 @@ var runCmd = &cobra.Command{
 					EnableReview:        runReview,
 					Stdin:               os.Stdin,
 					Stdout:              cmd.OutOrStdout(),
+					EngineFactory:       earlyPrepareFactory,
 				}); err != nil {
 					return err
 				}
@@ -278,7 +289,23 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		buildEngine, err := newResilientEngine(engineName)
+
+		mcpConfig := runMCPConfig
+		if mcpConfig == "" {
+			mcpConfig = ep.MCPConfig
+		}
+		if mcpConfig != "" {
+			abs, absErr := filepath.Abs(mcpConfig)
+			if absErr == nil {
+				mcpConfig = abs
+			}
+		}
+		var mcpOpts []engine.EngineOpt
+		if mcpConfig != "" {
+			mcpOpts = append(mcpOpts, engine.WithMCPConfig(mcpConfig))
+		}
+
+		buildEngine, err := newResilientEngine(engineName, mcpOpts...)
 		if err != nil {
 			return err
 		}
@@ -553,7 +580,7 @@ var runCmd = &cobra.Command{
 		observerEnabled := !runNoObserver && !runDryRun && ep.EffortLevel != epic.EffortLow
 		var observerEngine engine.Engine
 		if observerEnabled {
-			observerEngine, err = newResilientEngine(engineName)
+			observerEngine, err = newResilientEngine(engineName, mcpOpts...)
 			if err != nil {
 				frlog.Log("WARNING: observer: could not create engine: %v", err)
 				observerEnabled = false
@@ -752,7 +779,7 @@ var runCmd = &cobra.Command{
 			if isPassStatus(result.Status) {
 				// Sprint audit
 				if ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
-					auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
+					auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
 					if err != nil {
 						return err
 					}
@@ -842,7 +869,7 @@ var runCmd = &cobra.Command{
 					return err
 				}
 
-				compactEngine, err := newResilientEngine(engineName)
+				compactEngine, err := newResilientEngine(engineName, mcpOpts...)
 				if err != nil {
 					return err
 				}
@@ -862,7 +889,7 @@ var runCmd = &cobra.Command{
 				if ep.ReviewBetweenSprints && !runNoReview && spr.Number < ep.TotalSprints && ep.EffortLevel != epic.EffortLow {
 					reviewSummary.ReviewsConducted++
 
-					reviewEngine, err := resolveReviewEngine(engineName, ep.ReviewEngine)
+					reviewEngine, err := resolveReviewEngine(engineName, ep.ReviewEngine, mcpOpts...)
 					if err != nil {
 						return err
 					}
@@ -1033,7 +1060,7 @@ var runCmd = &cobra.Command{
 		fullBuildComplete := startSprint == 1 || allSprintsCompleted(projectPath, ep.TotalSprints, startSprint, summaryCopy)
 		if exitErr == nil && fullBuildComplete && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
 			deferredContent := readDeferredFailuresArtifact(projectPath)
-			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine)
+			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
 			if err != nil {
 				frlog.Log("WARNING: could not create engine for build audit: %v", err)
 			} else {
@@ -1088,7 +1115,7 @@ var runCmd = &cobra.Command{
 		// Run a single-pass build audit for triaged tasks that skipped the main
 		// build audit gate (e.g. simple+low, moderate+low where AuditAfterSprint=false).
 		if exitErr == nil && buildAuditResult == nil && !runNoAudit && triageDecision != nil {
-			auditEngine, auditEngErr := newResilientEngine(engineName)
+			auditEngine, auditEngErr := newResilientEngine(engineName, mcpOpts...)
 			if auditEngErr != nil {
 				frlog.Log("WARNING: could not create engine for triage build audit: %v", auditEngErr)
 			} else {
@@ -1155,7 +1182,7 @@ var runCmd = &cobra.Command{
 		}
 
 		// Generate build summary document (after build audit so results can be included)
-		summaryEngine, err := newResilientEngine(engineName)
+		summaryEngine, err := newResilientEngine(engineName, mcpOpts...)
 		if err != nil {
 			frlog.Log("WARNING: could not create engine for build summary: %v", err)
 		} else {
@@ -1212,7 +1239,7 @@ var runCmd = &cobra.Command{
 
 		// Synthesize observations into experience summary
 		if collector != nil && collector.ObservationCount() > 0 {
-			consciousnessEngine, cErr := newResilientEngine(engineName)
+			consciousnessEngine, cErr := newResilientEngine(engineName, mcpOpts...)
 			if cErr != nil {
 				frlog.Log("WARNING: could not create engine for experience summary: %v", cErr)
 			} else {
@@ -1378,6 +1405,7 @@ func init() {
 	runCmd.Flags().StringVar(&runModel, "model", "", "Override agent model for sprints (e.g. opus[1m], sonnet, haiku)")
 	runCmd.Flags().BoolVar(&runTelemetry, "telemetry", false, "Enable experience upload to consciousness API")
 	runCmd.Flags().BoolVar(&runNoTelemetry, "no-telemetry", false, "Disable experience upload")
+	runCmd.Flags().StringVar(&runMCPConfig, "mcp-config", "", "Path to MCP server configuration file (Claude engine only)")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -1625,24 +1653,24 @@ func isPassStatus(status string) bool {
 	return strings.HasPrefix(status, "PASS")
 }
 
-func resolveAuditEngine(buildEngineName, auditEngineName string) (engine.Engine, error) {
+func resolveAuditEngine(buildEngineName, auditEngineName string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
 	name := buildEngineName
 	if strings.TrimSpace(auditEngineName) != "" {
 		name = auditEngineName
 	}
-	return newResilientEngine(name)
+	return newResilientEngine(name, engineOpts...)
 }
 
-func resolveReviewEngine(buildEngineName, reviewEngineName string) (engine.Engine, error) {
+func resolveReviewEngine(buildEngineName, reviewEngineName string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
 	name := buildEngineName
 	if strings.TrimSpace(reviewEngineName) != "" {
 		name = reviewEngineName
 	}
-	return newResilientEngine(name)
+	return newResilientEngine(name, engineOpts...)
 }
 
-func newResilientEngine(name string) (engine.Engine, error) {
-	eng, err := engine.NewEngine(name)
+func newResilientEngine(name string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
+	eng, err := engine.NewEngine(name, engineOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1789,7 +1817,12 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 	if err != nil {
 		return nil, fmt.Errorf("triage: resolve engine: %w", err)
 	}
-	eng, err := newResilientEngine(engName)
+	var triageMCPOpts []engine.EngineOpt
+	if runMCPConfig != "" {
+		abs, _ := filepath.Abs(runMCPConfig)
+		triageMCPOpts = append(triageMCPOpts, engine.WithMCPConfig(abs))
+	}
+	eng, err := newResilientEngine(engName, triageMCPOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("triage: create engine: %w", err)
 	}
@@ -1915,6 +1948,14 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		resolvedEffort = complexEffort
 
 		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
+		var triagePrepareFactory func(string) (engine.Engine, error)
+		if runMCPConfig != "" {
+			abs, _ := filepath.Abs(runMCPConfig)
+			triagePrepareFactory = engine.NewResilientEngineFactory(
+				engine.WithLogFunc(frlog.Log),
+				engine.WithEngineOpts(engine.WithMCPConfig(abs)),
+			)
+		}
 		if err := prepare.RunPrepare(ctx, prepare.PrepareOpts{
 			ProjectDir:          projectPath,
 			EpicFilename:        filepath.Base(epicPath),
@@ -1927,6 +1968,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			EnableReview:        runReview,
 			Stdin:               stdin,
 			Stdout:              stdout,
+			EngineFactory:       triagePrepareFactory,
 		}); err != nil {
 			return nil, err
 		}

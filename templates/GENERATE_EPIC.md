@@ -139,6 +139,7 @@ Based on the plan, determine:
 - `@pre_sprint`: Dependency management command (go mod tidy, npm install, pip install, etc.)
 - `@model`: Override the AI agent model (optional, alias: `@codex_model`)
 - `@engine_flags`: Extra flags for the agent CLI (optional, alias: `@codex_flags`)
+- `@mcp_config`: Path to MCP server configuration file for Claude engine (optional)
 - `@max_heal_attempts`: Override alignment attempts per sprint (optional; do NOT set for `@effort max` — max effort uses unlimited progress-based alignment automatically)
 - `@max_fail_percent`: Maximum percentage of checks that can fail and still pass (optional, default: 20; 0 = strict)
 - `@compact_with_agent`: Use AI agent to summarize sprint progress (optional, default: mechanical extraction)

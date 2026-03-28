@@ -753,6 +753,24 @@ Prompt.
 	assert.Equal(t, "--profile fast", ep.AgentFlags)
 }
 
+func TestParseMCPConfig(t *testing.T) {
+	t.Parallel()
+
+	ep := parseTempEpic(t, `
+@epic Test
+@mcp_config /path/to/mcp.json
+
+@sprint 1
+@name One
+@max_iterations 1
+@promise DONE
+@prompt
+Do stuff.
+`)
+
+	assert.Equal(t, "/path/to/mcp.json", ep.MCPConfig)
+}
+
 func parseTempEpic(t *testing.T, contents string) *Epic {
 	t.Helper()
 

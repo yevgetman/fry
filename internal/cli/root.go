@@ -64,6 +64,7 @@ func init() {
 	rootCmd.Flags().StringVar(&runModel, "model", "", "Override agent model for sprints (e.g. opus[1m], sonnet, haiku)")
 	rootCmd.Flags().BoolVar(&runTelemetry, "telemetry", false, "Enable experience upload to consciousness API")
 	rootCmd.Flags().BoolVar(&runNoTelemetry, "no-telemetry", false, "Disable experience upload")
+	rootCmd.Flags().StringVar(&runMCPConfig, "mcp-config", "", "Path to MCP server configuration file (Claude engine only)")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(prepareCmd)

@@ -3,8 +3,11 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/prepare"
 )
@@ -19,6 +22,7 @@ var (
 	prepareEffort         string
 	prepareNoProjectOverview  bool
 	prepareReview         bool
+	prepareMCPConfig      string
 )
 
 var prepareCmd = &cobra.Command{
@@ -85,6 +89,12 @@ var prepareCmd = &cobra.Command{
 		noSanityCheck, _ := cmd.Flags().GetBool("no-sanity-check")
 		reviewVal, _ := cmd.Flags().GetBool("review")
 
+		var prepareEngineOpts []engine.EngineOpt
+		if prepareMCPConfig != "" {
+			abs, _ := filepath.Abs(prepareMCPConfig)
+			prepareEngineOpts = append(prepareEngineOpts, engine.WithMCPConfig(abs))
+		}
+
 		return prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
 			ProjectDir:          projectPath,
 			EpicFilename:        epicArg,
@@ -98,6 +108,14 @@ var prepareCmd = &cobra.Command{
 			EnableReview:        reviewVal,
 			Stdin:               os.Stdin,
 			Stdout:              cmd.OutOrStdout(),
+			EngineFactory: func() func(string) (engine.Engine, error) {
+				if len(prepareEngineOpts) > 0 {
+					return engine.NewResilientEngineFactory(
+						engine.WithEngineOpts(prepareEngineOpts...),
+					)
+				}
+				return nil
+			}(),
 		})
 	},
 }
@@ -114,4 +132,5 @@ func init() {
 	prepareCmd.Flags().BoolVar(&prepareNoProjectOverview, "no-sanity-check", false, "Deprecated alias for --no-project-overview")
 	_ = prepareCmd.Flags().MarkHidden("no-sanity-check")
 	prepareCmd.Flags().BoolVar(&prepareReview, "review", false, "Enable sprint review between sprints")
+	prepareCmd.Flags().StringVar(&prepareMCPConfig, "mcp-config", "", "Path to MCP server configuration file (Claude engine only)")
 }

@@ -349,3 +349,18 @@ func TestNewResilientEngineFactory_InvalidEngine(t *testing.T) {
 	_, err := factory("nonexistent")
 	require.Error(t, err)
 }
+
+func TestNewResilientEngineFactory_WithEngineOpts(t *testing.T) {
+	t.Parallel()
+
+	factory := NewResilientEngineFactory(
+		WithEngineOpts(WithMCPConfig("/test/mcp.json")),
+	)
+	eng, err := factory("claude")
+	require.NoError(t, err)
+	resilient, ok := eng.(*ResilientEngine)
+	require.True(t, ok)
+	inner, ok := resilient.Inner().(*ClaudeEngine)
+	require.True(t, ok)
+	assert.Equal(t, "/test/mcp.json", inner.mcpConfig)
+}

@@ -51,15 +51,33 @@ func ResolveEngine(cliFlag, epicDirective, envVar, defaultEngine string) (string
 	}
 }
 
-func NewEngine(name string) (Engine, error) {
+// EngineOpt configures an engine at creation time.
+type EngineOpt func(Engine)
+
+// WithMCPConfig sets the MCP server configuration file path.
+// Only applies to ClaudeEngine; silently ignored by other engines.
+func WithMCPConfig(path string) EngineOpt {
+	return func(e Engine) {
+		if ce, ok := e.(*ClaudeEngine); ok {
+			ce.mcpConfig = path
+		}
+	}
+}
+
+func NewEngine(name string, opts ...EngineOpt) (Engine, error) {
+	var eng Engine
 	switch name {
 	case "codex":
-		return &CodexEngine{}, nil
+		eng = &CodexEngine{}
 	case "claude":
-		return &ClaudeEngine{}, nil
+		eng = &ClaudeEngine{}
 	case "ollama":
-		return &OllamaEngine{}, nil
+		eng = &OllamaEngine{}
 	default:
 		return nil, fmt.Errorf("unsupported engine %q", name)
 	}
+	for _, opt := range opts {
+		opt(eng)
+	}
+	return eng, nil
 }

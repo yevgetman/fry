@@ -163,3 +163,26 @@ func TestCombinedWriter(t *testing.T) {
 	assert.Equal(t, "test-data", bufA.String())
 	assert.Equal(t, "test-data", bufB.String())
 }
+
+func TestNewEngine_WithMCPConfig(t *testing.T) {
+	t.Parallel()
+
+	eng, err := NewEngine("claude", WithMCPConfig("/path/to/mcp.json"))
+	require.NoError(t, err)
+	ce, ok := eng.(*ClaudeEngine)
+	require.True(t, ok)
+	assert.Equal(t, "/path/to/mcp.json", ce.mcpConfig)
+}
+
+func TestNewEngine_WithMCPConfig_NonClaude(t *testing.T) {
+	t.Parallel()
+
+	// Codex and Ollama should silently ignore MCP config
+	eng, err := NewEngine("codex", WithMCPConfig("/path/to/mcp.json"))
+	require.NoError(t, err)
+	assert.Equal(t, "codex", eng.Name())
+
+	eng2, err := NewEngine("ollama", WithMCPConfig("/path/to/mcp.json"))
+	require.NoError(t, err)
+	assert.Equal(t, "ollama", eng2.Name())
+}

@@ -96,6 +96,7 @@
 # @pre_iteration <cmd>            Run before every agent exec call
 # @model <model>                  Override the agent model (alias: @codex_model)
 # @engine_flags <flags>           Extra flags for agent exec (alias: @codex_flags)
+# @mcp_config <path>              MCP server config file for Claude (optional)
 # @verification <file>            Sanity checks file (default: .fry/verification.md)
 # @max_heal_attempts <N>          Auto-alignment attempts after sanity check failure (default: 3; ignored for max effort which uses unlimited progress-based alignment)
 # @max_fail_percent <N>           Max % of checks that can fail and still pass (default: 20; 0=strict)
