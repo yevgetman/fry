@@ -1,0 +1,30 @@
+{
+  "id": "fry",
+  "name": "Fry Build Orchestration",
+  "description": "Start, monitor, and interact with Fry builds through OpenClaw's conversational interface",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "fry_binary": {
+        "type": "string",
+        "description": "Path to the fry binary (default: 'fry' from PATH)"
+      },
+      "default_effort": {
+        "type": "string",
+        "enum": ["auto", "low", "medium", "high", "max"],
+        "description": "Default effort level for builds"
+      },
+      "default_engine": {
+        "type": "string",
+        "enum": ["claude", "codex", "ollama"],
+        "description": "Default LLM engine for builds"
+      },
+      "notifications": {
+        "type": "string",
+        "enum": ["all", "milestones", "errors"],
+        "description": "Notification verbosity level"
+      }
+    }
+  }
+}

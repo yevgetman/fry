@@ -6,11 +6,12 @@ Fry is a single static Go binary organized into focused internal packages. This 
 
 ```
 cmd/fry/                    Entry point — calls cli.Execute()
+internal/agent/             Agent foundation: domain types, build state reader, event streaming, artifact schema, system prompt generation
 internal/agentrun/          Shared dual-log execution harness for sprint and heal phases
 internal/archive/           Timestamped snapshots of .fry/ and build outputs into .fry-archive/
 internal/assets/            Supplementary assets scanner and content builder (prepare-only)
 internal/audit/             Post-sprint and post-build semantic audit (sprint audit loop + build audit)
-internal/cli/               Cobra command definitions (run, prepare, replan, init, clean, status, identity, version)
+internal/cli/               Cobra command definitions (run, prepare, replan, init, clean, status, identity, version, agent, events)
 internal/color/             ANSI color output with TTY detection and NO_COLOR support
 internal/config/            Constants: file paths, defaults, version string
 internal/consciousness/     End-of-build experience synthesis and BuildRecord collection
@@ -50,6 +51,10 @@ templates/                  Embedded templates (AGENTS.md, epic-example, verific
 | `fry identity` | Print Fry's current identity (core or full with `--full`) |
 | `fry replan` | Re-run the sprint review and replanning pass |
 | `fry version` | Print the Fry version |
+| `fry events` | List build events; `--follow --json` for real-time streaming |
+| `fry agent prompt` | Print the agent system prompt (artifact schema, lifecycle, identity) |
+| `fry status --json` | Output structured build state as JSON (for agent consumption) |
+| `fry reflect` | Trigger the Reflection pipeline remotely |
 
 ## Supported Engines
 

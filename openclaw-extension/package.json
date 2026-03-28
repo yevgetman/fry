@@ -1,0 +1,14 @@
+{
+  "name": "@fry/openclaw-extension",
+  "version": "0.1.0",
+  "description": "OpenClaw extension for Fry build orchestration — start, monitor, and interact with Fry builds through any messaging channel",
+  "type": "module",
+  "main": "index.ts",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "openclaw": "*"
+  }
+}

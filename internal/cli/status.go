@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/archive"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/consciousness"
@@ -22,6 +24,18 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show current build state without making an LLM call",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		if jsonOutput {
+			projectDir, _ := cmd.Flags().GetString("project-dir")
+			state, err := agent.ReadBuildState(projectDir)
+			if err != nil {
+				return fmt.Errorf("read build state: %w", err)
+			}
+			enc := json.NewEncoder(cmd.OutOrStdout())
+			enc.SetIndent("", "  ")
+			return enc.Encode(state)
+		}
+
 		showConsciousness, _ := cmd.Flags().GetBool("consciousness")
 		if showConsciousness {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
@@ -73,5 +87,6 @@ var statusCmd = &cobra.Command{
 
 func init() {
 	statusCmd.Flags().Bool("consciousness", false, "Show consciousness pipeline status")
+	statusCmd.Flags().Bool("json", false, "Output build state as JSON (for agent consumption)")
 	rootCmd.AddCommand(statusCmd)
 }
