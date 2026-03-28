@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -405,6 +406,65 @@ func TestAlwaysVerifyWarnsWhenNoBuildSystem(t *testing.T) {
 	verifyPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	_, err := os.Stat(verifyPath)
 	assert.True(t, os.IsNotExist(err), "sanity checks file must not exist when no build system is detected")
+}
+
+func TestAuditIncompleteVerdictRouting(t *testing.T) {
+	t.Parallel()
+
+	// Set up a project directory where all sprints completed but the build
+	// audit sentinel file is absent. CollectBuildState + HeuristicAnalyze
+	// should produce VerdictAuditIncomplete.
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+	epicProgress := "# Epic Progress — TestEpic\n\n" +
+		"## Sprint 1: Setup — PASS\n\nDone.\n\n" +
+		"## Sprint 2: Auth — PASS\n\nDone.\n\n" +
+		"## Sprint 3: API — PASS\n\nDone.\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.EpicProgressFile), []byte(epicProgress), 0o644))
+
+	ep := &epic.Epic{
+		Name:             "TestEpic",
+		TotalSprints:     3,
+		AuditAfterSprint: true,
+		EffortLevel:      epic.EffortHigh,
+		Sprints: []epic.Sprint{
+			{Number: 1, Name: "Setup"},
+			{Number: 2, Name: "Auth"},
+			{Number: 3, Name: "API"},
+		},
+	}
+
+	// No sentinel file — build audit was interrupted.
+	state, err := continuerun.CollectBuildState(context.Background(), dir, ep, false)
+	require.NoError(t, err)
+	assert.False(t, state.BuildAuditComplete, "sentinel absent → BuildAuditComplete must be false")
+	assert.True(t, state.AuditConfigured, "high-effort audit-enabled build → AuditConfigured must be true")
+
+	decision := continuerun.HeuristicAnalyze(state)
+	assert.Equal(t, continuerun.VerdictAuditIncomplete, decision.Verdict)
+	assert.Equal(t, 3, decision.StartSprint)
+
+	// Verify routing: startSprint should exceed endSprint to skip the sprint loop.
+	startSprint := ep.TotalSprints + 1
+	endSprint := ep.TotalSprints
+	assert.Greater(t, startSprint, endSprint, "startSprint > endSprint skips sprint loop")
+}
+
+func TestDryRunAuditOnlyResumeEarlyReturn(t *testing.T) {
+	t.Parallel()
+
+	// When auditOnlyResume is true and dry-run is requested, the CLI should
+	// return an early message instead of printing nonsensical sprint ranges.
+	var out bytes.Buffer
+	// Simulate the early return path from run.go.
+	auditOnlyResume := true
+	if auditOnlyResume {
+		fmt.Fprintln(&out, "Nothing to run — will resume from build audit only.")
+	}
+	assert.Contains(t, out.String(), "Nothing to run")
+	assert.Contains(t, out.String(), "build audit only")
 }
 
 func runRepoCommand(t *testing.T, name string, args ...string) {

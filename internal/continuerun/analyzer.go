@@ -28,7 +28,7 @@ type AnalyzeOpts struct {
 }
 
 var (
-	verdictRe = regexp.MustCompile(`<verdict>(RESUME|RESUME_FRESH|CONTINUE_NEXT|ALL_COMPLETE|BLOCKED)</verdict>`)
+	verdictRe = regexp.MustCompile(`<verdict>(RESUME|RESUME_FRESH|CONTINUE_NEXT|ALL_COMPLETE|AUDIT_INCOMPLETE|BLOCKED)</verdict>`)
 	sprintRe  = regexp.MustCompile(`<sprint>(\d+)</sprint>`)
 	reasonRe  = regexp.MustCompile(`(?s)<reason>(.*?)</reason>`)
 )
@@ -112,8 +112,9 @@ func Analyze(ctx context.Context, opts AnalyzeOpts) (*ContinueDecision, error) {
 // HeuristicAnalyze determines where to resume a build without an LLM call.
 // It scans the BuildState for sprint completion markers, finds the first sprint
 // without a completion marker, and returns that sprint as the resume point.
-// Returns VerdictAllComplete when state is nil, has no sprints, or all sprints
-// are complete.
+// Returns VerdictAuditIncomplete when all sprints are complete but the build
+// audit sentinel is absent. Returns VerdictAllComplete when state is nil, has
+// no sprints, or all sprints are complete and the audit is done.
 func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 	if state == nil || state.TotalSprints == 0 {
 		return &ContinueDecision{
@@ -134,6 +135,14 @@ func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 				StartSprint: i,
 				Reason:      "heuristic continue: first incomplete sprint",
 			}
+		}
+	}
+
+	if !state.BuildAuditComplete && state.AuditConfigured {
+		return &ContinueDecision{
+			Verdict:     VerdictAuditIncomplete,
+			StartSprint: state.TotalSprints,
+			Reason:      "heuristic continue: all sprints completed but build audit did not finish",
 		}
 	}
 
@@ -202,6 +211,7 @@ func buildAnalysisPrompt(state *BuildState, report string) string {
 	b.WriteString("| RESUME_FRESH | Sprint needs a full re-run from scratch (e.g., work was corrupted or insufficient). |\n")
 	b.WriteString("| CONTINUE_NEXT | The active sprint is actually done but wasn't recorded as complete. Start the next unstarted sprint. |\n")
 	b.WriteString("| ALL_COMPLETE | All sprints have passed. Nothing to do. |\n")
+	b.WriteString("| AUDIT_INCOMPLETE | All sprints passed but the build audit sentinel is absent — resume from build audit. |\n")
 	b.WriteString("| BLOCKED | Cannot continue without user action (e.g., Docker not running, missing tools). |\n\n")
 
 	b.WriteString("## Important Guidelines\n\n")

@@ -47,6 +47,17 @@ func FormatReport(state *BuildState) string {
 		b.WriteByte('\n')
 	}
 
+	// Build audit status
+	b.WriteString("## Build Audit\n")
+	if !state.AuditConfigured {
+		b.WriteString("- Sentinel: N/A (build audit not configured for this build)\n")
+	} else if state.BuildAuditComplete {
+		b.WriteString("- Sentinel: PRESENT (build audit completed successfully)\n")
+	} else {
+		b.WriteString("- Sentinel: ABSENT (build audit has not completed)\n")
+	}
+	b.WriteByte('\n')
+
 	// Next sprint
 	next := findNextSprint(state.CompletedSprints, state.TotalSprints)
 	if next == 0 {
