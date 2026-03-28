@@ -10,5 +10,8 @@ lint:
 clean:
 	rm -rf bin/
 
+PREFIX ?= $(HOME)/.local
+
 install: build
-	cp bin/fry /usr/local/bin/fry
+	mkdir -p $(PREFIX)/bin
+	cp bin/fry $(PREFIX)/bin/fry
