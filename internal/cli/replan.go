@@ -46,8 +46,11 @@ var replanCmd = &cobra.Command{
 			}
 			var mcpOpts []engine.EngineOpt
 			if replanMCPConfig != "" {
-				abs, _ := filepath.Abs(replanMCPConfig)
-				mcpOpts = append(mcpOpts, engine.WithMCPConfig(abs))
+				mcpPath := replanMCPConfig
+				if abs, err := filepath.Abs(replanMCPConfig); err == nil {
+					mcpPath = abs
+				}
+				mcpOpts = append(mcpOpts, engine.WithMCPConfig(mcpPath))
 			}
 			replanner, err = newResilientEngine(engineName, mcpOpts...)
 			if err != nil {

@@ -91,8 +91,11 @@ var prepareCmd = &cobra.Command{
 
 		var prepareEngineOpts []engine.EngineOpt
 		if prepareMCPConfig != "" {
-			abs, _ := filepath.Abs(prepareMCPConfig)
-			prepareEngineOpts = append(prepareEngineOpts, engine.WithMCPConfig(abs))
+			mcpPath := prepareMCPConfig
+			if abs, err := filepath.Abs(prepareMCPConfig); err == nil {
+				mcpPath = abs
+			}
+			prepareEngineOpts = append(prepareEngineOpts, engine.WithMCPConfig(mcpPath))
 		}
 
 		return prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{

@@ -195,10 +195,13 @@ var runCmd = &cobra.Command{
 			// Build engine factory with MCP config for auto-prepare paths
 			var earlyPrepareFactory func(string) (engine.Engine, error)
 			if runMCPConfig != "" {
-				abs, _ := filepath.Abs(runMCPConfig)
+				mcpPath := runMCPConfig
+				if abs, err := filepath.Abs(runMCPConfig); err == nil {
+					mcpPath = abs
+				}
 				earlyPrepareFactory = engine.NewResilientEngineFactory(
 					engine.WithLogFunc(frlog.Log),
-					engine.WithEngineOpts(engine.WithMCPConfig(abs)),
+					engine.WithEngineOpts(engine.WithMCPConfig(mcpPath)),
 				)
 			}
 			if runFullPrepare {
@@ -1819,8 +1822,11 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 	}
 	var triageMCPOpts []engine.EngineOpt
 	if runMCPConfig != "" {
-		abs, _ := filepath.Abs(runMCPConfig)
-		triageMCPOpts = append(triageMCPOpts, engine.WithMCPConfig(abs))
+		mcpPath := runMCPConfig
+		if abs, err := filepath.Abs(runMCPConfig); err == nil {
+			mcpPath = abs
+		}
+		triageMCPOpts = append(triageMCPOpts, engine.WithMCPConfig(mcpPath))
 	}
 	eng, err := newResilientEngine(engName, triageMCPOpts...)
 	if err != nil {
@@ -1950,10 +1956,13 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
 		var triagePrepareFactory func(string) (engine.Engine, error)
 		if runMCPConfig != "" {
-			abs, _ := filepath.Abs(runMCPConfig)
+			mcpPath := runMCPConfig
+			if abs, err := filepath.Abs(runMCPConfig); err == nil {
+				mcpPath = abs
+			}
 			triagePrepareFactory = engine.NewResilientEngineFactory(
 				engine.WithLogFunc(frlog.Log),
-				engine.WithEngineOpts(engine.WithMCPConfig(abs)),
+				engine.WithEngineOpts(engine.WithMCPConfig(mcpPath)),
 			)
 		}
 		if err := prepare.RunPrepare(ctx, prepare.PrepareOpts{
