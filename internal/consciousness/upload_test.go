@@ -303,10 +303,9 @@ func TestUploadInBackground_Success(t *testing.T) {
 
 // TestUploadInBackground_DoubleFail verifies that when both UploadExperience
 // and CachePendingUpload fail, a warning is emitted to stderr.
-// Cannot use t.Parallel: t.Setenv (required to redirect HOME) is incompatible
-// with t.Parallel in Go's testing framework.
 func TestUploadInBackground_DoubleFail(t *testing.T) {
-	// t.Parallel() omitted: t.Setenv panics in parallel tests
+	// t.Parallel() omitted: test reassigns os.Stderr which races with other goroutines
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"error":"down"}`))
@@ -319,15 +318,20 @@ func TestUploadInBackground_DoubleFail(t *testing.T) {
 	t.Cleanup(func() {
 		_ = os.Chmod(readOnlyDir, 0o755)
 	})
-	t.Setenv("HOME", readOnlyDir)
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", readOnlyDir)
+	t.Cleanup(func() {
+		os.Setenv("HOME", origHome)
+	})
 
 	// Capture stderr
 	oldStderr := os.Stderr
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
+	defer r.Close()
+	defer w.Close()
 	os.Stderr = w
 	t.Cleanup(func() {
-		w.Close()
 		os.Stderr = oldStderr
 	})
 
@@ -340,7 +344,7 @@ func TestUploadInBackground_DoubleFail(t *testing.T) {
 		t.Fatal("UploadInBackground did not complete in time")
 	}
 
-	// Close write end and read captured output
+	// Close write-end so ReadAll gets EOF (defer w.Close is a safety net for fatal paths)
 	w.Close()
 	captured, readErr := io.ReadAll(r)
 	require.NoError(t, readErr)

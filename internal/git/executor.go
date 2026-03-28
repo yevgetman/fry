@@ -102,14 +102,17 @@ func (e *ExecExecutor) Init(ctx context.Context, dir string) error {
 func (e *ExecExecutor) ConfigGet(ctx context.Context, dir string, key string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "config", "--get", key)
 	cmd.Dir = dir
-	var stdout bytes.Buffer
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = nil
+	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 			return "", nil // key not found
+		}
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return "", fmt.Errorf("git config --get %q: %s", key, msg)
 		}
 		return "", err
 	}

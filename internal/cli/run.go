@@ -654,9 +654,11 @@ var runCmd = &cobra.Command{
 					name := epicName
 					mu.Unlock()
 					if activeSprint > 0 {
-						if err := git.CommitPartialWork(ctx, projectPath, name, activeSprint, spr.Name); err != nil {
+						commitCtx, commitCancel := context.WithTimeout(context.Background(), 10*time.Second)
+						if err := git.CommitPartialWork(commitCtx, projectPath, name, activeSprint, spr.Name); err != nil {
 							fmt.Fprintf(os.Stderr, "fry: warning: failed to commit partial work: %v\n", err)
 						}
+						commitCancel()
 					}
 					exitErr = fmt.Errorf("interrupted by signal")
 					break

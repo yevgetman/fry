@@ -472,7 +472,7 @@ func TestEnsureLocalIdentityWith_ConfigGetEmailError(t *testing.T) {
 	var callCount atomic.Int32
 	configErr := errors.New("git config email failed")
 	ex := &mockExecutor{
-		ConfigGetFn: func(_ context.Context, _ string, key string) (string, error) {
+		ConfigGetFn: func(_ context.Context, _ string, _ string) (string, error) {
 			if callCount.Add(1) == 1 {
 				return "existing-name", nil
 			}
