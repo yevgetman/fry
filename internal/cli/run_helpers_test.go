@@ -37,9 +37,9 @@ func TestFormatAffectedSprints(t *testing.T) {
 }
 
 func TestColorizeStatus(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel: mutates global color state via color.SetEnabled.
 	color.SetEnabled(true)
+	t.Cleanup(func() { color.SetEnabled(false) })
 
 	tests := []struct {
 		name         string
@@ -55,7 +55,6 @@ func TestColorizeStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			got := colorizeStatus(tt.input)
 			assert.Contains(t, got, tt.wantContains)
 			assert.Contains(t, got, tt.input)
@@ -63,7 +62,6 @@ func TestColorizeStatus(t *testing.T) {
 	}
 
 	t.Run("unknown status returned unchanged", func(t *testing.T) {
-		t.Parallel()
 		assert.Equal(t, "UNKNOWN", colorizeStatus("UNKNOWN"))
 	})
 }
@@ -178,11 +176,12 @@ func TestResolvePrepareEngine(t *testing.T) {
 		})
 	}
 
-	t.Run("both empty falls back to FRY_ENGINE env", func(t *testing.T) {
-		t.Parallel()
-		got := resolvePrepareEngine("", "")
-		assert.Equal(t, os.Getenv("FRY_ENGINE"), got)
-	})
+}
+
+func TestResolvePrepareEngine_EnvFallback(t *testing.T) {
+	t.Setenv("FRY_ENGINE", "test-engine")
+	got := resolvePrepareEngine("", "")
+	assert.Equal(t, "test-engine", got)
 }
 
 func TestTruncateString(t *testing.T) {
@@ -221,11 +220,11 @@ func TestReadOptionalFile(t *testing.T) {
 		assert.Equal(t, "hello\n", got)
 	})
 
-	t.Run("non-existent file returns error", func(t *testing.T) {
+	t.Run("non-existent file returns empty string", func(t *testing.T) {
 		t.Parallel()
-		_, err := readOptionalFile("/nonexistent/path/file.txt")
-		assert.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
+		got, err := readOptionalFile("/nonexistent/path/file.txt")
+		require.NoError(t, err)
+		assert.Equal(t, "", got)
 	})
 }
 
