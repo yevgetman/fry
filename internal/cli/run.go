@@ -36,6 +36,7 @@ import (
 	"github.com/yevgetman/fry/internal/review"
 	"github.com/yevgetman/fry/internal/shellhook"
 	"github.com/yevgetman/fry/internal/sprint"
+	"github.com/yevgetman/fry/internal/steering"
 	"github.com/yevgetman/fry/internal/summary"
 	"github.com/yevgetman/fry/internal/textutil"
 	"github.com/yevgetman/fry/internal/triage"
@@ -700,6 +701,13 @@ var runCmd = &cobra.Command{
 			results[sprintNum-startSprint] = *result
 			mu.Unlock()
 
+			// Layer 1 — Tier C: handle PAUSED result
+			if result.Status == "PAUSED" {
+				frlog.Log("  BUILD PAUSED at sprint %d. Use --continue to resume.", spr.Number)
+				_ = os.WriteFile(filepath.Join(projectPath, config.BuildExitReasonFile), []byte("paused"), 0o644)
+				return nil
+			}
+
 			if observerEnabled {
 				_ = observer.EmitEvent(projectPath, observer.Event{
 					Type:   observer.EventSprintComplete,
@@ -887,6 +895,119 @@ var runCmd = &cobra.Command{
 				frlog.Log("  GIT: checkpoint — sprint %d compacted", spr.Number)
 				if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, spr.Name, "compacted"); err != nil {
 					return err
+				}
+
+				// Layer 1 — Tier B: Hold at sprint boundary
+				if steering.IsHoldRequested(projectPath) {
+					_ = steering.ClearHold(projectPath)
+					remainingSprints := ep.TotalSprints - spr.Number
+					holdPrompt := fmt.Sprintf(
+						"Sprint %d of %d complete (%s). Holding for your review.\n\n"+
+							"Options:\n"+
+							"- Say \"continue\" to proceed as planned\n"+
+							"- Provide a directive for the next sprint\n"+
+							"- Say \"replan: <instructions>\" to replan remaining sprints (%d remaining)\n",
+						spr.Number, ep.TotalSprints, spr.Name, remainingSprints)
+					frlog.Log("  STEERING: hold requested — waiting for user decision")
+					_ = steering.WriteDecisionNeeded(projectPath, holdPrompt)
+					if observerEnabled {
+						_ = observer.EmitEvent(projectPath, observer.Event{
+							Type:   observer.EventDecisionNeeded,
+							Sprint: spr.Number,
+							Data: map[string]string{
+								"reason":            "hold_after_sprint",
+								"completed_sprint":  spr.Name,
+								"remaining_sprints": strconv.Itoa(remainingSprints),
+							},
+						})
+					}
+
+					decision, waitErr := steering.WaitForDecision(ctx, projectPath)
+					if waitErr != nil {
+						return fmt.Errorf("steering: wait for decision: %w", waitErr)
+					}
+					_ = steering.ClearDecisionNeeded(projectPath)
+					if observerEnabled {
+						_ = observer.EmitEvent(projectPath, observer.Event{
+							Type:   observer.EventDecisionReceived,
+							Sprint: spr.Number,
+							Data:   map[string]string{"preview": truncateString(decision, 200)},
+						})
+					}
+					frlog.Log("  STEERING: decision received — %s", truncateString(decision, 80))
+
+					decision = strings.TrimSpace(decision)
+					if decision == "" {
+						frlog.Log("  STEERING: empty decision received — continuing as planned")
+					}
+					lowerDecision := strings.ToLower(decision)
+					if strings.HasPrefix(lowerDecision, "replan:") || lowerDecision == "replan" {
+						// Trigger replan with user's instructions
+						frlog.Log("  STEERING: triggering replan of remaining sprints")
+						replanEngine, rErr := resolveReviewEngine(engineName, ep.ReviewEngine, mcpOpts...)
+						if rErr != nil {
+							return rErr
+						}
+						replanModel := engine.ResolveModel(ep.ReviewModel, replanEngine.Name(), string(ep.EffortLevel), engine.SessionReplan)
+						// Strip the "replan:" prefix case-insensitively
+						userInstructions := decision
+						if strings.HasPrefix(lowerDecision, "replan:") {
+							userInstructions = decision[len("replan:"):]
+						}
+						userInstructions = strings.TrimSpace(userInstructions)
+						if userInstructions == "" {
+							userInstructions = "Replan the remaining sprints based on completed work."
+						}
+						affectedSprints := make([]int, 0, ep.TotalSprints-spr.Number)
+						for i := spr.Number + 1; i <= ep.TotalSprints; i++ {
+							affectedSprints = append(affectedSprints, i)
+						}
+						devSpec := &review.DeviationSpec{
+							Trigger:         "User-requested replan via build steering: " + userInstructions,
+							AffectedSprints: affectedSprints,
+							RiskAssessment:  "user-directed",
+							Details:         userInstructions,
+						}
+						if rpErr := review.RunReplan(ctx, review.ReplanOpts{
+							ProjectDir:    projectPath,
+							EpicPath:      epicPath,
+							DeviationSpec: devSpec,
+							CompletedSprint: spr.Number,
+							MaxScope:      ep.MaxDeviationScope,
+							Engine:        replanEngine,
+							Model:         replanModel,
+							Verbose:       frlog.Verbose,
+						}); rpErr != nil {
+							return fmt.Errorf("steering replan: %w", rpErr)
+						}
+						// Re-parse the modified epic
+						ep, err = epic.ParseEpic(epicPath)
+						if err != nil {
+							return fmt.Errorf("re-parse epic after steering replan: %w", err)
+						}
+						endSprint = ep.TotalSprints
+						// Refresh spr pointer to the new epic's sprint data
+						if sprintNum >= 1 && sprintNum <= len(ep.Sprints) {
+							spr = &ep.Sprints[sprintNum-1]
+						}
+						// Grow results slice if the replan added sprints
+						for len(results) < endSprint-startSprint+1 {
+							idx := startSprint + len(results)
+							name := ""
+							if idx >= 1 && idx <= len(ep.Sprints) {
+								name = ep.Sprints[idx-1].Name
+							}
+							results = append(results, sprint.SprintResult{
+								Number: idx,
+								Name:   name,
+								Status: sprint.StatusSkipped,
+							})
+						}
+					} else if strings.ToLower(decision) != "continue" && decision != "" {
+						// Inject as user prompt for the next sprint
+						userPrompt = decision
+					}
+					// else: "continue" — proceed as planned
 				}
 
 				if ep.ReviewBetweenSprints && !runNoReview && spr.Number < ep.TotalSprints && ep.EffortLevel != epic.EffortLow {
@@ -1211,6 +1332,9 @@ var runCmd = &cobra.Command{
 		if exitErr != nil {
 			buildOutcome = "failure"
 		}
+
+		// Clean up steering files so stale directives don't affect the next run
+		steering.CleanupAll(projectPath)
 
 		// Observer: final wake-up at build end
 		if observerEnabled {

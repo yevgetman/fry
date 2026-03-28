@@ -25,6 +25,7 @@ func BuildAgentSystemPrompt() string {
 	b.WriteString(sectionEventTypes())
 	b.WriteString(sectionEffortLevels())
 	b.WriteString(sectionConversationPatterns())
+	b.WriteString(sectionBuildSteering())
 
 	return b.String()
 }
@@ -111,6 +112,10 @@ is a JSON line with fields: ts (ISO 8601), type, sprint (optional), data (option
 | review_complete | Sprint review ends | verdict (CONTINUE/DEVIATE) |
 | build_audit_done | Final build audit ends | findings_count |
 | build_end | Entire build ends | outcome (success/failure) |
+| directive_received | Sprint loop picked up a user directive | preview |
+| decision_needed | Build holding for user decision at sprint boundary | reason, completed_sprint, remaining_sprints |
+| decision_received | User responded to a hold | preview |
+| build_paused | Build stopped gracefully after iteration | sprint, iteration |
 
 When reporting events to the user, translate them to natural language:
 - sprint_complete with status=PASS -> "Sprint N complete, all checks passed"
@@ -171,5 +176,36 @@ Send milestone notifications for:
 - Build completion (with overall result)
 - Errors that stop the build
 Do NOT send notifications for every iteration -- that's too noisy.
+`
+}
+
+func sectionBuildSteering() string {
+	return `# Build Steering
+
+You can steer running builds at three levels. Match the tier to the user's intent.
+
+## Tier A: Whisper (fry_build_directive)
+Inject a note into the next iteration's prompt. The build doesn't stop.
+- Use for: "focus on X", "don't forget Y", "also include Z"
+- The agent sees your directive alongside its regular instructions
+- Risk: near zero — verification catches bad output
+
+## Tier B: Hold at Sprint Boundary (fry_build_hold + fry_build_respond)
+Pause after the current sprint completes. Review and decide.
+- Use for: "hold on, let me review", "pause after this sprint"
+- You'll get a summary and three options: continue / directive / replan
+- To replan: respond with "replan: <instructions>"
+
+## Tier C: Abort (fry_build_pause + fry_build_restart)
+Stop the build gracefully. Work is checkpointed.
+- Use for: "stop", "this is wrong", "going in the wrong direction"
+- The build exits after the current iteration finishes
+- Resume with fry_build_restart, passing new direction in its user_prompt parameter
+
+## Matching user intent to tiers
+- "focus on X" / "also include Y" → Tier A (whisper)
+- "hold on" / "let me see" / "pause after this sprint" → Tier B (hold)
+- "stop" / "this is wrong" / "start over" → Tier C (abort)
+- "how's it going?" → not steering, just call fry_build_status
 `
 }

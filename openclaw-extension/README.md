@@ -30,9 +30,15 @@ agents:
         - fry_build_logs
         - fry_read_progress
         - fry_consciousness_stats
+        - fry_build_directive
+        - fry_build_hold
+        - fry_build_respond
+        - fry_build_pause
 ```
 
 ## Tools
+
+### Monitoring (Layer 0)
 
 | Tool | Description |
 |------|-------------|
@@ -42,6 +48,15 @@ agents:
 | `fry_build_logs` | Read recent sprint, heal, or audit logs |
 | `fry_read_progress` | Read sprint-progress.txt or epic-progress.txt |
 | `fry_consciousness_stats` | Query consciousness pipeline status (memory counts, reflection, identity) |
+
+### Build Steering (Layer 1)
+
+| Tool | Tier | Description |
+|------|------|-------------|
+| `fry_build_directive` | A (whisper) | Inject a directive into the next iteration's prompt |
+| `fry_build_hold` | B (hold) | Pause after the current sprint for review |
+| `fry_build_respond` | B (hold) | Respond to a held build: continue, directive, or replan |
+| `fry_build_pause` | C (abort) | Stop the build gracefully after current iteration |
 
 ## System Prompt
 

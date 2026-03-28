@@ -118,6 +118,10 @@ function isMilestone(evt: BuildEvent): boolean {
 		"build_end",
 		"build_audit_done",
 		"alignment_complete",
+		"directive_received",
+		"decision_needed",
+		"decision_received",
+		"build_paused",
 	].includes(evt.type);
 }
 
@@ -139,7 +143,7 @@ function formatEventNotification(evt: BuildEvent): string | null {
 
 		case "sprint_complete": {
 			const status = evt.data?.status ?? "unknown";
-			const heals = evt.data?.heal_attempts ?? "0";
+			const heals = evt.data?.alignment_attempts ?? "0";
 			const duration = evt.data?.duration ?? "";
 			const passed = status.startsWith("PASS");
 			const base = `Sprint ${evt.sprint} complete: ${passed ? "all checks passed" : "some checks failed"}`;
@@ -167,6 +171,19 @@ function formatEventNotification(evt: BuildEvent): string | null {
 				? "Build complete! All sprints passed."
 				: `Build ended: ${outcome}`;
 		}
+
+		// Layer 1: Steering events
+		case "directive_received":
+			return `Directive acknowledged for sprint ${evt.sprint}. Preview: ${evt.data?.preview ?? ""}`;
+
+		case "decision_needed":
+			return `Build is holding after sprint ${evt.sprint} (${evt.data?.completed_sprint ?? ""}). ${evt.data?.remaining_sprints ?? "?"} sprints remaining. Waiting for your decision.`;
+
+		case "decision_received":
+			return `Decision received for sprint ${evt.sprint}. Resuming build.`;
+
+		case "build_paused":
+			return `Build paused at sprint ${evt.sprint}, iteration ${evt.data?.iteration ?? "?"}. Work checkpointed. Use restart to resume.`;
 
 		default:
 			return null;

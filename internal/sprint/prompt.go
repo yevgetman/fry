@@ -23,6 +23,7 @@ type PromptOpts struct {
 	EffortLevel         epic.EffortLevel
 	Mode                string
 	IdentityDisposition string // behavioral disposition from Fry's identity
+	SteeringDirective   string // mid-build user directive injected via Layer 1 steering
 }
 
 func AssemblePrompt(opts PromptOpts) (string, error) {
@@ -62,6 +63,16 @@ func AssemblePrompt(opts PromptOpts) (string, error) {
 		b.WriteString("# The following behavioral tendencies are derived from accumulated build experience.\n")
 		b.WriteString("# Let them subtly guide your approach without overriding explicit instructions.\n\n")
 		b.WriteString(ensureTrailingNewline(strings.TrimSpace(opts.IdentityDisposition)))
+		b.WriteString("\n")
+	}
+
+	// Layer 1.7: Build steering directive (injected mid-build by user via agent)
+	if strings.TrimSpace(opts.SteeringDirective) != "" {
+		b.WriteString("# ===== MID-BUILD USER DIRECTIVE =====\n")
+		b.WriteString("# The user has sent the following directive during this build. Incorporate it\n")
+		b.WriteString("# into your work for this iteration. This takes priority over earlier instructions\n")
+		b.WriteString("# where they conflict.\n\n")
+		b.WriteString(ensureTrailingNewline(strings.TrimSpace(opts.SteeringDirective)))
 		b.WriteString("\n")
 	}
 

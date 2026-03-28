@@ -41,4 +41,9 @@ export const FRY_PATHS = {
 	buildExitReason: ".fry/build-exit-reason.txt",
 	sprintAudit: ".fry/sprint-audit.txt",
 	deferredFailures: ".fry/deferred-failures.md",
+	// Build steering (Layer 1)
+	agentDirective: ".fry/agent-directive.md",
+	agentHold: ".fry/agent-hold-after-sprint",
+	agentPause: ".fry/agent-pause",
+	decisionNeeded: ".fry/decision-needed.md",
 } as const;

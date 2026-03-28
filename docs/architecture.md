@@ -32,6 +32,7 @@ internal/report/            BuildReport JSON serialization
 internal/review/            Dynamic sprint review, replanning, deviation tracking
 internal/shellhook/         Shell command execution for hooks
 internal/sprint/            Sprint execution loop, prompt assembly, progress tracking
+internal/steering/          File-based IPC for mid-build human intervention (directives, holds, pauses)
 internal/summary/           Build summary generation (post-epic agent session)
 internal/textutil/          Text utilities (markdown stripping, file timestamps, artifact resolution)
 internal/triage/            Task complexity classification and programmatic epic generation

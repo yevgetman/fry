@@ -15,14 +15,20 @@ import (
 type EventType string
 
 const (
-	EventBuildStart     EventType = "build_start"
-	EventSprintStart    EventType = "sprint_start"
-	EventSprintComplete EventType = "sprint_complete"
+	EventBuildStart        EventType = "build_start"
+	EventSprintStart       EventType = "sprint_start"
+	EventSprintComplete    EventType = "sprint_complete"
 	EventAlignmentComplete EventType = "alignment_complete"
-	EventAuditComplete  EventType = "audit_complete"
-	EventReviewComplete EventType = "review_complete"
-	EventBuildAuditDone EventType = "build_audit_done"
-	EventBuildEnd       EventType = "build_end"
+	EventAuditComplete     EventType = "audit_complete"
+	EventReviewComplete    EventType = "review_complete"
+	EventBuildAuditDone    EventType = "build_audit_done"
+	EventBuildEnd          EventType = "build_end"
+
+	// Build steering events (Layer 1)
+	EventDirectiveReceived EventType = "directive_received"
+	EventDecisionNeeded    EventType = "decision_needed"
+	EventDecisionReceived  EventType = "decision_received"
+	EventBuildPaused       EventType = "build_paused"
 )
 
 // Event represents a single timestamped build event in the observer stream.

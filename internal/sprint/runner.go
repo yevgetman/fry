@@ -15,7 +15,9 @@ import (
 	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/heal"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/observer"
 	"github.com/yevgetman/fry/internal/shellhook"
+	"github.com/yevgetman/fry/internal/steering"
 	"github.com/yevgetman/fry/internal/verify"
 )
 
@@ -146,6 +148,37 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 			return nil, fmt.Errorf("run sprint pre-iteration hook: %w", err)
 		}
 
+		// Layer 1 — Tier A: Check for mid-build user directive
+		if directive, dErr := steering.ConsumeDirective(cfg.ProjectDir); dErr != nil {
+			frylog.Log("  STEERING: warning: failed to read directive: %v", dErr)
+		} else if directive != "" {
+			frylog.Log("  STEERING: received user directive (injecting into prompt)")
+			preview := directive
+			if len(preview) > 200 {
+				preview = preview[:200] + "..."
+			}
+			_ = observer.EmitEvent(cfg.ProjectDir, observer.Event{
+				Type:   observer.EventDirectiveReceived,
+				Sprint: cfg.Sprint.Number,
+				Data:   map[string]string{"preview": preview},
+			})
+			// Reassemble prompt with the directive injected
+			if _, pErr := AssemblePrompt(PromptOpts{
+				ProjectDir:          cfg.ProjectDir,
+				UserPrompt:          userPrompt,
+				SprintPrompt:        cfg.Sprint.Prompt,
+				SprintProgressFile:  config.SprintProgressFile,
+				EpicProgressFile:    config.EpicProgressFile,
+				Promise:             cfg.Sprint.Promise,
+				EffortLevel:         cfg.Epic.EffortLevel,
+				Mode:                cfg.Mode,
+				IdentityDisposition: cfg.IdentityDisposition,
+				SteeringDirective:   directive,
+			}); pErr != nil {
+				frylog.Log("  STEERING: failed to reassemble prompt with directive: %v", pErr)
+			}
+		}
+
 		resolvedModel := engine.ResolveModel(cfg.Epic.AgentModel, cfg.Engine.Name(), string(cfg.Epic.EffortLevel), engine.SessionSprint)
 		frylog.AgentBanner(cfg.Sprint.Number, cfg.Epic.TotalSprints, cfg.Sprint.Name, iter, cfg.Sprint.MaxIterations, cfg.Engine.Name(), resolvedModel)
 
@@ -188,6 +221,26 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 				frylog.Log("  No file changes for %d consecutive iterations and sanity checks pass — exiting early.", consecutiveNoop)
 				break
 			}
+		}
+
+		// Layer 1 — Tier C: Check for pause signal
+		if steering.IsPaused(cfg.ProjectDir) {
+			_ = steering.ClearPause(cfg.ProjectDir)
+			frylog.Log("  STEERING: pause requested — checkpointing and exiting")
+			_ = observer.EmitEvent(cfg.ProjectDir, observer.Event{
+				Type:   observer.EventBuildPaused,
+				Sprint: cfg.Sprint.Number,
+				Data: map[string]string{
+					"iteration": fmt.Sprintf("%d", iter),
+				},
+			})
+			_ = git.GitCheckpoint(ctx, cfg.ProjectDir, cfg.Epic.Name, cfg.Sprint.Number, cfg.Sprint.Name, "paused")
+			return &SprintResult{
+				Number:   cfg.Sprint.Number,
+				Name:     cfg.Sprint.Name,
+				Status:   "PAUSED",
+				Duration: time.Since(started),
+			}, nil
 		}
 	}
 

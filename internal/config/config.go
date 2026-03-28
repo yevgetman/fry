@@ -138,6 +138,12 @@ const (
 	// This is intentionally compiled into the binary (same pattern as Sentry DSNs).
 	ConsciousnessWriteKey = "c23060cb24e9133926314894db50089b03791731cae04d7f8ba96dc01c5330d0"
 
+	// Build steering constants (Layer 1: file-based IPC)
+	AgentDirectiveFile = ".fry/agent-directive.md"
+	AgentHoldFile      = ".fry/agent-hold-after-sprint"
+	AgentPauseFile     = ".fry/agent-pause"
+	DecisionNeededFile = ".fry/decision-needed.md"
+
 	// Rate-limit retry constants
 	RateLimitMaxRetries   = 5
 	RateLimitBaseDelaySec = 10   // seconds; converted to time.Duration by caller
