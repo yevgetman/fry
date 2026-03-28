@@ -95,6 +95,16 @@ func TestParseDecision(t *testing.T) {
 			wantReason:   "Sprint 3 work is complete, continue to next.",
 		},
 		{
+			name: "audit incomplete",
+			output: `<verdict>AUDIT_INCOMPLETE</verdict>
+<sprint>3</sprint>
+<reason>All sprints passed but build audit sentinel is absent.</reason>`,
+			totalSprints: 3,
+			wantVerdict:  VerdictAuditIncomplete,
+			wantSprint:   3,
+			wantReason:   "All sprints passed but build audit sentinel is absent.",
+		},
+		{
 			name:         "unparseable output",
 			output:       "I don't know what happened.",
 			totalSprints: 5,
@@ -181,12 +191,39 @@ func TestHeuristicAnalyze(t *testing.T) {
 		wantSprint  int
 	}{
 		{
-			name: "all sprints complete",
+			name: "all sprints complete with audit done",
 			state: &BuildState{
 				TotalSprints: 3,
 				CompletedSprints: []CompletedSprint{
 					{Number: 1}, {Number: 2}, {Number: 3},
 				},
+				BuildAuditComplete: true,
+			},
+			wantVerdict: VerdictAllComplete,
+			wantSprint:  3,
+		},
+		{
+			name: "all sprints complete without audit",
+			state: &BuildState{
+				TotalSprints: 3,
+				CompletedSprints: []CompletedSprint{
+					{Number: 1}, {Number: 2}, {Number: 3},
+				},
+				BuildAuditComplete: false,
+				AuditConfigured:    true,
+			},
+			wantVerdict: VerdictAuditIncomplete,
+			wantSprint:  3,
+		},
+		{
+			name: "all sprints complete audit not configured",
+			state: &BuildState{
+				TotalSprints: 3,
+				CompletedSprints: []CompletedSprint{
+					{Number: 1}, {Number: 2}, {Number: 3},
+				},
+				BuildAuditComplete: false,
+				AuditConfigured:    false,
 			},
 			wantVerdict: VerdictAllComplete,
 			wantSprint:  3,
@@ -270,9 +307,63 @@ func TestHeuristicAnalyzeAllComplete(t *testing.T) {
 		CompletedSprints: []CompletedSprint{
 			{Number: 1}, {Number: 2},
 		},
+		BuildAuditComplete: true,
 	}
 	decision := HeuristicAnalyze(state)
 	assert.Equal(t, VerdictAllComplete, decision.Verdict)
+	assert.Equal(t, 2, decision.StartSprint)
+}
+
+func TestHeuristicAnalyzeAuditIncomplete(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		TotalSprints: 2,
+		CompletedSprints: []CompletedSprint{
+			{Number: 1}, {Number: 2},
+		},
+		BuildAuditComplete: false,
+		AuditConfigured:    true,
+	}
+	decision := HeuristicAnalyze(state)
+	assert.Equal(t, VerdictAuditIncomplete, decision.Verdict)
+	assert.Equal(t, 2, decision.StartSprint)
+}
+
+// TestHeuristicAnalyzeAuditComplete is a named standalone required by acceptance criteria.
+// It mirrors the table case "all sprints complete with audit done" with a different sprint count.
+func TestHeuristicAnalyzeAuditComplete(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		TotalSprints: 3,
+		CompletedSprints: []CompletedSprint{
+			{Number: 1}, {Number: 2}, {Number: 3},
+		},
+		BuildAuditComplete: true,
+	}
+	decision := HeuristicAnalyze(state)
+	assert.Equal(t, VerdictAllComplete, decision.Verdict)
+	assert.Equal(t, 3, decision.StartSprint)
+}
+
+// TestHeuristicAnalyzeBackwardCompatNilSentinel is a named standalone required by acceptance criteria.
+// It validates the safe-default sentinel-absent path: when BuildAuditComplete is its zero value
+// (false), the analyzer returns AUDIT_INCOMPLETE regardless of whether the build predates the
+// sentinel feature or simply hasn't completed its audit yet.
+func TestHeuristicAnalyzeBackwardCompatNilSentinel(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		TotalSprints: 2,
+		CompletedSprints: []CompletedSprint{
+			{Number: 1}, {Number: 2},
+		},
+		AuditConfigured: true,
+	}
+	decision := HeuristicAnalyze(state)
+	assert.Equal(t, VerdictAuditIncomplete, decision.Verdict)
+	assert.Equal(t, 2, decision.StartSprint)
 }
 
 func TestHeuristicAnalyzeNoSprints(t *testing.T) {
@@ -303,6 +394,7 @@ func TestBuildAnalysisPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "CONTINUE_NEXT")
 	assert.Contains(t, prompt, "ALL_COMPLETE")
 	assert.Contains(t, prompt, "BLOCKED")
+	assert.Contains(t, prompt, "AUDIT_INCOMPLETE")
 	assert.Contains(t, prompt, "<verdict>")
 	assert.Contains(t, prompt, "<sprint>")
 	assert.Contains(t, prompt, "<reason>")

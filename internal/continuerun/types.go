@@ -6,11 +6,12 @@ import "fmt"
 type ContinueVerdict string
 
 const (
-	VerdictResume       ContinueVerdict = "RESUME"
-	VerdictResumeFresh  ContinueVerdict = "RESUME_FRESH"
-	VerdictContinueNext ContinueVerdict = "CONTINUE_NEXT"
-	VerdictAllComplete  ContinueVerdict = "ALL_COMPLETE"
-	VerdictBlocked      ContinueVerdict = "BLOCKED"
+	VerdictResume          ContinueVerdict = "RESUME"
+	VerdictResumeFresh     ContinueVerdict = "RESUME_FRESH"
+	VerdictContinueNext    ContinueVerdict = "CONTINUE_NEXT"
+	VerdictAllComplete     ContinueVerdict = "ALL_COMPLETE"
+	VerdictAuditIncomplete ContinueVerdict = "AUDIT_INCOMPLETE"
+	VerdictBlocked         ContinueVerdict = "BLOCKED"
 )
 
 // ErrNoPreviousBuild indicates no .fry/ directory or build artifacts exist.
@@ -51,6 +52,13 @@ type BuildState struct {
 	GitClean        bool
 	GitBranch       string
 	LastAutoCommit  string // message of most recent [automated] commit
+
+	// BuildAuditComplete is true when .fry/build-audit-complete sentinel file exists.
+	BuildAuditComplete bool
+
+	// AuditConfigured is true when the build audit is expected to run
+	// (AuditAfterSprint is true and effort level is not low without --always-verify).
+	AuditConfigured bool
 
 	// Build exit reason (from .fry/build-exit-reason.txt)
 	ExitReason string

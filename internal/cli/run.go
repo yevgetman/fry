@@ -342,9 +342,10 @@ var runCmd = &cobra.Command{
 		}
 
 		var startSprint, endSprint int
+		var auditOnlyResume bool
 		if runContinue || runSimpleContinue {
 			frlog.Log("▶ CONTINUE  collecting build state...")
-			state, collectErr := continuerun.CollectBuildState(cmd.Context(), projectPath, ep)
+			state, collectErr := continuerun.CollectBuildState(cmd.Context(), projectPath, ep, runAlwaysVerify)
 			if collectErr != nil {
 				return fmt.Errorf("continue: %w", collectErr)
 			}
@@ -389,6 +390,17 @@ var runCmd = &cobra.Command{
 			case continuerun.VerdictAllComplete:
 				fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints already complete. Nothing to do.\n", ep.TotalSprints)
 				return nil
+			case continuerun.VerdictAuditIncomplete:
+				if runNoAudit {
+					frlog.Log("All sprints complete. --no-audit prevents build audit; treating as complete.")
+					fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints complete. Build audit skipped (--no-audit).\n", ep.TotalSprints)
+					return nil
+				}
+				frlog.Log("All sprints complete but build audit did not finish. Resuming from build audit...")
+				fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints complete. Resuming from build audit...\n", ep.TotalSprints)
+				startSprint = ep.TotalSprints + 1 // > endSprint skips sprint loop, falls through to build audit
+				endSprint = ep.TotalSprints
+				auditOnlyResume = true
 			case continuerun.VerdictBlocked:
 				return fmt.Errorf("continue: blocked — %s", decision.Reason)
 			case continuerun.VerdictResume:
@@ -405,8 +417,11 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("continue: unexpected verdict %q", decision.Verdict)
 			}
 
-			if startSprint < 1 || startSprint > ep.TotalSprints {
-				return fmt.Errorf("continue: agent returned invalid sprint %d (total: %d)", startSprint, ep.TotalSprints)
+			// startSprint may be TotalSprints+1 for VerdictAuditIncomplete (skips sprint loop)
+			if decision.Verdict != continuerun.VerdictAuditIncomplete {
+				if startSprint < 1 || startSprint > ep.TotalSprints {
+					return fmt.Errorf("continue: agent returned invalid sprint %d (total: %d)", startSprint, ep.TotalSprints)
+				}
 			}
 		} else {
 			rangeArgs := []string{}
@@ -426,6 +441,10 @@ var runCmd = &cobra.Command{
 		}
 
 		if runDryRun {
+			if auditOnlyResume {
+				fmt.Fprintln(cmd.OutOrStdout(), "Nothing to run — will resume from build audit only.")
+				return nil
+			}
 			return printDryRunReport(cmd.OutOrStdout(), projectPath, epicPath, ep, engineName, startSprint, endSprint)
 		}
 
@@ -554,11 +573,18 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Clamp CurrentSprint to a valid range for preflight. When auditOnlyResume
+		// is true, startSprint is TotalSprints+1 (a sentinel to skip the sprint loop),
+		// which is not a valid sprint number for preflight checks.
+		preflightSprint := startSprint
+		if auditOnlyResume {
+			preflightSprint = ep.TotalSprints
+		}
 		if err := preflight.RunPreflight(preflight.PreflightConfig{
 			ProjectDir:       projectPath,
 			Engine:           engineName,
 			DockerFromSprint: ep.DockerFromSprint,
-			CurrentSprint:    startSprint,
+			CurrentSprint:    preflightSprint,
 			RequiredTools:    ep.RequiredTools,
 			PreflightCmds:    ep.PreflightCmds,
 		}); err != nil {
@@ -567,6 +593,9 @@ var runCmd = &cobra.Command{
 		reviewSummary := review.DeviationSummary{
 			TotalSprints: startSprintCount(startSprint, endSprint),
 			AllLowRisk:   true,
+		}
+		if auditOnlyResume {
+			reviewSummary.TotalSprints = ep.TotalSprints
 		}
 
 		var allDeferredFailures []deferredEntry
@@ -1161,12 +1190,34 @@ var runCmd = &cobra.Command{
 		mu.Lock()
 		summaryCopy := append([]sprint.SprintResult(nil), results...)
 		mu.Unlock()
+
+		// When resuming for audit-only, the sprint loop was skipped so results is empty.
+		// Populate summaryCopy from epic-progress.txt so printBuildSummary and the build
+		// audit receive meaningful sprint context.
+		// Known limitation: Duration is zero for all entries because epic-progress.txt
+		// does not record per-sprint timing. printBuildSummary and the build audit prompt
+		// will display "0s" for sprint durations on audit-only resumes.
+		if auditOnlyResume {
+			progressPath := filepath.Join(projectPath, config.EpicProgressFile)
+			if data, readErr := os.ReadFile(progressPath); readErr == nil {
+				for _, cs := range continuerun.ParseCompletedSprints(string(data)) {
+					summaryCopy = append(summaryCopy, sprint.SprintResult{
+						Number: cs.Number,
+						Name:   cs.Name,
+						Status: cs.Status,
+					})
+				}
+			} else {
+				frlog.Log("WARNING: audit-only resume: could not read epic-progress: %v", readErr)
+			}
+		}
+
 		if ep.EffortLevel != "" {
 			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", color.CyanText("Effort level:"), ep.EffortLevel)
 		}
 		printBuildSummary(cmd.OutOrStdout(), summaryCopy)
 
-		if ep.ReviewBetweenSprints && !runNoReview {
+		if ep.ReviewBetweenSprints && !runNoReview && !auditOnlyResume {
 			if reviewSummary.ReviewsConducted == 0 {
 				reviewSummary.AllLowRisk = true
 			}
@@ -1181,7 +1232,7 @@ var runCmd = &cobra.Command{
 		// The audit runs when all sprints are complete — either from a full run (sprint 1 to last)
 		// or from a resumed/continued run where prior sprints are recorded in epic-progress.txt.
 		var buildAuditResult *audit.AuditResult
-		fullBuildComplete := startSprint == 1 || allSprintsCompleted(projectPath, ep.TotalSprints, startSprint, summaryCopy)
+		fullBuildComplete := auditOnlyResume || startSprint == 1 || allSprintsCompleted(projectPath, ep.TotalSprints, startSprint, summaryCopy)
 		if exitErr == nil && fullBuildComplete && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
 			deferredContent := readDeferredFailuresArtifact(projectPath)
 			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
@@ -1210,6 +1261,11 @@ var runCmd = &cobra.Command{
 						frlog.Log("  BUILD AUDIT: FAILED — %s remain", audit.FormatCounts(result.SeverityCounts))
 					} else {
 						frlog.Log("  BUILD AUDIT: %s remain (advisory)", audit.FormatCounts(result.SeverityCounts))
+					}
+					if result.Passed || !result.Blocking {
+						if sentinelErr := writeBuildAuditSentinel(projectPath); sentinelErr != nil {
+							frlog.Log("WARNING: could not write build audit sentinel: %v", sentinelErr)
+						}
 					}
 					frlog.Log("  GIT: checkpoint — build-audit")
 					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "", "build-audit"); gitErr != nil {
@@ -1262,6 +1318,11 @@ var runCmd = &cobra.Command{
 						frlog.Log("  BUILD AUDIT: PASS (%s)", audit.FormatCounts(result.SeverityCounts))
 					} else {
 						frlog.Log("  BUILD AUDIT: %s (advisory)", audit.FormatCounts(result.SeverityCounts))
+					}
+					if result.Passed || !result.Blocking {
+						if sentinelErr := writeBuildAuditSentinel(projectPath); sentinelErr != nil {
+							frlog.Log("WARNING: could not write build audit sentinel: %v", sentinelErr)
+						}
 					}
 					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "", "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
@@ -1430,6 +1491,18 @@ var runCmd = &cobra.Command{
 
 		releaseLock()
 
+		// When auditOnlyResume is true the sprint loop was skipped, so sprintReportResults
+		// is empty. Synthesize it from summaryCopy so the JSON build report includes sprint data.
+		if auditOnlyResume && len(sprintReportResults) == 0 {
+			for _, r := range summaryCopy {
+				sprintReportResults = append(sprintReportResults, report.SprintResult{
+					SprintNum: r.Number,
+					Name:      r.Name,
+					Passed:    strings.HasPrefix(r.Status, "PASS"),
+				})
+			}
+		}
+
 		// Write JSON build report if --json-report flag is set.
 		if runJSONReport {
 			buildEnd := time.Now()
@@ -1482,7 +1555,7 @@ var runCmd = &cobra.Command{
 			_ = tw.Flush()
 		}
 
-		if exitErr == nil && startSprint == 1 && endSprint == ep.TotalSprints {
+		if exitErr == nil && ((startSprint == 1 && endSprint == ep.TotalSprints) || auditOnlyResume) {
 			archivePath, archiveErr := archive.Archive(projectPath)
 			if archiveErr != nil {
 				fmt.Fprintf(os.Stderr, "fry: warning: auto-archive failed: %v\n", archiveErr)
@@ -1839,6 +1912,32 @@ func readDeferredFailuresArtifact(projectDir string) string {
 		return ""
 	}
 	return string(data)
+}
+
+func writeBuildAuditSentinel(projectDir string) error {
+	finalPath := filepath.Join(projectDir, config.BuildAuditCompleteFile)
+	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	tmpFile, err := os.CreateTemp(filepath.Dir(finalPath), "fry-build-audit-sentinel-*")
+	if err != nil {
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	if _, err := tmpFile.WriteString(time.Now().UTC().Format(time.RFC3339) + "\n"); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("write build audit sentinel: %w", err)
+	}
+	return nil
 }
 
 func formatAffectedSprints(sprints []int) string {

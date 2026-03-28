@@ -75,7 +75,11 @@ var statusCmd = &cobra.Command{
 			}
 			return err
 		}
-		state, err := continuerun.CollectBuildState(cmd.Context(), buildDir, ep)
+		// alwaysVerify is hardcoded to false because it is a runtime-only flag with
+		// no persistent state. For low-effort builds originally run with --always-verify,
+		// the sentinel status may show "N/A" even though the audit ran. This is a known
+		// limitation; persisting the flag would require a .fry/build-flags.txt artifact.
+		state, err := continuerun.CollectBuildState(cmd.Context(), buildDir, ep, false)
 		if err != nil {
 			return err
 		}

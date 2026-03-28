@@ -256,7 +256,7 @@ func TestCollectBuildState_NoPreviousBuild(t *testing.T) {
 	dir := t.TempDir()
 
 	ep := &epic.Epic{TotalSprints: 3}
-	_, err := CollectBuildState(context.Background(), dir, ep)
+	_, err := CollectBuildState(context.Background(), dir, ep, false)
 	assert.ErrorIs(t, err, ErrNoPreviousBuild)
 }
 
@@ -278,7 +278,7 @@ func TestCollectBuildState_FreshBuild(t *testing.T) {
 		},
 	}
 
-	state, err := CollectBuildState(context.Background(), dir, ep)
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
 	require.NoError(t, err)
 	assert.Equal(t, "TestEpic", state.EpicName)
 	assert.Equal(t, 3, state.TotalSprints)
@@ -308,7 +308,7 @@ func TestCollectBuildState_FailedSprint(t *testing.T) {
 		},
 	}
 
-	state, err := CollectBuildState(context.Background(), dir, ep)
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
 	require.NoError(t, err)
 	assert.Empty(t, state.CompletedSprints)
 	assert.Equal(t, 0, state.HighestCompleted)
@@ -346,7 +346,7 @@ func TestCollectBuildState_PartialBuild(t *testing.T) {
 		},
 	}
 
-	state, err := CollectBuildState(context.Background(), dir, ep)
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
 	require.NoError(t, err)
 	assert.Len(t, state.CompletedSprints, 1)
 	assert.Equal(t, 1, state.HighestCompleted)
@@ -403,7 +403,7 @@ func TestCollectBuildState_MultipleActiveSprints(t *testing.T) {
 		},
 	}
 
-	state, err := CollectBuildState(context.Background(), dir, ep)
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
 	require.NoError(t, err)
 
 	// Should find two active sprints: 1 and 6 (7 has no evidence)
@@ -423,6 +423,140 @@ func TestCollectBuildState_MultipleActiveSprints(t *testing.T) {
 	assert.Equal(t, 1, state.ActiveSprints[1].AuditCount)
 	assert.Contains(t, state.ActiveSprints[1].ProgressExcerpt, "Sprint 6")
 	assert.Equal(t, "HIGH", state.ActiveSprints[1].AuditSeverity) // correctly attributed
+}
+
+func TestCollectBuildState_SentinelPresent(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+	// Create sentinel file
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.BuildAuditCompleteFile), []byte("done\n"), 0o644))
+
+	ep := &epic.Epic{
+		Name:             "TestEpic",
+		TotalSprints:     1,
+		AuditAfterSprint: true,
+		EffortLevel:      epic.EffortHigh,
+		Sprints:          []epic.Sprint{{Number: 1, Name: "Setup"}},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
+	require.NoError(t, err)
+	assert.True(t, state.BuildAuditComplete)
+}
+
+func TestCollectBuildState_SentinelAbsent(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+	ep := &epic.Epic{
+		Name:             "TestEpic",
+		TotalSprints:     1,
+		AuditAfterSprint: true,
+		EffortLevel:      epic.EffortHigh,
+		Sprints:          []epic.Sprint{{Number: 1, Name: "Setup"}},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
+	require.NoError(t, err)
+	assert.False(t, state.BuildAuditComplete)
+}
+
+func TestCollectBuildState_SentinelAbsentNoAudit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+	// Epic with @no_audit — sentinel absent but audit was intentionally skipped.
+	ep := &epic.Epic{
+		Name:             "TestEpic",
+		TotalSprints:     1,
+		AuditAfterSprint: false,
+		EffortLevel:      epic.EffortHigh,
+		Sprints:          []epic.Sprint{{Number: 1, Name: "Setup"}},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
+	require.NoError(t, err)
+	assert.True(t, state.BuildAuditComplete, "should be true when audit is disabled")
+}
+
+func TestCollectBuildState_SentinelAbsentEffortLow(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+	// Low-effort build — audit gate never fires, so sentinel is never written.
+	ep := &epic.Epic{
+		Name:             "TestEpic",
+		TotalSprints:     1,
+		AuditAfterSprint: true,
+		EffortLevel:      epic.EffortLow,
+		Sprints:          []epic.Sprint{{Number: 1, Name: "Setup"}},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
+	require.NoError(t, err)
+	assert.True(t, state.BuildAuditComplete, "should be true for low-effort builds")
+}
+
+func TestCollectBuildState_SentinelAbsentEffortLowAlwaysVerify(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+	// Low-effort build with --always-verify: audit gate fires, so sentinel
+	// absence must be reported as BuildAuditComplete = false.
+	ep := &epic.Epic{
+		Name:             "TestEpic",
+		TotalSprints:     1,
+		AuditAfterSprint: true,
+		EffortLevel:      epic.EffortLow,
+		Sprints:          []epic.Sprint{{Number: 1, Name: "Setup"}},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep, true)
+	require.NoError(t, err)
+	assert.False(t, state.BuildAuditComplete, "should be false for low-effort builds with always-verify")
+}
+
+func TestCollectBuildState_SentinelStatError(t *testing.T) {
+	t.Parallel()
+
+	if os.Getuid() == 0 {
+		t.Skip("test requires non-root user (root bypasses permission checks)")
+	}
+
+	dir := t.TempDir()
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+
+	// Remove execute permission from .fry/ so os.Stat on files inside it
+	// returns EACCES (not IsNotExist), exercising the warning branch.
+	require.NoError(t, os.Chmod(fryDir, 0o644))
+	t.Cleanup(func() {
+		_ = os.Chmod(fryDir, 0o755) // restore so TempDir cleanup works
+	})
+
+	ep := &epic.Epic{
+		Name:             "TestEpic",
+		TotalSprints:     1,
+		AuditAfterSprint: true,
+		EffortLevel:      epic.EffortHigh,
+		Sprints:          []epic.Sprint{{Number: 1, Name: "Setup"}},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
+	require.NoError(t, err)
+	// Sentinel stat failed with permission error → defaults to false
+	assert.False(t, state.BuildAuditComplete)
 }
 
 func TestReadSprintProgressExcerpt_FiltersBySprint(t *testing.T) {
@@ -550,7 +684,7 @@ func TestCollectBuildState_Mode(t *testing.T) {
 			},
 		}
 
-		state, err := CollectBuildState(context.Background(), dir, ep)
+		state, err := CollectBuildState(context.Background(), dir, ep, false)
 		require.NoError(t, err)
 		assert.Equal(t, "writing", state.Mode)
 	})
@@ -569,7 +703,7 @@ func TestCollectBuildState_Mode(t *testing.T) {
 			},
 		}
 
-		state, err := CollectBuildState(context.Background(), dir, ep)
+		state, err := CollectBuildState(context.Background(), dir, ep, false)
 		require.NoError(t, err)
 		assert.Equal(t, "", state.Mode)
 	})

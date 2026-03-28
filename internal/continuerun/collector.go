@@ -20,7 +20,9 @@ var completedSprintRe = regexp.MustCompile(`(?m)^## Sprint (\d+):\s*(.+?)\s*—\
 var failedSprintRe = regexp.MustCompile(`(?m)^## Sprint (\d+):\s*(.+?)\s*—\s*(FAIL.*)$`)
 
 // CollectBuildState gathers a snapshot of the current build state from .fry/ artifacts.
-func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*BuildState, error) {
+// When alwaysVerify is true, low-effort builds are not exempt from the build audit
+// sentinel check (mirrors the --always-verify CLI flag).
+func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic, alwaysVerify bool) (*BuildState, error) {
 	fryDir := filepath.Join(projectDir, config.FryDir)
 	if _, err := os.Stat(fryDir); os.IsNotExist(err) {
 		return nil, ErrNoPreviousBuild
@@ -85,6 +87,26 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic) (*
 
 	// Build exit reason
 	state.ExitReason = readExitReason(projectDir)
+
+	// Build audit sentinel
+	sentinelPath := filepath.Join(projectDir, config.BuildAuditCompleteFile)
+	if _, err := os.Stat(sentinelPath); err == nil {
+		state.BuildAuditComplete = true
+	} else if !os.IsNotExist(err) {
+		// Silently treat as absent — consistent with other unreadable artifacts
+		// in this collector. Callers control output.
+	}
+
+	// Track whether the build audit is configured for this epic.
+	auditConfigured := ep.AuditAfterSprint && !(ep.EffortLevel == epic.EffortLow && !alwaysVerify)
+	state.AuditConfigured = auditConfigured
+
+	// When the epic is configured to skip the build audit, the sentinel is never
+	// written — treat as complete so HeuristicAnalyze does not return
+	// VerdictAuditIncomplete for builds that intentionally omit the audit.
+	if !auditConfigured {
+		state.BuildAuditComplete = true
+	}
 
 	return state, nil
 }
