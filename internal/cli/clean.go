@@ -12,6 +12,7 @@ import (
 )
 
 var cleanForce bool
+var cleanYes bool
 
 var cleanCmd = &cobra.Command{
 	Use:   "clean",
@@ -29,7 +30,10 @@ var cleanCmd = &cobra.Command{
 		}
 
 		force, _ := cmd.Flags().GetBool("force")
-		if !force {
+		yes, _ := cmd.Flags().GetBool("yes")
+		if force || yes {
+			fmt.Fprintln(cmd.OutOrStdout(), "Archive .fry/ and build outputs? [y/N] y (auto-accepted)")
+		} else {
 			fmt.Fprint(cmd.OutOrStdout(), "Archive .fry/ and build outputs? [y/N] ")
 			reader := bufio.NewReader(cmd.InOrStdin())
 			answer, _ := reader.ReadString('\n')
@@ -51,4 +55,5 @@ var cleanCmd = &cobra.Command{
 
 func init() {
 	cleanCmd.Flags().BoolVar(&cleanForce, "force", false, "Skip confirmation prompt")
+	cleanCmd.Flags().BoolVarP(&cleanYes, "yes", "y", false, "Auto-accept confirmation prompts")
 }

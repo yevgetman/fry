@@ -36,7 +36,7 @@ Before doing any of the heavy lifting, Fry runs a [triage gate](docs/triage.md) 
 - **Moderate** tasks (add an endpoint with tests, build a small tool) also skip LLM-based preparation — Fry builds a programmatic 1-2 sprint epic with auto-generated sanity checks. Zero LLM calls for planning.
 - **Complex** tasks (multi-subsystem features, architectural changes) get the full preparation pipeline described below.
 
-After classification, Fry shows you the triage decision (difficulty, effort, reason) and asks you to confirm, decline, or adjust before the build begins. You can override both difficulty and effort at this step. Use `--no-project-overview` to skip the confirmation prompt.
+After classification, Fry shows you the triage decision (difficulty, effort, reason) and asks you to confirm, decline, or adjust before the build begins. You can override both difficulty and effort at this step. Use `--yes` / `-y` to auto-accept all confirmation prompts, or `--no-project-overview` to skip them entirely.
 
 Both simple and moderate tasks respect the effort level (suggested by triage or overridden with `--effort`), which controls iteration budgets, alignment, and audit depth. Max effort is reserved for complex tasks. The classifier is intentionally biased toward over-classification — it's better to over-prepare a simple task than to under-prepare a complex one. Use `--full-prepare` to bypass triage and force the full pipeline.
 
@@ -79,7 +79,7 @@ assets/                Optional text documents (specs, schemas) read during plan
                            SIMPLE   → programmatic epic (0 prep calls)
                            MODERATE → programmatic epic + auto-sanity-checks (0 prep calls)
                            COMPLEX  → full prepare (below)
-                         (--full-prepare skips triage, --no-project-overview skips confirmation)
+                         (--full-prepare skips triage, --yes auto-accepts, --no-project-overview skips confirmation)
         |
         v
   fry prepare           Step 0 (if needed): AI generates plans/plan.md from executive.md
@@ -100,8 +100,8 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 
 **Key mechanisms:**
 
-- **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. After classification, an interactive confirmation prompt lets you review, accept, or adjust the difficulty and effort before the build starts (`--no-project-overview` skips this). Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, alignment, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
-- **Project overview** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (skippable with `--no-project-overview`)
+- **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. After classification, an interactive confirmation prompt lets you review, accept, or adjust the difficulty and effort before the build starts (`--yes` / `-y` auto-accepts, `--no-project-overview` skips entirely). Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, alignment, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
+- **Project overview** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (`--yes` / `-y` auto-accepts, `--no-project-overview` skips entirely)
 - **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
 - **Supplementary assets** -- optional `assets/` directory for text reference documents (specs, schemas, requirements) whose full contents are read during plan and epic generation

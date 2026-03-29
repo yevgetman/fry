@@ -245,7 +245,7 @@ User Input                          Generated Artifacts
 ─────────────────────               ────────────────────
 plans/plan.md         ──┐
 plans/executive.md    ──┤  Triage Gate (1 cheap LLM call)
---user-prompt "..."   ──┤    ↓ Interactive confirmation [Y/n/a] (skipped with --no-project-overview)
+--user-prompt "..."   ──┤    ↓ Interactive confirmation [Y/n/a] (--yes auto-accepts, --no-project-overview skips)
 assets/               ──┤    SIMPLE   → programmatic epic (0 LLM calls)
 media/                ──┘    MODERATE → programmatic epic + auto-sanity-checks (0 LLM calls)
                                COMPLEX  → full prepare (3-4 LLM calls):
@@ -332,6 +332,7 @@ Key flags:
   --always-verify                    # Force sanity checks, alignment, and audit regardless of effort/complexity
   --full-prepare                     # Skip triage, run full prepare pipeline
   --triage-only                      # Classify task and exit (no artifact generation)
+  --yes, -y                           # Auto-accept all confirmation prompts (triage, overview, clean)
   --no-project-overview              # Skip interactive confirmations (triage + project summary)
   --no-observer                      # Disable observer metacognitive layer
   --no-review                        # Skip mid-build sprint review

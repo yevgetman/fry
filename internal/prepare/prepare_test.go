@@ -285,6 +285,31 @@ func TestEffortSizingGuidanceWriting_Auto(t *testing.T) {
 	assert.Contains(t, guidance, "content plan")
 }
 
+func TestBootstrapExecutive_AutoAccept(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	executivePath := dir + "/plans/executive.md"
+
+	stdin := strings.NewReader("")
+	var stdout strings.Builder
+
+	eng := &fakeEngine{output: "# My Project\n\nGenerated executive content."}
+	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+		ProjectDir: dir,
+		UserPrompt: "build a todo app",
+		AutoAccept: true,
+		Stdin:      stdin,
+		Stdout:     &stdout,
+	}, executivePath, "", "")
+
+	require.NoError(t, err)
+	data, readErr := os.ReadFile(executivePath)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(data), "Generated executive content")
+	assert.Contains(t, stdout.String(), "auto-accepted")
+}
+
 func TestBootstrapExecutive_UserDeclines(t *testing.T) {
 	t.Parallel()
 
@@ -942,6 +967,28 @@ func TestRunProjectOverview_ReaderErrorNotSilenced(t *testing.T) {
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, ErrProjectOverviewDeclined)
 	assert.Contains(t, err.Error(), "disk read failed")
+}
+
+func TestRunProjectOverview_AutoAccept(t *testing.T) {
+	t.Parallel()
+
+	eng := &fakeEngine{output: "PROJECT_TYPE: Software (CLI)\nGOAL: Build a CLI tool\nEXPECTED_OUTPUT: binary\nKEY_TOPICS: cobra\nEFFORT: low (1 sprint)"}
+	stdin := strings.NewReader("")
+	var stdout strings.Builder
+
+	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
+		ProjectDir:  t.TempDir(),
+		AutoAccept:  true,
+		EffortLevel: epic.EffortMedium,
+		Stdin:       stdin,
+		Stdout:      &stdout,
+	}, "plan content", "", "", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+	assert.Equal(t, "", result.UserPrompt)
+	assert.False(t, result.EnableReview)
+	assert.Contains(t, stdout.String(), "auto-accepted")
 }
 
 func TestOverviewPrompt_SprintsNotHours(t *testing.T) {

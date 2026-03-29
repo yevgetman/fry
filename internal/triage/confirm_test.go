@@ -470,23 +470,78 @@ func TestActionDescription(t *testing.T) {
 func TestConfirmDecision_AutoAccept(t *testing.T) {
 	t.Parallel()
 
-	decision := &TriageDecision{
-		Complexity:  ComplexityModerate,
-		EffortLevel: epic.EffortMedium,
-		Reason:      "test",
-		SprintCount: 2,
-	}
+	t.Run("moderate with medium effort", func(t *testing.T) {
+		t.Parallel()
 
-	var buf bytes.Buffer
-	result, err := ConfirmDecision(ConfirmOpts{
-		Decision:   decision,
-		Stdin:      strings.NewReader(""),
-		Stdout:     &buf,
-		AutoAccept: true,
+		decision := &TriageDecision{
+			Complexity:  ComplexityModerate,
+			EffortLevel: epic.EffortMedium,
+			Reason:      "test",
+			SprintCount: 2,
+		}
+
+		var buf bytes.Buffer
+		result, err := ConfirmDecision(ConfirmOpts{
+			Decision:   decision,
+			Stdin:      strings.NewReader(""),
+			Stdout:     &buf,
+			AutoAccept: true,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, ComplexityModerate, result.Complexity)
+		assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+		assert.Empty(t, result.GitStrategy)
+		assert.Contains(t, buf.String(), "auto-accepted")
 	})
 
-	require.NoError(t, err)
-	assert.Equal(t, ComplexityModerate, result.Complexity)
-	assert.Equal(t, epic.EffortMedium, result.EffortLevel)
-	assert.Contains(t, buf.String(), "auto-accepted")
+	t.Run("simple with low effort", func(t *testing.T) {
+		t.Parallel()
+
+		decision := &TriageDecision{
+			Complexity:  ComplexitySimple,
+			EffortLevel: epic.EffortLow,
+			Reason:      "trivial fix",
+			SprintCount: 1,
+		}
+
+		var buf bytes.Buffer
+		result, err := ConfirmDecision(ConfirmOpts{
+			Decision:   decision,
+			Stdin:      strings.NewReader(""),
+			Stdout:     &buf,
+			AutoAccept: true,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, ComplexitySimple, result.Complexity)
+		assert.Equal(t, epic.EffortLow, result.EffortLevel)
+		assert.Empty(t, result.GitStrategy)
+		assert.Contains(t, buf.String(), "auto-accepted")
+	})
+
+	t.Run("complex with max effort", func(t *testing.T) {
+		t.Parallel()
+
+		decision := &TriageDecision{
+			Complexity:  ComplexityComplex,
+			EffortLevel: epic.EffortMax,
+			Reason:      "multi-service architecture",
+			SprintCount: 0,
+		}
+
+		var buf bytes.Buffer
+		result, err := ConfirmDecision(ConfirmOpts{
+			Decision:   decision,
+			Stdin:      strings.NewReader(""),
+			Stdout:     &buf,
+			AutoAccept: true,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, ComplexityComplex, result.Complexity)
+		assert.Equal(t, epic.EffortMax, result.EffortLevel)
+		assert.Empty(t, result.GitStrategy)
+		assert.Contains(t, buf.String(), "auto-accepted")
+	})
 }

@@ -37,7 +37,7 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Consciousness stats | `fry status --consciousness --project-dir <dir>` |
 | Trigger reflection | `fry reflect` |
 | Print identity | `fry identity` (or `fry identity --full`) |
-| Clean/archive build | `fry clean --project-dir <dir>` |
+| Clean/archive build | `fry clean -y --project-dir <dir>` |
 | Triage only | `fry run --triage-only --project-dir <dir>` |
 | Dry run | `fry run --dry-run --project-dir <dir>` |
 
@@ -593,7 +593,7 @@ Key event types: `sprint_start`, `sprint_complete`, `alignment_complete`,
 Archive completed build artifacts to `.fry-archive/`:
 
 ```bash
-fry clean --project-dir /path/to/project
+fry clean -y --project-dir /path/to/project
 ```
 
 Creates a timestamped snapshot at `.fry-archive/.fry--build--YYYYMMDD-HHMMSS/`
