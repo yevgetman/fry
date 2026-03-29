@@ -39,67 +39,50 @@ func TestParseClassification(t *testing.T) {
 		wantReason     string
 	}{
 		{
-			name: "simple task with effort",
-			output: `<complexity>SIMPLE</complexity>
-<effort>low</effort>
-<sprints>1</sprints>
-<reason>Single config file change.</reason>`,
+			name:           "simple task with effort",
+			output:         `{"complexity":"SIMPLE","effort":"low","sprints":1,"reason":"Single config file change."}`,
 			wantComplexity: ComplexitySimple,
 			wantEffort:     epic.EffortLow,
 			wantSprints:    1,
 			wantReason:     "Single config file change.",
 		},
 		{
-			name: "moderate task with effort",
-			output: `<complexity>MODERATE</complexity>
-<effort>medium</effort>
-<sprints>2</sprints>
-<reason>REST endpoint with tests across 6 files.</reason>`,
+			name:           "moderate task with effort",
+			output:         `{"complexity":"MODERATE","effort":"medium","sprints":2,"reason":"REST endpoint with tests across 6 files."}`,
 			wantComplexity: ComplexityModerate,
 			wantEffort:     epic.EffortMedium,
 			wantSprints:    2,
 			wantReason:     "REST endpoint with tests across 6 files.",
 		},
 		{
-			name: "complex task",
-			output: `<complexity>COMPLEX</complexity>
-<effort>high</effort>
-<sprints>0</sprints>
-<reason>Full-stack app with database and Docker.</reason>`,
+			name:           "complex task",
+			output:         `{"complexity":"COMPLEX","effort":"high","sprints":0,"reason":"Full-stack app with database and Docker."}`,
 			wantComplexity: ComplexityComplex,
 			wantEffort:     epic.EffortHigh,
 			wantSprints:    0,
 			wantReason:     "Full-stack app with database and Docker.",
 		},
 		{
-			name: "effort tag missing defaults to empty",
-			output: `<complexity>SIMPLE</complexity>
-<sprints>1</sprints>
-<reason>Tiny change.</reason>`,
+			name:           "effort field missing defaults to empty",
+			output:         `{"complexity":"SIMPLE","sprints":1,"reason":"Tiny change."}`,
 			wantComplexity: ComplexitySimple,
 			wantEffort:     "",
 			wantSprints:    1,
 			wantReason:     "Tiny change.",
 		},
 		{
-			name: "max effort excluded by regex",
-			output: `<complexity>MODERATE</complexity>
-<effort>max</effort>
-<sprints>2</sprints>
-<reason>Big feature.</reason>`,
+			name:           "max effort excluded by validation",
+			output:         `{"complexity":"MODERATE","effort":"max","sprints":2,"reason":"Big feature."}`,
 			wantComplexity: ComplexityModerate,
-			wantEffort:     "", // max not matched by regex
+			wantEffort:     epic.EffortMax,
 			wantSprints:    2,
 			wantReason:     "Big feature.",
 		},
 		{
-			name: "invalid effort value ignored",
-			output: `<complexity>SIMPLE</complexity>
-<effort>extreme</effort>
-<sprints>1</sprints>
-<reason>A task.</reason>`,
+			name:           "invalid effort value ignored",
+			output:         `{"complexity":"SIMPLE","effort":"extreme","sprints":1,"reason":"A task."}`,
 			wantComplexity: ComplexitySimple,
-			wantEffort:     "", // not matched by regex
+			wantEffort:     "",
 			wantSprints:    1,
 			wantReason:     "A task.",
 		},
@@ -118,44 +101,41 @@ func TestParseClassification(t *testing.T) {
 			wantReason:     "could not parse classifier output",
 		},
 		{
-			name: "invalid complexity value defaults to complex",
-			output: `<complexity>EASY</complexity>
-<sprints>1</sprints>
-<reason>Tiny change.</reason>`,
+			name:           "invalid complexity value defaults to complex",
+			output:         `{"complexity":"EASY","sprints":1,"reason":"Tiny change."}`,
 			wantComplexity: ComplexityComplex,
 			wantSprints:    0,
 			wantReason:     "could not parse classifier output",
 		},
 		{
-			name: "simple with no sprints tag",
-			output: `<complexity>SIMPLE</complexity>
-<reason>Just a typo fix.</reason>`,
+			name:           "simple with no sprints field",
+			output:         `{"complexity":"SIMPLE","reason":"Just a typo fix."}`,
 			wantComplexity: ComplexitySimple,
 			wantSprints:    0,
 			wantReason:     "Just a typo fix.",
 		},
 		{
-			name: "complexity tag with surrounding text",
-			output: `Here is my analysis:
-<complexity>MODERATE</complexity>
-<effort>high</effort>
-<sprints>2</sprints>
-<reason>Multi-file change needed.</reason>
-Thank you!`,
+			name:           "JSON embedded in prose",
+			output:         "Here is my analysis:\n{\"complexity\":\"MODERATE\",\"effort\":\"high\",\"sprints\":2,\"reason\":\"Multi-file change needed.\"}\nThank you!",
 			wantComplexity: ComplexityModerate,
 			wantEffort:     epic.EffortHigh,
 			wantSprints:    2,
 			wantReason:     "Multi-file change needed.",
 		},
 		{
-			name: "multiline reason",
-			output: `<complexity>COMPLEX</complexity>
-<sprints>0</sprints>
-<reason>This task involves multiple subsystems
-and requires database migrations.</reason>`,
+			name:           "multiline reason",
+			output:         `{"complexity":"COMPLEX","sprints":0,"reason":"This task involves multiple subsystems\nand requires database migrations."}`,
 			wantComplexity: ComplexityComplex,
 			wantSprints:    0,
 			wantReason:     "This task involves multiple subsystems\nand requires database migrations.",
+		},
+		{
+			name:           "JSON in code fence",
+			output:         "```json\n{\"complexity\":\"SIMPLE\",\"effort\":\"low\",\"sprints\":1,\"reason\":\"Quick fix.\"}\n```",
+			wantComplexity: ComplexitySimple,
+			wantEffort:     epic.EffortLow,
+			wantSprints:    1,
+			wantReason:     "Quick fix.",
 		},
 	}
 
@@ -197,7 +177,7 @@ func TestBuildTriagePrompt(t *testing.T) {
 				"Build Plan",
 				"1-3 files",
 				"Effort Level Guidelines",
-				"<effort>low|medium|high</effort>",
+				`"effort": "low|medium|high"`,
 			},
 		},
 		{
@@ -306,31 +286,22 @@ func TestClassify(t *testing.T) {
 		wantSprints    int
 	}{
 		{
-			name: "simple classification yields LOW effort and 1 sprint",
-			output: `<complexity>SIMPLE</complexity>
-<effort>low</effort>
-<sprints>1</sprints>
-<reason>Single config file change.</reason>`,
+			name:           "simple classification yields LOW effort and 1 sprint",
+			output:         `{"complexity":"SIMPLE","effort":"low","sprints":1,"reason":"Single config file change."}`,
 			wantComplexity: ComplexitySimple,
 			wantEffort:     epic.EffortLow,
 			wantSprints:    1,
 		},
 		{
-			name: "moderate classification yields MEDIUM effort and 2 sprints",
-			output: `<complexity>MODERATE</complexity>
-<effort>medium</effort>
-<sprints>2</sprints>
-<reason>Multi-file REST endpoint with tests.</reason>`,
+			name:           "moderate classification yields MEDIUM effort and 2 sprints",
+			output:         `{"complexity":"MODERATE","effort":"medium","sprints":2,"reason":"Multi-file REST endpoint with tests."}`,
 			wantComplexity: ComplexityModerate,
 			wantEffort:     epic.EffortMedium,
 			wantSprints:    2,
 		},
 		{
-			name: "complex classification",
-			output: `<complexity>COMPLEX</complexity>
-<effort>high</effort>
-<sprints>0</sprints>
-<reason>Full-stack app with Docker and database.</reason>`,
+			name:           "complex classification",
+			output:         `{"complexity":"COMPLEX","effort":"high","sprints":0,"reason":"Full-stack app with Docker and database."}`,
 			wantComplexity: ComplexityComplex,
 			wantEffort:     epic.EffortHigh,
 			wantSprints:    0,
@@ -342,7 +313,7 @@ func TestClassify(t *testing.T) {
 			wantComplexity: ComplexityComplex,
 		},
 		{
-			name:           "malformed XML output defaults to complex",
+			name:           "non-JSON output defaults to complex",
 			output:         "I think this is a medium-sized task.",
 			wantComplexity: ComplexityComplex,
 		},
@@ -385,7 +356,7 @@ func TestClassify_WriteFileFailure(t *testing.T) {
 	// with EISDIR because it cannot write to a directory.
 	require.NoError(t, os.Mkdir(promptPath, 0o755))
 
-	stub := &stubEngine{output: "<complexity>SIMPLE</complexity>"}
+	stub := &stubEngine{output: `{"complexity":"SIMPLE"}`}
 	decision := Classify(context.Background(), TriageOpts{
 		ProjectDir: dir,
 		UserPrompt: "test",
@@ -411,7 +382,7 @@ func TestClassify_MkdirAllFailure(t *testing.T) {
 	buildLogsDir := filepath.Join(dir, config.BuildLogsDir)
 	require.NoError(t, os.WriteFile(buildLogsDir, []byte("blocker"), 0o644))
 
-	stub := &stubEngine{output: "<complexity>SIMPLE</complexity>"}
+	stub := &stubEngine{output: `{"complexity":"SIMPLE"}`}
 	decision := Classify(context.Background(), TriageOpts{
 		ProjectDir: dir,
 		UserPrompt: "test",

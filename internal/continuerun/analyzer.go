@@ -6,8 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,11 +25,12 @@ type AnalyzeOpts struct {
 	Stdout     io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
-var (
-	verdictRe = regexp.MustCompile(`<verdict>(RESUME|RESUME_FRESH|CONTINUE_NEXT|ALL_COMPLETE|AUDIT_INCOMPLETE|BLOCKED)</verdict>`)
-	sprintRe  = regexp.MustCompile(`<sprint>(\d+)</sprint>`)
-	reasonRe  = regexp.MustCompile(`(?s)<reason>(.*?)</reason>`)
-)
+// continueJSON is the expected JSON structure from the continue analysis agent.
+type continueJSON struct {
+	Verdict string `json:"verdict"`
+	Sprint  int    `json:"sprint"`
+	Reason  string `json:"reason"`
+}
 
 // Analyze runs the LLM analysis agent to determine where to resume a build.
 func Analyze(ctx context.Context, opts AnalyzeOpts) (*ContinueDecision, error) {
@@ -160,21 +159,23 @@ func ParseDecision(output string, totalSprints int) *ContinueDecision {
 		Reason:  "could not parse agent decision",
 	}
 
-	if m := verdictRe.FindStringSubmatch(output); len(m) > 1 {
-		decision.Verdict = ContinueVerdict(m[1])
-	}
-
-	if m := sprintRe.FindStringSubmatch(output); len(m) > 1 {
-		if n, err := strconv.Atoi(m[1]); err == nil && n >= 1 && n <= totalSprints {
-			decision.StartSprint = n
+	var parsed continueJSON
+	if err := textutil.ExtractJSON(output, &parsed); err == nil {
+		v := ContinueVerdict(strings.ToUpper(strings.TrimSpace(parsed.Verdict)))
+		switch v {
+		case VerdictResume, VerdictResumeFresh, VerdictContinueNext,
+			VerdictAllComplete, VerdictAuditIncomplete, VerdictBlocked:
+			decision.Verdict = v
+		}
+		if parsed.Sprint >= 1 && parsed.Sprint <= totalSprints {
+			decision.StartSprint = parsed.Sprint
+		}
+		if r := strings.TrimSpace(parsed.Reason); r != "" {
+			decision.Reason = r
 		}
 	}
 
-	if m := reasonRe.FindStringSubmatch(output); len(m) > 1 {
-		decision.Reason = strings.TrimSpace(m[1])
-	}
-
-	// Extract preconditions from markdown checklist
+	// Extract preconditions from markdown checklist (format-agnostic)
 	decision.Preconditions = parsePreconditions(output)
 
 	return decision
@@ -230,9 +231,9 @@ func buildAnalysisPrompt(state *BuildState, report string) string {
 	b.WriteString("## Analysis\n")
 	b.WriteString("<2-5 sentences about what happened and why the build stopped>\n\n")
 	b.WriteString("## Decision\n\n")
-	b.WriteString("<verdict>VERDICT_HERE</verdict>\n")
-	b.WriteString("<sprint>N</sprint>\n")
-	b.WriteString("<reason>1-2 sentence explanation</reason>\n\n")
+	b.WriteString("```json\n")
+	b.WriteString("{\"verdict\": \"VERDICT_HERE\", \"sprint\": N, \"reason\": \"1-2 sentence explanation\"}\n")
+	b.WriteString("```\n\n")
 	b.WriteString("## Pre-conditions\n")
 	b.WriteString("- [ ] Action the user must take (if any)\n\n")
 	b.WriteString("## Recommended Command\n")

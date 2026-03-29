@@ -103,7 +103,7 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 | `.fry/consciousness-prompt.md` | Prompt assembled for experience synthesis invocation (transient, deleted after run) | `fry run` at runtime |
 | `.fry/triage-prompt.md` | Prompt sent to LLM for task complexity classification (persists until next build) | `fry run` at runtime |
-| `.fry/triage-decision.txt` | LLM raw triage output (XML verdict); read by triage parser | `fry run` at runtime |
+| `.fry/triage-decision.txt` | LLM raw triage output (JSON); read by triage parser | `fry run` at runtime |
 | `.fry/git-strategy.txt` | Selected git branching strategy for the build; read by sprint runner | `fry run` at runtime |
 | `build-audit.sarif` | SARIF-format build audit report for tooling integration | `fry run` at runtime |
 | `.fry/build-report.json` | Machine-readable BuildReport JSON; archived on build complete | `fry run` at runtime |

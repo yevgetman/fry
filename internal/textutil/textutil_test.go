@@ -151,6 +151,87 @@ func TestTruncateUTF8(t *testing.T) {
 	})
 }
 
+func TestExtractJSON(t *testing.T) {
+	t.Parallel()
+
+	type result struct {
+		Name  string `json:"name"`
+		Value int    `json:"value"`
+	}
+
+	tests := []struct {
+		name    string
+		input   string
+		want    result
+		wantErr bool
+	}{
+		{
+			name:  "raw JSON",
+			input: `{"name":"test","value":42}`,
+			want:  result{Name: "test", Value: 42},
+		},
+		{
+			name:  "JSON with whitespace",
+			input: `  {"name":"test","value":42}  `,
+			want:  result{Name: "test", Value: 42},
+		},
+		{
+			name:  "JSON in code fence",
+			input: "Here is the result:\n```json\n{\"name\":\"fenced\",\"value\":1}\n```\nDone.",
+			want:  result{Name: "fenced", Value: 1},
+		},
+		{
+			name:  "JSON in plain code fence",
+			input: "```\n{\"name\":\"plain\",\"value\":2}\n```",
+			want:  result{Name: "plain", Value: 2},
+		},
+		{
+			name:  "JSON embedded in prose",
+			input: "The analysis shows:\n{\"name\":\"embedded\",\"value\":3}\nEnd of analysis.",
+			want:  result{Name: "embedded", Value: 3},
+		},
+		{
+			name:    "empty input",
+			input:   "",
+			wantErr: true,
+		},
+		{
+			name:    "no JSON at all",
+			input:   "This is plain text with no structured data.",
+			wantErr: true,
+		},
+		{
+			name:    "malformed JSON",
+			input:   `{"name": "broken", value: }`,
+			wantErr: true,
+		},
+		{
+			name:  "extra fields ignored",
+			input: `{"name":"test","value":42,"extra":"ignored"}`,
+			want:  result{Name: "test", Value: 42},
+		},
+		{
+			name:  "pretty-printed JSON",
+			input: "{\n  \"name\": \"pretty\",\n  \"value\": 99\n}",
+			want:  result{Name: "pretty", Value: 99},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var got result
+			err := ExtractJSON(tt.input, &got)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
 func TestStripMarkdownFences(t *testing.T) {
 	t.Parallel()
 

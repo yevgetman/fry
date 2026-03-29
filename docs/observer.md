@@ -26,7 +26,7 @@ Working memory at **`.fry/observer/scratchpad.md`**. Reset at the start of each 
 
 ### Wake-ups
 
-Short LLM sessions at natural breakpoints. Each wake-up reads the identity, scratchpad, and recent events (~12-15 KB total), then writes observations back. The observer responds with structured XML-style tags: `<thoughts>`, `<scratchpad>`, and `<directives>` (optional).
+Short LLM sessions at natural breakpoints. Each wake-up reads the identity, scratchpad, and recent events (~12-15 KB total), then writes observations back. The observer responds with a structured JSON object containing `thoughts`, `scratchpad`, and optionally `directives` fields.
 
 ### Experience collection
 
@@ -82,7 +82,7 @@ At `low` effort, the observer is fully disabled (no events, no wake-ups). At `me
 
 ## Directives
 
-During wake-ups, the observer can emit structured directives in the `<directives>` tag:
+During wake-ups, the observer can emit structured directives in the `directives` JSON field:
 
 | Type | Purpose |
 |---|---|

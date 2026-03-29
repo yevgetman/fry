@@ -44,8 +44,8 @@ func TestBuildObserverPrompt_IncludesAllSections(t *testing.T) {
 	assert.Contains(t, prompt, "## Wake-Point Context")
 	assert.Contains(t, prompt, "after sprint 2")
 	assert.Contains(t, prompt, "## Output Format")
-	assert.Contains(t, prompt, "<thoughts>")
-	assert.Contains(t, prompt, "<scratchpad>")
+	assert.Contains(t, prompt, `"thoughts"`)
+	assert.Contains(t, prompt, `"scratchpad"`)
 	assert.NotContains(t, prompt, "identity_update")
 }
 
@@ -166,25 +166,7 @@ func TestBuildObserverPrompt_BuildDataSorted(t *testing.T) {
 func TestParseObserverResponse_AllSections(t *testing.T) {
 	t.Parallel()
 
-	response := `Here are my observations:
-
-<thoughts>
-The build is progressing well. Sprint 1 completed without alignment loops.
-</thoughts>
-
-<scratchpad>
-Watch sprint 2 for potential test failures in the auth module.
-</scratchpad>
-
-<identity_update>
-# Observer Identity
-I am the Observer. I have seen one build complete smoothly.
-</identity_update>
-
-<directives>
-NOTE: Sprint 1 used only 3 of 10 allocated iterations
-SUGGEST: Consider lowering effort for similar tasks
-</directives>`
+	response := `{"thoughts":"The build is progressing well. Sprint 1 completed without alignment loops.","scratchpad":"Watch sprint 2 for potential test failures in the auth module.","directives":"NOTE: Sprint 1 used only 3 of 10 allocated iterations\nSUGGEST: Consider lowering effort for similar tasks"}`
 
 	obs, err := parseObserverResponse(response)
 	require.NoError(t, err)
@@ -200,13 +182,7 @@ SUGGEST: Consider lowering effort for similar tasks
 func TestParseObserverResponse_ThoughtsOnly(t *testing.T) {
 	t.Parallel()
 
-	response := `<thoughts>
-Just some initial thoughts about this build.
-</thoughts>
-
-<scratchpad>
-Nothing noteworthy yet.
-</scratchpad>`
+	response := `{"thoughts":"Just some initial thoughts about this build.","scratchpad":"Nothing noteworthy yet."}`
 
 	obs, err := parseObserverResponse(response)
 	require.NoError(t, err)
@@ -223,7 +199,7 @@ func TestParseObserverResponse_MalformedFallback(t *testing.T) {
 
 	obs, err := parseObserverResponse(response)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no structured tags")
+	assert.Contains(t, err.Error(), "no structured JSON")
 	assert.Equal(t, "This is just plain text with no tags at all.", obs.Thoughts)
 	assert.Empty(t, obs.ScratchpadDelta)
 
@@ -232,13 +208,7 @@ func TestParseObserverResponse_MalformedFallback(t *testing.T) {
 func TestParseObserverResponse_WithDirectives(t *testing.T) {
 	t.Parallel()
 
-	response := `<thoughts>Observations here.</thoughts>
-<scratchpad>Notes here.</scratchpad>
-<directives>
-WARN: alignment loop on sprint 3 appears stuck
-NOTE: audit found same issue in 3 sprints
-SUGGEST: add a pre-iteration check for dependency resolution
-</directives>`
+	response := `{"thoughts":"Observations here.","scratchpad":"Notes here.","directives":"WARN: alignment loop on sprint 3 appears stuck\nNOTE: audit found same issue in 3 sprints\nSUGGEST: add a pre-iteration check for dependency resolution"}`
 
 	obs, err := parseObserverResponse(response)
 	require.NoError(t, err)

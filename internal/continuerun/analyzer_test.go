@@ -41,64 +41,48 @@ func TestParseDecision(t *testing.T) {
 		wantReason   string
 	}{
 		{
-			name: "resume",
-			output: `## Decision
-<verdict>RESUME</verdict>
-<sprint>4</sprint>
-<reason>Sprint 4 code work is complete but Docker was not running.</reason>`,
+			name:         "resume",
+			output:       "## Decision\n" + `{"verdict":"RESUME","sprint":4,"reason":"Sprint 4 code work is complete but Docker was not running."}`,
 			totalSprints: 7,
 			wantVerdict:  VerdictResume,
 			wantSprint:   4,
 			wantReason:   "Sprint 4 code work is complete but Docker was not running.",
 		},
 		{
-			name: "resume fresh",
-			output: `<verdict>RESUME_FRESH</verdict>
-<sprint>2</sprint>
-<reason>No work exists for sprint 2.</reason>`,
+			name:         "resume fresh",
+			output:       `{"verdict":"RESUME_FRESH","sprint":2,"reason":"No work exists for sprint 2."}`,
 			totalSprints: 5,
 			wantVerdict:  VerdictResumeFresh,
 			wantSprint:   2,
 			wantReason:   "No work exists for sprint 2.",
 		},
 		{
-			name: "all complete",
-			output: `<verdict>ALL_COMPLETE</verdict>
-<sprint>0</sprint>
-<reason>All 5 sprints passed.</reason>`,
+			name:         "all complete",
+			output:       `{"verdict":"ALL_COMPLETE","sprint":0,"reason":"All 5 sprints passed."}`,
 			totalSprints: 5,
 			wantVerdict:  VerdictAllComplete,
 			wantSprint:   0,
 			wantReason:   "All 5 sprints passed.",
 		},
 		{
-			name: "blocked",
-			output: `<verdict>BLOCKED</verdict>
-<sprint>3</sprint>
-<reason>Docker daemon is not running.</reason>
-
-## Pre-conditions
-- [ ] Start Docker Desktop`,
+			name:         "blocked",
+			output:       "{\"verdict\":\"BLOCKED\",\"sprint\":3,\"reason\":\"Docker daemon is not running.\"}\n\n## Pre-conditions\n- [ ] Start Docker Desktop",
 			totalSprints: 5,
 			wantVerdict:  VerdictBlocked,
 			wantSprint:   3,
 			wantReason:   "Docker daemon is not running.",
 		},
 		{
-			name: "continue next",
-			output: `<verdict>CONTINUE_NEXT</verdict>
-<sprint>4</sprint>
-<reason>Sprint 3 work is complete, continue to next.</reason>`,
+			name:         "continue next",
+			output:       `{"verdict":"CONTINUE_NEXT","sprint":4,"reason":"Sprint 3 work is complete, continue to next."}`,
 			totalSprints: 7,
 			wantVerdict:  VerdictContinueNext,
 			wantSprint:   4,
 			wantReason:   "Sprint 3 work is complete, continue to next.",
 		},
 		{
-			name: "audit incomplete",
-			output: `<verdict>AUDIT_INCOMPLETE</verdict>
-<sprint>3</sprint>
-<reason>All sprints passed but build audit sentinel is absent.</reason>`,
+			name:         "audit incomplete",
+			output:       `{"verdict":"AUDIT_INCOMPLETE","sprint":3,"reason":"All sprints passed but build audit sentinel is absent."}`,
 			totalSprints: 3,
 			wantVerdict:  VerdictAuditIncomplete,
 			wantSprint:   3,
@@ -120,10 +104,8 @@ func TestParseDecision(t *testing.T) {
 			wantSprint:   0,
 		},
 		{
-			name: "sprint out of range ignored",
-			output: `<verdict>RESUME</verdict>
-<sprint>99</sprint>
-<reason>Bad sprint number.</reason>`,
+			name:         "sprint out of range ignored",
+			output:       `{"verdict":"RESUME","sprint":99,"reason":"Bad sprint number."}`,
 			totalSprints: 5,
 			wantVerdict:  VerdictResume,
 			wantSprint:   0, // invalid sprint is rejected
@@ -154,7 +136,7 @@ func TestParsePreconditions(t *testing.T) {
 	}{
 		{
 			name:     "no preconditions",
-			output:   "## Decision\n<verdict>RESUME</verdict>",
+			output:   "## Decision\n" + `{"verdict":"RESUME","sprint":1,"reason":"Resuming."}`,
 			expected: nil,
 		},
 		{
@@ -395,9 +377,9 @@ func TestBuildAnalysisPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "ALL_COMPLETE")
 	assert.Contains(t, prompt, "BLOCKED")
 	assert.Contains(t, prompt, "AUDIT_INCOMPLETE")
-	assert.Contains(t, prompt, "<verdict>")
-	assert.Contains(t, prompt, "<sprint>")
-	assert.Contains(t, prompt, "<reason>")
+	assert.Contains(t, prompt, `"verdict"`)
+	assert.Contains(t, prompt, `"sprint"`)
+	assert.Contains(t, prompt, `"reason"`)
 	assert.Contains(t, prompt, "continue-decision.txt")
 	assert.Contains(t, prompt, "TestEpic")
 }
@@ -410,7 +392,7 @@ func TestAnalyzeSuccess(t *testing.T) {
 
 	state := BuildState{TotalSprints: 2, EpicName: "Test"}
 	stub := stubEngine{
-		output: "<verdict>RESUME</verdict>\n<sprint>1</sprint>\n<reason>Sprint 1 incomplete.</reason>",
+		output: `{"verdict":"RESUME","sprint":1,"reason":"Sprint 1 incomplete."}`,
 	}
 
 	decision, err := Analyze(context.Background(), AnalyzeOpts{
@@ -435,9 +417,9 @@ func TestAnalyzeReadsDecisionFile(t *testing.T) {
 
 	state := BuildState{TotalSprints: 2, EpicName: "Test"}
 	stub := stubEngine{
-		output: "<verdict>BLOCKED</verdict>",
+		output: `{"verdict":"BLOCKED"}`,
 		decisionFn: func(workDir string) {
-			content := "<verdict>ALL_COMPLETE</verdict>\n<sprint>2</sprint>\n<reason>Done.</reason>"
+			content := `{"verdict":"ALL_COMPLETE","sprint":2,"reason":"Done."}`
 			_ = os.WriteFile(filepath.Join(workDir, config.ContinueDecisionFile), []byte(content), 0o644)
 		},
 	}

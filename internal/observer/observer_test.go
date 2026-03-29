@@ -205,13 +205,7 @@ func TestWakeUp_Success(t *testing.T) {
 	require.NoError(t, InitBuild(dir, "TestEpic", "high", 3))
 
 	eng := &stubObserverEngine{
-		output: `<thoughts>
-The build started cleanly. No issues observed in sprint 1.
-</thoughts>
-
-<scratchpad>
-Sprint 1 completed in 3 iterations. Watch for test flakiness in sprint 2.
-</scratchpad>`,
+		output: `{"thoughts":"The build started cleanly. No issues observed in sprint 1.","scratchpad":"Sprint 1 completed in 3 iterations. Watch for test flakiness in sprint 2."}`,
 	}
 
 	obs, err := WakeUp(context.Background(), ObserverOpts{
@@ -237,8 +231,7 @@ func TestWakeUp_UpdatesScratchpad(t *testing.T) {
 	require.NoError(t, InitBuild(dir, "TestEpic", "high", 3))
 
 	eng := &stubObserverEngine{
-		output: `<thoughts>Observation 1.</thoughts>
-<scratchpad>Note from wake 1.</scratchpad>`,
+		output: `{"thoughts":"Observation 1.","scratchpad":"Note from wake 1."}`,
 	}
 
 	_, err := WakeUp(context.Background(), ObserverOpts{
@@ -263,10 +256,9 @@ func TestWakeUp_IdentityReadOnly(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, InitBuild(dir, "TestEpic", "high", 3))
 
-	// Even if the LLM returns an identity_update tag, no file should be written
+	// Even if the LLM returns extra fields, no identity file should be written
 	eng := &stubObserverEngine{
-		output: `<thoughts>Significant learning happened.</thoughts>
-<scratchpad>Updating scratchpad.</scratchpad>`,
+		output: `{"thoughts":"Significant learning happened.","scratchpad":"Updating scratchpad."}`,
 	}
 
 	_, err := WakeUp(context.Background(), ObserverOpts{

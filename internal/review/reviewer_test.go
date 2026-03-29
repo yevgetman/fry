@@ -17,12 +17,12 @@ import (
 
 func TestParseVerdictContinue(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, VerdictContinue, ParseVerdict("<verdict>CONTINUE</verdict>"))
+	assert.Equal(t, VerdictContinue, ParseVerdict(`{"verdict":"CONTINUE"}`))
 }
 
 func TestParseVerdictDeviate(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, VerdictDeviate, ParseVerdict("<verdict>DEVIATE</verdict>"))
+	assert.Equal(t, VerdictDeviate, ParseVerdict(`{"verdict":"DEVIATE"}`))
 }
 
 func TestParseVerdictDefault(t *testing.T) {
@@ -33,16 +33,7 @@ func TestParseVerdictDefault(t *testing.T) {
 func TestExtractDeviationSpec(t *testing.T) {
 	t.Parallel()
 
-	output := `### Decision
-<verdict>DEVIATE</verdict>
-
-### Deviation Spec
-- **Trigger**: Auth middleware built at internal/middleware/auth instead of pkg/auth
-- **Affected sprints**: 4, 5
-- **Sprint 4**: Update 3 import path references from pkg/auth to internal/middleware/auth
-- **Sprint 5**: Update 1 wiring reference
-- **Risk assessment**: Low — purely mechanical path changes
-`
+	output := "### Decision\n{\"verdict\": \"DEVIATE\"}\n\n### Deviation Spec\n- **Trigger**: Auth middleware built at internal/middleware/auth instead of pkg/auth\n- **Affected sprints**: 4, 5\n- **Sprint 4**: Update 3 import path references from pkg/auth to internal/middleware/auth\n- **Sprint 5**: Update 1 wiring reference\n- **Risk assessment**: Low — purely mechanical path changes\n"
 
 	spec := ExtractDeviationSpec(output)
 	require.NotNil(t, spec)
@@ -57,11 +48,11 @@ func TestSimulationOutput(t *testing.T) {
 
 	continueOutput, err := simulatedReviewOutput("CONTINUE", 2, 5)
 	require.NoError(t, err)
-	assert.Equal(t, "### Analysis\nSprint completed as planned.\n\n### Decision\n<verdict>CONTINUE</verdict>\n", continueOutput)
+	assert.Contains(t, continueOutput, `"verdict": "CONTINUE"`)
 
 	deviateOutput, err := simulatedReviewOutput("DEVIATE", 2, 5)
 	require.NoError(t, err)
-	assert.Contains(t, deviateOutput, "<verdict>DEVIATE</verdict>")
+	assert.Contains(t, deviateOutput, `"verdict": "DEVIATE"`)
 	assert.Contains(t, deviateOutput, "- **Affected sprints**: 3")
 }
 
@@ -259,7 +250,7 @@ func TestAssembleReviewPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "### Sprint 4: Tests")
 	assert.Contains(t, prompt, "### Sprint 5: Deploy")
 	assert.Contains(t, prompt, "None — this is the first review.")
-	assert.Contains(t, prompt, "<verdict>CONTINUE</verdict> or <verdict>DEVIATE</verdict>")
+	assert.Contains(t, prompt, `"verdict": "CONTINUE"`)
 
 	_, err = os.Stat(filepath.Join(projectDir, config.ReviewPromptFile))
 	assert.NoError(t, err)
@@ -461,7 +452,7 @@ func TestRunSprintReview_WithEngine(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
 
 	eng := &stubReplanEngine{
-		output: "### Analysis\nAll good.\n\n### Decision\n<verdict>CONTINUE</verdict>\n",
+		output: "### Analysis\nAll good.\n\n### Decision\n{\"verdict\":\"CONTINUE\"}\n",
 	}
 
 	result, err := RunSprintReview(context.Background(), RunReviewOpts{
@@ -488,7 +479,7 @@ func TestRunSprintReview_WritesReviewLog(t *testing.T) {
 	projectDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
 
-	engineOutput := "### Analysis\nAll good.\n\n### Decision\n<verdict>CONTINUE</verdict>\n"
+	engineOutput := "### Analysis\nAll good.\n\n### Decision\n{\"verdict\":\"CONTINUE\"}\n"
 	eng := &stubReplanEngine{output: engineOutput}
 
 	result, err := RunSprintReview(context.Background(), RunReviewOpts{
@@ -526,7 +517,7 @@ func TestRunSprintReview_EngineReturnsDeviate(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".fry"), 0o755))
 
 	eng := &stubReplanEngine{
-		output: "### Analysis\nDeviated.\n\n### Decision\n<verdict>DEVIATE</verdict>\n\n### Deviation Spec\n- **Trigger**: path changed\n- **Affected sprints**: 2\n- **Risk assessment**: Low\n",
+		output: "### Analysis\nDeviated.\n\n### Decision\n{\"verdict\":\"DEVIATE\"}\n\n### Deviation Spec\n- **Trigger**: path changed\n- **Affected sprints**: 2\n- **Risk assessment**: Low\n",
 	}
 
 	result, err := RunSprintReview(context.Background(), RunReviewOpts{
@@ -573,7 +564,7 @@ func TestAssembleReviewPromptMaxEffort(t *testing.T) {
 
 func TestExtractDeviationSpec_NoSection(t *testing.T) {
 	t.Parallel()
-	assert.Nil(t, ExtractDeviationSpec("### Decision\n<verdict>CONTINUE</verdict>\n"))
+	assert.Nil(t, ExtractDeviationSpec("### Decision\n{\"verdict\":\"CONTINUE\"}\n"))
 }
 
 func TestExtractDeviationSpec_EmptyBody(t *testing.T) {

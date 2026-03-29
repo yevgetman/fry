@@ -3,7 +3,6 @@ package observer
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -101,39 +100,34 @@ func buildObserverPrompt(opts ObserverOpts, identity, scratchpad string, events 
 
 	// 6. Output format instructions
 	b.WriteString("## Output Format\n\n")
-	b.WriteString("Structure your response using these XML-style tags. Output the tags directly — do NOT wrap them in code fences or backticks.\n\n")
-	b.WriteString("**Required tags:**\n\n")
-	b.WriteString("  <thoughts>\n")
-	b.WriteString("  Your observations, reflections, and analysis. What did you notice?\n")
+	b.WriteString("Respond with a single JSON object. Do NOT include any text outside the JSON.\n\n")
+	b.WriteString("**Required fields:**\n\n")
+	b.WriteString("- `\"thoughts\"`: Your observations, reflections, and analysis. What did you notice?\n")
 	b.WriteString("  What patterns are emerging? What concerns or insights do you have?\n")
-	b.WriteString("  </thoughts>\n\n")
-	b.WriteString("  <scratchpad>\n")
-	b.WriteString("  Notes for your next wake-up this build. Track ongoing patterns,\n")
-	b.WriteString("  hypotheses to verify, things to watch for in subsequent sprints.\n")
-	b.WriteString("  </scratchpad>\n\n")
-	b.WriteString("**Optional tags (omit entirely if not needed):**\n\n")
-	b.WriteString("  <directives>\n")
-	b.WriteString("  Structured directives for the build system. One per line.\n")
-	b.WriteString("  Format: TYPE: value\n")
-	b.WriteString("  Supported types: WARN, NOTE, SUGGEST\n")
-	b.WriteString("  Example: WARN: alignment loop on sprint 3 appears stuck on the same error\n")
-	b.WriteString("  </directives>\n")
+	b.WriteString("- `\"scratchpad\"`: Notes for your next wake-up this build. Track ongoing patterns,\n")
+	b.WriteString("  hypotheses to verify, things to watch for in subsequent sprints.\n\n")
+	b.WriteString("**Optional fields (omit if not needed):**\n\n")
+	b.WriteString("- `\"directives\"`: Structured directives for the build system. One per line,\n")
+	b.WriteString("  separated by newlines within the string. Format: TYPE: value.\n")
+	b.WriteString("  Supported types: WARN, NOTE, SUGGEST.\n")
+	b.WriteString("  Example: `\"WARN: alignment loop stuck\\nNOTE: coverage improved\"`\n\n")
+	b.WriteString("Example:\n")
+	b.WriteString("```json\n")
+	b.WriteString("{\n")
+	b.WriteString("  \"thoughts\": \"The build is progressing well...\",\n")
+	b.WriteString("  \"scratchpad\": \"Watch sprint 2 for test failures...\",\n")
+	b.WriteString("  \"directives\": \"NOTE: Sprint 1 used only 3 of 10 iterations\"\n")
+	b.WriteString("}\n")
+	b.WriteString("```\n")
 
 	return b.String()
 }
 
-// knownTags lists the tag names the observer response parser recognizes.
-var knownTags = []string{"thoughts", "scratchpad", "directives"}
-
-// tagPatterns maps tag names to compiled regexes for extracting their content.
-var tagPatterns = buildTagPatterns(knownTags)
-
-func buildTagPatterns(tags []string) map[string]*regexp.Regexp {
-	m := make(map[string]*regexp.Regexp, len(tags))
-	for _, tag := range tags {
-		m[tag] = regexp.MustCompile(`(?s)<` + tag + `>(.*?)</` + tag + `>`)
-	}
-	return m
+// observerJSON is the expected JSON structure from the observer.
+type observerJSON struct {
+	Thoughts   string `json:"thoughts"`
+	Scratchpad string `json:"scratchpad"`
+	Directives string `json:"directives,omitempty"`
 }
 
 // parseObserverResponse extracts structured output from LLM response.
@@ -142,43 +136,22 @@ func parseObserverResponse(output string) (*Observation, error) {
 		return &Observation{}, nil
 	}
 
-	tags := extractAllTags(output)
-
-	obs := &Observation{}
-
-	thoughts, hasThoughts := tags["thoughts"]
-	if hasThoughts {
-		obs.Thoughts = strings.TrimSpace(thoughts)
+	var parsed observerJSON
+	if err := textutil.ExtractJSON(output, &parsed); err != nil {
+		// Fallback: treat entire output as thoughts
+		return &Observation{Thoughts: strings.TrimSpace(output)}, fmt.Errorf("no structured JSON found in response")
 	}
 
-	scratchpad, hasScratchpad := tags["scratchpad"]
-	if hasScratchpad {
-		obs.ScratchpadDelta = strings.TrimSpace(scratchpad)
+	obs := &Observation{
+		Thoughts:       strings.TrimSpace(parsed.Thoughts),
+		ScratchpadDelta: strings.TrimSpace(parsed.Scratchpad),
 	}
 
-	directivesRaw, hasDirectives := tags["directives"]
-	if hasDirectives {
-		obs.Directives = parseDirectives(strings.TrimSpace(directivesRaw))
-	}
-
-	// If no tags were found at all, treat entire output as thoughts (fallback)
-	if !hasThoughts && !hasScratchpad && !hasDirectives {
-		return &Observation{Thoughts: strings.TrimSpace(output)}, fmt.Errorf("no structured tags found in response")
+	if d := strings.TrimSpace(parsed.Directives); d != "" {
+		obs.Directives = parseDirectives(d)
 	}
 
 	return obs, nil
-}
-
-// extractAllTags extracts all known XML-style tag contents from the output.
-func extractAllTags(output string) map[string]string {
-	result := make(map[string]string)
-	for tag, pattern := range tagPatterns {
-		match := pattern.FindStringSubmatch(output)
-		if len(match) == 2 {
-			result[tag] = match[1]
-		}
-	}
-	return result
 }
 
 // parseDirectives parses directive lines in the format "TYPE: value".

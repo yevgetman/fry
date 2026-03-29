@@ -15,6 +15,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 
@@ -111,7 +112,14 @@ func AssembleReviewPrompt(opts ReviewPromptOpts) (string, error) {
 	b.WriteString("For each remaining sprint, one line:\n")
 	b.WriteString("- Sprint N: NO IMPACT | MINOR — reason | MODERATE — reason | MAJOR — reason\n\n")
 	b.WriteString("### Decision\n")
-	b.WriteString("<verdict>CONTINUE</verdict> or <verdict>DEVIATE</verdict>\n\n")
+	b.WriteString("Output your verdict as a JSON object:\n")
+	b.WriteString("```json\n")
+	b.WriteString("{\"verdict\": \"CONTINUE\"}\n")
+	b.WriteString("```\n")
+	b.WriteString("or\n")
+	b.WriteString("```json\n")
+	b.WriteString("{\"verdict\": \"DEVIATE\"}\n")
+	b.WriteString("```\n\n")
 	b.WriteString("### If DEVIATE: Deviation Spec\n")
 	b.WriteString("Only include this section if your verdict is DEVIATE.\n")
 	b.WriteString("- **Trigger**: what specifically in the completed sprint differs from the plan\n")
@@ -135,15 +143,19 @@ func AssembleReviewPrompt(opts ReviewPromptOpts) (string, error) {
 }
 
 func ParseVerdict(output string) ReviewVerdict {
-	switch {
-	case strings.Contains(output, "<verdict>DEVIATE</verdict>"):
-		return VerdictDeviate
-	case strings.Contains(output, "<verdict>CONTINUE</verdict>"):
-		return VerdictContinue
-	default:
-		frylog.Log("WARNING: no <verdict> tag found in review output — defaulting to CONTINUE")
-		return VerdictContinue
+	var parsed struct {
+		Verdict string `json:"verdict"`
 	}
+	if err := textutil.ExtractJSON(output, &parsed); err == nil {
+		switch strings.ToUpper(strings.TrimSpace(parsed.Verdict)) {
+		case "DEVIATE":
+			return VerdictDeviate
+		case "CONTINUE":
+			return VerdictContinue
+		}
+	}
+	frylog.Log("WARNING: no verdict found in review output — defaulting to CONTINUE")
+	return VerdictContinue
 }
 
 func ExtractDeviationSpec(output string) *DeviationSpec {
@@ -336,13 +348,13 @@ func buildReviewPromptOpts(opts RunReviewOpts) (ReviewPromptOpts, error) {
 func simulatedReviewOutput(verdict string, sprintNum, totalSprints int) (string, error) {
 	switch verdict {
 	case string(VerdictContinue):
-		return "### Analysis\nSprint completed as planned.\n\n### Decision\n<verdict>CONTINUE</verdict>\n", nil
+		return "### Analysis\nSprint completed as planned.\n\n### Decision\n```json\n{\"verdict\": \"CONTINUE\"}\n```\n", nil
 	case string(VerdictDeviate):
 		affected := sprintNum + 1
 		if affected > totalSprints {
 			affected = sprintNum
 		}
-		return fmt.Sprintf("### Analysis\nSprint %d deviated from plan (simulated). Downstream prompts need adjustment.\n\n### Decision\n<verdict>DEVIATE</verdict>\n\n### Deviation Spec\n- **Trigger**: Simulated deviation for testing the replan pipeline\n- **Affected sprints**: %d\n- **Sprint %d**: Add a comment noting this sprint was adjusted by a simulated review\n- **Risk assessment**: Low — simulation only\n", sprintNum, affected, affected), nil
+		return fmt.Sprintf("### Analysis\nSprint %d deviated from plan (simulated). Downstream prompts need adjustment.\n\n### Decision\n```json\n{\"verdict\": \"DEVIATE\"}\n```\n\n### Deviation Spec\n- **Trigger**: Simulated deviation for testing the replan pipeline\n- **Affected sprints**: %d\n- **Sprint %d**: Add a comment noting this sprint was adjusted by a simulated review\n- **Risk assessment**: Low — simulation only\n", sprintNum, affected, affected), nil
 	default:
 		return "", fmt.Errorf("unknown simulation verdict %q", verdict)
 	}

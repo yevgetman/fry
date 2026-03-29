@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +13,7 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/prepare"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
 // TriageOpts configures the triage classifier.
@@ -29,12 +28,13 @@ type TriageOpts struct {
 	Verbose     bool
 }
 
-var (
-	complexityRe   = regexp.MustCompile(`<complexity>(SIMPLE|MODERATE|COMPLEX)</complexity>`)
-	sprintsRe      = regexp.MustCompile(`<sprints>(\d+)</sprints>`)
-	triageReasonRe = regexp.MustCompile(`(?s)<reason>(.*?)</reason>`)
-	effortRe       = regexp.MustCompile(`<effort>(low|medium|high)</effort>`)
-)
+// triageJSON is the expected JSON structure from the triage classifier.
+type triageJSON struct {
+	Complexity string `json:"complexity"`
+	Effort     string `json:"effort"`
+	Sprints    int    `json:"sprints"`
+	Reason     string `json:"reason"`
+}
 
 // Classify runs a single cheap LLM call to classify task complexity.
 // On any error (parse failure, LLM error, timeout), it returns ComplexityComplex
@@ -126,33 +126,29 @@ func ParseClassification(output string) *TriageDecision {
 		Reason:     "could not parse classifier output",
 	}
 
-	if m := complexityRe.FindStringSubmatch(output); len(m) > 1 {
-		c := Complexity(m[1])
-		switch c {
-		case ComplexitySimple, ComplexityModerate, ComplexityComplex:
-			decision.Complexity = c
-		default:
-			// Unknown value — stay COMPLEX.
-			return decision
-		}
-	} else {
+	var parsed triageJSON
+	if err := textutil.ExtractJSON(output, &parsed); err != nil {
 		return decision
 	}
 
-	if m := sprintsRe.FindStringSubmatch(output); len(m) > 1 {
-		if n, err := strconv.Atoi(m[1]); err == nil && n >= 0 {
-			decision.SprintCount = n
-		}
+	c := Complexity(strings.ToUpper(strings.TrimSpace(parsed.Complexity)))
+	switch c {
+	case ComplexitySimple, ComplexityModerate, ComplexityComplex:
+		decision.Complexity = c
+	default:
+		return decision
 	}
 
-	if m := effortRe.FindStringSubmatch(output); len(m) > 1 {
-		if lvl, err := epic.ParseEffortLevel(m[1]); err == nil {
-			decision.EffortLevel = lvl
-		}
+	if parsed.Sprints >= 0 {
+		decision.SprintCount = parsed.Sprints
 	}
 
-	if m := triageReasonRe.FindStringSubmatch(output); len(m) > 1 {
-		decision.Reason = strings.TrimSpace(m[1])
+	if lvl, err := epic.ParseEffortLevel(parsed.Effort); err == nil {
+		decision.EffortLevel = lvl
+	}
+
+	if r := strings.TrimSpace(parsed.Reason); r != "" {
+		decision.Reason = r
 	}
 
 	return decision
@@ -240,12 +236,14 @@ func buildTriagePrompt(opts TriageOpts) string {
 	}
 
 	b.WriteString("## Output Format\n\n")
-	b.WriteString("Write your classification to .fry/triage-decision.txt in EXACTLY this format — no other text:\n\n")
-	b.WriteString("```\n")
-	b.WriteString("<complexity>SIMPLE|MODERATE|COMPLEX</complexity>\n")
-	b.WriteString("<effort>low|medium|high</effort>\n")
-	b.WriteString("<sprints>N</sprints>\n")
-	b.WriteString("<reason>1-2 sentence justification</reason>\n")
+	b.WriteString("Write your classification to .fry/triage-decision.txt as a single JSON object — no other text:\n\n")
+	b.WriteString("```json\n")
+	b.WriteString("{\n")
+	b.WriteString("  \"complexity\": \"SIMPLE|MODERATE|COMPLEX\",\n")
+	b.WriteString("  \"effort\": \"low|medium|high\",\n")
+	b.WriteString("  \"sprints\": N,\n")
+	b.WriteString("  \"reason\": \"1-2 sentence justification\"\n")
+	b.WriteString("}\n")
 	b.WriteString("```\n")
 
 	return b.String()

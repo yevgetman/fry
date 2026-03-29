@@ -1,6 +1,8 @@
 package textutil
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -62,6 +64,65 @@ func TruncateUTF8(s string, maxBytes int) string {
 		maxBytes--
 	}
 	return s[:maxBytes]
+}
+
+// ExtractJSON extracts and unmarshals a JSON object from LLM output into dest.
+// It tries three strategies in order:
+//  1. Unmarshal the raw (trimmed) output directly.
+//  2. Extract content from a ```json code fence and unmarshal it.
+//  3. Find the first '{' and last '}' in the output and unmarshal that substring.
+//
+// Returns an error if no valid JSON object can be found.
+func ExtractJSON(output string, dest interface{}) error {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return fmt.Errorf("empty output")
+	}
+
+	// Strategy 1: raw output is valid JSON.
+	if err := json.Unmarshal([]byte(trimmed), dest); err == nil {
+		return nil
+	}
+
+	// Strategy 2: JSON inside a markdown code fence.
+	if idx := strings.Index(trimmed, "```"); idx >= 0 {
+		fenceContent := extractFenceContent(trimmed, idx)
+		if fenceContent != "" {
+			if err := json.Unmarshal([]byte(fenceContent), dest); err == nil {
+				return nil
+			}
+		}
+	}
+
+	// Strategy 3: first '{' to last '}'.
+	start := strings.Index(trimmed, "{")
+	end := strings.LastIndex(trimmed, "}")
+	if start >= 0 && end > start {
+		candidate := trimmed[start : end+1]
+		if err := json.Unmarshal([]byte(candidate), dest); err == nil {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no valid JSON object found in output")
+}
+
+// extractFenceContent returns the text inside the first markdown code fence,
+// or "" if no complete fence is found.
+func extractFenceContent(s string, fenceStart int) string {
+	rest := s[fenceStart:]
+	// Skip the opening ``` and optional language tag
+	firstNewline := strings.Index(rest, "\n")
+	if firstNewline < 0 {
+		return ""
+	}
+	body := rest[firstNewline+1:]
+	// Find the closing ```
+	closeIdx := strings.Index(body, "```")
+	if closeIdx < 0 {
+		return ""
+	}
+	return strings.TrimSpace(body[:closeIdx])
 }
 
 // ResolveArtifact checks whether the engine wrote the target file during its
