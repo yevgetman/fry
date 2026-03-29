@@ -2,118 +2,110 @@
 
 Fry includes an agent foundation layer (`internal/agent/`) that provides the building blocks for conversational interfaces to the Fry build engine. The agent package is consumed by:
 
-1. **The OpenClaw extension** (`openclaw-extension/`) — via CLI commands
+1. **The OpenClaw skill** (`openclaw-skill/`) — a markdown-based skill that teaches an OpenClaw agent how to use the Fry CLI
 2. **Future native agent** — via direct Go imports (planned)
 
 ## Connecting OpenClaw to Fry
 
+OpenClaw integration uses a **skill** — a documentation file (`SKILL.md`) that gets injected into the agent's prompt when relevant. The skill teaches the agent every Fry CLI command, flag, artifact path, and steering mechanism. No gateway plugins or code runs in the OpenClaw process.
+
 ### Prerequisites
 
 - Fry binary installed and in your PATH (verify: `fry version`)
-- OpenClaw gateway running on your machine (verify: `openclaw channels status`)
+- OpenClaw gateway running on your machine (verify: `openclaw health`)
 
-### Step 1: Install the extension
+### Step 1: Install the skill
 
-Add the Fry extension to your OpenClaw config. Edit `~/.openclaw/config.yaml` (or your OpenClaw config file):
+Copy the skill into OpenClaw's managed skills directory:
 
-```yaml
-plugins:
-  entries:
-    fry:
-      enabled: true
-      source: "/path/to/fry/openclaw-extension"
-      config:
-        fry_binary: "fry"           # path to fry binary (default: from PATH)
-        default_effort: "auto"      # auto | low | medium | high | max
-        default_engine: "claude"    # claude | codex | ollama
-        notifications: "milestones" # all | milestones | errors
+```bash
+mkdir -p ~/.openclaw/skills/fry
+cp /path/to/fry/openclaw-skill/SKILL.md ~/.openclaw/skills/fry/SKILL.md
 ```
 
-Replace `/path/to/fry` with the actual path to your Fry repository (e.g., `~/Sites/fry`).
+Or install into the workspace skills directory (per-agent):
 
-### Step 2: Enable the tools on your agent
-
-In your OpenClaw agent configuration, allow the Fry tools:
-
-```yaml
-agents:
-  - id: main
-    tools:
-      allow:
-        # Monitoring (Layer 0)
-        - fry_build_start
-        - fry_build_status
-        - fry_build_restart
-        - fry_build_logs
-        - fry_read_progress
-        - fry_consciousness_stats
-        # Build steering (Layer 1)
-        - fry_build_directive
-        - fry_build_hold
-        - fry_build_respond
-        - fry_build_pause
+```bash
+mkdir -p ~/.openclaw/workspace/skills/fry
+cp /path/to/fry/openclaw-skill/SKILL.md ~/.openclaw/workspace/skills/fry/SKILL.md
 ```
 
-### Step 3: Restart the gateway
-
-Restart your OpenClaw gateway to pick up the new extension:
+### Step 2: Restart the gateway
 
 ```bash
 openclaw gateway restart
-# or restart via the OpenClaw Mac app
 ```
 
-### Step 4: Verify
+### Step 3: Verify
 
-From any OpenClaw channel (Telegram, Discord, iMessage, web chat, etc.), send:
-
-```
-hey fry, what's your status?
-```
-
-The agent should respond using the Fry tools. You can also verify the tools loaded:
+Check that the skill loaded:
 
 ```bash
-# Check the extension registered
-openclaw plugins list
-
-# Test the CLI commands directly
-fry status --json
-fry agent prompt | head -20
-fry events
+openclaw skills list
 ```
 
-### Step 5: Start a build
+You should see the fry skill listed as `ready` with the frying pan emoji.
+
+### Step 4: Start a build
 
 From any messaging channel connected to OpenClaw:
 
 ```
-start a build on ~/Sites/myproject with medium effort
+start a build on ~/code/myproject with medium effort
 ```
 
-The agent will call `fry_build_start`, spawn the build process, and start the watcher for proactive notifications. You'll receive milestone updates as the build progresses.
+The agent will use the Fry CLI to start the build, detaching it as a background process, and use `fry status --json` to monitor progress.
 
-### Notification Levels
+### What the Skill Provides
 
-Configure how much the agent reports proactively:
+The skill teaches the OpenClaw agent how to:
 
-| Level | What's reported |
-|-------|----------------|
-| `all` | Every sprint start/complete, heal attempt, audit finding, build event |
-| `milestones` (default) | Sprint completions, build end, errors |
-| `errors` | Only failures and build end |
+| Capability | How |
+|------------|-----|
+| **Set up projects** | `fry init`, create `plans/plan.md`, configure `assets/` and `media/` |
+| **Prepare builds** | `fry prepare` to generate epics, agent instructions, and sanity checks |
+| **Start builds** | `fry run` as a detached background process with appropriate flags |
+| **Monitor builds** | `fry status --json`, read logs, read progress files, stream events |
+| **Steer builds** | Write directives, hold after sprints, pause gracefully (file-based IPC) |
+| **Resume builds** | `fry run --continue`, `--simple-continue`, `--resume`, or `--sprint N` |
+| **Interpret results** | Read audit findings, review verdicts, build summaries |
+| **Use all modes** | Software, planning, and writing mode workflows |
+| **Replan** | `fry replan` after deviations or review verdicts |
+| **Clean up** | `fry clean` to archive completed builds |
+| **Consciousness** | `fry status --consciousness`, `fry reflect`, `fry identity` |
 
-Set in the plugin config: `notifications: "milestones"`
+### Skill Coverage
 
-### Troubleshooting
+The skill covers the full Fry CLI surface:
 
-**"Could not load Fry system prompt"** — The `fry` binary isn't found. Check `fry_binary` in your plugin config, or ensure `fry` is in your PATH.
+- **All commands**: `run`, `prepare`, `replan`, `clean`, `init`, `status`, `events`, `identity`, `reflect`
+- **All flags**: `--effort`, `--engine`, `--mode`, `--model`, `--git-strategy`, `--review`, `--no-audit`, `--continue`, `--resume`, `--simple-continue`, `--sprint`, `--user-prompt`, `--user-prompt-file`, `--mcp-config`, `--dry-run`, `--sarif`, `--json-report`, `--telemetry`, `--triage-only`, `--full-prepare`, `--always-verify`, `--verbose`, `--show-tokens`
+- **All build stages**: Triage, prepare, preflight, sprint execution, sanity checks, alignment, audit, review, build summary
+- **All steering tiers**: Whisper (directive), Hold (sprint boundary), Pause (graceful stop)
+- **All build modes**: Software, planning, writing
+- **All artifact paths**: Input files (`plans/`, `assets/`, `media/`), generated artifacts (`.fry/`), output files (`build-summary.md`, `build-audit.md`, `output/`)
+- **Epic format**: Global directives, sprint directives, sanity check types
 
-**No proactive notifications** — Verify the build watcher started. Check OpenClaw logs for `[fry] Build watcher ready`. If using `notifications: "errors"`, you'll only see failures.
+### Skill vs. Plugin
 
-**"No build events found"** — No `.fry/observer/events.jsonl` exists in the project directory. Start a build first, or check `--project-dir` points to the right location.
+The Fry integration was originally built as a TypeScript plugin (`openclaw-extension/`) that registered native tools in the OpenClaw gateway. This was replaced with a skill-based approach because:
 
-**Extension not loading** — Verify the `source` path in your plugin config points to the `openclaw-extension/` directory inside the Fry repo, not the Fry repo root.
+1. **Gateway stability**: External plugins have a known race condition with channel initialization in OpenClaw (see [openclaw/openclaw#56626](https://github.com/openclaw/openclaw/issues/56626)). Skills have zero gateway impact.
+2. **Simplicity**: A skill is a single markdown file. No dependencies, no build step, no TypeScript, no `node_modules`.
+3. **Equivalent capability**: The agent achieves the same results by running Fry CLI commands via its exec tool as it did with dedicated plugin tools. The CLI commands are identical.
+4. **One trade-off**: Skills cannot push proactive notifications. The plugin's build watcher spawned a background `fry events --follow` process that sent updates unprompted. With the skill, the agent monitors builds via polling (`fry status --json`) or when asked. A cron job can fill this gap.
+
+### Proactive Monitoring via Cron
+
+To replicate the plugin's proactive notifications, set up an OpenClaw cron job that polls build status:
+
+From any OpenClaw channel:
+
+```
+set up a cron job that runs every 60 seconds: check fry status --json
+for all active builds and notify me of any sprint completions, failures,
+or build completion
+```
 
 ---
 
@@ -121,13 +113,13 @@ Set in the plugin config: `notifications: "milestones"`
 
 ### `fry status --json`
 
-Returns structured JSON build state. Used by the OpenClaw extension to answer "how's the build going?" without parsing text output.
+Returns structured JSON build state. Used by the OpenClaw agent to answer "how's the build going?" without parsing text output.
 
 ```bash
-$ fry status --json --project-dir ~/Sites/myproject
+$ fry status --json --project-dir ~/code/myproject
 {
   "active": true,
-  "project_dir": "/Users/yev/Sites/myproject",
+  "project_dir": "/Users/yev/code/myproject",
   "epic": "REST API Build",
   "effort": "medium",
   "engine": "claude",
@@ -153,10 +145,10 @@ List or stream build events from the observer event log.
 
 ```bash
 # List all events
-$ fry events --project-dir ~/Sites/myproject
+$ fry events --project-dir ~/code/myproject
 
 # Stream events in real-time (follows events.jsonl)
-$ fry events --follow --json --project-dir ~/Sites/myproject
+$ fry events --follow --json --project-dir ~/code/myproject
 {"ts":"2026-03-27T10:31:45Z","type":"sprint_complete","sprint":1,"data":{"status":"PASS"}}
 {"ts":"2026-03-27T10:35:00Z","type":"sprint_start","sprint":2,"data":{"name":"API Endpoints"}}
 ```
@@ -197,7 +189,7 @@ Functions:
 
 ### `internal/steering/` — Build Steering (Layer 1)
 
-File-based IPC for mid-build human intervention. The extension writes files; the sprint loop reads them. All operations are atomic (rename-based) to avoid TOCTOU races.
+File-based IPC for mid-build human intervention. The skill teaches the OpenClaw agent to write steering files; the sprint loop reads them. All operations are atomic (rename-based) to avoid TOCTOU races.
 
 Functions:
 - **`ConsumeDirective(projectDir)`** — Atomically read and delete the directive file (rename + read + remove)
@@ -214,49 +206,16 @@ Functions:
 
 ---
 
-## OpenClaw Extension Tools
-
-### Monitoring (Layer 0)
-
-| Tool | Description |
-|------|-------------|
-| `fry_build_start` | Start a new Fry build. Spawns `fry run` as a subprocess and starts the event watcher. |
-| `fry_build_status` | Get structured JSON build state (calls `fry status --json`). |
-| `fry_build_restart` | Restart a failed/stopped build with `--continue`, `--resume`, or `--simple-continue`. Accepts `user_prompt` for new direction. |
-| `fry_build_logs` | Read recent sprint, heal, or audit logs from `.fry/build-logs/`. |
-| `fry_read_progress` | Read sprint-progress.txt or epic-progress.txt. |
-| `fry_consciousness_stats` | Query consciousness pipeline status (memory counts, reflection, identity version). |
-
-### Build Steering (Layer 1)
-
-| Tool | Tier | Description |
-|------|------|-------------|
-| `fry_build_directive` | A (whisper) | Inject a directive into the next iteration's prompt. Build doesn't stop. |
-| `fry_build_hold` | B (hold) | Request the build to pause after the current sprint completes. |
-| `fry_build_respond` | B (hold) | Respond to a held build: "continue", directive for next sprint, or "replan: instructions". |
-| `fry_build_pause` | C (abort) | Stop the build gracefully after the current iteration. Work is checkpointed. |
-
-### Steering Tiers
-
-**Tier A — Whisper**: Inject a note into the next iteration via `fry_build_directive`. The sprint agent sees it as an extra prompt section. Safe, no structural change.
-
-**Tier B — Hold at Sprint Boundary**: Call `fry_build_hold` to pause after the current sprint. You'll get a notification with a summary. Respond via `fry_build_respond` with:
-- `"continue"` — proceed as planned
-- A directive — injected as context for the next sprint
-- `"replan: <instructions>"` — replan remaining sprints using Fry's review/replan system
-
-**Tier C — Abort**: Call `fry_build_pause` to stop after the current iteration finishes. Work is git-checkpointed. Resume with `fry_build_restart` and optionally pass `user_prompt` for new direction.
-
 ## Build Steering Artifacts
 
 These files are created by the steering system:
 
 | File | Purpose | Written By | Read By |
 |------|---------|-----------|---------|
-| `.fry/agent-directive.md` | User directive for next iteration | Extension | Sprint loop |
-| `.fry/agent-hold-after-sprint` | Hold flag (sentinel) | Extension | Inter-sprint loop |
-| `.fry/agent-pause` | Pause flag (sentinel) | Extension | Sprint loop |
-| `.fry/decision-needed.md` | Build waiting for human input | Sprint loop | Extension |
+| `.fry/agent-directive.md` | User directive for next iteration | OpenClaw agent (via skill) | Sprint loop |
+| `.fry/agent-hold-after-sprint` | Hold flag (sentinel) | OpenClaw agent (via skill) | Inter-sprint loop |
+| `.fry/agent-pause` | Pause flag (sentinel) | OpenClaw agent (via skill) | Sprint loop |
+| `.fry/decision-needed.md` | Build waiting for human input | Sprint loop | OpenClaw agent (via skill) |
 
 ## Build Steering Events
 

@@ -1,6 +1,6 @@
 # Build Steering
 
-Build steering lets you interact with a running Fry build through natural language via the OpenClaw extension. You can inject directives, pause for review, or abort and redirect -- without restarting the build from scratch.
+Build steering lets you interact with a running Fry build through natural language via the OpenClaw skill (or any conversational interface). You can inject directives, pause for review, or abort and redirect -- without restarting the build from scratch.
 
 ## The Three Tiers
 
@@ -65,10 +65,10 @@ Steering uses files in the `.fry/` directory for communication between the exten
 
 | File | Purpose | Written By | Read By |
 |------|---------|-----------|---------|
-| `.fry/agent-directive.md` | User directive for the next iteration | Extension | Sprint loop (consumed atomically) |
-| `.fry/agent-hold-after-sprint` | Hold sentinel (empty file) | Extension | Inter-sprint loop |
-| `.fry/agent-pause` | Pause sentinel (empty file) | Extension | Sprint loop |
-| `.fry/decision-needed.md` | Build waiting for human input (contains prompt) | Sprint loop | Extension |
+| `.fry/agent-directive.md` | User directive for the next iteration | OpenClaw agent | Sprint loop (consumed atomically) |
+| `.fry/agent-hold-after-sprint` | Hold sentinel (empty file) | OpenClaw agent | Inter-sprint loop |
+| `.fry/agent-pause` | Pause sentinel (empty file) | OpenClaw agent | Sprint loop |
+| `.fry/decision-needed.md` | Build waiting for human input (contains prompt) | Sprint loop | OpenClaw agent |
 
 All steering files are cleaned up automatically when the build completes (success or failure) to prevent stale files from affecting the next run.
 
@@ -96,7 +96,7 @@ Steering emits structured events to `.fry/observer/events.jsonl`:
 | `decision_received` | User responded to a hold | `preview` (first 200 chars) |
 | `build_paused` | Build stopped after iteration | `sprint`, `iteration` |
 
-The OpenClaw extension's build watcher translates these events into natural-language notifications sent to whatever messaging channel you're using.
+The OpenClaw agent can monitor these events via `fry events --follow --json` or by polling `fry status --json` and relay them as natural-language notifications to whatever messaging channel you're using.
 
 ## Atomicity and Race Safety
 
