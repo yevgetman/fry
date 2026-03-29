@@ -10,7 +10,7 @@ When you run `fry run` and no `.fry/epic.md` exists:
 
 1. **Collect inputs** — reads `plans/plan.md`, `plans/executive.md`, and `--user-prompt` (same prerequisites as prepare)
 2. **Classify** — sends a single LLM call to a cheap model (haiku/gpt-5.4-mini) with the task description
-3. **Confirm** — displays the classification and asks the user to accept, decline, or adjust (see [Interactive Confirmation](#interactive-confirmation)). Skipped with `--no-project-overview` or `--dry-run`.
+3. **Confirm** — displays the classification and asks the user to accept, decline, or adjust (see [Interactive Confirmation](#interactive-confirmation)). Skipped with `--no-project-overview` or `--dry-run`. Auto-accepted with `--yes`.
 4. **Route** — based on the (possibly adjusted) classification:
 
 | Classification | Execution path | LLM calls | Output |
@@ -87,6 +87,10 @@ Git strategy [branch] (auto/current/branch/worktree, or Enter to keep):
 ```
 
 Changing difficulty to COMPLEX causes the full prepare pipeline to run. Effort `max` is only allowed when difficulty is COMPLEX — typing it on SIMPLE or MODERATE triggers a warning and keeps the previous value. If you downgrade difficulty from COMPLEX to SIMPLE/MODERATE but keep `max` effort (by pressing Enter), Fry automatically downgrades the effort to `high` with a warning.
+
+### Non-interactive mode
+
+Use `--yes` (or `-y`) to auto-accept the triage classification without prompting. The summary is still displayed for logging purposes. Use `--no-project-overview` to skip the confirmation entirely (no display, no prompt).
 
 The confirmation is skipped when `--no-project-overview` or `--dry-run` is passed.
 

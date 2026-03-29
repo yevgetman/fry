@@ -54,6 +54,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. Also offered interactively during the adjust flow for medium/high effort builds. Max effort auto-enables review. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
+| `--yes` / `-y` | Auto-accept all interactive confirmation prompts (triage, project overview, executive bootstrap). For CI/CD and AI agent automation. |
 | `--no-project-overview` | Skip interactive confirmations (triage classification and project overview) |
 | `--no-audit` | Disable sprint and build audits for this run |
 | `--no-observer` | Disable the observer metacognitive layer (event stream and wake-ups). Observer is also disabled at `low` effort and during `--dry-run`. See [Observer](observer.md). |
@@ -105,6 +106,7 @@ fry --mode writing --user-prompt "Write a guide"  # Writing project (books, guid
 fry --user-prompt "focus on backend API, skip frontend"
 fry --user-prompt "build a todo app" --engine claude  # Start from just a prompt
 fry --user-prompt-file ./prompt.txt --engine claude   # Load prompt from a file
+fry -y --user-prompt "add rate limiting"              # Fully automated: no interactive prompts
 fry --no-project-overview                             # Skip triage confirmation and project overview
 fry --git-strategy worktree                       # Force worktree isolation
 fry --git-strategy branch --branch-name feat/auth # Branch with explicit name
@@ -138,6 +140,7 @@ fry prepare [epic_filename] [flags]
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--validate-only` | Check that the epic is valid, then exit |
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. |
+| `--yes` / `-y` | Auto-accept all interactive confirmation prompts (project overview, executive bootstrap). |
 | `--no-project-overview` | Skip the interactive project overview confirmation |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--mcp-config <path>` | Path to MCP server configuration file (Claude engine only). See [Engines: MCP](engines.md#mcp-server-configuration). |

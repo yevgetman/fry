@@ -27,11 +27,11 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Initialize project | `fry init --project-dir <dir>` |
 | Prepare artifacts only | `fry prepare --project-dir <dir>` |
 | Validate prepare | `fry prepare --validate-only --project-dir <dir>` |
-| Start a build | `fry run --project-dir <dir> --json-report --telemetry` |
+| Start a build | `fry run -y --project-dir <dir> --json-report --telemetry` |
 | Check status | `fry status --json --project-dir <dir>` |
-| Resume (LLM-driven) | `fry run --continue --project-dir <dir> --json-report --telemetry` |
-| Resume (lightweight) | `fry run --simple-continue --project-dir <dir> --json-report --telemetry` |
-| Resume (skip to healing) | `fry run --resume --project-dir <dir> --json-report --telemetry` |
+| Resume (LLM-driven) | `fry run -y --continue --project-dir <dir> --json-report --telemetry` |
+| Resume (lightweight) | `fry run -y --simple-continue --project-dir <dir> --json-report --telemetry` |
+| Resume (skip to healing) | `fry run -y --resume --project-dir <dir> --json-report --telemetry` |
 | Replan after deviation | `fry replan --project-dir <dir>` |
 | Stream events | `fry events --follow --json --project-dir <dir>` |
 | Consciousness stats | `fry status --consciousness --project-dir <dir>` |
@@ -53,7 +53,7 @@ description and let Fry do the rest.
 For straightforward requests, pass the task description directly:
 
 ```bash
-fry run --project-dir /path/to/project \
+fry run -y --project-dir /path/to/project \
   --user-prompt "Add rate limiting to the API endpoints" \
   --json-report --telemetry
 ```
@@ -77,7 +77,7 @@ Refactor the authentication system to support OAuth2.
 - Update all API middleware
 PROMPT
 
-fry run --project-dir /path/to/project \
+fry run -y --project-dir /path/to/project \
   --user-prompt-file /tmp/fry-task.md \
   --json-report --telemetry
 ```
@@ -90,7 +90,7 @@ explicitly ask you to scaffold them. In this case, just run Fry without
 a user prompt — it picks up the plan files automatically:
 
 ```bash
-fry run --project-dir /path/to/project --json-report --telemetry
+fry run -y --project-dir /path/to/project --json-report --telemetry
 ```
 
 ### Decision guide
@@ -172,33 +172,26 @@ fry status --json --project-dir /path/to/project
 `cmd &` from a non-interactive shell — the exec environment's ephemeral shell
 will clean up backgrounded processes unpredictably.
 
+**Always pass `-y`** to auto-accept all interactive prompts (triage confirmation,
+project overview, executive context bootstrap). Without it, the process will
+block on stdin and die silently in a non-interactive shell.
+
 **Use sessions_spawn:**
 
 ```
 sessions_spawn({
-  task: "Run this command and report the exit code and last 30 lines of output when done:\n\nfry run --project-dir /path/to/project --json-report --telemetry 2>&1 | tee /tmp/fry-out.log",
+  task: "Run this command and report the exit code and last 30 lines of output when done:\n\nfry run -y --project-dir /path/to/project --json-report --telemetry 2>&1 | tee /tmp/fry-out.log",
   runtime: "subagent",
   mode: "run",
   runTimeoutSeconds: 600
 })
 ```
 
-**Additional note for writing mode:** Always pass `--no-project-overview` to
-suppress the interactive `Proceed? [y/N]` confirmation prompt that Fry shows
-after generating executive context. Without it, the process will block on stdin
-and die silently in a non-interactive shell.
-
-```bash
-fry run --project-dir /path/to/project \
-  --mode writing \
-  --no-project-overview \
-  --json-report --telemetry
-```
-
 ### Key flags
 
 | Flag | Values | Default | Purpose |
 |------|--------|---------|---------|
+| `-y` / `--yes` | (flag) | off | Auto-accept all interactive prompts. Always use this. |
 | `--effort` | low, medium, high, max, auto | auto | Sprint count and rigor |
 | `--engine` | claude, codex, ollama | claude | Which LLM engine to use |
 | `--mode` | software, planning, writing | software | Build mode |
@@ -526,7 +519,7 @@ Use `sessions_spawn` to resume, same as starting a build:
 
 ```
 sessions_spawn({
-  task: "Run this command and report the exit code and last 30 lines of output when done:\n\nfry run --continue --project-dir /path/to/project --json-report --telemetry 2>&1 | tee /tmp/fry-out.log",
+  task: "Run this command and report the exit code and last 30 lines of output when done:\n\nfry run -y --continue --project-dir /path/to/project --json-report --telemetry 2>&1 | tee /tmp/fry-out.log",
   runtime: "subagent",
   mode: "run",
   runTimeoutSeconds: 600
@@ -610,7 +603,7 @@ and removes the `.fry/` directory. The project-root outputs (`build-summary.md`,
 ## Behavior Guidelines
 
 - **Always use `sessions_spawn`** to run Fry builds — never `nohup` or `&`.
-- **Always pass `--no-project-overview`** for writing mode builds to avoid stdin blocking.
+- **Always pass `-y`** to auto-accept all interactive prompts.
 - **Check status before starting** — verify no build is active first.
 - **Use `fry status --json`** as the primary monitoring tool.
 - **Atomic file writes** for directives: write to `.tmp` then `mv`.
