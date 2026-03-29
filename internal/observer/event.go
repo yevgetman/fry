@@ -15,6 +15,10 @@ import (
 type EventType string
 
 const (
+	EventTriageStart       EventType = "triage_start"
+	EventTriageComplete    EventType = "triage_complete"
+	EventPrepareStart      EventType = "prepare_start"
+	EventPrepareComplete   EventType = "prepare_complete"
 	EventBuildStart        EventType = "build_start"
 	EventSprintStart       EventType = "sprint_start"
 	EventSprintComplete    EventType = "sprint_complete"

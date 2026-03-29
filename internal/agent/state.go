@@ -64,6 +64,65 @@ func ReadBuildState(projectDir string) (*BuildState, error) {
 		state.StartedAt = parseTimestamp(events[0].Timestamp)
 	}
 
+	// Enrich from build-status.json when available (more complete than events).
+	if bs, bsErr := ReadBuildStatus(absDir); bsErr == nil && bs != nil {
+		if bs.Build.Epic != "" {
+			state.Epic = bs.Build.Epic
+		}
+		if bs.Build.TotalSprints > 0 {
+			state.TotalSprints = bs.Build.TotalSprints
+		}
+		if bs.Build.CurrentSprint > 0 {
+			state.CurrentSprint = bs.Build.CurrentSprint
+		}
+		if bs.Build.Effort != "" {
+			state.Effort = bs.Build.Effort
+		}
+		if bs.Build.Engine != "" {
+			state.Engine = bs.Build.Engine
+		}
+		if bs.Build.Mode != "" {
+			state.Mode = bs.Build.Mode
+		}
+		if bs.Build.Phase != "" {
+			state.Phase = bs.Build.Phase
+		}
+		if !bs.Build.StartedAt.IsZero() {
+			t := bs.Build.StartedAt
+			state.StartedAt = &t
+		}
+		// Infer current sprint name from sprint list
+		for _, sp := range bs.Sprints {
+			if sp.Number == bs.Build.CurrentSprint {
+				state.CurrentSprintName = sp.Name
+				break
+			}
+		}
+		// Use build-status.json status when event-based inference yielded idle
+		if bs.Build.Status != "" && state.Status == "idle" {
+			state.Status = bs.Build.Status
+		}
+	}
+
+	// Read build phase (active during triage/prepare before events exist)
+	if data, err := os.ReadFile(filepath.Join(absDir, config.BuildPhaseFile)); err == nil {
+		phase := strings.TrimSpace(string(data))
+		if phase != "" {
+			state.Phase = phase
+		}
+		// If we have a phase but status is still idle, the build is in an early stage
+		if state.Status == "idle" && phase != "" && phase != "complete" && phase != "failed" {
+			switch {
+			case phase == "triage":
+				state.Status = "triaging"
+			case strings.HasPrefix(phase, "prepare"):
+				state.Status = "preparing"
+			default:
+				state.Status = "running"
+			}
+		}
+	}
+
 	// Git branch
 	state.GitBranch = readGitBranch(absDir)
 
@@ -287,6 +346,12 @@ func inferStatus(events []observer.Event) string {
 			return "completed"
 		}
 		return "failed"
+	case observer.EventTriageStart:
+		return "triaging"
+	case observer.EventTriageComplete, observer.EventPrepareComplete:
+		return "running"
+	case observer.EventPrepareStart:
+		return "preparing"
 	case observer.EventBuildStart, observer.EventSprintStart:
 		return "running"
 	case observer.EventSprintComplete, observer.EventAlignmentComplete,

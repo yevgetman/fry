@@ -371,8 +371,22 @@ detects writing mode from `.fry/build-mode.txt`.
 fry status --json --project-dir /path/to/project
 ```
 
-Returns structured JSON with sprint number, iteration, status, outcome, and
-timing. Use this as the primary way to monitor builds.
+Returns structured JSON with build phase, sprint data, status, and timing.
+Works correctly at every stage of a build:
+
+| Status value | Meaning |
+|---|---|
+| `idle` | No build running or artifacts present |
+| `triaging` | Triage classification in progress |
+| `preparing` | Prepare pipeline running (epic generation) |
+| `running` | Sprint execution, audit, or review in progress |
+| `paused` | Build paused via Tier C steering |
+| `completed` | Build finished successfully |
+| `failed` | Build finished with errors |
+| `stopped` | Build process died unexpectedly |
+
+The JSON includes `phase` (triage, prepare, sprint, complete, failed) and
+`worktree_dir` when the build uses worktree strategy.
 
 ### Error handling
 

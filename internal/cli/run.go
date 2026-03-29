@@ -209,6 +209,7 @@ var runCmd = &cobra.Command{
 				)
 			}
 			if runFullPrepare {
+				writeBuildPhase(projectPath, "prepare")
 				if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
 					ProjectDir:          projectPath,
 					EpicFilename:        filepath.Base(epicPath),
@@ -228,6 +229,7 @@ var runCmd = &cobra.Command{
 					return err
 				}
 			} else {
+				writeBuildPhase(projectPath, "triage")
 				var err error
 				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, promptSource, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoProjectOverview || runDryRun, runYes, runTriageOnly, runConfirmFile)
 				if err != nil {
@@ -614,6 +616,13 @@ var runCmd = &cobra.Command{
 			frlog.Log("WARNING: could not persist build mode: %v", writeErr)
 		}
 
+		// Write build phase for status tracking
+		writeBuildPhase(projectPath, "sprint")
+		// Also write phase to original project dir so status can find it when worktree is active
+		if originalProjectPath != projectPath {
+			writeBuildPhase(originalProjectPath, "sprint:worktree")
+		}
+
 		// Initialize machine-readable build status for agent polling.
 		buildStatus := &agent.BuildStatus{
 			Version: 1,
@@ -624,6 +633,7 @@ var runCmd = &cobra.Command{
 				Mode:         modeStr,
 				TotalSprints: ep.TotalSprints,
 				Status:       "running",
+				Phase:        "sprint",
 				StartedAt:    buildStart,
 				GitBranch:    gitBranchFromHead(projectPath),
 			},
@@ -1636,10 +1646,21 @@ var runCmd = &cobra.Command{
 		// Final build status update
 		if exitErr != nil {
 			buildStatus.Build.Status = "failed"
+			buildStatus.Build.Phase = "failed"
+			writeBuildPhase(projectPath, "failed")
 		} else {
 			buildStatus.Build.Status = "completed"
+			buildStatus.Build.Phase = "complete"
+			writeBuildPhase(projectPath, "complete")
 		}
 		writeBuildStatus(projectPath, buildStatus)
+		if originalProjectPath != projectPath {
+			if exitErr != nil {
+				writeBuildPhase(originalProjectPath, "failed")
+			} else {
+				writeBuildPhase(originalProjectPath, "complete")
+			}
+		}
 
 		// Wait for upload to complete (bounded by upload timeout)
 		if uploadDone != nil {
@@ -2088,6 +2109,15 @@ func writeExitReason(projectDir string, buildErr error, sprintNum int) {
 	}
 }
 
+// writeBuildPhase writes the current build phase to .fry/build-phase.txt.
+func writeBuildPhase(projectDir, phase string) {
+	path := filepath.Join(projectDir, config.BuildPhaseFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return
+	}
+	_ = os.WriteFile(path, []byte(phase+"\n"), 0o644)
+}
+
 // gitBranchFromHead reads the current branch name from .git/HEAD without a subprocess.
 func gitBranchFromHead(projectDir string) string {
 	data, err := os.ReadFile(filepath.Join(projectDir, ".git", "HEAD"))
@@ -2380,6 +2410,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		resolvedEffort = complexEffort
 
 		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
+		writeBuildPhase(projectPath, "prepare")
 		var triagePrepareFactory func(string) (engine.Engine, error)
 		if runMCPConfig != "" {
 			mcpPath := runMCPConfig

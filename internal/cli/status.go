@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -18,22 +19,18 @@ import (
 	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
+	"github.com/yevgetman/fry/internal/lock"
 )
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show current build state without making an LLM call",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		projectDir, _ := cmd.Flags().GetString("project-dir")
+
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		if jsonOutput {
-			projectDir, _ := cmd.Flags().GetString("project-dir")
-			state, err := agent.ReadBuildState(projectDir)
-			if err != nil {
-				return fmt.Errorf("read build state: %w", err)
-			}
-			enc := json.NewEncoder(cmd.OutOrStdout())
-			enc.SetIndent("", "  ")
-			return enc.Encode(state)
+			return runStatusJSON(cmd, projectDir)
 		}
 
 		showConsciousness, _ := cmd.Flags().GetBool("consciousness")
@@ -49,43 +46,7 @@ var statusCmd = &cobra.Command{
 			return nil
 		}
 
-		projectDir, _ := cmd.Flags().GetString("project-dir")
-
-		// If a worktree strategy was used, resolve to the worktree directory
-		// where the actual build artifacts live.
-		buildDir := projectDir
-		if setup, err := git.ReadPersistedStrategy(projectDir); err == nil && setup != nil && setup.WorkDir != "" {
-			buildDir = setup.WorkDir
-		}
-
-		epicPath := filepath.Join(buildDir, config.FryDir, "epic.md")
-		ep, err := epic.ParseEpic(epicPath)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				if buildDir != projectDir {
-					fmt.Fprintf(cmd.OutOrStdout(), "Build worktree not found at %s\n", buildDir)
-					fmt.Fprintf(cmd.OutOrStdout(), "The worktree may have been removed. Run 'fry run --continue' to resume.\n")
-				} else {
-					archives, _ := archive.ScanArchives(projectDir)
-					worktrees, _ := git.ScanWorktreeBuilds(projectDir)
-					summary := continuerun.FormatInactiveSummary(projectDir, archives, worktrees)
-					fmt.Fprint(cmd.OutOrStdout(), summary)
-				}
-				return nil
-			}
-			return err
-		}
-		// alwaysVerify is hardcoded to false because it is a runtime-only flag with
-		// no persistent state. For low-effort builds originally run with --always-verify,
-		// the sentinel status may show "N/A" even though the audit ran. This is a known
-		// limitation; persisting the flag would require a .fry/build-flags.txt artifact.
-		state, err := continuerun.CollectBuildState(cmd.Context(), buildDir, ep, false)
-		if err != nil {
-			return err
-		}
-		report := continuerun.FormatReport(state)
-		fmt.Fprint(cmd.OutOrStdout(), report)
-		return nil
+		return runStatusHumanReadable(cmd, projectDir)
 	},
 }
 
@@ -93,4 +54,136 @@ func init() {
 	statusCmd.Flags().Bool("consciousness", false, "Show consciousness pipeline status")
 	statusCmd.Flags().Bool("json", false, "Output build state as JSON (for agent consumption)")
 	rootCmd.AddCommand(statusCmd)
+}
+
+// resolveBuildDir returns the directory where build artifacts live, which may
+// be a worktree directory if the build used the worktree strategy.
+func resolveBuildDir(projectDir string) (buildDir string, worktreeDir string) {
+	buildDir = projectDir
+	if setup, err := git.ReadPersistedStrategy(projectDir); err == nil && setup != nil && setup.WorkDir != "" && setup.WorkDir != projectDir {
+		// Verify the worktree directory actually exists
+		if _, statErr := os.Stat(setup.WorkDir); statErr == nil {
+			buildDir = setup.WorkDir
+			worktreeDir = setup.WorkDir
+		}
+	}
+	return buildDir, worktreeDir
+}
+
+// readPhase reads build-phase.txt from one or more directories, returning
+// the first non-empty phase found.
+func readPhase(dirs ...string) string {
+	for _, dir := range dirs {
+		if data, err := os.ReadFile(filepath.Join(dir, config.BuildPhaseFile)); err == nil {
+			if phase := strings.TrimSpace(string(data)); phase != "" {
+				return phase
+			}
+		}
+	}
+	return ""
+}
+
+func runStatusJSON(cmd *cobra.Command, projectDir string) error {
+	projectDir, _ = filepath.Abs(projectDir)
+	buildDir, worktreeDir := resolveBuildDir(projectDir)
+
+	state, err := agent.ReadBuildState(buildDir)
+	if err != nil {
+		return fmt.Errorf("read build state: %w", err)
+	}
+
+	// Always show the original project dir, not the worktree
+	state.ProjectDir = projectDir
+	if worktreeDir != "" {
+		state.WorktreeDir = worktreeDir
+	}
+
+	// For worktree builds, the lock lives in the original project dir.
+	// ReadBuildState checked the worktree dir for a lock, which won't exist there.
+	if worktreeDir != "" && state.PID == 0 && state.Status != "completed" && state.Status != "failed" {
+		if lock.IsLocked(projectDir) {
+			state.PID = lock.ReadPID(projectDir)
+			state.Active = true
+			if state.Status == "idle" || state.Status == "stopped" || state.Status == "unknown" {
+				state.Status = "running"
+			}
+		}
+	}
+
+	// Check original dir for early-phase signals (triage/prepare happen before worktree exists)
+	if state.Status == "idle" {
+		phase := readPhase(projectDir, buildDir)
+		if phase != "" && phase != "complete" && phase != "failed" {
+			state.Phase = phase
+			if lock.IsLocked(projectDir) {
+				state.Active = true
+				state.PID = lock.ReadPID(projectDir)
+				switch {
+				case phase == "triage":
+					state.Status = "triaging"
+				case strings.HasPrefix(phase, "prepare"):
+					state.Status = "preparing"
+				case strings.HasPrefix(phase, "sprint"):
+					state.Status = "running"
+				default:
+					state.Status = "running"
+				}
+			} else {
+				state.Status = "stopped"
+				state.Active = false
+			}
+		}
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(state)
+}
+
+func runStatusHumanReadable(cmd *cobra.Command, projectDir string) error {
+	buildDir, _ := resolveBuildDir(projectDir)
+
+	// Check for early-phase build (triage/prepare) before requiring epic
+	phase := readPhase(projectDir, buildDir)
+	if phase != "" && phase != "complete" && phase != "failed" {
+		pid := lock.ReadPID(projectDir)
+		alive := pid > 0 && lock.IsLocked(projectDir)
+		if alive && (phase == "triage" || strings.HasPrefix(phase, "prepare")) {
+			phaseLabel := phase
+			if strings.HasPrefix(phase, "prepare") {
+				phaseLabel = "prepare"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Build in progress: %s (PID %d)\n", phaseLabel, pid)
+			return nil
+		}
+		// If phase says sprint:worktree but worktree is gone, fall through
+		// to the normal flow which will show archives/worktrees.
+	}
+
+	epicPath := filepath.Join(buildDir, config.FryDir, "epic.md")
+	ep, err := epic.ParseEpic(epicPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// Check if process is running but no epic yet (early phase, died mid-triage)
+			if phase != "" && phase != "complete" && phase != "failed" {
+				fmt.Fprintf(cmd.OutOrStdout(), "Build phase: %s (process not running)\n", phase)
+				return nil
+			}
+
+			archives, _ := archive.ScanArchives(projectDir)
+			worktrees, _ := git.ScanWorktreeBuilds(projectDir)
+			summary := continuerun.FormatInactiveSummary(projectDir, archives, worktrees)
+			fmt.Fprint(cmd.OutOrStdout(), summary)
+			return nil
+		}
+		return err
+	}
+
+	state, err := continuerun.CollectBuildState(cmd.Context(), buildDir, ep, false)
+	if err != nil {
+		return err
+	}
+	report := continuerun.FormatReport(state)
+	fmt.Fprint(cmd.OutOrStdout(), report)
+	return nil
 }

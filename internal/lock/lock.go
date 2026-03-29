@@ -83,6 +83,21 @@ func IsLocked(projectDir string) bool {
 	return processAlive(pid)
 }
 
+// ReadPID returns the PID from the lock file, or 0 if no valid lock exists.
+// Does NOT check if the process is alive.
+func ReadPID(projectDir string) int {
+	lockPath := filepath.Join(projectDir, config.LockFile)
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 0 {
+		return 0
+	}
+	return pid
+}
+
 func processAlive(pid int) bool {
 	// On Unix, os.FindProcess always succeeds, so we skip it and go
 	// straight to the signal-0 liveness check.

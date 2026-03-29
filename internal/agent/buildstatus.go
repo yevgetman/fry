@@ -30,7 +30,8 @@ type BuildInfo struct {
 	GitBranch     string    `json:"git_branch,omitempty"`
 	TotalSprints  int       `json:"total_sprints"`
 	CurrentSprint int       `json:"current_sprint"`
-	Status        string    `json:"status"` // running, completed, failed, paused
+	Status        string    `json:"status"`          // running, completed, failed, paused, triaging, preparing
+	Phase         string    `json:"phase,omitempty"` // triage, prepare, sprint, audit, complete
 	StartedAt     time.Time `json:"started_at"`
 }
 

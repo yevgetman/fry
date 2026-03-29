@@ -17,9 +17,11 @@ type BuildState struct {
 	TotalSprints      int         `json:"total_sprints"`
 	CurrentSprint     int         `json:"current_sprint"`
 	CurrentSprintName string      `json:"current_sprint_name"`
-	Status            string      `json:"status"` // running, completed, failed, paused, idle
+	Status            string      `json:"status"`                // running, completed, failed, paused, idle, triaging, preparing
+	Phase             string      `json:"phase,omitempty"`       // triage, prepare, sprint, audit, complete, failed
 	LastEvent         *BuildEvent `json:"last_event,omitempty"`
 	GitBranch         string      `json:"git_branch,omitempty"`
+	WorktreeDir       string      `json:"worktree_dir,omitempty"`
 	StartedAt         *time.Time  `json:"started_at,omitempty"`
 	PID               int         `json:"pid,omitempty"`
 }
