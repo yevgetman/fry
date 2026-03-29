@@ -22,6 +22,7 @@ var (
 	prepareEffort         string
 	prepareNoProjectOverview  bool
 	prepareReview         bool
+	prepareYes            bool
 	prepareMCPConfig      string
 )
 
@@ -106,6 +107,7 @@ var prepareCmd = &cobra.Command{
 			UserPromptSource:    promptSource,
 			ValidateOnly:        false,
 			SkipProjectOverview: noProjectOverview || noSanityCheck,
+			AutoAccept:          prepareYes,
 			Mode:                mode,
 			EffortLevel:         effortLevel,
 			EnableReview:        reviewVal,
@@ -136,4 +138,5 @@ func init() {
 	_ = prepareCmd.Flags().MarkHidden("no-sanity-check")
 	prepareCmd.Flags().BoolVar(&prepareReview, "review", false, "Enable sprint review between sprints")
 	prepareCmd.Flags().StringVar(&prepareMCPConfig, "mcp-config", "", "Path to MCP server configuration file (Claude engine only)")
+	prepareCmd.Flags().BoolVarP(&prepareYes, "yes", "y", false, "Auto-accept all interactive confirmation prompts")
 }

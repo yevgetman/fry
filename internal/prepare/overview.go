@@ -75,6 +75,12 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 
 		summary := parseOverviewSummary(output)
 		displayOverviewSummary(stdout, summary)
+
+		if opts.AutoAccept {
+			fmt.Fprintln(stdout, "Does this look right? [Y/n/a] (a = adjust) Y (auto-accepted)")
+			return &OverviewResult{UserPrompt: userPrompt, EffortLevel: effortLevel, EnableReview: enableReview}, nil
+		}
+
 		fmt.Fprint(stdout, "Does this look right? [Y/n/a] (a = adjust) ")
 
 		answer, err := scanLine()

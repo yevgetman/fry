@@ -466,3 +466,27 @@ func TestActionDescription(t *testing.T) {
 	assert.Contains(t, actionDescription(ComplexityModerate, 0), "1-sprint")
 	assert.Contains(t, actionDescription(ComplexityComplex, 0), "full prepare")
 }
+
+func TestConfirmDecision_AutoAccept(t *testing.T) {
+	t.Parallel()
+
+	decision := &TriageDecision{
+		Complexity:  ComplexityModerate,
+		EffortLevel: epic.EffortMedium,
+		Reason:      "test",
+		SprintCount: 2,
+	}
+
+	var buf bytes.Buffer
+	result, err := ConfirmDecision(ConfirmOpts{
+		Decision:   decision,
+		Stdin:      strings.NewReader(""),
+		Stdout:     &buf,
+		AutoAccept: true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, ComplexityModerate, result.Complexity)
+	assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+	assert.Contains(t, buf.String(), "auto-accepted")
+}

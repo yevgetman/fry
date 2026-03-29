@@ -29,6 +29,7 @@ type PrepareOpts struct {
 	UserPromptSource string // human-readable origin, e.g. "--user-prompt-file path" or "--user-prompt flag"
 	ValidateOnly     bool
 	SkipProjectOverview  bool
+	AutoAccept       bool
 	EngineFactory    func(string) (engine.Engine, error)       // optional; defaults to engine.NewEngine
 	LogFunc          func(format string, args ...interface{})   // optional; defaults to frylog.Log
 	Mode             Mode
@@ -373,18 +374,22 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 	fmt.Fprintln(stdout, output)
 	fmt.Fprintln(stdout, "")
 	fmt.Fprintln(stdout, "─────────────────────────────────────────────────────────────────")
-	fmt.Fprint(stdout, "Proceed with this executive context? [y/N] ")
+	if opts.SkipProjectOverview || opts.AutoAccept {
+		fmt.Fprintln(stdout, "Proceed with this executive context? [y/N] y (auto-accepted)")
+	} else {
+		fmt.Fprint(stdout, "Proceed with this executive context? [y/N] ")
 
-	scanner := bufio.NewScanner(stdin)
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("run prepare: read input: %w", err)
+		scanner := bufio.NewScanner(stdin)
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("run prepare: read input: %w", err)
+			}
+			return ErrUserDeclined
 		}
-		return ErrUserDeclined
-	}
-	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
-	if answer != "y" && answer != "yes" {
-		return ErrUserDeclined
+		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+		if answer != "y" && answer != "yes" {
+			return ErrUserDeclined
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(executivePath), 0o755); err != nil {

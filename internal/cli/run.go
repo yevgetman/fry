@@ -60,6 +60,7 @@ var (
 	runSprint            int
 	runContinue          bool
 	runNoProjectOverview bool
+	runYes               bool
 	runFullPrepare       bool
 	runGitStrategy       string
 	runBranchName        string
@@ -213,6 +214,7 @@ var runCmd = &cobra.Command{
 					UserPrompt:          userPrompt,
 					UserPromptSource:    promptSource,
 					SkipProjectOverview: runNoProjectOverview || runDryRun,
+					AutoAccept:          runYes,
 					Mode:                mode,
 					EffortLevel:         effortLevel,
 					EnableReview:        runReview,
@@ -224,7 +226,7 @@ var runCmd = &cobra.Command{
 				}
 			} else {
 				var err error
-				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, promptSource, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoProjectOverview || runDryRun, runTriageOnly)
+				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, promptSource, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoProjectOverview || runDryRun, runYes, runTriageOnly)
 				if err != nil {
 					return err
 				}
@@ -1606,6 +1608,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runTelemetry, "telemetry", false, "Enable experience upload to consciousness API")
 	runCmd.Flags().BoolVar(&runNoTelemetry, "no-telemetry", false, "Disable experience upload")
 	runCmd.Flags().StringVar(&runMCPConfig, "mcp-config", "", "Path to MCP server configuration file (Claude engine only)")
+	runCmd.Flags().BoolVarP(&runYes, "yes", "y", false, "Auto-accept all interactive confirmation prompts")
 }
 
 func resolveProjectDir(dir string) (string, error) {
@@ -2025,7 +2028,7 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 // For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it builds
 // a programmatic epic with auto-generated sanity checks. For COMPLEX, it falls
 // through to full prepare.
-func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt, promptSource string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool, triageOnly bool) (*triage.TriageDecision, error) {
+func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt, promptSource string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool, autoAccept bool, triageOnly bool) (*triage.TriageDecision, error) {
 	// Read available inputs.
 	planPath := filepath.Join(projectPath, config.PlanFile)
 	executivePath := filepath.Join(projectPath, config.ExecutiveFile)
@@ -2071,9 +2074,10 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 	// Interactive confirmation (unless skipped).
 	if !skipConfirm {
 		result, confirmErr := triage.ConfirmDecision(triage.ConfirmOpts{
-			Decision: decision,
-			Stdin:    stdin,
-			Stdout:   stdout,
+			Decision:   decision,
+			Stdin:      stdin,
+			Stdout:     stdout,
+			AutoAccept: autoAccept,
 		})
 		if confirmErr != nil {
 			return nil, confirmErr
@@ -2195,6 +2199,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			UserPrompt:          userPrompt,
 			UserPromptSource:    promptSource,
 			SkipProjectOverview: runNoProjectOverview || runDryRun,
+			AutoAccept:          runYes,
 			Mode:                mode,
 			EffortLevel:         complexEffort,
 			EnableReview:        runReview,

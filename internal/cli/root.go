@@ -65,6 +65,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&runTelemetry, "telemetry", false, "Enable experience upload to consciousness API")
 	rootCmd.Flags().BoolVar(&runNoTelemetry, "no-telemetry", false, "Disable experience upload")
 	rootCmd.Flags().StringVar(&runMCPConfig, "mcp-config", "", "Path to MCP server configuration file (Claude engine only)")
+	rootCmd.Flags().BoolVarP(&runYes, "yes", "y", false, "Auto-accept all interactive confirmation prompts")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(prepareCmd)

@@ -15,9 +15,10 @@ var ErrTriageDeclined = fmt.Errorf("user declined triage classification")
 
 // ConfirmOpts configures the interactive triage confirmation prompt.
 type ConfirmOpts struct {
-	Decision *TriageDecision
-	Stdin    io.Reader
-	Stdout   io.Writer
+	Decision   *TriageDecision
+	Stdin      io.Reader
+	Stdout     io.Writer
+	AutoAccept bool
 }
 
 // ConfirmResult holds the (possibly adjusted) values from the confirmation prompt.
@@ -36,6 +37,15 @@ func ConfirmDecision(opts ConfirmOpts) (*ConfirmResult, error) {
 	d := opts.Decision
 
 	DisplayTriageSummary(stdout, d)
+
+	if opts.AutoAccept {
+		fmt.Fprintln(stdout, "Accept this classification? [Y/n/a] (a = adjust) Y (auto-accepted)")
+		return &ConfirmResult{
+			Complexity:  d.Complexity,
+			EffortLevel: d.EffortLevel,
+		}, nil
+	}
+
 	fmt.Fprint(stdout, "Accept this classification? [Y/n/a] (a = adjust) ")
 
 	scanner := bufio.NewScanner(stdin)
