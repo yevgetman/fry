@@ -121,6 +121,45 @@ FRY_ENGINE=claude fry                             # Set engine via environment v
 
 ---
 
+## `fry audit`
+
+Run a standalone AI-powered build-level audit on the current project. Works on any codebase -- a completed Fry build, a partially built project, or code that was never built with Fry. Finds issues, attempts fixes, and re-audits until clean or the cycle limit is reached.
+
+Results are written to `build-audit.md` in the project root.
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--engine <claude\|codex\|ollama>` | Execution engine (default: `claude`) |
+| `--effort <low\|medium\|high\|max>` | Effort level controlling audit rigor — higher effort means more audit cycles and fix iterations (default: `high`) |
+| `--model <name>` | Override the agent model (e.g. `opus`, `sonnet`, `haiku`) |
+| `--mode <software\|planning\|writing>` | Audit mode — controls the audit criteria (code quality vs content quality). Default: `software`. |
+| `--sarif` | Write `build-audit.sarif` in SARIF 2.1.0 format alongside `build-audit.md` |
+| `--mcp-config <path>` | Path to MCP server configuration file (Claude engine only) |
+
+### Examples
+
+```bash
+fry audit                                    # Audit current project (high effort, claude)
+fry audit --effort max                       # Maximum rigor audit
+fry audit --effort low                       # Quick single-pass audit
+fry audit --engine codex                     # Audit with Codex engine
+fry audit --sarif                            # Also write SARIF output for tooling
+fry audit --mode writing                     # Audit content quality (writing mode criteria)
+fry audit --project-dir /path/to/project     # Audit a different directory
+```
+
+### Behavior
+
+- If `.fry/epic.md` exists, the audit uses it for context (epic name, effort directives, audit model). CLI flags override epic directives.
+- If no `.fry/` artifacts exist, the audit creates a minimal synthetic context and runs against the raw codebase.
+- The audit follows the same two-level loop as the build audit: discover issues, fix, verify, re-audit. See [Build Audit](build-audit.md) for details on the loop mechanics.
+- On completion, results are committed via git checkpoint.
+- Non-zero exit code if blocking (CRITICAL/HIGH) findings remain unresolved.
+
+---
+
 ## `fry prepare`
 
 Generates `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan. Requires at least one of `plans/plan.md`, `plans/executive.md`, `--user-prompt`, or `--user-prompt-file`.

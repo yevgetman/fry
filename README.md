@@ -189,6 +189,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry replan` | Replan an epic after a deviation |
 | `fry identity` | Print Fry's compiled-in identity (core + disposition) |
 | `fry reflect` | Trigger identity reflection from accumulated memories |
+| `fry audit` | Run a standalone AI-powered build-level audit on any codebase |
 | `fry status` | Show current build state, or archived/worktree build history if no active build |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
 | `fry version` | Print fry version |

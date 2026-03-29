@@ -40,6 +40,8 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Clean/archive build | `fry clean -y --project-dir <dir>` |
 | Triage only | `fry run --triage-only --project-dir <dir>` |
 | File-based prompts | `fry run --confirm-file --project-dir <dir>` |
+| Standalone audit | `fry audit --project-dir <dir>` |
+| Standalone audit (SARIF) | `fry audit --sarif --project-dir <dir>` |
 | Dry run | `fry run --dry-run --project-dir <dir>` |
 
 ## How to Pass Tasks to Fry

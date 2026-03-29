@@ -315,6 +315,7 @@ Final: build audit (if full epic completed) → deferred check re-run → build 
 fry [run] [epic.md] [start] [end]   # Execute sprints (run is default)
 fry prepare [epic_filename]          # Generate .fry/ artifacts from plans
 fry replan                           # Replan after deviation
+fry audit                            # Standalone AI-powered build audit
 fry clean                            # Archive .fry/ + build outputs to .fry-archive/
 fry version                          # Print version
 fry status                           # Show current build state (no LLM call)
