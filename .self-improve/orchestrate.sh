@@ -1234,6 +1234,17 @@ main() {
         run_build_phase
     fi
 
+    # Push any commits on master that were created during this run
+    # (planning checkpoints, build merges, etc.)
+    local unpushed
+    unpushed="$(git -C "$REPO_DIR" rev-list origin/master..master 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$unpushed" -gt 0 ]; then
+        log "Pushing $unpushed unpushed commit(s) to origin/master..."
+        if ! git -C "$REPO_DIR" push origin master 2>&1 | tee -a "$LOG_FILE"; then
+            log "WARNING: Failed to push to origin/master"
+        fi
+    fi
+
     log "==========================================================="
     log "  Orchestrator complete"
     log "==========================================================="
