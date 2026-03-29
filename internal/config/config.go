@@ -73,8 +73,9 @@ const (
 	SummaryFile       = "build-summary.md"
 	SummaryPromptFile = ".fry/summary-prompt.md"
 
-	// Build report constant
+	// Build report constants
 	BuildReportFile = ".fry/build-report.json"
+	BuildStatusFile = ".fry/build-status.json"
 
 	// Build audit constants
 	BuildAuditSARIFFile        = "build-audit.sarif"

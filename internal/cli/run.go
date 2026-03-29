@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/archive"
 	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/color"
@@ -611,6 +612,23 @@ var runCmd = &cobra.Command{
 			frlog.Log("WARNING: could not persist build mode: %v", writeErr)
 		}
 
+		// Initialize machine-readable build status for agent polling.
+		buildStatus := &agent.BuildStatus{
+			Version: 1,
+			Build: agent.BuildInfo{
+				Epic:         ep.Name,
+				Effort:       string(ep.EffortLevel),
+				Engine:       engineName,
+				Mode:         modeStr,
+				TotalSprints: ep.TotalSprints,
+				Status:       "running",
+				StartedAt:    buildStart,
+				GitBranch:    gitBranchFromHead(projectPath),
+			},
+			Sprints: make([]agent.SprintStatus, 0, endSprint-startSprint+1),
+		}
+		writeBuildStatus(projectPath, buildStatus)
+
 		// Initialize observer metacognitive layer
 		observerEnabled := !runNoObserver && !runDryRun && ep.EffortLevel != epic.EffortLow
 		var observerEngine engine.Engine
@@ -658,6 +676,17 @@ var runCmd = &cobra.Command{
 					Data:   map[string]string{"name": spr.Name},
 				})
 			}
+
+			// Update build status for agent polling
+			buildStatus.Build.CurrentSprint = spr.Number
+			sprintStartedAt := time.Now()
+			buildStatus.Sprints = append(buildStatus.Sprints, agent.SprintStatus{
+				Number:    spr.Number,
+				Name:      spr.Name,
+				Status:    "running",
+				StartedAt: &sprintStartedAt,
+			})
+			writeBuildStatus(projectPath, buildStatus)
 
 			if ep.DockerFromSprint > 0 && sprintNum >= ep.DockerFromSprint {
 				if err := docker.EnsureDockerUp(ctx, projectPath, ep.DockerReadyCmd, ep.DockerReadyTimeout); err != nil {
@@ -735,6 +764,8 @@ var runCmd = &cobra.Command{
 			// Layer 1 — Tier C: handle PAUSED result
 			if result.Status == "PAUSED" {
 				frlog.Log("  BUILD PAUSED at sprint %d. Use --continue to resume.", spr.Number)
+				buildStatus.Build.Status = "paused"
+				writeBuildStatus(projectPath, buildStatus)
 				_ = os.WriteFile(filepath.Join(projectPath, config.BuildExitReasonFile), []byte("paused"), 0o644)
 				return nil
 			}
@@ -817,6 +848,10 @@ var runCmd = &cobra.Command{
 				frlog.Log("  WARNING: %d deferred sanity check failures (within %d%% threshold)",
 					len(result.DeferredFailures), ep.MaxFailPercent)
 			}
+
+			// Update build status with sprint result
+			updateBuildStatusSprint(buildStatus, spr.Number, result)
+			writeBuildStatus(projectPath, buildStatus)
 
 			if isPassStatus(result.Status) {
 				// Sprint audit
@@ -904,6 +939,10 @@ var runCmd = &cobra.Command{
 							Data:   auditData,
 						})
 					}
+
+					// Update build status with audit result
+					updateBuildStatusAudit(buildStatus, spr.Number, auditResult)
+					writeBuildStatus(projectPath, buildStatus)
 				}
 
 				frlog.Log("  GIT: checkpoint — sprint %d complete", spr.Number)
@@ -1087,6 +1126,10 @@ var runCmd = &cobra.Command{
 							Data:   reviewData,
 						})
 					}
+
+					// Update build status with review verdict
+					updateBuildStatusReview(buildStatus, spr.Number, string(reviewResult.Verdict))
+					writeBuildStatus(projectPath, buildStatus)
 
 					entry := review.DeviationLogEntry{
 						SprintNum:  spr.Number,
@@ -1333,6 +1376,17 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Update build status with build audit result
+		if buildAuditResult != nil {
+			buildStatus.BuildAudit = &agent.BuildAuditStatus{
+				Ran:      true,
+				Passed:   buildAuditResult.Passed,
+				Blocking: buildAuditResult.Blocking,
+				Findings: buildAuditResult.SeverityCounts,
+			}
+			writeBuildStatus(projectPath, buildStatus)
+		}
+
 		// Observer: build audit event and wake-up
 		if observerEnabled {
 			buildAuditData := map[string]string{"ran": strconv.FormatBool(buildAuditResult != nil)}
@@ -1565,6 +1619,14 @@ var runCmd = &cobra.Command{
 				frlog.Log("  ARCHIVE  build artifacts archived to %s", archivePath)
 			}
 		}
+
+		// Final build status update
+		if exitErr != nil {
+			buildStatus.Build.Status = "failed"
+		} else {
+			buildStatus.Build.Status = "completed"
+		}
+		writeBuildStatus(projectPath, buildStatus)
 
 		// Wait for upload to complete (bounded by upload timeout)
 		if uploadDone != nil {
@@ -2010,6 +2072,126 @@ func writeExitReason(projectDir string, buildErr error, sprintNum int) {
 	if err := os.WriteFile(path, []byte(reason), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "fry: warning: write exit reason: %v\n", err)
 	}
+}
+
+// gitBranchFromHead reads the current branch name from .git/HEAD without a subprocess.
+func gitBranchFromHead(projectDir string) string {
+	data, err := os.ReadFile(filepath.Join(projectDir, ".git", "HEAD"))
+	if err != nil {
+		return ""
+	}
+	ref := strings.TrimSpace(string(data))
+	if strings.HasPrefix(ref, "ref: refs/heads/") {
+		return strings.TrimPrefix(ref, "ref: refs/heads/")
+	}
+	return ""
+}
+
+// writeBuildStatus writes the build status file, logging a warning on failure.
+func writeBuildStatus(projectDir string, status *agent.BuildStatus) {
+	if err := agent.WriteBuildStatus(projectDir, status); err != nil {
+		frlog.Log("WARNING: could not write build status: %v", err)
+	}
+}
+
+// updateBuildStatusSprint updates the build status with a completed sprint's results.
+func updateBuildStatusSprint(status *agent.BuildStatus, sprintNum int, result *sprint.SprintResult) {
+	idx := findSprintStatusIndex(status, sprintNum)
+	if idx < 0 {
+		return
+	}
+	now := time.Now()
+	status.Sprints[idx].Status = result.Status
+	status.Sprints[idx].FinishedAt = &now
+	status.Sprints[idx].DurationSec = result.Duration.Seconds()
+
+	if result.HealAttempts > 0 {
+		outcome := "exhausted"
+		if strings.Contains(result.Status, "deferred") {
+			outcome = "within_threshold"
+		} else if strings.HasPrefix(result.Status, "PASS") {
+			outcome = "healed"
+		}
+		status.Sprints[idx].Alignment = &agent.AlignmentStatus{
+			Attempts: result.HealAttempts,
+			Outcome:  outcome,
+		}
+	}
+
+	if result.VerificationTotalCount > 0 {
+		checks := &agent.SanityCheckStatus{
+			Passed: result.VerificationPassCount,
+			Total:  result.VerificationTotalCount,
+		}
+		for _, cr := range result.VerificationResults {
+			target := cr.Check.Path
+			if target == "" {
+				target = cr.Check.Command
+			}
+			entry := agent.CheckResultEntry{
+				Type:   cr.Check.Type.String(),
+				Target: target,
+				Passed: cr.Passed,
+			}
+			if !cr.Passed && cr.Output != "" {
+				entry.Output = textutil.TruncateUTF8(cr.Output, 512)
+			}
+			checks.Results = append(checks.Results, entry)
+		}
+		status.Sprints[idx].SanityChecks = checks
+	}
+
+	if len(result.DeferredFailures) > 0 {
+		status.Sprints[idx].DeferredFailures = len(result.DeferredFailures)
+	}
+	if result.AuditWarning != "" {
+		status.Sprints[idx].Warnings = append(status.Sprints[idx].Warnings, result.AuditWarning)
+	}
+}
+
+// updateBuildStatusAudit updates a sprint's audit information in the build status.
+func updateBuildStatusAudit(status *agent.BuildStatus, sprintNum int, auditResult *audit.AuditResult) {
+	if auditResult == nil {
+		return
+	}
+	idx := findSprintStatusIndex(status, sprintNum)
+	if idx < 0 {
+		return
+	}
+	outcome := "pass"
+	if auditResult.Blocking {
+		outcome = "failed"
+	} else if !auditResult.Passed {
+		outcome = "advisory"
+	}
+	status.Sprints[idx].Audit = &agent.AuditStatus{
+		Cycles:   auditResult.Iterations,
+		Findings: auditResult.SeverityCounts,
+		Outcome:  outcome,
+	}
+	// Update sprint status if audit failed
+	if auditResult.Blocking {
+		status.Sprints[idx].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
+	}
+}
+
+// updateBuildStatusReview updates a sprint's review verdict in the build status.
+func updateBuildStatusReview(status *agent.BuildStatus, sprintNum int, verdict string) {
+	idx := findSprintStatusIndex(status, sprintNum)
+	if idx < 0 {
+		return
+	}
+	status.Sprints[idx].Review = &agent.ReviewStatus{Verdict: verdict}
+}
+
+// findSprintStatusIndex returns the index of the sprint in the status, or -1.
+func findSprintStatusIndex(status *agent.BuildStatus, sprintNum int) int {
+	for i := range status.Sprints {
+		if status.Sprints[i].Number == sprintNum {
+			return i
+		}
+	}
+	return -1
 }
 
 // resolveMode reconciles the --mode flag with the legacy --planning bool flag.

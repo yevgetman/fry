@@ -45,6 +45,7 @@ your-project/
       events.jsonl                       #     Structured event stream (JSONL)
       scratchpad.md                      #     Working memory (reset each build)
       wake-prompt.md                     #     Transient wake-up prompt (deleted after use)
+    build-status.json                     #   Machine-readable status snapshot for agent polling
     build-logs/                          #   Per-iteration logs
     .fry.lock                            #   Concurrency lock
   build-summary.md                       # Build summary report (persisted in project root)
@@ -106,6 +107,7 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `.fry/git-strategy.txt` | Selected git branching strategy for the build; read by sprint runner | `fry run` at runtime |
 | `build-audit.sarif` | SARIF-format build audit report for tooling integration | `fry run` at runtime |
 | `.fry/build-report.json` | Machine-readable BuildReport JSON; archived on build complete | `fry run` at runtime |
+| `.fry/build-status.json` | Machine-readable build status snapshot; updated atomically after every state change (sprint start/end, audit, review, build audit, build end) for agent polling | `fry run` at runtime |
 
 ### Auto-Generation Behavior
 

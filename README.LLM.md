@@ -164,6 +164,8 @@ fry/
 | `observer/events.jsonl` | Observer event stream (JSONL, reset per build) |
 | `observer/scratchpad.md` | Observer working memory (reset per build) |
 | `observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) |
+| `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change for agent polling |
+| `build-report.json` | Machine-readable BuildReport JSON (written at build end with `--json-report`) |
 | `.fry.lock` | Concurrency lock |
 
 ---

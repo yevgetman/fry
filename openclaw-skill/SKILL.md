@@ -283,6 +283,80 @@ timing. Use this as the primary way to monitor builds.
 - Completed/failed state when expected running: build process died. Check
   `/tmp/fry-out.log` and `.fry/build-logs/` for details.
 
+### Polling build status (file-based)
+
+For continuous monitoring without running a command, read `.fry/build-status.json`
+directly. This file is written atomically after every state change:
+
+```bash
+cat "/path/to/project/.fry/build-status.json"
+```
+
+The file contains:
+
+```json
+{
+  "version": 1,
+  "updated_at": "2026-03-29T10:05:00Z",
+  "build": {
+    "epic": "My Feature",
+    "effort": "high",
+    "engine": "claude",
+    "mode": "software",
+    "git_branch": "fry/my-feature",
+    "total_sprints": 3,
+    "current_sprint": 2,
+    "status": "running",
+    "started_at": "2026-03-29T10:00:00Z"
+  },
+  "sprints": [
+    {
+      "number": 1,
+      "name": "Scaffolding",
+      "status": "PASS (aligned)",
+      "started_at": "2026-03-29T10:00:10Z",
+      "finished_at": "2026-03-29T10:01:00Z",
+      "duration_sec": 50.0,
+      "sanity_checks": {
+        "passed": 3,
+        "total": 3,
+        "results": [
+          { "type": "FILE", "target": "main.go", "passed": true },
+          { "type": "CMD", "target": "go build ./...", "passed": true },
+          { "type": "TEST", "target": "go test ./...", "passed": true }
+        ]
+      },
+      "alignment": { "attempts": 2, "outcome": "healed" },
+      "audit": {
+        "cycles": 1,
+        "findings": { "LOW": 1 },
+        "outcome": "pass"
+      },
+      "review": { "verdict": "CONTINUE" }
+    },
+    {
+      "number": 2,
+      "name": "Core Logic",
+      "status": "running",
+      "started_at": "2026-03-29T10:01:30Z"
+    }
+  ],
+  "build_audit": null
+}
+```
+
+**Key fields for status reporting:**
+- `build.status`: overall build state (`running`, `completed`, `failed`, `paused`)
+- `build.current_sprint`: which sprint is active
+- `sprints[].status`: per-sprint outcome (`running`, `PASS`, `PASS (aligned)`, `FAIL`, etc.)
+- `sprints[].sanity_checks`: pass/fail per check with type and target
+- `sprints[].alignment.attempts`: how many alignment iterations were needed
+- `sprints[].audit.outcome`: `pass`, `failed`, or `advisory`
+- `build_audit`: final holistic audit result (present after build audit runs)
+
+Prefer this file over `fry status --json` when monitoring a running build —
+it requires no subprocess and updates in real time.
+
 ## Reading Build Logs
 
 Build logs are in `.fry/build-logs/`. Read the most recent:
@@ -575,6 +649,7 @@ Key event types: `sprint_start`, `sprint_complete`, `alignment_complete`,
 | `.fry/epic-progress.txt` | Compacted summaries of completed sprints |
 | `.fry/build-logs/` | Sprint, heal, and audit log files |
 | `.fry/build-report.json` | Structured build report (when `--json-report`) |
+| `.fry/build-status.json` | Machine-readable build status snapshot (updated every state change) |
 | `.fry/sprint-audit.txt` | Current sprint audit findings (transient) |
 | `.fry/observer/events.jsonl` | Full event stream |
 | `.fry/deviation-log.md` | Sprint review deviation history |
