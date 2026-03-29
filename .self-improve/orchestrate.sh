@@ -812,7 +812,7 @@ HEALPROMPT
     else
         log "No manifest file — falling back to sprint name parsing"
         worked_numbers="$(grep "STARTING SPRINT" "$LOG_FILE" 2>/dev/null \
-            | grep -oE '#[0-9]+' \
+            | { grep -oE '#[0-9]+' || true; } \
             | tr -d '#' \
             | sort -u \
             | tr '\n' ' ')"
