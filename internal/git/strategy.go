@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/yevgetman/fry/internal/config"
 )
+
+// execCommandContext is a variable to allow test overrides. Defaults to exec.CommandContext.
+var execCommandContext = exec.CommandContext
 
 // StrategyOpts configures SetupStrategy.
 type StrategyOpts struct {
@@ -223,6 +227,71 @@ func DetectExistingSetupWith(ctx context.Context, projectDir, branchName string,
 }
 
 // PersistStrategy writes the strategy setup to a file for --continue detection.
+// MergeAndCleanupWorktree merges the worktree branch into the original branch,
+// removes the worktree, deletes the branch, and cleans up the strategy file.
+// This should be called after a successful build that used the worktree strategy.
+func MergeAndCleanupWorktree(ctx context.Context, setup *StrategySetup) error {
+	return MergeAndCleanupWorktreeWith(ctx, setup, DefaultExecutor)
+}
+
+// MergeAndCleanupWorktreeWith is like MergeAndCleanupWorktree but uses the provided Executor.
+func MergeAndCleanupWorktreeWith(ctx context.Context, setup *StrategySetup, ex Executor) error {
+	if setup == nil || !setup.IsWorktree {
+		return nil
+	}
+
+	origDir := setup.OriginalDir
+	branchName := setup.BranchName
+	origBranch := setup.OriginalBranch
+	if origBranch == "" {
+		origBranch = "main"
+	}
+
+	// 1. Ensure we're on the original branch in the main repo
+	if current := ex.CurrentBranch(ctx, origDir); current != origBranch {
+		if err := ex.Checkout(ctx, origDir, origBranch); err != nil {
+			return fmt.Errorf("checkout %s before merge: %w", origBranch, err)
+		}
+	}
+
+	// 2. Merge the worktree branch (fast-forward when possible)
+	if err := runGit(ctx, origDir, "merge", branchName, "--no-edit"); err != nil {
+		return fmt.Errorf("merge %s into %s: %w", branchName, origBranch, err)
+	}
+
+	// 3. Remove the worktree (--force to handle untracked .fry files)
+	if err := runGit(ctx, origDir, "worktree", "remove", "--force", setup.WorkDir); err != nil {
+		// Non-fatal: directory may already be gone
+		fmt.Fprintf(os.Stderr, "fry: warning: worktree remove: %v\n", err)
+	}
+
+	// 4. Prune stale worktree references
+	_ = ex.WorktreePrune(ctx, origDir)
+
+	// 5. Delete the branch (safe delete — it's merged)
+	if err := runGit(ctx, origDir, "branch", "-d", branchName); err != nil {
+		// Non-fatal: branch may not exist
+		fmt.Fprintf(os.Stderr, "fry: warning: branch delete: %v\n", err)
+	}
+
+	// 6. Remove stale git-strategy.txt
+	_ = os.Remove(filepath.Join(origDir, config.GitStrategyFile))
+
+	return nil
+}
+
+// runGit is a thin helper for one-off git commands not in the Executor interface.
+func runGit(ctx context.Context, dir string, args ...string) error {
+	allArgs := append([]string{}, args...)
+	cmd := execCommandContext(ctx, "git", allArgs...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 func PersistStrategy(originalDir string, setup *StrategySetup) error {
 	path := filepath.Join(originalDir, config.GitStrategyFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

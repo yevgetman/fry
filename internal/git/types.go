@@ -61,6 +61,15 @@ type StrategySetup struct {
 	cleanedUp bool
 }
 
+// MarkCleanedUp suppresses the deferred Cleanup message. Call this after
+// a successful worktree merge to prevent Cleanup from printing a stale
+// "worktree preserved" message.
+func (s *StrategySetup) MarkCleanedUp() {
+	if s != nil {
+		s.cleanedUp = true
+	}
+}
+
 // Cleanup performs any necessary teardown. For worktrees, it logs the
 // worktree path for the user but does not auto-remove it. For branches,
 // it is a no-op. Safe to call multiple times.

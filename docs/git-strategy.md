@@ -77,12 +77,16 @@ When strategy is `worktree`:
 1. **Creation** -- a git worktree is created at `.fry-worktrees/<slug>/` with a new branch `fry/<slug>`
 2. **Artifact copy** -- `.fry/` and `plans/` are copied from the original project directory into the worktree so the sprint runner finds all build artifacts
 3. **Build execution** -- all sprint operations (agent runs, sanity checks, alignment, audit) happen inside the worktree directory
-4. **Preservation** -- after the build completes, the worktree is preserved (not auto-removed). Fry prints the path and a removal command:
+4. **Auto-merge on success** -- when the build completes successfully, Fry automatically merges the worktree branch into the original branch, removes the worktree, deletes the branch, and cleans up the strategy file. The log shows:
+   ```
+     GIT: merging worktree branch fry/my-rest-api into main...
+     GIT: worktree merged and cleaned up
+   ```
+5. **Preservation on failure** -- if the build fails, the worktree is preserved for inspection. Fry prints the path and a removal command:
    ```
      GIT: worktree preserved at .fry-worktrees/my-rest-api
           To remove: git worktree remove .fry-worktrees/my-rest-api
    ```
-5. **Manual cleanup** -- remove with `git worktree remove <path>` when you are done reviewing the work
 
 The `.fry-worktrees/` directory is listed in `.gitignore`.
 

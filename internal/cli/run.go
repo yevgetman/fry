@@ -1622,6 +1622,17 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Merge worktree branch on successful completion
+		if exitErr == nil && strategySetup != nil && strategySetup.IsWorktree {
+			frlog.Log("  GIT: merging worktree branch %s into %s...", strategySetup.BranchName, strategySetup.OriginalBranch)
+			if mergeErr := git.MergeAndCleanupWorktree(ctx, strategySetup); mergeErr != nil {
+				frlog.Log("WARNING: worktree merge failed: %v", mergeErr)
+			} else {
+				frlog.Log("  GIT: worktree merged and cleaned up")
+				strategySetup.MarkCleanedUp() // prevent deferred Cleanup from printing stale message
+			}
+		}
+
 		// Final build status update
 		if exitErr != nil {
 			buildStatus.Build.Status = "failed"

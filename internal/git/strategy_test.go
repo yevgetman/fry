@@ -490,3 +490,97 @@ func TestCheckoutBranchWith_Error(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "branch not found")
 }
+
+func TestMergeAndCleanupWorktree(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	// Initialize a real git repo with an initial commit
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %s: %s", strings.Join(args, " "), string(out))
+	}
+	run("init")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "test")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("init"), 0o644))
+	run("add", "README.md")
+	run("commit", "-m", "initial")
+
+	// Create a worktree with a branch
+	branchName := "fry/test-feature"
+	worktreeDir := filepath.Join(dir, ".fry-worktrees", "test-feature")
+	require.NoError(t, os.MkdirAll(filepath.Dir(worktreeDir), 0o755))
+	run("worktree", "add", "-b", branchName, worktreeDir)
+
+	// Add a commit in the worktree
+	require.NoError(t, os.WriteFile(filepath.Join(worktreeDir, "output.md"), []byte("essay"), 0o644))
+	wtRun := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = worktreeDir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %s: %s", strings.Join(args, " "), string(out))
+	}
+	wtRun("add", "output.md")
+	wtRun("commit", "-m", "add output")
+
+	// Write strategy file
+	setup := &StrategySetup{
+		WorkDir:        worktreeDir,
+		OriginalDir:    dir,
+		BranchName:     branchName,
+		OriginalBranch: "main",
+		Strategy:       StrategyWorktree,
+		IsWorktree:     true,
+	}
+	require.NoError(t, PersistStrategy(dir, setup))
+
+	// Merge and cleanup
+	err := MergeAndCleanupWorktree(ctx, setup)
+	require.NoError(t, err)
+
+	// Verify: output.md now exists on main
+	_, err = os.Stat(filepath.Join(dir, "output.md"))
+	assert.NoError(t, err, "output.md should exist on main after merge")
+
+	// Verify: worktree is removed
+	_, err = os.Stat(worktreeDir)
+	assert.True(t, os.IsNotExist(err), "worktree directory should be removed")
+
+	// Verify: branch is deleted
+	cmd := exec.CommandContext(ctx, "git", "branch", "--list", branchName)
+	cmd.Dir = dir
+	out, _ := cmd.Output()
+	assert.Empty(t, strings.TrimSpace(string(out)), "branch should be deleted")
+
+	// Verify: strategy file is removed
+	_, err = os.Stat(filepath.Join(dir, config.GitStrategyFile))
+	assert.True(t, os.IsNotExist(err), "git-strategy.txt should be removed")
+}
+
+func TestMergeAndCleanupWorktree_NilSetup(t *testing.T) {
+	t.Parallel()
+	assert.NoError(t, MergeAndCleanupWorktree(context.Background(), nil))
+}
+
+func TestMergeAndCleanupWorktree_NonWorktree(t *testing.T) {
+	t.Parallel()
+	setup := &StrategySetup{IsWorktree: false}
+	assert.NoError(t, MergeAndCleanupWorktree(context.Background(), setup))
+}
+
+func TestMarkCleanedUp(t *testing.T) {
+	t.Parallel()
+
+	setup := &StrategySetup{IsWorktree: true, WorkDir: "/tmp/fake"}
+	setup.MarkCleanedUp()
+	// Cleanup should be a no-op after MarkCleanedUp
+	err := setup.Cleanup()
+	assert.NoError(t, err)
+}
