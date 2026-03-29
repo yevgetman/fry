@@ -166,20 +166,33 @@ fry run --triage-only --project-dir /path/to/project
 fry status --json --project-dir /path/to/project
 ```
 
-If no build is active, start as a **detached background process**:
+### How to launch builds
 
-```bash
-nohup fry run --project-dir /path/to/project \
-  --json-report --telemetry \
-  > /dev/null 2>/tmp/fry-start.log &
-echo "PID: $!"
+**Always use a subagent to run Fry builds.** Do not use `nohup ... &` or plain
+`cmd &` from a non-interactive shell — the exec environment's ephemeral shell
+will clean up backgrounded processes unpredictably.
+
+**Use sessions_spawn:**
+
+```
+sessions_spawn({
+  task: "Run this command and report the exit code and last 30 lines of output when done:\n\nfry run --project-dir /path/to/project --json-report --telemetry 2>&1 | tee /tmp/fry-out.log",
+  runtime: "subagent",
+  mode: "run",
+  runTimeoutSeconds: 600
+})
 ```
 
-Verify it launched:
+**Additional note for writing mode:** Always pass `--no-project-overview` to
+suppress the interactive `Proceed? [y/N]` confirmation prompt that Fry shows
+after generating executive context. Without it, the process will block on stdin
+and die silently in a non-interactive shell.
 
 ```bash
-sleep 2 && cat /tmp/fry-start.log
-fry status --json --project-dir /path/to/project
+fry run --project-dir /path/to/project \
+  --mode writing \
+  --no-project-overview \
+  --json-report --telemetry
 ```
 
 ### Key flags
@@ -275,7 +288,7 @@ timing. Use this as the primary way to monitor builds.
 
 - Non-zero exit code: `.fry/` may not exist or project path is wrong.
 - Completed/failed state when expected running: build process died. Check
-  `/tmp/fry-start.log` and `.fry/build-logs/` for details.
+  `/tmp/fry-out.log` and `.fry/build-logs/` for details.
 
 ## Reading Build Logs
 
@@ -509,10 +522,15 @@ Work is checkpointed via git. Resume with `fry run --continue`.
 | Heal-only | `--resume` | Skip iterations, go straight to sanity checks + alignment. |
 | From sprint N | `--sprint N` | Fresh start from specific sprint number. |
 
-```bash
-nohup fry run --continue --project-dir /path/to/project \
-  --json-report --telemetry \
-  > /dev/null 2>/tmp/fry-resume.log &
+Use `sessions_spawn` to resume, same as starting a build:
+
+```
+sessions_spawn({
+  task: "Run this command and report the exit code and last 30 lines of output when done:\n\nfry run --continue --project-dir /path/to/project --json-report --telemetry 2>&1 | tee /tmp/fry-out.log",
+  runtime: "subagent",
+  mode: "run",
+  runTimeoutSeconds: 600
+})
 ```
 
 Resume auto-detects the build mode (software/planning/writing) and git
@@ -591,8 +609,8 @@ and removes the `.fry/` directory. The project-root outputs (`build-summary.md`,
 
 ## Behavior Guidelines
 
-- **Always run builds detached** (`nohup ... &`) so they don't block.
-- **Always redirect stderr** to a temp file when starting builds.
+- **Always use `sessions_spawn`** to run Fry builds — never `nohup` or `&`.
+- **Always pass `--no-project-overview`** for writing mode builds to avoid stdin blocking.
 - **Check status before starting** — verify no build is active first.
 - **Use `fry status --json`** as the primary monitoring tool.
 - **Atomic file writes** for directives: write to `.tmp` then `mv`.
