@@ -13,8 +13,6 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 )
 
-// execCommandContext is a variable to allow test overrides. Defaults to exec.CommandContext.
-var execCommandContext = exec.CommandContext
 
 // StrategyOpts configures SetupStrategy.
 type StrategyOpts struct {
@@ -226,7 +224,6 @@ func DetectExistingSetupWith(ctx context.Context, projectDir, branchName string,
 	return nil, nil
 }
 
-// PersistStrategy writes the strategy setup to a file for --continue detection.
 // MergeAndCleanupWorktree merges the worktree branch into the original branch,
 // removes the worktree, deletes the branch, and cleans up the strategy file.
 // This should be called after a successful build that used the worktree strategy.
@@ -243,6 +240,10 @@ func MergeAndCleanupWorktreeWith(ctx context.Context, setup *StrategySetup, ex E
 	origDir := setup.OriginalDir
 	branchName := setup.BranchName
 	origBranch := setup.OriginalBranch
+	if origBranch == "" {
+		// Fallback: detect current branch of the original repo
+		origBranch = ex.CurrentBranch(ctx, origDir)
+	}
 	if origBranch == "" {
 		origBranch = "main"
 	}
@@ -282,8 +283,7 @@ func MergeAndCleanupWorktreeWith(ctx context.Context, setup *StrategySetup, ex E
 
 // runGit is a thin helper for one-off git commands not in the Executor interface.
 func runGit(ctx context.Context, dir string, args ...string) error {
-	allArgs := append([]string{}, args...)
-	cmd := execCommandContext(ctx, "git", allArgs...)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -292,13 +292,14 @@ func runGit(ctx context.Context, dir string, args ...string) error {
 	return nil
 }
 
+// PersistStrategy writes the strategy setup to a file for --continue detection.
 func PersistStrategy(originalDir string, setup *StrategySetup) error {
 	path := filepath.Join(originalDir, config.GitStrategyFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create dir for git strategy file: %w", err)
 	}
-	content := fmt.Sprintf("strategy=%s\nbranch=%s\nworkdir=%s\noriginaldir=%s\n",
-		setup.Strategy, setup.BranchName, setup.WorkDir, setup.OriginalDir)
+	content := fmt.Sprintf("strategy=%s\nbranch=%s\nworkdir=%s\noriginaldir=%s\noriginalbranch=%s\n",
+		setup.Strategy, setup.BranchName, setup.WorkDir, setup.OriginalDir, setup.OriginalBranch)
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
@@ -334,6 +335,8 @@ func ReadPersistedStrategy(projectDir string) (*StrategySetup, error) {
 			setup.WorkDir = val
 		case "originaldir":
 			setup.OriginalDir = val
+		case "originalbranch":
+			setup.OriginalBranch = val
 		}
 	}
 
