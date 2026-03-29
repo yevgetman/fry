@@ -41,40 +41,75 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Triage only | `fry run --triage-only --project-dir <dir>` |
 | Dry run | `fry run --dry-run --project-dir <dir>` |
 
-## Project Setup
+## How to Pass Tasks to Fry
 
-Before running a build, the project needs input files. Fry accepts three
-starting points (from most to least structured):
+**Let Fry handle its own planning.** Do not generate `plans/plan.md` or
+`plans/executive.md` unless the user explicitly asks you to. Fry has its own
+triage, prepare, and epic generation pipeline — your job is to pass the task
+description and let Fry do the rest.
 
-### Option A: Write a plan file
+### Small tasks: use `--user-prompt`
 
-Create `plans/plan.md` with a description of what to build. Fry will generate
-the epic, sanity checks, and agent instructions from it.
-
-```bash
-mkdir -p /path/to/project/plans
-```
-
-Then write `plans/plan.md` describing the desired outcome. For high-level
-strategic context, also create `plans/executive.md`.
-
-### Option B: Use a user prompt (no files needed)
+For straightforward requests, pass the task description directly:
 
 ```bash
 fry run --project-dir /path/to/project \
-  --user-prompt "Build a REST API for managing bookmarks with SQLite storage"
+  --user-prompt "Add rate limiting to the API endpoints" \
+  --json-report --telemetry
 ```
 
-Fry will triage, prepare, and run from the prompt alone.
+Fry will triage, prepare, and run from the prompt alone. No plan files needed.
 
-### Option C: Provide a user prompt file
+### Larger tasks: use `--user-prompt-file`
+
+When the task description is longer or multi-part, write it to a temp file
+and pass it via `--user-prompt-file`:
 
 ```bash
+cat <<'PROMPT' > /tmp/fry-task.md
+## Task
+Refactor the authentication system to support OAuth2.
+
+## Requirements
+- Replace session-based auth with JWT tokens
+- Add Google and GitHub OAuth providers
+- Migrate existing user sessions
+- Update all API middleware
+PROMPT
+
 fry run --project-dir /path/to/project \
-  --user-prompt-file /path/to/prompt.md
+  --user-prompt-file /tmp/fry-task.md \
+  --json-report --telemetry
 ```
+
+### Complex builds: pre-scaffolded artifacts
+
+For complex builds, the user will have already set up `plans/plan.md`,
+`plans/executive.md`, `assets/`, and `media/` in the project, or will
+explicitly ask you to scaffold them. In this case, just run Fry without
+a user prompt — it picks up the plan files automatically:
+
+```bash
+fry run --project-dir /path/to/project --json-report --telemetry
+```
+
+### Decision guide
+
+| Scenario | What to do |
+|----------|-----------|
+| User says "build X" or "fix Y" | Use `--user-prompt` with their request |
+| User gives a detailed multi-part task | Write to temp file, use `--user-prompt-file` |
+| `plans/plan.md` already exists in project | Run without `--user-prompt` — Fry uses the plan |
+| User says "create a plan for..." | Then and only then write `plans/plan.md` |
+| User says "set up the executive summary" | Then and only then write `plans/executive.md` |
+
+**Never generate plan.md or executive.md on your own initiative.** These are
+user-owned artifacts. If the user hasn't asked for them and they don't exist,
+use `--user-prompt` or `--user-prompt-file` instead.
 
 ### Supplementary inputs
+
+These directories are user-managed. Only populate them if the user asks:
 
 | Directory | Purpose | What goes in |
 |-----------|---------|--------------|
@@ -88,7 +123,8 @@ fry init --project-dir /path/to/project
 ```
 
 Creates `plans/`, `assets/`, `media/` directories with a template plan file,
-initializes git, and configures `.gitignore` for Fry artifacts.
+initializes git, and configures `.gitignore` for Fry artifacts. Only run this
+when the user asks to initialize a new Fry project.
 
 ## Prepare Phase
 
