@@ -565,6 +565,50 @@ fry replan --project-dir /path/to/project
 After a build completes, Fry generates `build-summary.md` at the project root
 with a sprint status table, key findings, and overall outcome.
 
+## Standalone Audit
+
+Run `fry audit` for an on-demand AI-powered code audit on any codebase — no
+build required:
+
+```bash
+# Audit current project
+fry audit --project-dir /path/to/project
+
+# With SARIF output for tooling
+fry audit --sarif --project-dir /path/to/project
+
+# Maximum rigor
+fry audit --effort max --project-dir /path/to/project
+
+# Content audit (writing mode criteria)
+fry audit --mode writing --project-dir /path/to/project
+```
+
+**Key flags:**
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--effort` | `high` | Audit rigor: low (quick), medium, high, max (thorough) |
+| `--engine` | `claude` | AI engine |
+| `--model` | (auto) | Override agent model |
+| `--mode` | `software` | Audit criteria: software (code quality) or writing (content quality) |
+| `--sarif` | off | Write `build-audit.sarif` in SARIF 2.1.0 format |
+| `--mcp-config` | (none) | MCP server config (Claude only) |
+
+**Behavior:**
+- Works on any directory — completed Fry builds, partial builds, or non-Fry projects
+- Uses existing `.fry/epic.md` for context when available; creates synthetic context otherwise
+- Runs the same two-level audit loop as the build pipeline (find → fix → verify → re-audit)
+- Writes `build-audit.md` to the project root
+- Git-checkpoints the results
+- Returns non-zero exit code when blocking (CRITICAL/HIGH) findings remain
+
+**Use cases:**
+- Re-run the audit after a build was interrupted during the audit phase
+- Quality gate in CI pipelines
+- Post-edit review after manual changes
+- Audit any codebase that was never built with Fry
+
 ## Epic Format
 
 Fry uses epic files (`.fry/epic.md`) to define sprint structure. These are
