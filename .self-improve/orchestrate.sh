@@ -1207,6 +1207,10 @@ main() {
     log "Pulling latest from origin..."
     git pull origin master --ff-only || die "git pull failed — resolve conflicts manually"
 
+    # Record HEAD so we can roll back if the build fails
+    local pre_run_head
+    pre_run_head="$(git -C "$REPO_DIR" rev-parse HEAD)"
+
     # Build latest fry
     log "Building latest fry..."
     if ! make -C "$REPO_DIR" install 2>&1 | tee -a "$LOG_FILE"; then
@@ -1232,6 +1236,22 @@ main() {
         log "Skipping build phase (--skip-build)"
     else
         run_build_phase
+    fi
+
+    # If the build failed, reset master to pre-run state to remove partial commits
+    # (planning checkpoints, etc.). The build work in the worktree is already gone.
+    local final_status=""
+    if [ -f "$LAST_BUILD_STATUS" ]; then
+        final_status="$(cat "$LAST_BUILD_STATUS")"
+    fi
+    local current_head
+    current_head="$(git -C "$REPO_DIR" rev-parse HEAD)"
+
+    if [ "$final_status" = "failure" ] && [ "$current_head" != "$pre_run_head" ]; then
+        local rollback_count
+        rollback_count="$(git -C "$REPO_DIR" rev-list "$pre_run_head"..HEAD | wc -l | tr -d ' ')"
+        log "Build failed — rolling back $rollback_count commit(s) on master to pre-run state"
+        git -C "$REPO_DIR" reset --hard "$pre_run_head" 2>&1 | tee -a "$LOG_FILE"
     fi
 
     # Push any commits on master that were created during this run
