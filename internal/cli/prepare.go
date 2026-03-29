@@ -24,6 +24,7 @@ var (
 	prepareReview         bool
 	prepareYes            bool
 	prepareMCPConfig      string
+	prepareConfirmFile    bool
 )
 
 var prepareCmd = &cobra.Command{
@@ -108,6 +109,7 @@ var prepareCmd = &cobra.Command{
 			ValidateOnly:        false,
 			SkipProjectOverview: noProjectOverview || noSanityCheck,
 			AutoAccept:          prepareYes,
+			ConfirmFile:         prepareConfirmFile,
 			Mode:                mode,
 			EffortLevel:         effortLevel,
 			EnableReview:        reviewVal,
@@ -139,4 +141,5 @@ func init() {
 	prepareCmd.Flags().BoolVar(&prepareReview, "review", false, "Enable sprint review between sprints")
 	prepareCmd.Flags().StringVar(&prepareMCPConfig, "mcp-config", "", "Path to MCP server configuration file (Claude engine only)")
 	prepareCmd.Flags().BoolVarP(&prepareYes, "yes", "y", false, "Auto-accept all interactive confirmation prompts")
+	prepareCmd.Flags().BoolVar(&prepareConfirmFile, "confirm-file", false, "Use file-based interactive prompts (.fry/confirm-prompt.json) instead of stdin")
 }

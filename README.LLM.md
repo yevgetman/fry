@@ -166,6 +166,8 @@ fry/
 | `observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) |
 | `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change for agent polling |
 | `build-report.json` | Machine-readable BuildReport JSON (written at build end with `--json-report`) |
+| `confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, `--confirm-file`) |
+| `confirm-response.json` | Agent response to interactive prompt (transient, `--confirm-file`) |
 | `.fry.lock` | Concurrency lock |
 
 ---
@@ -343,6 +345,7 @@ Key flags:
   --no-color                         # Disable colored output (also: NO_COLOR env, TERM=dumb)
   --sarif                            # Write build-audit.sarif in SARIF 2.1.0 format alongside build-audit.md
   --json-report                      # Write build-report.json with structured sprint results
+  --confirm-file                     # File-based interactive prompts for agent LLMs
   --show-tokens                      # Print per-sprint token usage summary to stderr after the run
   --telemetry                        # Enable experience upload to consciousness API
   --no-telemetry                     # Disable experience upload

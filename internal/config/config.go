@@ -140,6 +140,12 @@ const (
 	// This is intentionally compiled into the binary (same pattern as Sentry DSNs).
 	ConsciousnessWriteKey = "c23060cb24e9133926314894db50089b03791731cae04d7f8ba96dc01c5330d0"
 
+	// File-based interactive prompt constants
+	ConfirmPromptFile   = ".fry/confirm-prompt.json"
+	ConfirmResponseFile = ".fry/confirm-response.json"
+	ConfirmPollInterval = 2  // seconds between polls for response file
+	ConfirmTimeoutSec   = 300 // 5 minutes
+
 	// Build steering constants (Layer 1: file-based IPC)
 	AgentDirectiveFile = ".fry/agent-directive.md"
 	AgentHoldFile      = ".fry/agent-hold-after-sprint"

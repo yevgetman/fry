@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yevgetman/fry/internal/color"
+	"github.com/yevgetman/fry/internal/confirm"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
@@ -79,6 +80,37 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 		if opts.AutoAccept {
 			fmt.Fprintln(stdout, "Does this look right? [Y/n/a] (a = adjust) Y (auto-accepted)")
 			return &OverviewResult{UserPrompt: userPrompt, EffortLevel: effortLevel, EnableReview: enableReview}, nil
+		}
+
+		if opts.ConfirmFile {
+			resp, fileErr := confirmOverviewViaFile(ctx, opts.ProjectDir, summary)
+			if fileErr != nil {
+				return nil, fileErr
+			}
+			switch resp.Action {
+			case "accept":
+				return &OverviewResult{UserPrompt: userPrompt, EffortLevel: effortLevel, EnableReview: enableReview}, nil
+			case "adjust":
+				if v, ok := resp.Adjustments["user_prompt"].(string); ok && v != "" {
+					if strings.TrimSpace(userPrompt) == "" {
+						userPrompt = v
+					} else {
+						userPrompt = userPrompt + "\n\n" + v
+					}
+				}
+				if v, ok := resp.Adjustments["effort"].(string); ok && v != "" {
+					if parsed, parseErr := epic.ParseEffortLevel(v); parseErr == nil {
+						effortLevel = parsed
+					}
+				}
+				if v, ok := resp.Adjustments["enable_review"].(bool); ok {
+					enableReview = v
+				}
+				frylog.Log("Regenerating project summary with adjustments...")
+				continue
+			default:
+				return nil, ErrProjectOverviewDeclined
+			}
 		}
 
 		fmt.Fprint(stdout, "Does this look right? [Y/n/a] (a = adjust) ")
@@ -207,6 +239,29 @@ func fieldOrUnknown(v string) string {
 		return "(unknown)"
 	}
 	return v
+}
+
+func confirmOverviewViaFile(ctx context.Context, projectDir string, summary OverviewSummary) (*confirm.Response, error) {
+	p := &confirm.Prompt{
+		Type:    confirm.PromptProjectOverview,
+		Message: "Review the AI-generated project summary. Accept, adjust, or reject.",
+		Data: map[string]any{
+			"project_type":    summary.ProjectType,
+			"goal":            summary.Goal,
+			"expected_output": summary.ExpectedOutput,
+			"key_topics":      summary.KeyTopics,
+			"effort_estimate": summary.EffortEstimate,
+		},
+		Options: []string{"accept", "adjust", "reject"},
+	}
+	if err := confirm.WritePrompt(projectDir, p); err != nil {
+		return nil, fmt.Errorf("project overview confirm: %w", err)
+	}
+	resp, err := confirm.WaitForResponse(ctx, projectDir)
+	if err != nil {
+		return nil, fmt.Errorf("project overview confirm: %w", err)
+	}
+	return resp, nil
 }
 
 func buildOverviewPrompt(persona, planContent, executiveContent, userPrompt string, effort epic.EffortLevel, mediaManifest, assetsSection string) string {

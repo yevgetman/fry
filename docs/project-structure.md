@@ -46,6 +46,8 @@ your-project/
       scratchpad.md                      #     Working memory (reset each build)
       wake-prompt.md                     #     Transient wake-up prompt (deleted after use)
     build-status.json                     #   Machine-readable status snapshot for agent polling
+    confirm-prompt.json                  #   File-based interactive prompt (transient, --confirm-file)
+    confirm-response.json                #   File-based interactive response (transient, --confirm-file)
     build-logs/                          #   Per-iteration logs
     .fry.lock                            #   Concurrency lock
   build-summary.md                       # Build summary report (persisted in project root)
@@ -108,6 +110,8 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `build-audit.sarif` | SARIF-format build audit report for tooling integration | `fry run` at runtime |
 | `.fry/build-report.json` | Machine-readable BuildReport JSON; archived on build complete | `fry run` at runtime |
 | `.fry/build-status.json` | Machine-readable build status snapshot; updated atomically after every state change (sprint start/end, audit, review, build audit, build end) for agent polling | `fry run` at runtime |
+| `.fry/confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, deleted after response) | `fry run --confirm-file` or `fry prepare --confirm-file` |
+| `.fry/confirm-response.json` | Agent's response to the prompt (transient, deleted after read) | Written by agent |
 
 ### Auto-Generation Behavior
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/assets"
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/confirm"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
@@ -30,6 +31,7 @@ type PrepareOpts struct {
 	ValidateOnly     bool
 	SkipProjectOverview  bool
 	AutoAccept       bool
+	ConfirmFile      bool // use file-based prompts instead of stdin
 	EngineFactory    func(string) (engine.Engine, error)       // optional; defaults to engine.NewEngine
 	LogFunc          func(format string, args ...interface{})   // optional; defaults to frylog.Log
 	Mode             Mode
@@ -376,6 +378,23 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 	fmt.Fprintln(stdout, "─────────────────────────────────────────────────────────────────")
 	if opts.SkipProjectOverview || opts.AutoAccept {
 		fmt.Fprintln(stdout, "Proceed with this executive context? [y/N] y (auto-accepted)")
+	} else if opts.ConfirmFile {
+		p := &confirm.Prompt{
+			Type:    confirm.PromptExecutiveContext,
+			Message: "Review the generated executive context. Accept or reject.",
+			Data:    map[string]any{"executive_text": output},
+			Options: []string{"accept", "reject"},
+		}
+		if writeErr := confirm.WritePrompt(opts.ProjectDir, p); writeErr != nil {
+			return fmt.Errorf("run prepare: confirm executive: %w", writeErr)
+		}
+		resp, waitErr := confirm.WaitForResponse(ctx, opts.ProjectDir)
+		if waitErr != nil {
+			return fmt.Errorf("run prepare: confirm executive: %w", waitErr)
+		}
+		if resp.Action != "accept" {
+			return ErrUserDeclined
+		}
 	} else {
 		fmt.Fprint(stdout, "Proceed with this executive context? [y/N] ")
 

@@ -2,11 +2,13 @@ package triage
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/yevgetman/fry/internal/color"
+	"github.com/yevgetman/fry/internal/confirm"
 	"github.com/yevgetman/fry/internal/epic"
 )
 
@@ -15,10 +17,13 @@ var ErrTriageDeclined = fmt.Errorf("user declined triage classification")
 
 // ConfirmOpts configures the interactive triage confirmation prompt.
 type ConfirmOpts struct {
-	Decision   *TriageDecision
-	Stdin      io.Reader
-	Stdout     io.Writer
-	AutoAccept bool
+	Decision    *TriageDecision
+	Stdin       io.Reader
+	Stdout      io.Writer
+	AutoAccept  bool
+	ConfirmFile bool           // use file-based prompt instead of stdin
+	ProjectDir  string         // required when ConfirmFile is true
+	Ctx         context.Context // required when ConfirmFile is true
 }
 
 // ConfirmResult holds the (possibly adjusted) values from the confirmation prompt.
@@ -44,6 +49,10 @@ func ConfirmDecision(opts ConfirmOpts) (*ConfirmResult, error) {
 			Complexity:  d.Complexity,
 			EffortLevel: d.EffortLevel,
 		}, nil
+	}
+
+	if opts.ConfirmFile {
+		return confirmTriageViaFile(opts.Ctx, opts.ProjectDir, d)
 	}
 
 	fmt.Fprint(stdout, "Accept this classification? [Y/n/a] (a = adjust) ")
@@ -179,6 +188,72 @@ func actionDescription(c Complexity, sprintCount int) string {
 		return "Run full prepare pipeline (3-4 LLM calls)"
 	default:
 		return "Unknown"
+	}
+}
+
+func confirmTriageViaFile(ctx context.Context, projectDir string, d *TriageDecision) (*ConfirmResult, error) {
+	p := &confirm.Prompt{
+		Type:    confirm.PromptTriageConfirm,
+		Message: fmt.Sprintf("Triage classified task as %s (effort: %s, sprints: %d). Reason: %s", d.Complexity, d.EffortLevel.String(), d.SprintCount, d.Reason),
+		Data: map[string]any{
+			"complexity":   string(d.Complexity),
+			"effort":       d.EffortLevel.String(),
+			"sprints":      d.SprintCount,
+			"reason":       d.Reason,
+			"git_strategy": gitStrategyLabel(d.Complexity),
+		},
+		Options: []string{"accept", "adjust", "reject"},
+	}
+
+	if err := confirm.WritePrompt(projectDir, p); err != nil {
+		return nil, fmt.Errorf("triage confirm: %w", err)
+	}
+
+	resp, err := confirm.WaitForResponse(ctx, projectDir)
+	if err != nil {
+		return nil, fmt.Errorf("triage confirm: %w", err)
+	}
+
+	switch resp.Action {
+	case "accept":
+		return &ConfirmResult{
+			Complexity:  d.Complexity,
+			EffortLevel: d.EffortLevel,
+		}, nil
+
+	case "adjust":
+		result := &ConfirmResult{
+			Complexity:  d.Complexity,
+			EffortLevel: d.EffortLevel,
+		}
+		if v, ok := resp.Adjustments["complexity"].(string); ok && v != "" {
+			parsed, parseErr := parseComplexityInput(v)
+			if parseErr == nil {
+				result.Complexity = parsed
+			}
+		}
+		if v, ok := resp.Adjustments["effort"].(string); ok && v != "" {
+			parsed, parseErr := epic.ParseEffortLevel(v)
+			if parseErr == nil {
+				if parsed == epic.EffortMax && result.Complexity != ComplexityComplex {
+					parsed = epic.EffortHigh
+				}
+				result.EffortLevel = parsed
+			}
+		}
+		if v, ok := resp.Adjustments["git_strategy"].(string); ok && v != "" {
+			switch v {
+			case "current", "branch", "worktree":
+				result.GitStrategy = v
+			}
+		}
+		return result, nil
+
+	case "reject":
+		return nil, ErrTriageDeclined
+
+	default:
+		return nil, fmt.Errorf("triage confirm: unknown action %q", resp.Action)
 	}
 }
 

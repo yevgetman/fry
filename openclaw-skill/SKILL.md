@@ -39,6 +39,7 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Print identity | `fry identity` (or `fry identity --full`) |
 | Clean/archive build | `fry clean -y --project-dir <dir>` |
 | Triage only | `fry run --triage-only --project-dir <dir>` |
+| File-based prompts | `fry run --confirm-file --project-dir <dir>` |
 | Dry run | `fry run --dry-run --project-dir <dir>` |
 
 ## How to Pass Tasks to Fry
@@ -158,6 +159,101 @@ To inspect triage without building:
 fry run --triage-only --project-dir /path/to/project
 ```
 
+## Agent Interactive Flows
+
+By default, Fry prompts the user interactively during the prepare phase (triage
+confirmation, project overview, executive context). Agents have two options for
+handling these prompts instead of auto-accepting with `-y`.
+
+### Option A: Two-step flow (recommended)
+
+Run triage separately, relay the result to the user, then build with their choice:
+
+```bash
+# Step 1: Classify the task (instant, non-interactive)
+fry run --triage-only --project-dir /path/to/project \
+  --user-prompt "Add rate limiting to API endpoints"
+
+# Step 2: Read the triage output and present to the user:
+#   "Fry classified this as MODERATE (effort: medium, 2 sprints).
+#    Reason: Multi-file change with tests needed.
+#    Accept, or would you like to adjust?"
+
+# Step 3: Build with the user's chosen effort level
+fry run -y --project-dir /path/to/project \
+  --effort medium \
+  --user-prompt "Add rate limiting to API endpoints" \
+  --json-report --telemetry
+```
+
+This is the simplest approach — no PTY, no file polling. The user controls the
+effort level and the build runs non-interactively.
+
+### Option B: File-based interactive prompts
+
+For full interactive control (including project overview and executive context
+confirmation), use `--confirm-file`. Fry writes prompts to
+`.fry/confirm-prompt.json` and waits for responses at `.fry/confirm-response.json`:
+
+```bash
+# Launch Fry with file-based prompts (in a subagent)
+fry run --confirm-file --project-dir /path/to/project \
+  --user-prompt "Add rate limiting to API endpoints" \
+  --json-report --telemetry
+```
+
+**Prompt file** (`.fry/confirm-prompt.json`) — written by Fry when it needs input:
+```json
+{
+  "type": "triage_confirm",
+  "message": "Triage classified task as MODERATE (effort: medium, 2 sprints).",
+  "data": {
+    "complexity": "MODERATE",
+    "effort": "medium",
+    "sprints": 2,
+    "reason": "Multi-file change with tests needed.",
+    "git_strategy": "branch (new branch for this build)"
+  },
+  "options": ["accept", "adjust", "reject"]
+}
+```
+
+**Response file** (`.fry/confirm-response.json`) — written by the agent after
+relaying to the user:
+```json
+{"action": "accept"}
+```
+
+Or to adjust:
+```json
+{
+  "action": "adjust",
+  "adjustments": {"effort": "high", "git_strategy": "worktree"}
+}
+```
+
+Or to reject (stops the build):
+```json
+{"action": "reject"}
+```
+
+**Prompt types:**
+
+| Type | When | Data fields | Adjustable fields |
+|------|------|-------------|-------------------|
+| `triage_confirm` | After triage classification | complexity, effort, sprints, reason, git_strategy | complexity, effort, git_strategy |
+| `project_overview` | After AI-generated project summary | project_type, goal, expected_output, key_topics, effort_estimate | user_prompt (additional text), effort, enable_review |
+| `executive_context` | After AI-generated executive context | executive_text | (accept or reject only) |
+
+**Flow:** poll `.fry/confirm-prompt.json` → relay `message` and `data` to user →
+write response to `.fry/confirm-response.json` → Fry continues. Repeat for each
+prompt in sequence (up to 3 during a full prepare: executive, triage, overview).
+
+**Timeout:** Fry waits up to 5 minutes for each response. If no response arrives,
+the build fails with a timeout error.
+
+**Precedence:** `-y` overrides `--confirm-file`. If both are passed, `-y` wins.
+
 ## Starting Builds
 
 **Before starting**, always check if a build is already running:
@@ -203,6 +299,7 @@ sessions_spawn({
 | `--user-prompt` | string | (none) | Additional directive for the build |
 | `--user-prompt-file` | path | (none) | Load user prompt from a file |
 | `--mcp-config` | path | (none) | MCP server config file (Claude engine only) |
+| `--confirm-file` | (flag) | off | Use file-based interactive prompts instead of stdin |
 | `--dry-run` | (flag) | off | Preview without executing |
 | `--sarif` | (flag) | off | Write SARIF 2.1.0 audit output |
 | `--show-tokens` | (flag) | off | Print per-sprint token usage |
@@ -658,6 +755,8 @@ Key event types: `sprint_start`, `sprint_complete`, `alignment_complete`,
 | `build-summary.md` | Build summary (project root, committed) |
 | `build-audit.md` | Build audit findings (project root, committed) |
 | `output/` | Planning/writing mode output directory |
+| `.fry/confirm-prompt.json` | File-based interactive prompt (transient) |
+| `.fry/confirm-response.json` | File-based interactive response (transient) |
 | `.fry/agent-directive.md` | Active directive (Layer 1 steering) |
 | `.fry/agent-hold-after-sprint` | Hold flag (Layer 1 steering) |
 | `.fry/agent-pause` | Pause flag (Layer 1 steering) |
@@ -678,7 +777,10 @@ and removes the `.fry/` directory. The project-root outputs (`build-summary.md`,
 ## Behavior Guidelines
 
 - **Always use `sessions_spawn`** to run Fry builds — never `nohup` or `&`.
-- **Always pass `-y`** to auto-accept all interactive prompts.
+- **Always pass `-y` or `--confirm-file`** — use `-y` to auto-accept all prompts,
+  or `--confirm-file` to relay prompts to the user via file-based IPC.
+  Prefer the **two-step flow** (Option A) when possible: run `--triage-only`,
+  relay to user, then build with `-y --effort <choice>`.
 - **Check status before starting** — verify no build is active first.
 - **Use `fry status --json`** as the primary monitoring tool.
 - **Atomic file writes** for directives: write to `.tmp` then `mv`.

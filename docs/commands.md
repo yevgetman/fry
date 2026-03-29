@@ -55,6 +55,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. Also offered interactively during the adjust flow for medium/high effort builds. Max effort auto-enables review. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
 | `--yes` / `-y` | Auto-accept all interactive confirmation prompts (triage, project overview, executive bootstrap). For CI/CD and AI agent automation. |
+| `--confirm-file` | Use file-based interactive prompts instead of stdin. Writes prompts to `.fry/confirm-prompt.json`, waits for responses at `.fry/confirm-response.json`. For AI agent automation where the user should review and confirm each step. |
 | `--no-project-overview` | Skip interactive confirmations (triage classification and project overview) |
 | `--no-audit` | Disable sprint and build audits for this run |
 | `--no-observer` | Disable the observer metacognitive layer (event stream and wake-ups). Observer is also disabled at `low` effort and during `--dry-run`. See [Observer](observer.md). |
@@ -141,6 +142,7 @@ fry prepare [epic_filename] [flags]
 | `--validate-only` | Check that the epic is valid, then exit |
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. |
 | `--yes` / `-y` | Auto-accept all interactive confirmation prompts (project overview, executive bootstrap). |
+| `--confirm-file` | Use file-based interactive prompts (`.fry/confirm-prompt.json` / `.fry/confirm-response.json`) instead of stdin. |
 | `--no-project-overview` | Skip the interactive project overview confirmation |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--mcp-config <path>` | Path to MCP server configuration file (Claude engine only). See [Engines: MCP](engines.md#mcp-server-configuration). |
