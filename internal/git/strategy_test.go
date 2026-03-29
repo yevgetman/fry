@@ -530,6 +530,13 @@ func TestMergeAndCleanupWorktree(t *testing.T) {
 	wtRun("add", "output.md")
 	wtRun("commit", "-m", "add output")
 
+	// Create .fry/ artifacts in the worktree (simulating build completion)
+	wtFryDir := filepath.Join(worktreeDir, ".fry")
+	require.NoError(t, os.MkdirAll(wtFryDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(worktreeDir, config.BuildStatusFile), []byte(`{"version":1,"build":{"status":"completed"}}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(worktreeDir, config.EpicProgressFile), []byte("## Sprint 1: done\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(worktreeDir, config.BuildPhaseFile), []byte("complete\n"), 0o644))
+
 	// Write strategy file
 	setup := &StrategySetup{
 		WorkDir:        worktreeDir,
@@ -562,6 +569,19 @@ func TestMergeAndCleanupWorktree(t *testing.T) {
 	// Verify: strategy file is removed
 	_, err = os.Stat(filepath.Join(dir, config.GitStrategyFile))
 	assert.True(t, os.IsNotExist(err), "git-strategy.txt should be removed")
+
+	// Verify: .fry/ artifacts were copied from worktree to original dir
+	statusData, err := os.ReadFile(filepath.Join(dir, config.BuildStatusFile))
+	require.NoError(t, err, "build-status.json should be copied to original dir")
+	assert.Contains(t, string(statusData), "completed")
+
+	progressData, err := os.ReadFile(filepath.Join(dir, config.EpicProgressFile))
+	require.NoError(t, err, "epic-progress.txt should be copied to original dir")
+	assert.Contains(t, string(progressData), "Sprint 1")
+
+	phaseData, err := os.ReadFile(filepath.Join(dir, config.BuildPhaseFile))
+	require.NoError(t, err, "build-phase.txt should be copied to original dir")
+	assert.Contains(t, string(phaseData), "complete")
 }
 
 func TestMergeAndCleanupWorktree_NilSetup(t *testing.T) {

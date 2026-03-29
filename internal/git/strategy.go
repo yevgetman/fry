@@ -260,25 +260,61 @@ func MergeAndCleanupWorktreeWith(ctx context.Context, setup *StrategySetup, ex E
 		return fmt.Errorf("merge %s into %s: %w", branchName, origBranch, err)
 	}
 
-	// 3. Remove the worktree (--force to handle untracked .fry files)
+	// 3. Copy key .fry/ artifacts from worktree to original dir before removal.
+	// These artifacts are gitignored and would be lost when the worktree is deleted.
+	copyWorktreeArtifacts(setup.WorkDir, origDir)
+
+	// 4. Remove the worktree (--force to handle untracked .fry files)
 	if err := runGit(ctx, origDir, "worktree", "remove", "--force", setup.WorkDir); err != nil {
 		// Non-fatal: directory may already be gone
 		fmt.Fprintf(os.Stderr, "fry: warning: worktree remove: %v\n", err)
 	}
 
-	// 4. Prune stale worktree references
+	// 5. Prune stale worktree references
 	_ = ex.WorktreePrune(ctx, origDir)
 
-	// 5. Delete the branch (safe delete — it's merged)
+	// 6. Delete the branch (safe delete — it's merged)
 	if err := runGit(ctx, origDir, "branch", "-d", branchName); err != nil {
 		// Non-fatal: branch may not exist
 		fmt.Fprintf(os.Stderr, "fry: warning: branch delete: %v\n", err)
 	}
 
-	// 6. Remove stale git-strategy.txt
+	// 7. Remove stale git-strategy.txt
 	_ = os.Remove(filepath.Join(origDir, config.GitStrategyFile))
 
 	return nil
+}
+
+// worktreeArtifacts lists the .fry/ files that should be copied from the worktree
+// to the original project dir before worktree removal. These are gitignored artifacts
+// that would otherwise be lost.
+var worktreeArtifacts = []string{
+	config.BuildStatusFile,
+	config.BuildPhaseFile,
+	config.BuildModeFile,
+	config.EpicProgressFile,
+	config.SprintProgressFile,
+	config.BuildAuditCompleteFile,
+	config.DeferredFailuresFile,
+	config.BuildReportFile,
+}
+
+// copyWorktreeArtifacts copies key .fry/ artifacts from the worktree to the
+// original project dir so that fry status and fry run --continue work after
+// the worktree is removed. Best-effort: errors are silently ignored.
+func copyWorktreeArtifacts(worktreeDir, origDir string) {
+	for _, relPath := range worktreeArtifacts {
+		src := filepath.Join(worktreeDir, relPath)
+		data, err := os.ReadFile(src)
+		if err != nil {
+			continue // file may not exist in the worktree
+		}
+		dst := filepath.Join(origDir, relPath)
+		if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+			continue
+		}
+		_ = os.WriteFile(dst, data, 0o644)
+	}
 }
 
 // runGit is a thin helper for one-off git commands not in the Executor interface.
