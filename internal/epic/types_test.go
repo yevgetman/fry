@@ -137,12 +137,12 @@ func TestEffortLevel_HealHasHardCap(t *testing.T) {
 	assert.False(t, EffortMax.HealHasHardCap())
 }
 
-func TestEffortLevel_DeviationScopeUnlimited(t *testing.T) {
+func TestEffortLevel_deviationScopeUnlimited(t *testing.T) {
 	t.Parallel()
 
-	assert.False(t, EffortLow.DeviationScopeUnlimited())
-	assert.True(t, EffortMedium.DeviationScopeUnlimited())
-	assert.True(t, EffortHigh.DeviationScopeUnlimited())
-	assert.True(t, EffortMax.DeviationScopeUnlimited())
-	assert.True(t, EffortLevel("").DeviationScopeUnlimited()) // auto-detect
+	assert.False(t, EffortLow.deviationScopeUnlimited())
+	assert.True(t, EffortMedium.deviationScopeUnlimited())
+	assert.True(t, EffortHigh.deviationScopeUnlimited())
+	assert.True(t, EffortMax.deviationScopeUnlimited())
+	assert.True(t, EffortLevel("").deviationScopeUnlimited()) // auto-detect
 }

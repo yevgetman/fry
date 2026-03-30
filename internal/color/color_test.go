@@ -37,8 +37,6 @@ func TestColorState(t *testing.T) {
 		assert.Equal(t, "\033[32mtext\033[0m", GreenText("text"))
 		assert.Equal(t, "\033[33mtext\033[0m", YellowText("text"))
 		assert.Equal(t, "\033[36mtext\033[0m", CyanText("text"))
-		assert.Equal(t, "\033[1mtext\033[0m", BoldText("text"))
-		assert.Equal(t, "\033[2mtext\033[0m", DimText("text"))
 	})
 
 	t.Run("ColorizeLogLine_patterns", func(t *testing.T) {

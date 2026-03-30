@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -25,16 +24,6 @@ func StripMarkdownFences(output string) string {
 		lines = lines[:len(lines)-1]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// FileModTime returns the modification time of a file, or the zero time if
-// the file does not exist or cannot be stat'd.
-func FileModTime(path string) time.Time {
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}
-	}
-	return info.ModTime()
 }
 
 // FileSize returns the size in bytes of a file, or -1 if the file does not

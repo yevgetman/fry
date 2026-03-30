@@ -10,18 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFileModTime(t *testing.T) {
-	t.Parallel()
-
-	// Non-existent file returns zero time.
-	assert.True(t, FileModTime("/no/such/file").IsZero())
-
-	// Existing file returns a non-zero time.
-	path := filepath.Join(t.TempDir(), "f.txt")
-	require.NoError(t, os.WriteFile(path, []byte("hi"), 0o644))
-	assert.False(t, FileModTime(path).IsZero())
-}
-
 func TestResolveArtifactUsesEngineFile(t *testing.T) {
 	t.Parallel()
 

@@ -131,10 +131,10 @@ func (e EffortLevel) HealHasHardCap() bool {
 	return e != EffortMax
 }
 
-// DeviationScopeUnlimited returns whether this effort level allows deviations
+// deviationScopeUnlimited returns whether this effort level allows deviations
 // to touch any remaining sprint in the epic (up to the safety cap).
 // All effort levels except low expand deviation scope to cover remaining sprints.
-func (e EffortLevel) DeviationScopeUnlimited() bool {
+func (e EffortLevel) deviationScopeUnlimited() bool {
 	return e != EffortLow
 }
 

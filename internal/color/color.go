@@ -77,5 +77,3 @@ func RedText(s string) string    { return Colorize(s, Red) }
 func GreenText(s string) string  { return Colorize(s, Green) }
 func YellowText(s string) string { return Colorize(s, Yellow) }
 func CyanText(s string) string   { return Colorize(s, Cyan) }
-func BoldText(s string) string   { return Colorize(s, Bold) }
-func DimText(s string) string    { return Colorize(s, Dim) }
