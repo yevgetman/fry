@@ -86,6 +86,7 @@ func (m *Monitor) Run(ctx context.Context) <-chan Snapshot {
 		defer close(ch)
 
 		idleTicks := 0
+		firstPoll := true
 		wasActive := false
 		sawBuildEnd := false
 		interval := m.cfg.Interval
@@ -98,6 +99,8 @@ func (m *Monitor) Run(ctx context.Context) <-chan Snapshot {
 			}
 
 			anyChanged := m.pollAll()
+			shouldEmit := firstPoll || anyChanged
+			firstPoll = false
 
 			if anyChanged {
 				idleTicks = 0
@@ -119,7 +122,7 @@ func (m *Monitor) Run(ctx context.Context) <-chan Snapshot {
 			// If waiting and build hasn't started, skip emitting snapshots
 			// but still send the first one so the caller can render "waiting".
 			if m.cfg.Wait && !wasActive && !snap.BuildActive && len(snap.Events) == 0 {
-				if anyChanged || idleTicks == 0 {
+				if shouldEmit {
 					select {
 					case ch <- snap:
 					case <-ctx.Done():
@@ -158,7 +161,7 @@ func (m *Monitor) Run(ctx context.Context) <-chan Snapshot {
 			}
 
 			// Emit snapshot when anything changed or on first iteration.
-			if anyChanged || idleTicks == 0 {
+			if shouldEmit {
 				select {
 				case ch <- snap:
 				case <-ctx.Done():
