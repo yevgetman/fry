@@ -276,6 +276,23 @@ func TestRunChecksCmdOutputEmptyMatchesCaretDollar(t *testing.T) {
 	assert.True(t, results[0].Passed, "empty command output should match ^$")
 }
 
+func TestRunChecksCmdOutputNonZeroExitEmptyOutput(t *testing.T) {
+	t.Parallel()
+
+	// A command that exits non-zero but produces no output (e.g. grep with no
+	// matches exits 1) should still match ^$. CheckCmdOutput semantics are
+	// output-only: exit code is irrelevant.
+	checks := []Check{
+		{Sprint: 1, Type: CheckCmdOutput, Command: "false", Pattern: "^$"},
+	}
+
+	results, passCount, totalCount := RunChecks(context.Background(), checks, 1, t.TempDir())
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, passCount)
+	assert.Equal(t, 1, totalCount)
+	assert.True(t, results[0].Passed, "non-zero exit with empty output must match ^$")
+}
+
 func TestTrimOutputLines(t *testing.T) {
 	t.Parallel()
 

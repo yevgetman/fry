@@ -83,14 +83,10 @@ func runCheck(ctx context.Context, check Check, projectDir string) CheckResult {
 		command.Stdout = &stdout
 		command.Stderr = &stderr
 
-		err := command.Run()
+		_ = command.Run() // exit code is irrelevant for output-pattern checks
 		result.Output = stdout.String()
 		if result.Output == "" && stderr.Len() > 0 {
 			result.Output = stderr.String()
-		}
-		if err != nil {
-			result.Passed = false
-			return result
 		}
 
 		// Trim leading/trailing whitespace from each line before matching.
