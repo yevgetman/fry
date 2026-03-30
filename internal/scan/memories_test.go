@@ -178,11 +178,11 @@ func TestFindDuplicate_HighOverlap(t *testing.T) {
 	t.Parallel()
 
 	existing := []Memory{
-		{Body: "The auth middleware requires JWT_SECRET to be set for all tests to pass correctly."},
+		{Body: "The auth middleware requires JWT_SECRET to be set for tests to pass."},
 	}
 
-	// Very similar phrasing with high word overlap.
-	idx := findDuplicate(existing, "The auth middleware requires JWT_SECRET to be set for all tests to pass.")
+	// Very similar phrasing — only one word different.
+	idx := findDuplicate(existing, "The auth middleware requires JWT_SECRET to be set for tests to work.")
 	assert.Equal(t, 0, idx)
 }
 

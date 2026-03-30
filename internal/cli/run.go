@@ -1600,6 +1600,48 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Incremental codebase.md update (or first-time generation for from-scratch projects).
+		{
+			codebasePath := filepath.Join(projectPath, config.CodebaseFile)
+			_, codebaseExists := os.Stat(codebasePath)
+
+			if codebaseExists == nil {
+				// Existing codebase.md — check if incremental update is warranted.
+				if diffStat, dsErr := git.GitDiffForAudit(ctx, projectPath); dsErr == nil {
+					if scan.ShouldUpdateCodebaseDoc(diffStat) {
+						scanEng, sErr := newResilientEngine(engineName, mcpOpts...)
+						if sErr == nil {
+							scanModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionCodebaseScan)
+							frlog.Log("  SCAN: updating codebase.md (significant changes detected)")
+							if updateErr := scan.UpdateCodebaseDoc(ctx, projectPath, diffStat, scanEng, scanModel); updateErr != nil {
+								frlog.Log("WARNING: codebase.md update failed (non-fatal): %v", updateErr)
+							}
+						}
+					}
+				}
+			} else if os.IsNotExist(codebaseExists) {
+				// No codebase.md — generate one for the first time (from-scratch project).
+				scanEng, sErr := newResilientEngine(engineName, mcpOpts...)
+				if sErr == nil {
+					snap, snapErr := scan.RunStructuralScan(ctx, projectPath)
+					if snapErr == nil {
+						scanModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionCodebaseScan)
+						frlog.Log("  SCAN: generating initial codebase.md (first build complete)")
+						if genErr := scan.RunSemanticScan(ctx, scan.SemanticScanOpts{
+							ProjectDir: projectPath,
+							Snapshot:   snap,
+							Engine:     scanEng,
+							Model:      scanModel,
+						}); genErr != nil {
+							frlog.Log("WARNING: initial codebase.md generation failed (non-fatal): %v", genErr)
+						}
+						// Also write file index.
+						_ = scan.WriteFileIndex(snap, filepath.Join(projectPath, config.FileIndexFile))
+					}
+				}
+			}
+		}
+
 		// Upload experience to consciousness API (background, bounded by timeout)
 		var uploadDone <-chan struct{}
 		if collector != nil {

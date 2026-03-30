@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -349,7 +350,7 @@ func detectFrameworks(dir string, snap *StructuralSnapshot) {
 			"nest":    "NestJS",
 		}
 		for key, name := range frameworks {
-			if strings.Contains(content, `"`+key) {
+			if strings.Contains(content, `"`+key+`"`) {
 				snap.Frameworks = append(snap.Frameworks, name)
 			}
 		}
@@ -477,7 +478,7 @@ func parseGoMod(dir string, snap *StructuralSnapshot) {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "require (") || line == "require(" {
+		if strings.HasPrefix(line, "require") && strings.Contains(line, "(") {
 			inRequire = true
 			continue
 		}
@@ -521,57 +522,29 @@ func parsePackageJSON(dir string, snap *StructuralSnapshot) {
 	if err != nil {
 		return
 	}
-	// Simple extraction without a JSON parser to avoid adding dependencies.
-	// Look for "dependencies" and "devDependencies" sections.
-	content := string(data)
-	for _, section := range []string{"dependencies", "devDependencies"} {
-		idx := strings.Index(content, `"`+section+`"`)
-		if idx < 0 {
-			continue
-		}
-		// Find the opening brace.
-		braceStart := strings.Index(content[idx:], "{")
-		if braceStart < 0 {
-			continue
-		}
-		braceStart += idx
-		// Find matching closing brace.
-		depth := 0
-		braceEnd := -1
-		for i := braceStart; i < len(content); i++ {
-			if content[i] == '{' {
-				depth++
-			} else if content[i] == '}' {
-				depth--
-				if depth == 0 {
-					braceEnd = i
-					break
-				}
-			}
-		}
-		if braceEnd < 0 {
-			continue
-		}
-		block := content[braceStart+1 : braceEnd]
-		// Parse "name": "version" pairs.
-		lines := strings.Split(block, "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			line = strings.TrimSuffix(line, ",")
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) != 2 {
-				continue
-			}
-			name := strings.Trim(strings.TrimSpace(parts[0]), `"`)
-			version := strings.Trim(strings.TrimSpace(parts[1]), `"`)
-			if name != "" && version != "" {
-				snap.Dependencies = append(snap.Dependencies, Dependency{
-					Name:    name,
-					Version: version,
-					Source:  "package.json",
-				})
-			}
-		}
+
+	// Use encoding/json from stdlib for reliable parsing.
+	var pkg struct {
+		Dependencies    map[string]string `json:"dependencies"`
+		DevDependencies map[string]string `json:"devDependencies"`
+	}
+	if jsonErr := json.Unmarshal(data, &pkg); jsonErr != nil {
+		return
+	}
+
+	for name, version := range pkg.Dependencies {
+		snap.Dependencies = append(snap.Dependencies, Dependency{
+			Name:    name,
+			Version: version,
+			Source:  "package.json",
+		})
+	}
+	for name, version := range pkg.DevDependencies {
+		snap.Dependencies = append(snap.Dependencies, Dependency{
+			Name:    name,
+			Version: version,
+			Source:  "package.json",
+		})
 	}
 }
 
@@ -676,11 +649,14 @@ func collectGitHistory(ctx context.Context, dir string) (*GitHistory, error) {
 	}
 
 	// Top authors.
-	if out, err := gitOutputCtx(ctx, dir, "shortlog", "-sn", "--all", fmt.Sprintf("-%d", topAuthorsCount)); err == nil {
+	if out, err := gitOutputCtx(ctx, dir, "shortlog", "-sn", "--all"); err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 			line = strings.TrimSpace(line)
 			if line != "" {
 				history.TopAuthors = append(history.TopAuthors, line)
+				if len(history.TopAuthors) >= topAuthorsCount {
+					break
+				}
 			}
 		}
 	}

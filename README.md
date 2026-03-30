@@ -249,6 +249,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Observer](docs/observer.md) | Metacognitive layer: event stream, identity, wake-ups, effort-level gating |
 | [Consciousness](docs/consciousness.md) | Experience synthesis and identity pipeline |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
+| [Codebase Awareness](docs/codebase-awareness.md) | Existing codebase detection, scanning, memories, and pipeline integration |
 
 ## License
 

@@ -90,6 +90,79 @@ func RunSemanticScan(ctx context.Context, opts SemanticScanOpts) error {
 	return nil
 }
 
+// UpdateCodebaseDoc incrementally updates .fry/codebase.md based on a git diff.
+// Only called when significant changes are detected (>=5 files or new packages).
+func UpdateCodebaseDoc(ctx context.Context, projectDir string, diffSummary string, eng engine.Engine, model string) error {
+	codebasePath := filepath.Join(projectDir, config.CodebaseFile)
+	existing, err := os.ReadFile(codebasePath)
+	if err != nil {
+		return fmt.Errorf("update codebase doc: read existing: %w", err)
+	}
+
+	prompt := buildUpdatePrompt(string(existing), diffSummary)
+
+	updatePromptFile := ".fry/codebase-update-prompt.md"
+	promptPath := filepath.Join(projectDir, updatePromptFile)
+	_ = os.MkdirAll(filepath.Dir(promptPath), 0o755)
+	_ = os.WriteFile(promptPath, []byte(prompt), 0o644)
+
+	invocation := fmt.Sprintf(
+		"Read and execute ALL instructions in %s. "+
+			"Update %s in place. Do NOT modify any source code.",
+		updatePromptFile, config.CodebaseFile,
+	)
+
+	_, _, runErr := eng.Run(ctx, invocation, engine.RunOpts{
+		Model:   model,
+		WorkDir: projectDir,
+	})
+
+	_ = os.Remove(promptPath)
+
+	if runErr != nil {
+		return fmt.Errorf("update codebase doc: engine run: %w", runErr)
+	}
+	return nil
+}
+
+func buildUpdatePrompt(existingDoc, diffSummary string) string {
+	var b strings.Builder
+	b.WriteString("# Codebase Document Update\n\n")
+	b.WriteString("The following is the current codebase.md document. A build just completed\n")
+	b.WriteString("that modified the codebase. Update ONLY the sections affected by the changes.\n")
+	b.WriteString("Preserve all other sections exactly as they are.\n\n")
+	b.WriteString("## Changes Made\n\n")
+	b.WriteString(diffSummary)
+	b.WriteString("\n\n## Current Document\n\n")
+
+	doc := existingDoc
+	if len(doc) > 20000 {
+		doc = textutil.TruncateUTF8(doc, 20000) + "\n... [truncated]"
+	}
+	b.WriteString(doc)
+	b.WriteString("\n\n## Instructions\n\n")
+	b.WriteString("Update .fry/codebase.md to reflect the changes. Only modify sections that\n")
+	b.WriteString("are affected. Do NOT rewrite the entire document. If the changes are minor\n")
+	b.WriteString("and don't affect any section, make no changes.\n")
+	return b.String()
+}
+
+// ShouldUpdateCodebaseDoc returns true if the git diff is significant enough
+// to warrant an incremental codebase.md update. Counts files changed by
+// looking for "diff --git" headers in unified diff output.
+func ShouldUpdateCodebaseDoc(diffOutput string) bool {
+	if strings.TrimSpace(diffOutput) == "" {
+		return false
+	}
+	fileCount := 0
+	for _, line := range strings.Split(diffOutput, "\n") {
+		if strings.HasPrefix(line, "diff --git ") {
+			fileCount++
+		}
+	}
+	return fileCount >= 5
+}
+
 // assembleSemanticPrompt builds the full prompt for the LLM codebase analysis.
 func assembleSemanticPrompt(snap *StructuralSnapshot, projectDir string) string {
 	var b strings.Builder

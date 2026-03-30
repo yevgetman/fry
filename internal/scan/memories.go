@@ -333,30 +333,33 @@ func normalizeForComparison(s string) string {
 }
 
 func wordOverlap(a, b string) float64 {
-	wordsA := strings.Fields(a)
-	wordsB := strings.Fields(b)
-	if len(wordsA) == 0 || len(wordsB) == 0 {
+	setA := toWordSet(strings.Fields(a))
+	setB := toWordSet(strings.Fields(b))
+	if len(setA) == 0 || len(setB) == 0 {
 		return 0
 	}
 
-	setB := make(map[string]bool, len(wordsB))
-	for _, w := range wordsB {
-		setB[w] = true
-	}
-
 	shared := 0
-	for _, w := range wordsA {
+	for w := range setA {
 		if setB[w] {
 			shared++
 		}
 	}
 
-	// Jaccard-like: shared / union.
-	total := len(wordsA) + len(wordsB) - shared
-	if total == 0 {
+	// Jaccard: |intersection| / |union|.
+	union := len(setA) + len(setB) - shared
+	if union == 0 {
 		return 0
 	}
-	return float64(shared) / float64(total)
+	return float64(shared) / float64(union)
+}
+
+func toWordSet(words []string) map[string]bool {
+	s := make(map[string]bool, len(words))
+	for _, w := range words {
+		s[w] = true
+	}
+	return s
 }
 
 // parseMemoryFile reads a memory file and extracts its frontmatter and body.

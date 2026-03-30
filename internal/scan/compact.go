@@ -43,6 +43,10 @@ func CompactMemories(ctx context.Context, projectDir string, eng engine.Engine, 
 	if len(compacted) == 0 {
 		return fmt.Errorf("compact memories: LLM produced no output")
 	}
+	// Enforce target count in case the LLM output exceeds it.
+	if len(compacted) > config.CompactedMemoryCount {
+		compacted = compacted[:config.CompactedMemoryCount]
+	}
 
 	// Preserve reinforcement counts from originals where possible.
 	for i := range compacted {
