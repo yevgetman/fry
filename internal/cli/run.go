@@ -35,6 +35,7 @@ import (
 	"github.com/yevgetman/fry/internal/prepare"
 	"github.com/yevgetman/fry/internal/report"
 	"github.com/yevgetman/fry/internal/review"
+	"github.com/yevgetman/fry/internal/scan"
 	"github.com/yevgetman/fry/internal/shellhook"
 	"github.com/yevgetman/fry/internal/sprint"
 	"github.com/yevgetman/fry/internal/steering"
@@ -160,6 +161,11 @@ var runCmd = &cobra.Command{
 					frlog.Log("▶ CONTINUE  reattaching to branch: %s", persisted.BranchName)
 				}
 			}
+		}
+
+		// Refresh file index if stale (codebase awareness).
+		if scan.RefreshFileIndexIfStale(ctx, projectPath) {
+			frlog.Log("  SCAN: refreshed stale file index")
 		}
 
 		epicArg := filepath.Join(config.FryDir, "epic.md")
@@ -2286,15 +2292,22 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 	}
 	triageModel := engine.ResolveModelForSession(engName, string(effortLevel), engine.SessionTriage)
 
+	// Load codebase context for triage if available.
+	triageCodebaseContent := ""
+	if data, readErr := os.ReadFile(filepath.Join(projectPath, config.CodebaseFile)); readErr == nil {
+		triageCodebaseContent = string(data)
+	}
+
 	decision := triage.Classify(ctx, triage.TriageOpts{
-		ProjectDir:  projectPath,
-		UserPrompt:  userPrompt,
-		PlanContent: planContent,
-		ExecContent: execContent,
-		Engine:      eng,
-		Model:       triageModel,
-		Mode:        mode,
-		Verbose:     frlog.Verbose,
+		ProjectDir:      projectPath,
+		UserPrompt:      userPrompt,
+		PlanContent:     planContent,
+		ExecContent:     execContent,
+		CodebaseContent: triageCodebaseContent,
+		Engine:          eng,
+		Model:           triageModel,
+		Mode:            mode,
+		Verbose:         frlog.Verbose,
 	})
 
 	// Interactive confirmation (unless skipped).

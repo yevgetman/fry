@@ -39,6 +39,7 @@ type PrepareOpts struct {
 	EnableReview     bool      // include @review_between_sprints in the generated epic
 	Stdin            io.Reader // for interactive confirmation (defaults to os.Stdin)
 	Stdout           io.Writer // for displaying generated content (defaults to os.Stdout)
+	CodebaseContent  string    // contents of .fry/codebase.md (may be empty for new projects)
 }
 
 var numberedRulePattern = regexp.MustCompile(`(?m)^[0-9]+\.`)
@@ -136,6 +137,15 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	}
 	assetsSection := assets.BuildSection(assetsResult)
 
+	// Load codebase context if available (from fry init scan).
+	if opts.CodebaseContent == "" {
+		codebasePath := filepath.Join(projectDir, config.CodebaseFile)
+		if data, readErr := os.ReadFile(codebasePath); readErr == nil {
+			opts.CodebaseContent = string(data)
+			logf("Codebase context loaded from %s — will be included in generation.", config.CodebaseFile)
+		}
+	}
+
 	hasAssets := len(assetsResult.Assets) > 0
 	hasMedia := len(mediaAssets) > 0
 	hasUserPrompt := strings.TrimSpace(opts.UserPrompt) != ""
@@ -188,7 +198,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if err := os.MkdirAll(filepath.Dir(planPath), 0o755); err != nil {
 			return err
 		}
-		prompt := step0Prompt(opts.Mode, string(executiveContent), mediaManifest, assetsSection)
+		prompt := step0Prompt(opts.Mode, string(executiveContent), mediaManifest, assetsSection, opts.CodebaseContent)
 		beforeSize := textutil.FileSize(planPath)
 		output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 		if err != nil {
@@ -278,7 +288,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		step2Inputs = append(step2Inputs, config.MediaDir+"/ manifest")
 	}
 	logf("Step 2: Generating %s from %s (engine: %s, model: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName, prepModel)
-	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, opts.EnableReview, mediaManifest, assetsSection)
+	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, opts.EnableReview, mediaManifest, assetsSection, opts.CodebaseContent)
 	beforeSize = textutil.FileSize(epicPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
 	if err != nil {
@@ -306,7 +316,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		step3Inputs = append(step3Inputs, config.MediaDir+"/ manifest")
 	}
 	logf("Step 3: Generating %s from %s (engine: %s, model: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), engName, prepModel)
-	prompt = step3Prompt(opts.Mode, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest)
+	prompt = step3Prompt(opts.Mode, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest, opts.CodebaseContent)
 	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	beforeSize = textutil.FileSize(verificationPath)
 	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
@@ -509,14 +519,14 @@ func writeEmbeddedTemplates(dir string) (epicExamplePath, verificationExamplePat
 	return epicExamplePath, verificationExamplePath, generateEpicPath, nil
 }
 
-func step0Prompt(mode Mode, executiveContent, mediaManifest, assetsSection string) string {
+func step0Prompt(mode Mode, executiveContent, mediaManifest, assetsSection, codebaseContent string) string {
 	switch mode {
 	case ModePlanning:
 		return PlanningStep0Prompt(executiveContent, mediaManifest, assetsSection)
 	case ModeWriting:
 		return WritingStep0Prompt(executiveContent, mediaManifest, assetsSection)
 	default:
-		return SoftwareStep0Prompt(executiveContent, mediaManifest, assetsSection)
+		return SoftwareStep0Prompt(executiveContent, mediaManifest, assetsSection) + codebaseSection(codebaseContent)
 	}
 }
 
@@ -531,25 +541,25 @@ func step1Prompt(mode Mode, planContent, executiveContent, mediaManifest string)
 	}
 }
 
-func step2Prompt(mode Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel, enableReview bool, mediaManifest, assetsSection string) string {
+func step2Prompt(mode Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt string, effort epic.EffortLevel, enableReview bool, mediaManifest, assetsSection, codebaseContent string) string {
 	switch mode {
 	case ModePlanning:
 		return PlanningStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, enableReview, mediaManifest, assetsSection)
 	case ModeWriting:
 		return WritingStep2Prompt(planContent, agentsContent, epicExamplePath, userPrompt, effort, enableReview, mediaManifest, assetsSection)
 	default:
-		return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort, enableReview, mediaManifest, assetsSection)
+		return SoftwareStep2Prompt(planContent, agentsContent, epicExamplePath, generateEpicPath, userPrompt, effort, enableReview, mediaManifest, assetsSection) + codebaseSection(codebaseContent)
 	}
 }
 
-func step3Prompt(mode Mode, planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest string) string {
+func step3Prompt(mode Mode, planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest, codebaseContent string) string {
 	switch mode {
 	case ModePlanning:
 		return PlanningStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
 	case ModeWriting:
 		return WritingStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
 	default:
-		return SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest)
+		return SoftwareStep3Prompt(planContent, epicContent, verificationExamplePath, userPrompt, mediaManifest) + codebaseSection(codebaseContent)
 	}
 }
 
@@ -562,6 +572,24 @@ func readPrepareOptional(path string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+// codebaseSection returns a prompt section with existing codebase context,
+// or empty string if no codebase content is available. Appended to software-mode
+// step prompts so the LLM is aware of existing code when generating plans, epics,
+// and sanity checks.
+func codebaseSection(codebaseContent string) string {
+	if strings.TrimSpace(codebaseContent) == "" {
+		return ""
+	}
+	return fmt.Sprintf(`
+
+EXISTING CODEBASE CONTEXT:
+This build modifies an existing codebase. The following describes what currently exists.
+Leverage existing code, patterns, and conventions. Do NOT create duplicates of existing
+functionality. Decompose work to modify existing files where appropriate.
+
+%s`, codebaseContent)
 }
 
 func countDirective(content, prefix string) int {

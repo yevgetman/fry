@@ -152,6 +152,13 @@ fry init --heuristic-only --project-dir /path/to/project  # Structural only
 
 Running `fry init` in an already-initialized project rescans the codebase.
 
+**Pipeline integration:** When `.fry/codebase.md` exists, it is automatically used
+throughout the build pipeline:
+- **Sprint prompts:** Injected as Layer 0.5 (CODEBASE CONTEXT) before executive context
+- **Prepare pipeline:** Included in plan, epic, and sanity check generation
+- **Triage:** Included in complexity classification
+- **File index:** Auto-refreshed on each `fry run` if stale (newer git commits exist)
+
 ## Prepare Phase
 
 Generate build artifacts without running a build:

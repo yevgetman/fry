@@ -47,7 +47,7 @@ fry/
 │   │   └── validator.go         # Epic structural validation
 │   ├── sprint/
 │   │   ├── runner.go            # Sprint execution loop (iterations, no-op detection)
-│   │   ├── prompt.go            # Layered prompt assembly (8 layers)
+│   │   ├── prompt.go            # Layered prompt assembly (9 layers, 0.5 through 5)
 │   │   ├── progress.go          # Iteration memory management
 │   │   └── compactor.go         # Sprint progress → epic-progress summarization
 │   ├── verify/

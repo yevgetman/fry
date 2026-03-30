@@ -29,6 +29,18 @@ type PromptOpts struct {
 func AssemblePrompt(opts PromptOpts) (string, error) {
 	var b strings.Builder
 
+	// Layer 0.5: Codebase context (only if .fry/codebase.md exists)
+	codebaseContent := readOptionalPromptFile(filepath.Join(opts.ProjectDir, config.CodebaseFile))
+	if codebaseContent != "" {
+		b.WriteString("# ===== CODEBASE CONTEXT =====\n")
+		b.WriteString("# This build modifies an existing codebase. The following document describes\n")
+		b.WriteString("# what currently exists. Use this as ground truth for understanding the\n")
+		b.WriteString("# project's architecture, conventions, and key files. Follow existing\n")
+		b.WriteString("# patterns unless the sprint instructions explicitly direct otherwise.\n\n")
+		b.WriteString(ensureTrailingNewline(codebaseContent))
+		b.WriteString("\n")
+	}
+
 	// Layer 1: Executive context (only if content exists)
 	executiveContent := opts.ExecutiveContent
 	if executiveContent == "" {

@@ -12,6 +12,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/yevgetman/fry/internal/config"
 )
 
 const (
@@ -755,6 +758,41 @@ func WriteFileIndex(snap *StructuralSnapshot, path string) error {
 	}
 
 	return os.WriteFile(path, []byte(b.String()), 0o644)
+}
+
+// RefreshFileIndexIfStale regenerates .fry/file-index.txt if it is older than
+// the most recent git commit. Returns true if the index was regenerated.
+func RefreshFileIndexIfStale(ctx context.Context, projectDir string) bool {
+	indexPath := filepath.Join(projectDir, config.FileIndexFile)
+	indexStat, err := os.Stat(indexPath)
+	if err != nil {
+		// No index file — nothing to refresh (fry init wasn't run).
+		return false
+	}
+
+	// Get the timestamp of the latest git commit.
+	out, gitErr := gitOutputCtx(ctx, projectDir, "log", "-1", "--format=%ct")
+	if gitErr != nil {
+		return false
+	}
+	epochStr := strings.TrimSpace(out)
+	epoch, parseErr := strconv.ParseInt(epochStr, 10, 64)
+	if parseErr != nil {
+		return false
+	}
+	headTime := time.Unix(epoch, 0)
+
+	if headTime.After(indexStat.ModTime()) {
+		snap, scanErr := RunStructuralScan(ctx, projectDir)
+		if scanErr != nil {
+			return false
+		}
+		if writeErr := WriteFileIndex(snap, indexPath); writeErr != nil {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // gitOutputCtx runs a git command with context and returns stdout.

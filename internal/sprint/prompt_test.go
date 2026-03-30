@@ -1,10 +1,14 @@
 package sprint
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/yevgetman/fry/internal/epic"
 )
 
@@ -98,4 +102,47 @@ func TestAssemblePrompt_WritingMode_PlanReference(t *testing.T) {
 	assert.Contains(t, prompt, "content plan")
 	assert.Contains(t, prompt, "chapters/sections")
 	assert.NotContains(t, prompt, "project architecture")
+}
+
+func TestAssemblePrompt_CodebaseContext_Present(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Write a codebase.md file.
+	fryDir := filepath.Join(dir, ".fry")
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "codebase.md"),
+		[]byte("# Codebase: Test\n\n## Summary\nA test project with Go and React.\n"), 0o644))
+
+	prompt, err := AssemblePrompt(PromptOpts{
+		ProjectDir:   dir,
+		SprintPrompt: "Add a new feature.",
+	})
+	require.NoError(t, err)
+
+	// Layer 0.5 should appear.
+	assert.Contains(t, prompt, "CODEBASE CONTEXT")
+	assert.Contains(t, prompt, "A test project with Go and React")
+
+	// Layer 0.5 should appear BEFORE Layer 1 (PROJECT CONTEXT) and Layer 2 (STRATEGIC PLAN).
+	codebaseIdx := strings.Index(prompt, "CODEBASE CONTEXT")
+	strategicIdx := strings.Index(prompt, "STRATEGIC PLAN")
+	assert.True(t, codebaseIdx < strategicIdx,
+		"Layer 0.5 (CODEBASE CONTEXT) should appear before Layer 2 (STRATEGIC PLAN)")
+}
+
+func TestAssemblePrompt_CodebaseContext_Absent(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	prompt, err := AssemblePrompt(PromptOpts{
+		ProjectDir:   dir,
+		SprintPrompt: "Build from scratch.",
+	})
+	require.NoError(t, err)
+
+	// No codebase.md → no Layer 0.5.
+	assert.NotContains(t, prompt, "CODEBASE CONTEXT")
 }

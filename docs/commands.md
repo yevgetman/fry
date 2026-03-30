@@ -309,6 +309,11 @@ fry init [flags]
 7. Prints a scan summary (files, languages, frameworks, dependencies, git commits).
 8. Runs a semantic scan using a Sonnet-class LLM to generate `.fry/codebase.md` — a comprehensive document describing the project's architecture, conventions, key files, dependencies, and gotchas. Use `--heuristic-only` to skip this step.
 
+When `.fry/codebase.md` exists, it is automatically used by:
+- **Sprint prompts** — injected as Layer 0.5 (CODEBASE CONTEXT) before the project context
+- **Prepare pipeline** — included in plan, epic, and sanity check generation so sprints are decomposed with awareness of existing code
+- **Triage classification** — included in complexity assessment to account for existing code patterns
+
 `fry init` does **not** create `plans/plan.md`. You write that yourself using `plan.example.md` as a reference, or provide a `--user-prompt` to `fry prepare` / `fry run` and fry will generate the plan for you.
 
 Running `fry init` in an already-initialized project is safe — it only creates missing directories, refreshes the example file, and rescans the codebase.
