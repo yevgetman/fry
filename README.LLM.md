@@ -23,7 +23,7 @@ fry/
 │   ├── cli/                     # Cobra commands: root, run, init, prepare, replan, clean, version, status, identity
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose, --engine, etc.)
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
-│   │   ├── init.go              # Scaffold project structure (plans/, assets/, media/, git, .gitignore)
+│   │   ├── init.go              # Scaffold project structure; auto-detect and scan existing codebases
 │   │   ├── prepare.go           # Generate .fry/ artifacts from plans
 │   │   ├── replan.go            # Mid-build replanning
 │   │   ├── clean.go             # Archive .fry/ and build outputs to .fry-archive/
@@ -47,7 +47,7 @@ fry/
 │   │   └── validator.go         # Epic structural validation
 │   ├── sprint/
 │   │   ├── runner.go            # Sprint execution loop (iterations, no-op detection)
-│   │   ├── prompt.go            # Layered prompt assembly (8 layers)
+│   │   ├── prompt.go            # Layered prompt assembly (10 layers, 0.5 through 5)
 │   │   ├── progress.go          # Iteration memory management
 │   │   └── compactor.go         # Sprint progress → epic-progress summarization
 │   ├── verify/
@@ -87,6 +87,13 @@ fry/
 │   ├── archive/
 │   │   ├── archive.go           # Build archiving (.fry/ → .fry-archive/)
 │   │   └── scan.go              # BuildSummary type, ScanArchives, ScanBuildDir (lightweight build scanning)
+│   ├── scan/
+│   │   ├── types.go             # StructuralSnapshot, FileEntry, GitHistory, Language, Dependency types
+│   │   ├── detect.go            # IsExistingProject: heuristic detection (git history, markers, file count)
+│   │   ├── structural.go        # RunStructuralScan: file tree, languages, frameworks, deps, git history
+│   │   ├── semantic.go          # RunSemanticScan: LLM-powered codebase analysis → .fry/codebase.md
+│   │   ├── memories.go          # ExtractCodebaseMemories: post-build learning extraction + dedup
+│   │   └── compact.go           # CompactMemories: reduce memories from 50+ to ~20 via LLM
 │   ├── lock/lock.go             # File-based build concurrency lock + IsLocked check
 │   ├── log/log.go               # Verbose logging, agent banners
 │   ├── media/media.go           # Binary asset scanning (images, PDFs, fonts)

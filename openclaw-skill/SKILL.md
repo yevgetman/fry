@@ -126,8 +126,42 @@ fry init --project-dir /path/to/project
 ```
 
 Creates `plans/`, `assets/`, `media/` directories with a template plan file,
-initializes git, and configures `.gitignore` for Fry artifacts. Only run this
-when the user asks to initialize a new Fry project.
+initializes git, and configures `.gitignore` for Fry artifacts.
+
+**Existing project detection:** When run in a directory with an existing codebase
+(detected via git history >1 commit, project marker files like `go.mod`/`package.json`,
+or >10 non-hidden files), `fry init` automatically runs a structural scan:
+- Walks the file tree (respecting `.gitignore`)
+- Detects languages, frameworks, entry points, and test directories
+- Parses dependency manifests (`go.mod`, `package.json`, `requirements.txt`)
+- Analyzes git history (recent commits, frequently changed files, top authors)
+- Writes `.fry/file-index.txt` with a human-readable index and statistics
+
+On existing projects, `fry init` also runs a **semantic scan** by default using a
+Sonnet-class LLM to generate `.fry/codebase.md` — a comprehensive document covering
+architecture, conventions, key files, dependencies, and gotchas. This document is
+injected into sprint prompts as Layer 0.5 context.
+
+Use `--heuristic-only` to skip the semantic scan and only run structural heuristics.
+Use `--engine` to override the engine used for the semantic scan.
+
+```bash
+fry init --project-dir /path/to/project             # Full scan (structural + semantic)
+fry init --heuristic-only --project-dir /path/to/project  # Structural only
+```
+
+Running `fry init` in an already-initialized project rescans the codebase.
+
+**Pipeline integration:** When `.fry/codebase.md` exists, it is automatically used
+throughout the build pipeline:
+- **Sprint prompts:** Injected as Layer 0.5 (CODEBASE CONTEXT) before executive context
+- **Prepare pipeline:** Included in plan, epic, and sanity check generation
+- **Triage:** Included in complexity classification
+- **File index:** Auto-refreshed on each `fry run` if stale (newer git commits exist)
+- **Codebase memories:** After each build, Fry extracts project-specific learnings
+  into `.fry/codebase-memories/` (Layer 0.75 in sprint prompts). Memories are
+  deduplicated across builds, reinforced when confirmed, and compacted from 50+ to ~20
+  via LLM when the threshold is exceeded. Memories persist across `fry clean`.
 
 ## Prepare Phase
 

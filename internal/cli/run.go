@@ -35,6 +35,7 @@ import (
 	"github.com/yevgetman/fry/internal/prepare"
 	"github.com/yevgetman/fry/internal/report"
 	"github.com/yevgetman/fry/internal/review"
+	"github.com/yevgetman/fry/internal/scan"
 	"github.com/yevgetman/fry/internal/shellhook"
 	"github.com/yevgetman/fry/internal/sprint"
 	"github.com/yevgetman/fry/internal/steering"
@@ -160,6 +161,11 @@ var runCmd = &cobra.Command{
 					frlog.Log("▶ CONTINUE  reattaching to branch: %s", persisted.BranchName)
 				}
 			}
+		}
+
+		// Refresh file index if stale (codebase awareness).
+		if scan.RefreshFileIndexIfStale(ctx, projectPath) {
+			frlog.Log("  SCAN: refreshed stale file index")
 		}
 
 		epicArg := filepath.Join(config.FryDir, "epic.md")
@@ -1539,6 +1545,103 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Extract codebase-specific memories from this build.
+		{
+			memEngine, memErr := newResilientEngine(engineName, mcpOpts...)
+			if memErr != nil {
+				frlog.Log("WARNING: could not create engine for memory extraction: %v", memErr)
+			} else {
+				memModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionCodebaseMemory)
+				frlog.Log("  MEMORY: extracting codebase learnings...  model=%s", memModel)
+
+				// Collect build context for memory extraction.
+				scratchpad, _ := os.ReadFile(filepath.Join(projectPath, config.ObserverScratchpadFile))
+				events, _ := os.ReadFile(filepath.Join(projectPath, config.ObserverEventsFile))
+				auditContent, _ := os.ReadFile(filepath.Join(projectPath, config.SprintAuditFile))
+
+				diffStat := ""
+				if ds, dsErr := git.GitDiffForAudit(ctx, projectPath); dsErr == nil && len(ds) < 5000 {
+					diffStat = ds
+				}
+
+				buildID := fmt.Sprintf("build-%s", time.Now().Format("20060102-150405"))
+				var sprintSummaryLines []string
+				for _, r := range summaryCopy {
+					sprintSummaryLines = append(sprintSummaryLines,
+						fmt.Sprintf("Sprint %d (%s): %s [heal=%d]", r.Number, r.Name, r.Status, r.HealAttempts))
+				}
+
+				if extractErr := scan.ExtractCodebaseMemories(ctx, scan.MemoryExtractionOpts{
+					ProjectDir:    projectPath,
+					Engine:        memEngine,
+					Model:         memModel,
+					BuildID:       buildID,
+					SprintCount:   ep.TotalSprints,
+					Scratchpad:    string(scratchpad),
+					Events:        string(events),
+					SprintSummary: strings.Join(sprintSummaryLines, "\n"),
+					GitDiffStat:   diffStat,
+					AuditFindings: string(auditContent),
+				}); extractErr != nil {
+					frlog.Log("WARNING: memory extraction failed (non-fatal): %v", extractErr)
+				} else {
+					frlog.Log("  MEMORY: codebase learnings extracted")
+				}
+
+				// Compact if over threshold.
+				if scan.NeedsCompaction(projectPath) {
+					frlog.Log("  MEMORY: compacting memories (over %d threshold)...", config.MaxMemoryCount)
+					if compactErr := scan.CompactMemories(ctx, projectPath, memEngine, memModel); compactErr != nil {
+						frlog.Log("WARNING: memory compaction failed (non-fatal): %v", compactErr)
+					} else {
+						frlog.Log("  MEMORY: compaction complete")
+					}
+				}
+			}
+		}
+
+		// Incremental codebase.md update (or first-time generation for from-scratch projects).
+		{
+			codebasePath := filepath.Join(projectPath, config.CodebaseFile)
+			_, codebaseExists := os.Stat(codebasePath)
+
+			if codebaseExists == nil {
+				// Existing codebase.md — check if incremental update is warranted.
+				if diffStat, dsErr := git.GitDiffForAudit(ctx, projectPath); dsErr == nil {
+					if scan.ShouldUpdateCodebaseDoc(diffStat) {
+						scanEng, sErr := newResilientEngine(engineName, mcpOpts...)
+						if sErr == nil {
+							scanModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionCodebaseScan)
+							frlog.Log("  SCAN: updating codebase.md (significant changes detected)")
+							if updateErr := scan.UpdateCodebaseDoc(ctx, projectPath, diffStat, scanEng, scanModel); updateErr != nil {
+								frlog.Log("WARNING: codebase.md update failed (non-fatal): %v", updateErr)
+							}
+						}
+					}
+				}
+			} else if os.IsNotExist(codebaseExists) {
+				// No codebase.md — generate one for the first time (from-scratch project).
+				scanEng, sErr := newResilientEngine(engineName, mcpOpts...)
+				if sErr == nil {
+					snap, snapErr := scan.RunStructuralScan(ctx, projectPath)
+					if snapErr == nil {
+						scanModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionCodebaseScan)
+						frlog.Log("  SCAN: generating initial codebase.md (first build complete)")
+						if genErr := scan.RunSemanticScan(ctx, scan.SemanticScanOpts{
+							ProjectDir: projectPath,
+							Snapshot:   snap,
+							Engine:     scanEng,
+							Model:      scanModel,
+						}); genErr != nil {
+							frlog.Log("WARNING: initial codebase.md generation failed (non-fatal): %v", genErr)
+						}
+						// Also write file index.
+						_ = scan.WriteFileIndex(snap, filepath.Join(projectPath, config.FileIndexFile))
+					}
+				}
+			}
+		}
+
 		// Upload experience to consciousness API (background, bounded by timeout)
 		var uploadDone <-chan struct{}
 		if collector != nil {
@@ -2286,15 +2389,22 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 	}
 	triageModel := engine.ResolveModelForSession(engName, string(effortLevel), engine.SessionTriage)
 
+	// Load codebase context for triage if available.
+	triageCodebaseContent := ""
+	if data, readErr := os.ReadFile(filepath.Join(projectPath, config.CodebaseFile)); readErr == nil {
+		triageCodebaseContent = string(data)
+	}
+
 	decision := triage.Classify(ctx, triage.TriageOpts{
-		ProjectDir:  projectPath,
-		UserPrompt:  userPrompt,
-		PlanContent: planContent,
-		ExecContent: execContent,
-		Engine:      eng,
-		Model:       triageModel,
-		Mode:        mode,
-		Verbose:     frlog.Verbose,
+		ProjectDir:      projectPath,
+		UserPrompt:      userPrompt,
+		PlanContent:     planContent,
+		ExecContent:     execContent,
+		CodebaseContent: triageCodebaseContent,
+		Engine:          eng,
+		Model:           triageModel,
+		Mode:            mode,
+		Verbose:         frlog.Verbose,
 	})
 
 	// Interactive confirmation (unless skipped).

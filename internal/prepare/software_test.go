@@ -165,3 +165,25 @@ func TestSoftwarePromptBuilders(t *testing.T) {
 		assert.NotContains(t, result, "Also read plans/executive.md")
 	})
 }
+
+func TestCodebaseSection(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-empty content", func(t *testing.T) {
+		t.Parallel()
+		result := codebaseSection("# Codebase: Test\nA Go project.")
+		assert.Contains(t, result, "EXISTING CODEBASE CONTEXT")
+		assert.Contains(t, result, "A Go project")
+		assert.Contains(t, result, "Leverage existing code")
+	})
+
+	t.Run("empty content", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "", codebaseSection(""))
+	})
+
+	t.Run("whitespace-only content", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "", codebaseSection("   \n  \t  "))
+	})
+}

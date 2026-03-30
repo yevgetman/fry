@@ -153,6 +153,14 @@ const (
 	AgentPauseFile     = ".fry/agent-pause"
 	DecisionNeededFile = ".fry/decision-needed.md"
 
+	// Codebase awareness constants
+	CodebaseFile         = ".fry/codebase.md"
+	FileIndexFile        = ".fry/file-index.txt"
+	CodebaseMemoriesDir  = ".fry/codebase-memories"
+	MaxMemoryCount       = 50
+	CompactedMemoryCount = 20
+	MaxMemoryPromptBytes = 10240 // 10KB cap for memory injection into prompt
+
 	// Rate-limit retry constants
 	RateLimitMaxRetries   = 5
 	RateLimitBaseDelaySec = 10   // seconds; converted to time.Duration by caller

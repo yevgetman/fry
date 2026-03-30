@@ -77,6 +77,7 @@ This is not optional. When you add, modify, or remove a feature:
    - Project layout → `docs/project-structure.md`
    - Terminal output → `docs/terminal-output.md`
    - Architecture → `docs/architecture.md`
+   - Codebase awareness → `docs/codebase-awareness.md`
 
 3. **`README.LLM.md`** — Update if the change affects the directory layout, core types, execution flow, CLI flags, key constants, or any section documented there. This file is the AI agent reference and must stay accurate.
 

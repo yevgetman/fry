@@ -18,14 +18,15 @@ import (
 
 // TriageOpts configures the triage classifier.
 type TriageOpts struct {
-	ProjectDir  string
-	UserPrompt  string
-	PlanContent string // contents of plans/plan.md, may be empty
-	ExecContent string // contents of plans/executive.md, may be empty
-	Engine      engine.Engine
-	Model       string
-	Mode        prepare.Mode
-	Verbose     bool
+	ProjectDir      string
+	UserPrompt      string
+	PlanContent     string // contents of plans/plan.md, may be empty
+	ExecContent     string // contents of plans/executive.md, may be empty
+	CodebaseContent string // contents of .fry/codebase.md, may be empty
+	Engine          engine.Engine
+	Model           string
+	Mode            prepare.Mode
+	Verbose         bool
 }
 
 // triageJSON is the expected JSON structure from the triage classifier.
@@ -228,6 +229,15 @@ func buildTriagePrompt(opts TriageOpts) string {
 	if strings.TrimSpace(opts.UserPrompt) != "" {
 		b.WriteString("### User Directive\n\n")
 		b.WriteString(opts.UserPrompt)
+		b.WriteString("\n\n")
+		hasInput = true
+	}
+	if strings.TrimSpace(opts.CodebaseContent) != "" {
+		b.WriteString("### Existing Codebase\n\n")
+		b.WriteString("This task modifies an existing codebase. Consider the codebase's size, complexity,\n")
+		b.WriteString("and patterns when classifying. Tasks that integrate with established code are often\n")
+		b.WriteString("more complex than equivalent greenfield tasks.\n\n")
+		b.WriteString(opts.CodebaseContent)
 		b.WriteString("\n\n")
 		hasInput = true
 	}

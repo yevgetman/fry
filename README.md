@@ -184,7 +184,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | Command | Description |
 |---|---|
 | `fry run` | Execute sprints from an epic file (default command) |
-| `fry init` | Scaffold the fry project structure (`plans/`, `assets/`, `media/`, git, `.gitignore`) |
+| `fry init` | Scaffold project structure; auto-detect and scan existing codebases |
 | `fry prepare` | Generate `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan |
 | `fry replan` | Replan an epic after a deviation |
 | `fry identity` | Print Fry's compiled-in identity (core + disposition) |
@@ -249,6 +249,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Observer](docs/observer.md) | Metacognitive layer: event stream, identity, wake-ups, effort-level gating |
 | [Consciousness](docs/consciousness.md) | Experience synthesis and identity pipeline |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
+| [Codebase Awareness](docs/codebase-awareness.md) | Existing codebase detection, scanning, memories, and pipeline integration |
 
 ## License
 

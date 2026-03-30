@@ -244,6 +244,30 @@ func TestBuildTriagePrompt(t *testing.T) {
 				"Effort Level Guidelines",
 			},
 		},
+		{
+			name: "with codebase context",
+			opts: TriageOpts{
+				UserPrompt:      "add a new endpoint",
+				CodebaseContent: "# Codebase: MyApp\n\n## Summary\nA Next.js app with 50 files.",
+				Mode:            prepare.ModeSoftware,
+			},
+			wantContains: []string{
+				"Existing Codebase",
+				"MyApp",
+				"Next.js app with 50 files",
+				"add a new endpoint",
+			},
+		},
+		{
+			name: "no codebase context does not show section",
+			opts: TriageOpts{
+				UserPrompt: "build from scratch",
+				Mode:       prepare.ModeSoftware,
+			},
+			wantAbsent: []string{
+				"Existing Codebase",
+			},
+		},
 	}
 
 	for _, tt := range tests {
