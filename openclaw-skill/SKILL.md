@@ -34,6 +34,8 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Resume (skip to healing) | `fry run -y --resume --project-dir <dir> --json-report --telemetry` |
 | Replan after deviation | `fry replan --project-dir <dir>` |
 | Stream events | `fry events --follow --json --project-dir <dir>` |
+| Monitor build | `fry monitor --json --project-dir <dir>` |
+| Monitor dashboard | `fry monitor --dashboard --project-dir <dir>` |
 | Consciousness stats | `fry status --consciousness --project-dir <dir>` |
 | Trigger reflection | `fry reflect` |
 | Print identity | `fry identity` (or `fry identity --full`) |
@@ -503,6 +505,20 @@ The file contains:
 
 Prefer this file over `fry status --json` when monitoring a running build —
 it requires no subprocess and updates in real time.
+
+## Real-Time Monitoring
+
+`fry monitor` provides continuous, multi-source monitoring with enriched output:
+
+```bash
+fry monitor --json --project-dir /path/to/project   # NDJSON snapshots
+fry monitor --dashboard --project-dir /path/to/project  # Refreshing dashboard
+fry monitor --logs --project-dir /path/to/project    # Tail active build log
+```
+
+The monitor composes data from events, build status, sprint progress, build logs, and process liveness. It enriches events with elapsed times, sprint fractions (`2/5`), and phase transitions. The `--json` output emits one snapshot per state change, including `new_events` with enrichment fields.
+
+By default, the monitor waits for a build to start. Use `--no-wait` to exit immediately if no build is active.
 
 ## Reading Build Logs
 

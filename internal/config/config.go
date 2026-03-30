@@ -166,4 +166,10 @@ const (
 	RateLimitBaseDelaySec = 10   // seconds; converted to time.Duration by caller
 	RateLimitMaxDelaySec  = 120  // seconds
 	RateLimitJitter       = 0.25 // fraction of delay randomized [0.0, 1.0]
+
+	// Monitor constants
+	MonitorDefaultIntervalSec  = 2  // default polling interval in seconds
+	MonitorDefaultLogTailLines = 20 // lines to tail from active build log
+	MonitorIdleSlowdownTicks   = 10 // unchanged ticks before slowing to idle interval
+	MonitorSlowIntervalSec     = 5  // idle polling interval in seconds
 )

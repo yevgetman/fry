@@ -386,6 +386,53 @@ Run 'fry run' to start a new build.
 
 ---
 
+## `fry monitor`
+
+Real-time build monitoring with enriched event stream. Composes data from events, build status, sprint progress, build logs, and process liveness into a unified view. See [Monitor](monitor.md) for full details.
+
+```
+fry monitor [project-dir] [flags]
+```
+
+### Positional Arguments
+
+| Position | Argument | Description |
+|---|---|---|
+| 1 | `project-dir` | Project directory to monitor (default: current directory or `--project-dir` value) |
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--dashboard` | Show a refreshing status dashboard instead of the event stream |
+| `--logs` | Tail the active build log |
+| `--json` | Output snapshots as NDJSON (one JSON object per line) |
+| `--no-wait` | Exit immediately if no active build (default: wait for build to start) |
+| `--interval <duration>` | Polling interval (e.g. `1s`, `500ms`; default: `2s`) |
+
+### Examples
+
+```bash
+fry monitor                                 # Stream enriched events for current directory
+fry monitor /path/to/project                # Monitor a build in another directory
+fry monitor --dashboard                     # Refreshing dashboard view
+fry monitor --logs                          # Tail the active build log
+fry monitor --json                          # Machine-readable NDJSON output
+fry monitor --no-wait                       # Exit if no active build
+fry monitor --interval 500ms                # Faster polling
+```
+
+### Example output (stream mode)
+
+```
+[10:00:05]  +0s      build_start       effort=high epic=MyFeature sprints=3
+[10:00:15]  +10s     sprint_start      1/3  name=Setup
+[10:05:15]  +5m10s   sprint_complete   1/3  status=PASS duration=5m
+[10:05:18]  +5m13s   sprint_start      2/3  name=API  [triage -> sprint]
+```
+
+---
+
 ## `fry version`
 
 Print the Fry version string.

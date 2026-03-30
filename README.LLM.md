@@ -118,6 +118,12 @@ fry/
 │   │   ├── event.go             # Event types, EmitEvent, ReadEvents, ReadRecentEvents
 │   │   ├── identity.go          # ReadIdentity (delegates to consciousness.LoadCoreIdentity)
 │   │   └── prompt.go            # Wake-up prompt builder, response parser, directive extraction
+│   ├── monitor/
+│   │   ├── snapshot.go          # Snapshot and EnrichedEvent types
+│   │   ├── source.go            # Source interface + 7 implementations (event, phase, status, lock, progress, log, exit)
+│   │   ├── enrichment.go        # Pure event enrichment: elapsed times, sprint fractions, phase transitions
+│   │   ├── stream.go            # Monitor orchestrator: New, Run (continuous), Snapshot (one-shot)
+│   │   └── render.go            # Rendering: stream, dashboard, log tail, waiting/ended messages
 │   ├── metrics/tokens.go        # Token usage parsing for Claude and Codex engines
 │   ├── report/report.go         # BuildReport types and JSON serialisation (--json-report)
 │   ├── shellhook/shellhook.go   # Pre-sprint/iteration shell commands
@@ -479,6 +485,7 @@ make clean     # rm -rf bin/
 | `project-structure.md` | Directory layout, file reference |
 | `terminal-output.md` | Output format, logging |
 | `architecture.md` | Internal package structure, data flow |
+| `monitor.md` | Real-time build monitoring: event stream, dashboard, log tail, NDJSON |
 | `observer.md` | Metacognitive layer: events, identity, wake-ups |
 | `git-strategy.md` | Branch/worktree isolation strategies |
 | `self-improvement.md` | Automated self-improvement pipeline |

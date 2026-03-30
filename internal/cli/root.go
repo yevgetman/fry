@@ -78,6 +78,7 @@ func init() {
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(eventsCmd)
 	rootCmd.AddCommand(auditCmd)
+	rootCmd.AddCommand(monitorCmd)
 }
 
 func Execute() error {
