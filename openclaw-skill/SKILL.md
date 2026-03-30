@@ -137,13 +137,17 @@ or >10 non-hidden files), `fry init` automatically runs a structural scan:
 - Analyzes git history (recent commits, frequently changed files, top authors)
 - Writes `.fry/file-index.txt` with a human-readable index and statistics
 
-When `--engine` is provided (or `FRY_ENGINE` is set), `fry init` also runs a
-**semantic scan** using a Sonnet-class LLM to generate `.fry/codebase.md` — a
-comprehensive document covering architecture, conventions, key files, dependencies,
-and gotchas. This document is injected into sprint prompts as Layer 0.5 context.
+On existing projects, `fry init` also runs a **semantic scan** by default using a
+Sonnet-class LLM to generate `.fry/codebase.md` — a comprehensive document covering
+architecture, conventions, key files, dependencies, and gotchas. This document is
+injected into sprint prompts as Layer 0.5 context.
+
+Use `--heuristic-only` to skip the semantic scan and only run structural heuristics.
+Use `--engine` to override the engine used for the semantic scan.
 
 ```bash
-fry init --engine claude --project-dir /path/to/project
+fry init --project-dir /path/to/project             # Full scan (structural + semantic)
+fry init --heuristic-only --project-dir /path/to/project  # Structural only
 ```
 
 Running `fry init` in an already-initialized project rescans the codebase.

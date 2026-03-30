@@ -16,12 +16,15 @@ import (
 	"github.com/yevgetman/fry/internal/scan"
 )
 
-var initEngine string
+var (
+	initEngine string
+	initHeuristicOnly bool
+)
 
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Scaffold the fry project structure in the current directory",
-	Long:  "Scaffold the fry project structure. In an empty directory, creates plans/, assets/, and media/ with a plan template. In an existing project (detected via git history, project markers, or file count), also runs a structural scan and writes .fry/file-index.txt. When an --engine is provided, a semantic scan produces .fry/codebase.md with deep project understanding.",
+	Long:  "Scaffold the fry project structure. In an empty directory, creates plans/, assets/, and media/ with a plan template. In an existing project (detected via git history, project markers, or file count), runs a structural scan and a semantic LLM scan to generate .fry/codebase.md. Use --heuristic-only to skip the semantic scan and only run structural heuristics.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectPath, err := resolveProjectDir(projectDir)
 		if err != nil {
@@ -66,10 +69,12 @@ var initCmd = &cobra.Command{
 
 			printScanSummary(cmd, snap)
 
-			// Semantic scan: generate .fry/codebase.md if an engine is available.
-			if err := runSemanticScanIfPossible(ctx, cmd, projectPath, snap); err != nil {
-				// Non-fatal: structural scan succeeded, semantic is optional.
-				fmt.Fprintf(cmd.ErrOrStderr(), "fry: warning: semantic scan skipped: %v\n", err)
+			// Semantic scan: generate .fry/codebase.md (default behavior).
+			if initHeuristicOnly {
+				fmt.Fprintln(cmd.OutOrStdout(), "  Semantic scan skipped (--heuristic-only)")
+			} else if err := runSemanticScan(ctx, cmd, projectPath, snap); err != nil {
+				// Non-fatal: structural scan succeeded, semantic failed gracefully.
+				fmt.Fprintf(cmd.ErrOrStderr(), "fry: warning: semantic scan failed: %v\n", err)
 			}
 
 			fmt.Fprintln(cmd.OutOrStdout())
@@ -90,18 +95,13 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initEngine, "engine", "", "Engine for semantic codebase scan (claude, codex, ollama)")
+	initCmd.Flags().StringVar(&initEngine, "engine", "", "Engine for semantic codebase scan (default: auto-resolved)")
+	initCmd.Flags().BoolVar(&initHeuristicOnly, "heuristic-only", false, "Skip semantic LLM scan; only run structural heuristics")
 }
 
-// runSemanticScanIfPossible resolves an engine and runs the semantic scan.
-// Only attempts when --engine is explicitly provided or FRY_ENGINE is set.
-// Returns an error (treated as non-fatal by the caller) if no engine is available.
-func runSemanticScanIfPossible(ctx context.Context, cmd *cobra.Command, projectDir string, snap *scan.StructuralSnapshot) error {
-	// Only run semantic scan if the user explicitly configured an engine.
-	if initEngine == "" && os.Getenv("FRY_ENGINE") == "" {
-		return fmt.Errorf("no engine configured (use --engine or set FRY_ENGINE)")
-	}
-
+// runSemanticScan resolves an engine and runs the semantic scan.
+// Returns an error (treated as non-fatal by the caller) on failure.
+func runSemanticScan(ctx context.Context, cmd *cobra.Command, projectDir string, snap *scan.StructuralSnapshot) error {
 	engineName, err := engine.ResolveEngine(initEngine, "", "", config.DefaultEngine)
 	if err != nil {
 		return fmt.Errorf("resolve engine: %w", err)

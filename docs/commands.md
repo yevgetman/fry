@@ -290,7 +290,8 @@ fry init [flags]
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
-| `--engine <name>` | Engine for semantic codebase scan (`claude`, `codex`, `ollama`). When provided (or `FRY_ENGINE` is set), generates `.fry/codebase.md` with LLM-powered project understanding using a Sonnet-class model. |
+| `--engine <name>` | Override engine for semantic codebase scan (`claude`, `codex`, `ollama`). Default: auto-resolved via `FRY_ENGINE` or config default. |
+| `--heuristic-only` | Skip semantic LLM scan; only run structural heuristics (file tree, language detection, dependency parsing). |
 
 ### Behavior
 
@@ -306,7 +307,7 @@ fry init [flags]
 5. Runs a structural scan: file tree, language/framework detection, dependency parsing, entry point identification, git history analysis.
 6. Writes `.fry/file-index.txt` with a human-readable file index and project stats.
 7. Prints a scan summary (files, languages, frameworks, dependencies, git commits).
-8. If `--engine` is provided or `FRY_ENGINE` is set: runs a semantic scan using a Sonnet-class LLM to generate `.fry/codebase.md` — a comprehensive document describing the project's architecture, conventions, key files, dependencies, and gotchas.
+8. Runs a semantic scan using a Sonnet-class LLM to generate `.fry/codebase.md` — a comprehensive document describing the project's architecture, conventions, key files, dependencies, and gotchas. Use `--heuristic-only` to skip this step.
 
 `fry init` does **not** create `plans/plan.md`. You write that yourself using `plan.example.md` as a reference, or provide a `--user-prompt` to `fry prepare` / `fry run` and fry will generate the plan for you.
 
@@ -325,7 +326,8 @@ A directory is considered an existing project when **any** of these hold:
 fry init                                # Initialize in the current directory
 fry init --project-dir /path/to/proj    # Initialize a different directory
 cd existing-project && fry init         # Scan existing codebase and scaffold fry
-fry init --engine claude                # Scan + generate codebase.md with Claude
+fry init --engine claude                # Override engine for semantic scan
+fry init --heuristic-only               # Structural scan only, no LLM call
 ```
 
 ---
