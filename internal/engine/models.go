@@ -45,6 +45,7 @@ const (
 	SessionTriage       SessionType = "triage"
 	SessionObserver           SessionType = "observer"
 	SessionExperienceSummary SessionType = "experience-summary"
+	SessionCodebaseScan     SessionType = "codebase-scan"
 )
 
 // Tier-to-model mapping tables.
@@ -226,6 +227,9 @@ func TierForSession(engineName, effort string, session SessionType) ModelTier {
 
 	case SessionExperienceSummary:
 		return TierMini
+
+	case SessionCodebaseScan:
+		return TierStandard
 
 	default:
 		return TierStandard

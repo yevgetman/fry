@@ -10,14 +10,18 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/git"
+	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/scan"
 )
+
+var initEngine string
 
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Scaffold the fry project structure in the current directory",
-	Long: "Scaffold the fry project structure. In an empty directory, creates plans/, assets/, and media/ with a plan template. In an existing project (detected via git history, project markers, or file count), also runs a structural scan and writes .fry/file-index.txt.",
+	Long:  "Scaffold the fry project structure. In an empty directory, creates plans/, assets/, and media/ with a plan template. In an existing project (detected via git history, project markers, or file count), also runs a structural scan and writes .fry/file-index.txt. When an --engine is provided, a semantic scan produces .fry/codebase.md with deep project understanding.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectPath, err := resolveProjectDir(projectDir)
 		if err != nil {
@@ -62,6 +66,12 @@ var initCmd = &cobra.Command{
 
 			printScanSummary(cmd, snap)
 
+			// Semantic scan: generate .fry/codebase.md if an engine is available.
+			if err := runSemanticScanIfPossible(ctx, cmd, projectPath, snap); err != nil {
+				// Non-fatal: structural scan succeeded, semantic is optional.
+				fmt.Fprintf(cmd.ErrOrStderr(), "fry: warning: semantic scan skipped: %v\n", err)
+			}
+
 			fmt.Fprintln(cmd.OutOrStdout())
 			fmt.Fprintln(cmd.OutOrStdout(), "Codebase indexed. Next steps:")
 			fmt.Fprintln(cmd.OutOrStdout(), "  1. Run: fry run --user-prompt \"describe what you want to change\"")
@@ -77,6 +87,42 @@ var initCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	initCmd.Flags().StringVar(&initEngine, "engine", "", "Engine for semantic codebase scan (claude, codex, ollama)")
+}
+
+// runSemanticScanIfPossible resolves an engine and runs the semantic scan.
+// Only attempts when --engine is explicitly provided or FRY_ENGINE is set.
+// Returns an error (treated as non-fatal by the caller) if no engine is available.
+func runSemanticScanIfPossible(ctx context.Context, cmd *cobra.Command, projectDir string, snap *scan.StructuralSnapshot) error {
+	// Only run semantic scan if the user explicitly configured an engine.
+	if initEngine == "" && os.Getenv("FRY_ENGINE") == "" {
+		return fmt.Errorf("no engine configured (use --engine or set FRY_ENGINE)")
+	}
+
+	engineName, err := engine.ResolveEngine(initEngine, "", "", config.DefaultEngine)
+	if err != nil {
+		return fmt.Errorf("resolve engine: %w", err)
+	}
+
+	eng, err := newResilientEngine(engineName)
+	if err != nil {
+		return fmt.Errorf("create engine: %w", err)
+	}
+
+	model := engine.ResolveModelForSession(engineName, "", engine.SessionCodebaseScan)
+
+	frylog.Log("▶ SCAN     generating codebase.md with %s (%s)", engineName, model)
+	fmt.Fprintln(cmd.OutOrStdout(), "  Generating codebase understanding (this may take a moment)...")
+
+	return scan.RunSemanticScan(ctx, scan.SemanticScanOpts{
+		ProjectDir: projectDir,
+		Snapshot:   snap,
+		Engine:     eng,
+		Model:      model,
+	})
 }
 
 // scaffoldProject creates the fry directory structure and returns paths of created items.

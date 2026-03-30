@@ -90,7 +90,8 @@ fry/
 │   ├── scan/
 │   │   ├── types.go             # StructuralSnapshot, FileEntry, GitHistory, Language, Dependency types
 │   │   ├── detect.go            # IsExistingProject: heuristic detection (git history, markers, file count)
-│   │   └── structural.go        # RunStructuralScan: file tree, languages, frameworks, deps, git history
+│   │   ├── structural.go        # RunStructuralScan: file tree, languages, frameworks, deps, git history
+│   │   └── semantic.go          # RunSemanticScan: LLM-powered codebase analysis → .fry/codebase.md
 │   ├── lock/lock.go             # File-based build concurrency lock + IsLocked check
 │   ├── log/log.go               # Verbose logging, agent banners
 │   ├── media/media.go           # Binary asset scanning (images, PDFs, fonts)
