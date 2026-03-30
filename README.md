@@ -191,6 +191,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry reflect` | Trigger identity reflection from accumulated memories |
 | `fry audit` | Run a standalone AI-powered build-level audit on any codebase |
 | `fry status` | Show current build state, or archived/worktree build history if no active build |
+| `fry monitor` | Real-time build monitoring — enriched event stream, dashboard, or log tail |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
 | `fry version` | Print fry version |
 
@@ -246,6 +247,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Triage](docs/triage.md) | Complexity classification with interactive confirmation — controls whether full prepare runs |
 | [Git Strategy](docs/git-strategy.md) | Branch and worktree isolation strategies for builds |
 | [Self-Improvement](docs/self-improvement.md) | Automated self-improvement pipeline: roadmap, orchestrator, planning, build, alignment |
+| [Build Monitoring](docs/monitor.md) | Real-time monitoring: enriched event stream, dashboard, log tail, NDJSON output |
 | [Observer](docs/observer.md) | Metacognitive layer: event stream, identity, wake-ups, effort-level gating |
 | [Consciousness](docs/consciousness.md) | Experience synthesis and identity pipeline |
 | [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
