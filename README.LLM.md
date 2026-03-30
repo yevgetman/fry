@@ -114,7 +114,8 @@ fry/
 │   ├── metrics/tokens.go        # Token usage parsing for Claude and Codex engines
 │   ├── report/report.go         # BuildReport types and JSON serialisation (--json-report)
 │   ├── shellhook/shellhook.go   # Pre-sprint/iteration shell commands
-│   └── textutil/textutil.go     # Shell quoting, file timestamps, artifact resolution
+│   ├── severity/severity.go     # Shared severity ranking: Rank(sev string) int — used by audit and continuerun
+│   └── textutil/textutil.go     # Shell quoting, UTF-8 truncation, JSON extraction, artifact resolution
 ├── templates/
 │   ├── embed.go                 # //go:embed *.md identity/*.md for compile-time inclusion
 │   ├── AGENTS.md                # Placeholder (generated via fry prepare)
