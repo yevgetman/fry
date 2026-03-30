@@ -5,29 +5,35 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/git"
+	"github.com/yevgetman/fry/internal/scan"
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Scaffold the fry project structure in the current directory",
-	Long:  "Create the plans/, assets/, and media/ directories with a plan.example.md template, initialize git, and configure .gitignore for fry.",
+	Long: "Scaffold the fry project structure. In an empty directory, creates plans/, assets/, and media/ with a plan template. In an existing project (detected via git history, project markers, or file count), also runs a structural scan and writes .fry/file-index.txt.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectPath, err := resolveProjectDir(projectDir)
 		if err != nil {
 			return err
 		}
 
+		ctx := context.Background()
+
+		// Detect existing project BEFORE scaffolding so we can report it.
+		existing := scan.IsExistingProject(ctx, projectPath)
+
 		created, err := scaffoldProject(projectPath)
 		if err != nil {
 			return fmt.Errorf("init: %w", err)
 		}
 
-		ctx := context.Background()
 		if err := git.InitGit(ctx, projectPath); err != nil {
 			return fmt.Errorf("init: %w", err)
 		}
@@ -40,12 +46,34 @@ var initCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "  created %s\n", rel)
 		}
 
-		fmt.Fprintln(cmd.OutOrStdout())
-		fmt.Fprintln(cmd.OutOrStdout(), "Project initialized. Next steps:")
-		fmt.Fprintln(cmd.OutOrStdout(), "  1. Write plans/plan.md (see plans/plan.example.md for reference)")
-		fmt.Fprintln(cmd.OutOrStdout(), "     Or provide a --user-prompt and fry will generate one for you")
-		fmt.Fprintln(cmd.OutOrStdout(), "  2. Run: fry prepare")
-		fmt.Fprintln(cmd.OutOrStdout(), "  3. Run: fry run")
+		if existing {
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "Existing project detected. Scanning codebase...")
+
+			snap, scanErr := scan.RunStructuralScan(ctx, projectPath)
+			if scanErr != nil {
+				return fmt.Errorf("init: codebase scan: %w", scanErr)
+			}
+
+			indexPath := filepath.Join(projectPath, config.FileIndexFile)
+			if writeErr := scan.WriteFileIndex(snap, indexPath); writeErr != nil {
+				return fmt.Errorf("init: write file index: %w", writeErr)
+			}
+
+			printScanSummary(cmd, snap)
+
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "Codebase indexed. Next steps:")
+			fmt.Fprintln(cmd.OutOrStdout(), "  1. Run: fry run --user-prompt \"describe what you want to change\"")
+			fmt.Fprintln(cmd.OutOrStdout(), "     Or write plans/plan.md and run: fry run")
+		} else {
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "Project initialized. Next steps:")
+			fmt.Fprintln(cmd.OutOrStdout(), "  1. Write plans/plan.md (see plans/plan.example.md for reference)")
+			fmt.Fprintln(cmd.OutOrStdout(), "     Or provide a --user-prompt and fry will generate one for you")
+			fmt.Fprintln(cmd.OutOrStdout(), "  2. Run: fry prepare")
+			fmt.Fprintln(cmd.OutOrStdout(), "  3. Run: fry run")
+		}
 
 		return nil
 	},
@@ -83,6 +111,47 @@ func scaffoldProject(projectDir string) ([]string, error) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// printScanSummary outputs a human-readable summary of the structural scan.
+func printScanSummary(cmd *cobra.Command, snap *scan.StructuralSnapshot) {
+	w := cmd.OutOrStdout()
+
+	fmt.Fprintf(w, "  Indexed %d files across %d directories (%s)\n",
+		snap.FileStats.TotalFiles, snap.FileStats.TotalDirs,
+		scan.FormatSize(snap.FileStats.TotalSize))
+
+	if len(snap.Languages) > 0 {
+		names := make([]string, 0, len(snap.Languages))
+		for _, lang := range snap.Languages {
+			names = append(names, lang.Name)
+		}
+		fmt.Fprintf(w, "  Languages: %s\n", joinMax(names, 5))
+	}
+
+	if len(snap.Frameworks) > 0 {
+		fmt.Fprintf(w, "  Frameworks: %s\n", joinMax(snap.Frameworks, 5))
+	}
+
+	if len(snap.EntryPoints) > 0 {
+		fmt.Fprintf(w, "  Entry points: %s\n", joinMax(snap.EntryPoints, 3))
+	}
+
+	if len(snap.Dependencies) > 0 {
+		fmt.Fprintf(w, "  Dependencies: %d\n", len(snap.Dependencies))
+	}
+
+	if snap.GitHistory != nil {
+		fmt.Fprintf(w, "  Git commits: %d\n", snap.GitHistory.TotalCommits)
+	}
+}
+
+// joinMax joins up to max strings with ", " and appends "..." if truncated.
+func joinMax(items []string, max int) string {
+	if len(items) <= max {
+		return strings.Join(items, ", ")
+	}
+	return strings.Join(items[:max], ", ") + ", ..."
 }
 
 const starterPlan = `# Build Plan

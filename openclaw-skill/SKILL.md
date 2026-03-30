@@ -126,8 +126,18 @@ fry init --project-dir /path/to/project
 ```
 
 Creates `plans/`, `assets/`, `media/` directories with a template plan file,
-initializes git, and configures `.gitignore` for Fry artifacts. Only run this
-when the user asks to initialize a new Fry project.
+initializes git, and configures `.gitignore` for Fry artifacts.
+
+**Existing project detection:** When run in a directory with an existing codebase
+(detected via git history >1 commit, project marker files like `go.mod`/`package.json`,
+or >10 non-hidden files), `fry init` automatically runs a structural scan:
+- Walks the file tree (respecting `.gitignore`)
+- Detects languages, frameworks, entry points, and test directories
+- Parses dependency manifests (`go.mod`, `package.json`, `requirements.txt`)
+- Analyzes git history (recent commits, frequently changed files, top authors)
+- Writes `.fry/file-index.txt` with a human-readable index and statistics
+
+Running `fry init` in an already-initialized project rescans the codebase.
 
 ## Prepare Phase
 

@@ -279,7 +279,7 @@ fry clean --project-dir /path/to/proj  # Archive a different project
 
 ## `fry init`
 
-Scaffold the fry project structure in the current (or specified) directory. Creates `plans/`, `assets/`, and `media/` directories, writes a `plan.example.md` template, initializes a git repository, and configures `.gitignore` with fry entries.
+Scaffold the fry project structure. In an empty directory, creates standard scaffolding. In an existing project, also runs a structural codebase scan.
 
 ```
 fry init [flags]
@@ -293,21 +293,36 @@ fry init [flags]
 
 ### Behavior
 
+**All directories:**
+
 1. Creates `plans/`, `assets/`, and `media/` directories if they don't exist.
 2. Writes `plans/plan.example.md` with a starter template for reference.
 3. Initializes a git repository if one doesn't exist.
 4. Adds `.fry/`, `.fry-archive/`, `.env`, `.DS_Store`, and `.fry-worktrees/` to `.gitignore`.
-5. Prints created items and next steps.
 
-`fry init` does **not** create `plans/plan.md`. You write that yourself using `plan.example.md` as a reference, or provide a `--user-prompt` to `fry prepare` / `fry run` and fry will generate the plan for you (the normal flow via `executive.md` and/or prompt).
+**Existing projects** (auto-detected via git history, project markers, or file count):
 
-Running `fry init` in an already-initialized project is safe — it only creates missing directories and always refreshes the example file.
+5. Runs a structural scan: file tree, language/framework detection, dependency parsing, entry point identification, git history analysis.
+6. Writes `.fry/file-index.txt` with a human-readable file index and project stats.
+7. Prints a scan summary (files, languages, frameworks, dependencies, git commits).
+
+`fry init` does **not** create `plans/plan.md`. You write that yourself using `plan.example.md` as a reference, or provide a `--user-prompt` to `fry prepare` / `fry run` and fry will generate the plan for you.
+
+Running `fry init` in an already-initialized project is safe — it only creates missing directories, refreshes the example file, and rescans the codebase.
+
+### Existing project detection
+
+A directory is considered an existing project when **any** of these hold:
+- Git history has more than 1 commit (beyond fry init's own initial commit)
+- A known project marker exists (`go.mod`, `package.json`, `Cargo.toml`, `requirements.txt`, `pyproject.toml`, `Gemfile`, `pom.xml`, `build.gradle`, `CMakeLists.txt`, `composer.json`, `mix.exs`, `Package.swift`, `pubspec.yaml`, `*.sln`)
+- The directory contains more than 10 non-hidden files
 
 ### Examples
 
 ```bash
 fry init                                # Initialize in the current directory
 fry init --project-dir /path/to/proj    # Initialize a different directory
+cd existing-project && fry init         # Scan existing codebase and scaffold fry
 ```
 
 ---
