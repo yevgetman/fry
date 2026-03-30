@@ -1545,6 +1545,61 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Extract codebase-specific memories from this build.
+		{
+			memEngine, memErr := newResilientEngine(engineName, mcpOpts...)
+			if memErr != nil {
+				frlog.Log("WARNING: could not create engine for memory extraction: %v", memErr)
+			} else {
+				memModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionCodebaseMemory)
+				frlog.Log("  MEMORY: extracting codebase learnings...  model=%s", memModel)
+
+				// Collect build context for memory extraction.
+				scratchpad, _ := os.ReadFile(filepath.Join(projectPath, config.ObserverScratchpadFile))
+				events, _ := os.ReadFile(filepath.Join(projectPath, config.ObserverEventsFile))
+				auditContent, _ := os.ReadFile(filepath.Join(projectPath, config.SprintAuditFile))
+
+				diffStat := ""
+				if ds, dsErr := git.GitDiffForAudit(ctx, projectPath); dsErr == nil && len(ds) < 5000 {
+					diffStat = ds
+				}
+
+				buildID := fmt.Sprintf("build-%s", time.Now().Format("20060102-150405"))
+				var sprintSummaryLines []string
+				for _, r := range summaryCopy {
+					sprintSummaryLines = append(sprintSummaryLines,
+						fmt.Sprintf("Sprint %d (%s): %s [heal=%d]", r.Number, r.Name, r.Status, r.HealAttempts))
+				}
+
+				if extractErr := scan.ExtractCodebaseMemories(ctx, scan.MemoryExtractionOpts{
+					ProjectDir:    projectPath,
+					Engine:        memEngine,
+					Model:         memModel,
+					BuildID:       buildID,
+					SprintCount:   ep.TotalSprints,
+					Scratchpad:    string(scratchpad),
+					Events:        string(events),
+					SprintSummary: strings.Join(sprintSummaryLines, "\n"),
+					GitDiffStat:   diffStat,
+					AuditFindings: string(auditContent),
+				}); extractErr != nil {
+					frlog.Log("WARNING: memory extraction failed (non-fatal): %v", extractErr)
+				} else {
+					frlog.Log("  MEMORY: codebase learnings extracted")
+				}
+
+				// Compact if over threshold.
+				if scan.NeedsCompaction(projectPath) {
+					frlog.Log("  MEMORY: compacting memories (over %d threshold)...", config.MaxMemoryCount)
+					if compactErr := scan.CompactMemories(ctx, projectPath, memEngine, memModel); compactErr != nil {
+						frlog.Log("WARNING: memory compaction failed (non-fatal): %v", compactErr)
+					} else {
+						frlog.Log("  MEMORY: compaction complete")
+					}
+				}
+			}
+		}
+
 		// Upload experience to consciousness API (background, bounded by timeout)
 		var uploadDone <-chan struct{}
 		if collector != nil {

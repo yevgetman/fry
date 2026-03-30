@@ -158,6 +158,10 @@ throughout the build pipeline:
 - **Prepare pipeline:** Included in plan, epic, and sanity check generation
 - **Triage:** Included in complexity classification
 - **File index:** Auto-refreshed on each `fry run` if stale (newer git commits exist)
+- **Codebase memories:** After each build, Fry extracts project-specific learnings
+  into `.fry/codebase-memories/` (Layer 0.75 in sprint prompts). Memories are
+  deduplicated across builds, reinforced when confirmed, and compacted from 50+ to ~20
+  via LLM when the threshold is exceeded. Memories persist across `fry clean`.
 
 ## Prepare Phase
 
