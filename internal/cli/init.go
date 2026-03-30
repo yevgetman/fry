@@ -17,14 +17,15 @@ import (
 )
 
 var (
-	initEngine string
+	initEngine        string
 	initHeuristicOnly bool
+	initForce         bool
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Scaffold the fry project structure in the current directory",
-	Long:  "Scaffold the fry project structure. In an empty directory, creates plans/, assets/, and media/ with a plan template. In an existing project (detected via git history, project markers, or file count), runs a structural scan and a semantic LLM scan to generate .fry/codebase.md. Use --heuristic-only to skip the semantic scan and only run structural heuristics.",
+	Long:  "Scaffold the fry project structure. In an empty directory, creates plans/, assets/, and media/ with a plan template. In an existing project (detected via git history, project markers, or file count), runs a structural scan and a semantic LLM scan to generate .fry/codebase.md. Use --heuristic-only to skip the semantic scan and only run structural heuristics. Composable: if codebase indexing was already completed, scanning is skipped unless --force is passed.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectPath, err := resolveProjectDir(projectDir)
 		if err != nil {
@@ -54,27 +55,36 @@ var initCmd = &cobra.Command{
 		}
 
 		if existing {
-			fmt.Fprintln(cmd.OutOrStdout())
-			fmt.Fprintln(cmd.OutOrStdout(), "Existing project detected. Scanning codebase...")
+			// Composable: skip scanning if index files already exist (unless --force).
+			alreadyIndexed := codebaseIndexExists(projectPath)
+			if alreadyIndexed && !initForce {
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), "Codebase already indexed (use --force to re-index).")
+				fmt.Fprintln(cmd.OutOrStdout(), "  .fry/file-index.txt")
+				fmt.Fprintln(cmd.OutOrStdout(), "  .fry/codebase.md")
+			} else {
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), "Existing project detected. Scanning codebase...")
 
-			snap, scanErr := scan.RunStructuralScan(ctx, projectPath)
-			if scanErr != nil {
-				return fmt.Errorf("init: codebase scan: %w", scanErr)
-			}
+				snap, scanErr := scan.RunStructuralScan(ctx, projectPath)
+				if scanErr != nil {
+					return fmt.Errorf("init: codebase scan: %w", scanErr)
+				}
 
-			indexPath := filepath.Join(projectPath, config.FileIndexFile)
-			if writeErr := scan.WriteFileIndex(snap, indexPath); writeErr != nil {
-				return fmt.Errorf("init: write file index: %w", writeErr)
-			}
+				indexPath := filepath.Join(projectPath, config.FileIndexFile)
+				if writeErr := scan.WriteFileIndex(snap, indexPath); writeErr != nil {
+					return fmt.Errorf("init: write file index: %w", writeErr)
+				}
 
-			printScanSummary(cmd, snap)
+				printScanSummary(cmd, snap)
 
-			// Semantic scan: generate .fry/codebase.md (default behavior).
-			if initHeuristicOnly {
-				fmt.Fprintln(cmd.OutOrStdout(), "  Semantic scan skipped (--heuristic-only)")
-			} else if err := runSemanticScan(ctx, cmd, projectPath, snap); err != nil {
-				// Non-fatal: structural scan succeeded, semantic failed gracefully.
-				fmt.Fprintf(cmd.ErrOrStderr(), "fry: warning: semantic scan failed: %v\n", err)
+				// Semantic scan: generate .fry/codebase.md (default behavior).
+				if initHeuristicOnly {
+					fmt.Fprintln(cmd.OutOrStdout(), "  Semantic scan skipped (--heuristic-only)")
+				} else if err := runSemanticScan(ctx, cmd, projectPath, snap); err != nil {
+					// Non-fatal: structural scan succeeded, semantic failed gracefully.
+					fmt.Fprintf(cmd.ErrOrStderr(), "fry: warning: semantic scan failed: %v\n", err)
+				}
 			}
 
 			fmt.Fprintln(cmd.OutOrStdout())
@@ -97,6 +107,7 @@ var initCmd = &cobra.Command{
 func init() {
 	initCmd.Flags().StringVar(&initEngine, "engine", "", "Engine for semantic codebase scan (default: auto-resolved)")
 	initCmd.Flags().BoolVar(&initHeuristicOnly, "heuristic-only", false, "Skip semantic LLM scan; only run structural heuristics")
+	initCmd.Flags().BoolVar(&initForce, "force", false, "Force re-index even if codebase index already exists")
 }
 
 // runSemanticScan resolves an engine and runs the semantic scan.
@@ -157,6 +168,13 @@ func scaffoldProject(projectDir string) ([]string, error) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// codebaseIndexExists returns true when both the file index and the semantic
+// codebase file already exist, indicating that a prior init completed indexing.
+func codebaseIndexExists(projectDir string) bool {
+	return fileExists(filepath.Join(projectDir, config.FileIndexFile)) &&
+		fileExists(filepath.Join(projectDir, config.CodebaseFile))
 }
 
 // printScanSummary outputs a human-readable summary of the structural scan.

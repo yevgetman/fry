@@ -40,6 +40,7 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Trigger reflection | `fry reflect` |
 | Print identity | `fry identity` (or `fry identity --full`) |
 | Clean/archive build | `fry clean -y --project-dir <dir>` |
+| Destroy all artifacts | `fry destroy -y --project-dir <dir>` |
 | Triage only | `fry run --triage-only --project-dir <dir>` |
 | File-based prompts | `fry run --confirm-file --project-dir <dir>` |
 | Standalone audit | `fry audit --project-dir <dir>` |
@@ -152,7 +153,13 @@ fry init --project-dir /path/to/project             # Full scan (structural + se
 fry init --heuristic-only --project-dir /path/to/project  # Structural only
 ```
 
-Running `fry init` in an already-initialized project rescans the codebase.
+**Composability:** `fry init` is composable. If `.fry/file-index.txt` and
+`.fry/codebase.md` already exist (from a prior init), scanning is skipped. Use
+`--force` to re-index even when index files already exist.
+
+```bash
+fry init --force --project-dir /path/to/project  # Force re-index
+```
 
 **Pipeline integration:** When `.fry/codebase.md` exists, it is automatically used
 throughout the build pipeline:
@@ -881,8 +888,17 @@ fry clean -y --project-dir /path/to/project
 ```
 
 Creates a timestamped snapshot at `.fry-archive/.fry--build--YYYYMMDD-HHMMSS/`
-and removes the `.fry/` directory. The project-root outputs (`build-summary.md`,
-`build-audit.md`) are preserved.
+and removes the `.fry/` directory. Persistent artifacts (`.fry/codebase.md`,
+`.fry/file-index.txt`, `.fry/codebase-memories/`) are preserved and restored.
+
+To completely remove all fry artifacts (as if fry was never run):
+
+```bash
+fry destroy -y --project-dir /path/to/project
+```
+
+Removes `.fry/`, `.fry-archive/`, `.fry-worktrees/`, `plans/`, `assets/`, `media/`,
+and root-level build outputs. Unlike `clean`, nothing is preserved or archived.
 
 ## Behavior Guidelines
 

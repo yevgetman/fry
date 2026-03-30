@@ -193,6 +193,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry status` | Show current build state, or archived/worktree build history if no active build |
 | `fry monitor` | Real-time build monitoring — enriched event stream, dashboard, or log tail |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
+| `fry destroy` | Remove all fry artifacts as if fry was never run |
 | `fry version` | Print fry version |
 
 ```bash
@@ -206,6 +207,7 @@ fry run --resume --sprint 4             # Resume failed sprint 4 (skip iteration
 fry run --continue                     # Auto-detect and resume from where you left off
 fry clean                              # Archive .fry/ and build outputs (interactive)
 fry clean --force                      # Archive without confirmation prompt
+fry destroy -y                         # Remove all fry artifacts completely
 fry --mode planning                    # Planning mode (documents, not code) — claude for both stages
 fry --mode writing --user-prompt "..."  # Writing mode (books, guides) — claude for both stages
 fry --user-prompt "no ORMs, raw SQL"   # Inject a directive

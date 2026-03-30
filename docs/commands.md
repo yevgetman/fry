@@ -245,7 +245,7 @@ fry replan <deviation_spec> [flags]
 
 ## `fry clean`
 
-Archive build artifacts from `.fry/` and root-level build outputs (`build-audit.md`, `build-summary.md`) into a timestamped folder under `.fry-archive/`.
+Archive build artifacts from `.fry/` and root-level build outputs (`build-audit.md`, `build-summary.md`) into a timestamped folder under `.fry-archive/`. Persistent artifacts (`.fry/codebase.md`, `.fry/file-index.txt`, `.fry/codebase-memories/`) are preserved and restored after archival.
 
 ```
 fry clean [flags]
@@ -256,16 +256,20 @@ fry clean [flags]
 | Flag | Description |
 |---|---|
 | `--force` | Skip the confirmation prompt |
+| `--yes`, `-y` | Auto-accept confirmation prompts |
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 
 ### Behavior
 
 1. Checks if a build is currently running (lock file active) and warns if so.
-2. Prompts for confirmation unless `--force` is passed.
+2. Prompts for confirmation unless `--force` or `--yes` is passed.
 3. Moves `.fry/` into `.fry-archive/.fry--build--YYYYMMDD-HHMMSS`.
 4. Moves `build-audit.md` and `build-summary.md` from the project root into the same archive folder (skips silently if they don't exist).
+5. Restores persistent artifacts (codebase index files and memories) into a fresh `.fry/`.
 
 Auto-archiving also happens automatically after a successful full build (all sprints from 1 to the last). The `fry clean` command is for manual archiving between builds.
+
+To completely remove all fry artifacts instead of archiving them, use `fry destroy`.
 
 ### Examples
 
@@ -273,6 +277,55 @@ Auto-archiving also happens automatically after a successful full build (all spr
 fry clean                              # Archive with confirmation prompt
 fry clean --force                      # Archive without confirmation
 fry clean --project-dir /path/to/proj  # Archive a different project
+```
+
+---
+
+## `fry destroy`
+
+Completely remove all fry-generated directories and files as if fry was never run. Unlike `fry clean` which archives build artifacts and preserves codebase index files, `fry destroy` wipes everything.
+
+```
+fry destroy [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--force` | Skip the confirmation prompt |
+| `--yes`, `-y` | Auto-accept confirmation prompts |
+| `--project-dir <path>` | Project directory to operate on (default: current directory) |
+
+### What gets removed
+
+| Artifact | Description |
+|---|---|
+| `.fry/` | All build artifacts, codebase index, memories |
+| `.fry-archive/` | All archived builds |
+| `.fry-worktrees/` | All fry-managed git worktrees |
+| `plans/` | Plan directory and all plan files |
+| `assets/` | Assets directory |
+| `media/` | Media directory |
+| `build-audit.md` | Root-level build audit |
+| `build-summary.md` | Root-level build summary |
+| `build-audit.sarif` | Root-level SARIF audit |
+
+Only artifacts that exist are listed and removed. If no fry artifacts exist, the command reports nothing to destroy.
+
+### Behavior
+
+1. Checks if a build is currently running (lock file active) and warns if so.
+2. Lists all fry artifacts that exist in the project directory.
+3. Prompts for confirmation unless `--force` or `--yes` is passed.
+4. Permanently deletes all listed artifacts.
+
+### Examples
+
+```bash
+fry destroy                              # Destroy with confirmation prompt
+fry destroy --force                      # Destroy without confirmation
+fry destroy -y --project-dir /path/to/proj  # Destroy a different project
 ```
 
 ---
@@ -292,6 +345,7 @@ fry init [flags]
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <name>` | Override engine for semantic codebase scan (`claude`, `codex`, `ollama`). Default: auto-resolved via `FRY_ENGINE` or config default. |
 | `--heuristic-only` | Skip semantic LLM scan; only run structural heuristics (file tree, language detection, dependency parsing). |
+| `--force` | Force re-index even if codebase index files already exist. |
 
 ### Behavior
 
@@ -316,7 +370,11 @@ When `.fry/codebase.md` exists, it is automatically used by:
 
 `fry init` does **not** create `plans/plan.md`. You write that yourself using `plan.example.md` as a reference, or provide a `--user-prompt` to `fry prepare` / `fry run` and fry will generate the plan for you.
 
-Running `fry init` in an already-initialized project is safe — it only creates missing directories, refreshes the example file, and rescans the codebase.
+### Composability
+
+`fry init` is composable — running it multiple times is safe and efficient. If both `.fry/file-index.txt` and `.fry/codebase.md` already exist (from a prior init), the structural and semantic scans are skipped. Directory scaffolding and git initialization still run (both are already idempotent).
+
+Use `--force` to re-index even when index files already exist.
 
 ### Existing project detection
 
@@ -333,6 +391,7 @@ fry init --project-dir /path/to/proj    # Initialize a different directory
 cd existing-project && fry init         # Scan existing codebase and scaffold fry
 fry init --engine claude                # Override engine for semantic scan
 fry init --heuristic-only               # Structural scan only, no LLM call
+fry init --force                        # Re-index even if already indexed
 ```
 
 ---

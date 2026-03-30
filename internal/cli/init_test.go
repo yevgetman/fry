@@ -88,3 +88,40 @@ func TestScaffoldProjectIdempotent(t *testing.T) {
 	assert.Len(t, created2, 1)
 	assert.Equal(t, filepath.Join(dir, config.PlansDir, "plan.example.md"), created2[0])
 }
+
+func TestCodebaseIndexExistsReturnsFalseWhenMissing(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	assert.False(t, codebaseIndexExists(dir), "should be false when neither file exists")
+}
+
+func TestCodebaseIndexExistsReturnsFalseWithPartialIndex(t *testing.T) {
+	t.Parallel()
+
+	t.Run("only file-index.txt", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.FileIndexFile), []byte("index"), 0o644))
+		assert.False(t, codebaseIndexExists(dir))
+	})
+
+	t.Run("only codebase.md", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.CodebaseFile), []byte("codebase"), 0o644))
+		assert.False(t, codebaseIndexExists(dir))
+	})
+}
+
+func TestCodebaseIndexExistsReturnsTrueWhenBothExist(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.FileIndexFile), []byte("index"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.CodebaseFile), []byte("codebase"), 0o644))
+	assert.True(t, codebaseIndexExists(dir))
+}

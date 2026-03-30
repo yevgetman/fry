@@ -27,6 +27,7 @@ fry/
 │   │   ├── prepare.go           # Generate .fry/ artifacts from plans
 │   │   ├── replan.go            # Mid-build replanning
 │   │   ├── clean.go             # Archive .fry/ and build outputs to .fry-archive/
+│   │   ├── destroy.go           # Remove all fry artifacts completely (inverse of init)
 │   │   ├── version.go           # Version subcommand
 │   │   └── status.go            # Show current build state (no LLM call)
 │   ├── color/
@@ -331,6 +332,7 @@ fry prepare [epic_filename]          # Generate .fry/ artifacts from plans
 fry replan                           # Replan after deviation
 fry audit                            # Standalone AI-powered build audit
 fry clean                            # Archive .fry/ + build outputs to .fry-archive/
+fry destroy                          # Remove all fry artifacts completely
 fry version                          # Print version
 fry status                           # Show current build state (no LLM call)
 
