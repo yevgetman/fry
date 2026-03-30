@@ -160,7 +160,24 @@ func runStatusHumanReadable(cmd *cobra.Command, projectDir string) error {
 		// to the normal flow which will show archives/worktrees.
 	}
 
-	epicPath := filepath.Join(buildDir, config.FryDir, "epic.md")
+	// Check if fry has ever been used in this project.
+	fryDir := filepath.Join(buildDir, config.FryDir)
+	fryDirExists := false
+	if _, statErr := os.Stat(fryDir); statErr == nil {
+		fryDirExists = true
+	}
+	if !fryDirExists {
+		// No .fry/ — check for archives or worktrees before declaring no project.
+		hasArchives := fileExists(filepath.Join(projectDir, config.ArchiveDir))
+		hasWorktrees := fileExists(filepath.Join(projectDir, config.GitWorktreeDir))
+		if !hasArchives && !hasWorktrees {
+			fmt.Fprintf(cmd.OutOrStdout(), "No fry project found in %s\n", projectDir)
+			fmt.Fprintln(cmd.OutOrStdout(), "Run 'fry init' to get started.")
+			return nil
+		}
+	}
+
+	epicPath := filepath.Join(fryDir, "epic.md")
 	ep, err := epic.ParseEpic(epicPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

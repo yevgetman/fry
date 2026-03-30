@@ -23,7 +23,9 @@ func newTestCmd(t *testing.T, projectDir string) *cobra.Command {
 func TestStatusCommandNoBuild(t *testing.T) {
 	t.Parallel()
 
+	// .fry/ exists but no epic — this is a scaffolded project with no build.
 	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry"), 0o755))
 
 	var buf bytes.Buffer
 	fakeCmd := newTestCmd(t, dir)
@@ -110,7 +112,9 @@ func TestStatusCommandNoBuild_WithWorktrees(t *testing.T) {
 func TestStatusCommandNoBuild_Empty(t *testing.T) {
 	t.Parallel()
 
+	// .fry/ exists but no epic and no archives — scaffolded, never built.
 	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry"), 0o755))
 
 	var buf bytes.Buffer
 	fakeCmd := newTestCmd(t, dir)
@@ -124,4 +128,22 @@ func TestStatusCommandNoBuild_Empty(t *testing.T) {
 	assert.Contains(t, output, "Run 'fry run' to start a build.")
 	assert.NotContains(t, output, "Archived")
 	assert.NotContains(t, output, "Worktree")
+}
+
+func TestStatusCommandNoFryProject(t *testing.T) {
+	t.Parallel()
+
+	// Completely empty directory — no .fry/, no archives, no worktrees.
+	dir := t.TempDir()
+
+	var buf bytes.Buffer
+	fakeCmd := newTestCmd(t, dir)
+	fakeCmd.SetOut(&buf)
+
+	err := statusCmd.RunE(fakeCmd, []string{})
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "No fry project found")
+	assert.Contains(t, output, "Run 'fry init' to get started.")
 }
