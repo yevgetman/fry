@@ -98,9 +98,9 @@ func adjustDecision(scanner *bufio.Scanner, stdout io.Writer, d *TriageDecision)
 	}
 
 	// Prompt for effort adjustment.
-	effortChoices := "low/medium/high"
+	effortChoices := "fast/standard/high"
 	if complexity == ComplexityComplex {
-		effortChoices = "low/medium/high/max"
+		effortChoices = "fast/standard/high/max"
 	}
 	fmt.Fprintf(stdout, "Effort [%s] (%s, or Enter to keep): ", effortLevel.String(), effortChoices)
 	if !scanner.Scan() {

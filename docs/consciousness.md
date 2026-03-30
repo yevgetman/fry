@@ -145,7 +145,7 @@ Observations are added at each observer wake-point via `collector.AddObservation
 | `StartTime` | `time.Time` | Build start timestamp |
 | `EndTime` | `time.Time` | Build end timestamp (set by `Finalize`) |
 | `Engine` | `string` | Engine name used for the build |
-| `EffortLevel` | `string` | Effort level (`low`, `medium`, `high`, `max`) |
+| `EffortLevel` | `string` | Effort level (`fast`, `standard`, `high`, `max`) |
 | `TotalSprints` | `int` | Number of sprints in the epic |
 | `Outcome` | `string` | Final build outcome (set by `Finalize`) |
 | `Observations` | `[]BuildObservation` | Observer observations collected during the build |

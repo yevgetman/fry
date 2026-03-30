@@ -79,11 +79,11 @@ When no epic file exists and `--full-prepare` is not set, Fry runs the triage cl
 
 ```
 [2026-03-10 11:49:52] ▶ TRIAGE  classifying task complexity...  engine=claude  model=haiku
-[2026-03-10 11:49:54] ▶ TRIAGE  result: MODERATE  effort=medium  sprints=2 — REST endpoint with tests across 6 files.
+[2026-03-10 11:49:54] ▶ TRIAGE  result: MODERATE  effort=standard  sprints=2 — REST endpoint with tests across 6 files.
 
 ── Triage classification ───────────────────────────────────────
 Difficulty:  MODERATE
-Effort:      medium
+Effort:      standard
 Reason:      REST endpoint with tests across 6 files.
 Action:      Build 2-sprint epic programmatically (no LLM prepare)
 ─────────────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ Press **Enter** or **Y** to accept. Press **a** to adjust difficulty and/or effo
 ```
 Accept this classification? [Y/n/a] (a = adjust) a
 Difficulty [MODERATE] (simple/moderate/complex, or Enter to keep): complex
-Effort [medium] (low/medium/high/max, or Enter to keep): high
+Effort [standard] (fast/standard/high/max, or Enter to keep): high
 ```
 
 The confirmation is skipped with `--no-project-overview` or `--dry-run`. See [Triage — Interactive Confirmation](triage.md#interactive-confirmation) for full details.
@@ -112,7 +112,7 @@ Project type:    Software (REST API)
 Goal:            Build a todo app with PostgreSQL backend
 Expected output: Go binary with REST API, database migrations, Docker setup
 Key topics:      REST API, PostgreSQL, authentication, Docker
-Effort:          medium (2-4 sprints)
+Effort:          standard (2-4 sprints)
 ─────────────────────────────────────────────────────────────────
 Does this look right? [Y/n/a] (a = adjust) y
 ```
@@ -127,7 +127,7 @@ If the summary doesn't look right but you don't want to start over, type `a` to 
 Does this look right? [Y/n/a] (a = adjust) a
 
 Prompt adjustment (describe any change, or leave blank to skip): focus on backend, skip the frontend for now
-Effort level [auto] (low/medium/high/max, or Enter to keep): high
+Effort level [auto] (fast/standard/high/max, or Enter to keep): high
 Enable sprint review? [n] (y/n, or Enter to keep):
 [2026-03-10 11:51:30] Regenerating project summary with adjustments...
 [2026-03-10 11:51:32] Project overview: summarizing project (engine: claude, model: haiku)...
@@ -408,7 +408,7 @@ Archived to /path/to/project/.fry-archive/.fry--build--20260310-140000
 After all sprints complete, Fry prints a summary table with the status of each sprint, then generates a summary document:
 
 ```
-Effort level: medium
+Effort level: standard
 SPRINT  NAME                  STATUS        DURATION
 1       Scaffolding           PASS          2m35s
 2       Data Layer            PASS (aligned) 5m12s

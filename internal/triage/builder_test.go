@@ -29,7 +29,7 @@ func TestBuildSimpleEpic(t *testing.T) {
 		wantAuditIter    int
 	}{
 		{
-			name: "default effort (low)",
+			name: "default effort (fast)",
 			opts: SimpleEpicOpts{
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Build a CLI tool",
@@ -37,35 +37,35 @@ func TestBuildSimpleEpic(t *testing.T) {
 			},
 			wantPrompt:  "Build a CLI tool",
 			wantSprints: 1,
-			wantEffort:  epic.EffortLow,
+			wantEffort:  epic.EffortFast,
 			wantMaxIter: 12,
 			wantAudit:   false,
 		},
 		{
-			name: "low effort explicit",
+			name: "fast effort explicit",
 			opts: SimpleEpicOpts{
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Fix a typo",
 				EngineName:  "claude",
-				EffortLevel: epic.EffortLow,
+				EffortLevel: epic.EffortFast,
 			},
 			wantPrompt:  "Fix a typo",
 			wantSprints: 1,
-			wantEffort:  epic.EffortLow,
+			wantEffort:  epic.EffortFast,
 			wantMaxIter: 12,
 			wantAudit:   false,
 		},
 		{
-			name: "medium effort enables audit with cap",
+			name: "standard effort enables audit with cap",
 			opts: SimpleEpicOpts{
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Add a new config option",
 				EngineName:  "claude",
-				EffortLevel: epic.EffortMedium,
+				EffortLevel: epic.EffortStandard,
 			},
 			wantPrompt:       "Add a new config option",
 			wantSprints:      1,
-			wantEffort:       epic.EffortMedium,
+			wantEffort:       epic.EffortStandard,
 			wantMaxIter:      20,
 			wantAudit:        true,
 			wantAuditIterSet: true,
@@ -88,7 +88,7 @@ func TestBuildSimpleEpic(t *testing.T) {
 			wantAuditIter:    1,
 		},
 		{
-			name: "max effort capped to low",
+			name: "max effort capped to fast",
 			opts: SimpleEpicOpts{
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Quick change",
@@ -97,7 +97,7 @@ func TestBuildSimpleEpic(t *testing.T) {
 			},
 			wantPrompt:  "Quick change",
 			wantSprints: 1,
-			wantEffort:  epic.EffortLow,
+			wantEffort:  epic.EffortFast,
 			wantMaxIter: 12,
 			wantAudit:   false,
 		},
@@ -111,7 +111,7 @@ func TestBuildSimpleEpic(t *testing.T) {
 			},
 			wantPrompt:  "The plan",
 			wantSprints: 1,
-			wantEffort:  epic.EffortLow,
+			wantEffort:  epic.EffortFast,
 			wantMaxIter: 12,
 			wantAudit:   false,
 		},
@@ -124,7 +124,7 @@ func TestBuildSimpleEpic(t *testing.T) {
 			},
 			wantPrompt:  "Executive context",
 			wantSprints: 1,
-			wantEffort:  epic.EffortLow,
+			wantEffort:  epic.EffortFast,
 			wantMaxIter: 12,
 			wantAudit:   false,
 		},
@@ -201,7 +201,7 @@ func TestBuildModerateEpic(t *testing.T) {
 		wantAudit        bool
 	}{
 		{
-			name: "default effort (medium) 1 sprint",
+			name: "default effort (standard) 1 sprint",
 			opts: ModerateEpicOpts{
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Add REST endpoint",
@@ -209,37 +209,37 @@ func TestBuildModerateEpic(t *testing.T) {
 				SprintCount: 1,
 			},
 			wantSprints:      1,
-			wantEffort:       epic.EffortMedium,
+			wantEffort:       epic.EffortStandard,
 			wantMaxIter:      20,
 			wantHealAttempts: config.DefaultMaxHealAttempts,
 			wantAudit:        true,
 		},
 		{
-			name: "medium effort 2 sprints",
+			name: "standard effort 2 sprints",
 			opts: ModerateEpicOpts{
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Build a small tool",
 				EngineName:  "claude",
-				EffortLevel: epic.EffortMedium,
+				EffortLevel: epic.EffortStandard,
 				SprintCount: 2,
 			},
 			wantSprints:      2,
-			wantEffort:       epic.EffortMedium,
+			wantEffort:       epic.EffortStandard,
 			wantMaxIter:      20,
 			wantHealAttempts: config.DefaultMaxHealAttempts,
 			wantAudit:        true,
 		},
 		{
-			name: "low effort forces 1 sprint no audit no alignment",
+			name: "fast effort forces 1 sprint no audit no alignment",
 			opts: ModerateEpicOpts{
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Quick fix",
 				EngineName:  "claude",
-				EffortLevel: epic.EffortLow,
+				EffortLevel: epic.EffortFast,
 				SprintCount: 2, // should be clamped to 1
 			},
 			wantSprints:      1,
-			wantEffort:       epic.EffortLow,
+			wantEffort:       epic.EffortFast,
 			wantMaxIter:      12,
 			wantHealAttempts: 0,
 			wantAudit:        false,
@@ -280,11 +280,11 @@ func TestBuildModerateEpic(t *testing.T) {
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Some task",
 				EngineName:  "claude",
-				EffortLevel: epic.EffortMedium,
+				EffortLevel: epic.EffortStandard,
 				SprintCount: 0,
 			},
 			wantSprints:      1,
-			wantEffort:       epic.EffortMedium,
+			wantEffort:       epic.EffortStandard,
 			wantMaxIter:      20,
 			wantHealAttempts: config.DefaultMaxHealAttempts,
 			wantAudit:        true,
@@ -295,11 +295,11 @@ func TestBuildModerateEpic(t *testing.T) {
 				ProjectDir:  "/tmp/test",
 				PlanContent: "Some task",
 				EngineName:  "claude",
-				EffortLevel: epic.EffortMedium,
+				EffortLevel: epic.EffortStandard,
 				SprintCount: 5,
 			},
 			wantSprints:      2,
-			wantEffort:       epic.EffortMedium,
+			wantEffort:       epic.EffortStandard,
 			wantMaxIter:      20,
 			wantHealAttempts: config.DefaultMaxHealAttempts,
 			wantAudit:        true,
@@ -314,7 +314,7 @@ func TestBuildModerateEpic(t *testing.T) {
 				SprintCount: 1,
 			},
 			wantSprints:      1,
-			wantEffort:       epic.EffortMedium,
+			wantEffort:       epic.EffortStandard,
 			wantMaxIter:      20,
 			wantHealAttempts: config.DefaultMaxHealAttempts,
 			wantAudit:        true,
@@ -521,7 +521,7 @@ func TestWriteEpicFile(t *testing.T) {
 		original := &epic.Epic{
 			Name:             "Test Epic",
 			Engine:           "claude",
-			EffortLevel:      epic.EffortLow,
+			EffortLevel:      epic.EffortFast,
 			MaxHealAttempts:  0,
 			AuditAfterSprint: false,
 			TotalSprints:     1,
@@ -568,7 +568,7 @@ func TestWriteEpicFile(t *testing.T) {
 		original := &epic.Epic{
 			Name:             "Multi Sprint",
 			Engine:           "codex",
-			EffortLevel:      epic.EffortMedium,
+			EffortLevel:      epic.EffortStandard,
 			MaxHealAttempts:  3,
 			AuditAfterSprint: true,
 			TotalSprints:     2,
@@ -599,7 +599,7 @@ func TestWriteEpicFile(t *testing.T) {
 
 		assert.Equal(t, "Multi Sprint", parsed.Name)
 		assert.Equal(t, "codex", parsed.Engine)
-		assert.Equal(t, epic.EffortMedium, parsed.EffortLevel)
+		assert.Equal(t, epic.EffortStandard, parsed.EffortLevel)
 		require.Len(t, parsed.Sprints, 2)
 		assert.Equal(t, "Sprint one", parsed.Sprints[0].Name)
 		assert.Equal(t, "Sprint two", parsed.Sprints[1].Name)
@@ -614,7 +614,7 @@ func TestWriteEpicFile(t *testing.T) {
 		original := &epic.Epic{
 			Name:                  "Audited Task",
 			Engine:                "claude",
-			EffortLevel:           epic.EffortMedium,
+			EffortLevel:           epic.EffortStandard,
 			MaxHealAttempts:       0,
 			AuditAfterSprint:      true,
 			MaxAuditIterations:    1,

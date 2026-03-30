@@ -111,7 +111,7 @@ The [alignment](alignment.md) loop works identically in writing mode. When sanit
 
 ## Effort Levels
 
-[Effort levels](effort-levels.md) work the same in writing mode. A `low` effort run produces 1-2 sprints for a short document; `max` produces extended sprints with thorough review and higher word-count expectations.
+[Effort levels](effort-levels.md) work the same in writing mode. A `fast` effort run produces 1-2 sprints for a short document; `max` produces extended sprints with thorough review and higher word-count expectations.
 
 ## Resuming a Writing Build
 

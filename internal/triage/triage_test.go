@@ -40,17 +40,17 @@ func TestParseClassification(t *testing.T) {
 	}{
 		{
 			name:           "simple task with effort",
-			output:         `{"complexity":"SIMPLE","effort":"low","sprints":1,"reason":"Single config file change."}`,
+			output:         `{"complexity":"SIMPLE","effort":"fast","sprints":1,"reason":"Single config file change."}`,
 			wantComplexity: ComplexitySimple,
-			wantEffort:     epic.EffortLow,
+			wantEffort:     epic.EffortFast,
 			wantSprints:    1,
 			wantReason:     "Single config file change.",
 		},
 		{
 			name:           "moderate task with effort",
-			output:         `{"complexity":"MODERATE","effort":"medium","sprints":2,"reason":"REST endpoint with tests across 6 files."}`,
+			output:         `{"complexity":"MODERATE","effort":"standard","sprints":2,"reason":"REST endpoint with tests across 6 files."}`,
 			wantComplexity: ComplexityModerate,
-			wantEffort:     epic.EffortMedium,
+			wantEffort:     epic.EffortStandard,
 			wantSprints:    2,
 			wantReason:     "REST endpoint with tests across 6 files.",
 		},
@@ -131,9 +131,9 @@ func TestParseClassification(t *testing.T) {
 		},
 		{
 			name:           "JSON in code fence",
-			output:         "```json\n{\"complexity\":\"SIMPLE\",\"effort\":\"low\",\"sprints\":1,\"reason\":\"Quick fix.\"}\n```",
+			output:         "```json\n{\"complexity\":\"SIMPLE\",\"effort\":\"fast\",\"sprints\":1,\"reason\":\"Quick fix.\"}\n```",
 			wantComplexity: ComplexitySimple,
-			wantEffort:     epic.EffortLow,
+			wantEffort:     epic.EffortFast,
 			wantSprints:    1,
 			wantReason:     "Quick fix.",
 		},
@@ -177,7 +177,7 @@ func TestBuildTriagePrompt(t *testing.T) {
 				"Build Plan",
 				"1-3 files",
 				"Effort Level Guidelines",
-				`"effort": "low|medium|high"`,
+				`"effort": "fast|standard|high"`,
 			},
 		},
 		{
@@ -310,17 +310,17 @@ func TestClassify(t *testing.T) {
 		wantSprints    int
 	}{
 		{
-			name:           "simple classification yields LOW effort and 1 sprint",
-			output:         `{"complexity":"SIMPLE","effort":"low","sprints":1,"reason":"Single config file change."}`,
+			name:           "simple classification yields FAST effort and 1 sprint",
+			output:         `{"complexity":"SIMPLE","effort":"fast","sprints":1,"reason":"Single config file change."}`,
 			wantComplexity: ComplexitySimple,
-			wantEffort:     epic.EffortLow,
+			wantEffort:     epic.EffortFast,
 			wantSprints:    1,
 		},
 		{
-			name:           "moderate classification yields MEDIUM effort and 2 sprints",
-			output:         `{"complexity":"MODERATE","effort":"medium","sprints":2,"reason":"Multi-file REST endpoint with tests."}`,
+			name:           "moderate classification yields STANDARD effort and 2 sprints",
+			output:         `{"complexity":"MODERATE","effort":"standard","sprints":2,"reason":"Multi-file REST endpoint with tests."}`,
 			wantComplexity: ComplexityModerate,
-			wantEffort:     epic.EffortMedium,
+			wantEffort:     epic.EffortStandard,
 			wantSprints:    2,
 		},
 		{

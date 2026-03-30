@@ -80,12 +80,12 @@ func TestPlanningStep2NoGenerateEpic(t *testing.T) {
 	assert.NotContains(t, prompt, "GENERATE_EPIC.md")
 }
 
-func TestEffortSizingGuidance_Low(t *testing.T) {
+func TestEffortSizingGuidance_Fast(t *testing.T) {
 	t.Parallel()
 
-	guidance := effortSizingGuidance("low")
+	guidance := effortSizingGuidance("fast")
 	assert.Contains(t, guidance, "AT MOST 2 sprints")
-	assert.Contains(t, guidance, "EFFORT LEVEL: LOW")
+	assert.Contains(t, guidance, "EFFORT LEVEL: FAST")
 }
 
 func TestEffortSizingGuidance_Max(t *testing.T) {
@@ -107,8 +107,8 @@ func TestEffortSizingGuidance_Auto(t *testing.T) {
 func TestSoftwareStep2Prompt_IncludesEffort(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "low", false, "", "")
-	assert.Contains(t, prompt, "EFFORT LEVEL: LOW")
+	prompt := SoftwareStep2Prompt("plan", "agents", "/tmp/epic-example.md", "/tmp/GENERATE_EPIC.md", "", "fast", false, "", "")
+	assert.Contains(t, prompt, "EFFORT LEVEL: FAST")
 	assert.Contains(t, prompt, "AT MOST 2 sprints")
 }
 
@@ -261,12 +261,12 @@ func TestWritingExecutiveFromUserPromptPrompt_WithAssets(t *testing.T) {
 	assert.Contains(t, prompt, "Voice & Tone")
 }
 
-func TestEffortSizingGuidanceWriting_Low(t *testing.T) {
+func TestEffortSizingGuidanceWriting_Fast(t *testing.T) {
 	t.Parallel()
 
-	guidance := effortSizingGuidanceWriting("low")
+	guidance := effortSizingGuidanceWriting("fast")
 	assert.Contains(t, guidance, "AT MOST 2 sprints")
-	assert.Contains(t, guidance, "EFFORT LEVEL: LOW")
+	assert.Contains(t, guidance, "EFFORT LEVEL: FAST")
 }
 
 func TestEffortSizingGuidanceWriting_Max(t *testing.T) {
@@ -408,24 +408,24 @@ func TestParseOverviewSummary(t *testing.T) {
 GOAL: Build a todo app with PostgreSQL backend
 EXPECTED_OUTPUT: Go binary with REST API, database migrations, Docker setup
 KEY_TOPICS: REST API, PostgreSQL, authentication, Docker
-EFFORT: medium (3-4 sprints)`,
+EFFORT: standard (3-4 sprints)`,
 			expected: OverviewSummary{
 				ProjectType:    "Software (REST API)",
 				Goal:           "Build a todo app with PostgreSQL backend",
 				ExpectedOutput: "Go binary with REST API, database migrations, Docker setup",
 				KeyTopics:      "REST API, PostgreSQL, authentication, Docker",
-				EffortEstimate: "medium (3-4 sprints)",
+				EffortEstimate: "standard (3-4 sprints)",
 			},
 		},
 		{
 			name: "wrapped in markdown fences",
-			input: "```\nPROJECT_TYPE: Writing (guide)\nGOAL: Write a Go concurrency guide\nEXPECTED_OUTPUT: 6 chapters in output/\nKEY_TOPICS: goroutines, channels\nEFFORT: medium (3 sprints)\n```",
+			input: "```\nPROJECT_TYPE: Writing (guide)\nGOAL: Write a Go concurrency guide\nEXPECTED_OUTPUT: 6 chapters in output/\nKEY_TOPICS: goroutines, channels\nEFFORT: standard (3 sprints)\n```",
 			expected: OverviewSummary{
 				ProjectType:    "Writing (guide)",
 				Goal:           "Write a Go concurrency guide",
 				ExpectedOutput: "6 chapters in output/",
 				KeyTopics:      "goroutines, channels",
-				EffortEstimate: "medium (3 sprints)",
+				EffortEstimate: "standard (3 sprints)",
 			},
 		},
 		{
@@ -446,13 +446,13 @@ GOAL: Build a CLI
 Some random line
 EXPECTED_OUTPUT: binary
 KEY_TOPICS: cobra, testing
-EFFORT: low (1 sprint)`,
+EFFORT: fast (1 sprint)`,
 			expected: OverviewSummary{
 				ProjectType:    "Software (CLI tool)",
 				Goal:           "Build a CLI",
 				ExpectedOutput: "binary",
 				KeyTopics:      "cobra, testing",
-				EffortEstimate: "low (1 sprint)",
+				EffortEstimate: "fast (1 sprint)",
 			},
 		},
 		{
@@ -575,14 +575,14 @@ func TestRunProjectOverview_EOF(t *testing.T) {
 func TestSoftwareOverviewPrompt_IncludesInputs(t *testing.T) {
 	t.Parallel()
 
-	prompt := SoftwareOverviewPrompt("my plan", "my executive", "focus on backend", "medium", "media manifest", "assets section")
+	prompt := SoftwareOverviewPrompt("my plan", "my executive", "focus on backend", "standard", "media manifest", "assets section")
 	assert.Contains(t, prompt, "senior software architect")
 	assert.Contains(t, prompt, "my plan")
 	assert.Contains(t, prompt, "my executive")
 	assert.Contains(t, prompt, "focus on backend")
 	assert.Contains(t, prompt, "media manifest")
 	assert.Contains(t, prompt, "assets section")
-	assert.Contains(t, prompt, `"medium"`)
+	assert.Contains(t, prompt, `"standard"`)
 }
 
 func TestSoftwareOverviewPrompt_OmitsMissingInputs(t *testing.T) {
@@ -782,14 +782,14 @@ func TestRunProjectOverview_AdjustAppendsToExistingPrompt(t *testing.T) {
 	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
 		UserPrompt:  "build a REST API",
-		EffortLevel: epic.EffortMedium,
+		EffortLevel: epic.EffortStandard,
 		Stdin:       stdin,
 		Stdout:      &stdout,
 	}, "plan", "", "", "")
 
 	require.NoError(t, err)
 	assert.Equal(t, "build a REST API\n\nalso add tests", result.UserPrompt)
-	assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+	assert.Equal(t, epic.EffortStandard, result.EffortLevel)
 }
 
 func TestRunProjectOverview_AdjustChangesEffort(t *testing.T) {
@@ -802,7 +802,7 @@ func TestRunProjectOverview_AdjustChangesEffort(t *testing.T) {
 
 	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
-		EffortLevel: epic.EffortLow,
+		EffortLevel: epic.EffortFast,
 		Stdin:       stdin,
 		Stdout:      &stdout,
 	}, "plan", "", "", "")
@@ -821,13 +821,13 @@ func TestRunProjectOverview_AdjustInvalidEffortKeepsOld(t *testing.T) {
 
 	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
-		EffortLevel: epic.EffortMedium,
+		EffortLevel: epic.EffortStandard,
 		Stdin:       stdin,
 		Stdout:      &stdout,
 	}, "plan", "", "", "")
 
 	require.NoError(t, err)
-	assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+	assert.Equal(t, epic.EffortStandard, result.EffortLevel)
 	assert.Contains(t, stdout.String(), "Invalid effort level")
 }
 
@@ -912,7 +912,7 @@ func TestRunProjectOverview_ReviewNotShownForLowEffort(t *testing.T) {
 
 	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
-		EffortLevel: epic.EffortLow,
+		EffortLevel: epic.EffortFast,
 		Stdin:       stdin,
 		Stdout:      &stdout,
 	}, "plan", "", "", "")
@@ -979,13 +979,13 @@ func TestRunProjectOverview_AutoAccept(t *testing.T) {
 	result, err := runProjectOverview(context.Background(), eng, PrepareOpts{
 		ProjectDir:  t.TempDir(),
 		AutoAccept:  true,
-		EffortLevel: epic.EffortMedium,
+		EffortLevel: epic.EffortStandard,
 		Stdin:       stdin,
 		Stdout:      &stdout,
 	}, "plan content", "", "", "")
 
 	require.NoError(t, err)
-	assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+	assert.Equal(t, epic.EffortStandard, result.EffortLevel)
 	assert.Equal(t, "", result.UserPrompt)
 	assert.False(t, result.EnableReview)
 	assert.Contains(t, stdout.String(), "auto-accepted")

@@ -144,7 +144,7 @@ func TestFormatReport_AllComplete(t *testing.T) {
 		EpicName:     "TestEpic",
 		TotalSprints: 2,
 		Engine:       "codex",
-		EffortLevel:  "low",
+		EffortLevel:  "fast",
 		CompletedSprints: []CompletedSprint{
 			{Number: 1, Name: "Setup", Status: "PASS"},
 			{Number: 2, Name: "Auth", Status: "PASS"},

@@ -175,25 +175,25 @@ AGENTS.md:
 
 func effortSizingGuidanceWriting(effort epic.EffortLevel) string {
 	switch effort {
-	case epic.EffortLow:
+	case epic.EffortFast:
 		return `
-EFFORT LEVEL: LOW
-The user has indicated this is a low-effort writing task. You MUST:
+EFFORT LEVEL: FAST
+The user has indicated this is a fast writing task. You MUST:
 - Generate AT MOST 2 sprints total
 - Use max_iterations of 10-15 per sprint
 - Write concise sprint prompts focused on essential deliverables
 - Combine research and writing into a single sprint where possible
-- Add the @effort low directive to the epic header
+- Add the @effort fast directive to the epic header
 `
-	case epic.EffortMedium:
+	case epic.EffortStandard:
 		return `
-EFFORT LEVEL: MEDIUM
-The user has indicated this is a medium-effort writing task. You MUST:
+EFFORT LEVEL: STANDARD
+The user has indicated this is a standard writing task. You MUST:
 - Generate 2-4 sprints total (prefer the lower end)
 - Use max_iterations of 15-25 per sprint
 - Write moderately detailed sprint prompts
 - Merge related writing phases where practical
-- Add the @effort medium directive to the epic header
+- Add the @effort standard directive to the epic header
 `
 	case epic.EffortHigh:
 		return `
@@ -220,8 +220,8 @@ The user has indicated this is a maximum-effort, high-stakes writing project. Yo
 EFFORT LEVEL: AUTO-DETECT
 No effort level was specified. Analyze the content plan and determine the appropriate effort level:
 
-- If the plan describes a short, focused piece (1-2 documents, under 5000 words total): use LOW effort (1-2 sprints, @effort low)
-- If the plan describes a moderate work (3-5 documents or chapters): use MEDIUM effort (2-4 sprints, @effort medium)
+- If the plan describes a short, focused piece (1-2 documents, under 5000 words total): use FAST effort (1-2 sprints, @effort fast)
+- If the plan describes a moderate work (3-5 documents or chapters): use STANDARD effort (2-4 sprints, @effort standard)
 - If the plan describes a substantial work (6+ chapters, book-length, or multi-part series): use HIGH effort (4-10 sprints, @effort high)
 
 Add the @effort directive matching your assessment to the epic header.

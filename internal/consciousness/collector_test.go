@@ -26,7 +26,7 @@ func TestNewCollector(t *testing.T) {
 func TestAddObservation(t *testing.T) {
 	t.Parallel()
 
-	c := NewCollector("claude", "medium", 3)
+	c := NewCollector("claude", "standard", 3)
 
 	c.AddObservation("Sprint 1 went smoothly.", "after_sprint", 1)
 	assert.Equal(t, 1, c.ObservationCount())
@@ -81,7 +81,7 @@ func TestFinalize_CreatesDirectory(t *testing.T) {
 	t.Parallel()
 
 	dir := filepath.Join(t.TempDir(), "nested", "experiences")
-	c := NewCollector("claude", "low", 1)
+	c := NewCollector("claude", "fast", 1)
 	c.outDir = dir
 
 	err := c.Finalize("success")
@@ -165,7 +165,7 @@ func TestSetSummary(t *testing.T) {
 func TestGetRecord(t *testing.T) {
 	t.Parallel()
 
-	c := NewCollector("claude", "medium", 2)
+	c := NewCollector("claude", "standard", 2)
 	c.AddObservation("First.", "after_sprint", 1)
 
 	record := c.GetRecord()
@@ -183,7 +183,7 @@ func TestFinalize_EmptyObservations(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	c := NewCollector("claude", "medium", 1)
+	c := NewCollector("claude", "standard", 1)
 	c.outDir = dir
 
 	err := c.Finalize("success")

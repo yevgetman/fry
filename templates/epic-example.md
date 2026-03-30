@@ -85,7 +85,7 @@
 # ─── GLOBAL DIRECTIVE REFERENCE ───
 #
 # @epic <name>                    Display name for logs/summaries
-# @effort <low|medium|high|max>  Effort level — controls sprint count and density
+# @effort <fast|standard|high|max>  Effort level — controls sprint count and density
 # @engine <codex|claude>          AI engine to use (default: claude)
 # @docker_from_sprint <N>         Start Docker from sprint N (omit if no Docker)
 # @docker_ready_cmd <cmd>         Health check after docker-compose up

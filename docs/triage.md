@@ -21,12 +21,12 @@ When you run `fry run` and no `.fry/epic.md` exists:
 
 ## Effort Suggestion
 
-The triage classifier suggests an effort level (`low`, `medium`, or `high`) alongside the complexity classification. The effort resolution order is:
+The triage classifier suggests an effort level (`fast`, `standard`, or `high`) alongside the complexity classification. The effort resolution order is:
 
 1. `--effort` CLI flag (if set)
 2. User adjustment via [interactive confirmation](#interactive-confirmation) (if the user overrides effort during the `[Y/n/a]` prompt)
 3. Triage suggestion (from classifier output)
-4. Default per difficulty (low for simple, medium for moderate)
+4. Default per difficulty (fast for simple, standard for moderate)
 
 Simple and moderate tasks are **capped at high** — `--effort max` is automatically reduced to `high` with a log warning. Max effort is reserved for complex tasks.
 
@@ -34,7 +34,7 @@ Simple and moderate tasks are **capped at high** — `--effort max` is automatic
 
 ### Simple (no prepare, 1 sprint)
 
-| | Low | Medium | High |
+| | Fast | Standard | High |
 |---|---|---|---|
 | **Model** | Standard | Standard | Frontier |
 | **Max iterations** | 12 | 20 | 25 |
@@ -44,7 +44,7 @@ Simple and moderate tasks are **capped at high** — `--effort max` is automatic
 
 ### Moderate (no prepare, auto-gen sanity checks, 1-2 sprints)
 
-| | Low | Medium | High |
+| | Fast | Standard | High |
 |---|---|---|---|
 | **Model** | Standard | Standard | Frontier |
 | **Max iterations** | 12 | 20 | 25 |
@@ -64,7 +64,7 @@ After classification, Fry displays the triage decision and asks the user to conf
 ```
 ── Triage classification ───────────────────────────────────────
 Difficulty:  MODERATE
-Effort:      medium
+Effort:      standard
 Git:         branch
 Reason:      REST endpoint with tests across 6 files.
 Action:      Build 2-sprint epic programmatically (no LLM prepare)
@@ -82,7 +82,7 @@ When adjusting, you can change difficulty, effort, and/or git strategy:
 
 ```
 Difficulty [MODERATE] (simple/moderate/complex, or Enter to keep):
-Effort [medium] (low/medium/high, or Enter to keep):
+Effort [standard] (fast/standard/high, or Enter to keep):
 Git strategy [branch] (auto/current/branch/worktree, or Enter to keep):
 ```
 
@@ -118,7 +118,7 @@ For tasks classified as SIMPLE:
 - **Sprint**: 1 sprint, iterations set by effort level (12/20/25)
 - **Alignment**: disabled (`@max_heal_attempts 0`) at all effort levels
 - **Sanity checks**: skipped (no `verification.md` generated)
-- **Sprint audit**: skipped at low; 1 audit+fix pass at medium/high (`@max_audit_iterations 1`)
+- **Sprint audit**: skipped at fast; 1 audit+fix pass at standard/high (`@max_audit_iterations 1`)
 - **Build audit**: single pass after the sprint completes
 - **Git checkpoint**: runs normally
 
@@ -128,10 +128,10 @@ The sprint prompt is the content of `plans/plan.md` (or `plans/executive.md`, or
 
 For tasks classified as MODERATE:
 - **Epic**: built programmatically in Go — no LLM call (previously used 1 LLM call)
-- **Sprints**: 1-2 sprints (low effort forces 1 sprint)
+- **Sprints**: 1-2 sprints (fast effort forces 1 sprint)
 - **Sanity checks**: auto-generated from detected build system (e.g. `go build && go test`, `npm test`, `cargo test`)
-- **Alignment**: effort-aware (none at low, 3 at medium, 10 + progress detection at high)
-- **Sprint audit**: effort-aware (skipped at low, default cycles at medium, full cycles at high)
+- **Alignment**: effort-aware (none at fast, 3 at standard, 10 + progress detection at high)
+- **Sprint audit**: effort-aware (skipped at fast, default cycles at standard, full cycles at high)
 - **Build audit**: runs after sprint completion
 
 The auto-generated sanity checks are heuristic-only — they detect `go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`, `setup.py`, and `Makefile` and generate appropriate build+test commands.

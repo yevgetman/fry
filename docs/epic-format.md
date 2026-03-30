@@ -9,7 +9,7 @@ Placed before any `@sprint` block:
 ```
 @epic My Project Phase 1
 @engine codex
-@effort medium
+@effort standard
 @docker_from_sprint 2
 @docker_ready_cmd docker compose exec -T postgres pg_isready -U myapp
 @docker_ready_timeout 30
@@ -31,7 +31,7 @@ Placed before any `@sprint` block:
 |---|---|
 | `@epic <name>` | Display name for logs and summaries |
 | `@engine <codex\|claude\|ollama>` | AI engine (default: claude). See [AI Engines](engines.md). |
-| `@effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). See [Effort Levels](effort-levels.md). |
+| `@effort <fast\|standard\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `@docker_from_sprint <N>` | Start docker-compose from sprint N |
 | `@docker_ready_cmd <cmd>` | Custom health check after docker-compose up |
 | `@docker_ready_timeout <s>` | Health check timeout in seconds (default: 30) |
@@ -49,7 +49,7 @@ Placed before any `@sprint` block:
 | `@review_between_sprints` | Enable mid-build sprint review (default: disabled) |
 | `@review_engine <codex\|claude\|ollama>` | AI engine for reviewer session (default: same as `@engine`) |
 | `@review_model <model>` | Model override for the reviewer session |
-| `@max_deviation_scope <N>` | Maximum sprints a single deviation can touch (default: 3; auto-expanded to `totalSprints` for all non-low effort levels, capped at 10) |
+| `@max_deviation_scope <N>` | Maximum sprints a single deviation can touch (default: 3; auto-expanded to `totalSprints` for all non-fast effort levels, capped at 10) |
 | `@audit_after_sprint` | Enable post-sprint semantic audit (default: enabled). See [Sprint Audit](sprint-audit.md). |
 | `@no_audit` | Disable post-sprint semantic audit. See [Sprint Audit](sprint-audit.md). |
 | `@max_audit_iterations <N>` | Maximum audit→fix cycles per sprint (default: 3) |
@@ -119,7 +119,7 @@ The epic parser enforces:
 - At least one sprint must be present
 - Sprint numbers must be sequential (1, 2, 3, ...)
 - Each sprint must have `@name`, `@max_iterations` > 0, `@promise`, and prompt content
-- When `@effort` is set, sprint count must not exceed the level's maximum (low: 2, medium: 4, high/max: 10)
+- When `@effort` is set, sprint count must not exceed the level's maximum (fast: 2, standard: 4, high/max: 10)
 
 ## Manual Epic Authoring
 

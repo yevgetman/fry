@@ -21,7 +21,7 @@ var completedSprintRe = regexp.MustCompile(`(?m)^## Sprint (\d+):\s*(.+?)\s*—\
 var failedSprintRe = regexp.MustCompile(`(?m)^## Sprint (\d+):\s*(.+?)\s*—\s*(FAIL.*)$`)
 
 // CollectBuildState gathers a snapshot of the current build state from .fry/ artifacts.
-// When alwaysVerify is true, low-effort builds are not exempt from the build audit
+// When alwaysVerify is true, fast-effort builds are not exempt from the build audit
 // sentinel check (mirrors the --always-verify CLI flag).
 func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic, alwaysVerify bool) (*BuildState, error) {
 	fryDir := filepath.Join(projectDir, config.FryDir)
@@ -99,7 +99,7 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic, al
 	}
 
 	// Track whether the build audit is configured for this epic.
-	auditConfigured := ep.AuditAfterSprint && !(ep.EffortLevel == epic.EffortLow && !alwaysVerify)
+	auditConfigured := ep.AuditAfterSprint && !(ep.EffortLevel == epic.EffortFast && !alwaysVerify)
 	state.AuditConfigured = auditConfigured
 
 	// When the epic is configured to skip the build audit, the sentinel is never

@@ -102,7 +102,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 
 - **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. After classification, an interactive confirmation prompt lets you review, accept, or adjust the difficulty and effort before the build starts (`--yes` / `-y` auto-accepts, `--no-project-overview` skips entirely). Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, alignment, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
 - **Project overview** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (`--yes` / `-y` auto-accepts, `--no-project-overview` skips entirely)
-- **Effort-level triage** -- `--effort low|medium|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
+- **Effort-level triage** -- `--effort fast|standard|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
 - **Supplementary assets** -- optional `assets/` directory for text reference documents (specs, schemas, requirements) whose full contents are read during plan and epic generation
 - **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, operational disposition, plan references, sprint tasks, iteration memory, and completion signals
@@ -200,7 +200,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 fry                                    # Run all sprints (prepare: claude, build: claude)
 fry --engine codex                     # Use OpenAI Codex for build stage
 fry --engine ollama                    # Use local Ollama models (no API key)
-fry --effort low                       # Simple task: 1-2 sprints, minimal overhead
+fry --effort fast                       # Simple task: 1-2 sprints, minimal overhead
 fry --effort max                       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
 fry run --resume --sprint 4             # Resume failed sprint 4 (skip iterations, align only)
@@ -217,7 +217,7 @@ fry --git-strategy worktree            # Force worktree isolation for the build
 fry --git-strategy branch --branch-name feat/api  # Build on a named branch
 fry --always-verify                    # Force sanity checks+audit on all tasks
 fry --no-observer                      # Disable the observer metacognitive layer
-fry prepare --effort medium            # Generate artifacts with medium effort sizing
+fry prepare --effort standard            # Generate artifacts with standard effort sizing
 ```
 
 See [Commands](docs/commands.md) for complete flag and argument reference.
@@ -228,7 +228,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 |---|---|
 | [Getting Started](docs/getting-started.md) | Prerequisites, installation, first build walkthrough |
 | [Commands](docs/commands.md) | Full CLI reference: `run`, `prepare`, `replan`, `version` |
-| [Effort Levels](docs/effort-levels.md) | Effort triage: `low`, `medium`, `high`, `max` -- controls sprint count, density, and review rigor |
+| [Effort Levels](docs/effort-levels.md) | Effort triage: `fast`, `standard`, `high`, `max` -- controls sprint count, density, and review rigor |
 | [Epic Format](docs/epic-format.md) | Epic file syntax: global directives, sprint blocks, validation rules, sizing guidelines |
 | [AI Engines](docs/engines.md) | Codex, Claude, and Ollama engine configuration, mixing engines, model overrides |
 | [Sprint Execution](docs/sprint-execution.md) | Agent iteration loop, prompt assembly, progress tracking, promise tokens |

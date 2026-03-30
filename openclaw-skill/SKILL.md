@@ -220,13 +220,13 @@ fry run --triage-only --project-dir /path/to/project \
   --user-prompt "Add rate limiting to API endpoints"
 
 # Step 2: Read the triage output and present to the user:
-#   "Fry classified this as MODERATE (effort: medium, 2 sprints).
+#   "Fry classified this as MODERATE (effort: standard, 2 sprints).
 #    Reason: Multi-file change with tests needed.
 #    Accept, or would you like to adjust?"
 
 # Step 3: Build with the user's chosen effort level
 fry run -y --project-dir /path/to/project \
-  --effort medium \
+  --effort standard \
   --user-prompt "Add rate limiting to API endpoints" \
   --json-report --telemetry
 ```
@@ -251,10 +251,10 @@ fry run --confirm-file --project-dir /path/to/project \
 ```json
 {
   "type": "triage_confirm",
-  "message": "Triage classified task as MODERATE (effort: medium, 2 sprints).",
+  "message": "Triage classified task as MODERATE (effort: standard, 2 sprints).",
   "data": {
     "complexity": "MODERATE",
-    "effort": "medium",
+    "effort": "standard",
     "sprints": 2,
     "reason": "Multi-file change with tests needed.",
     "git_strategy": "branch (new branch for this build)"
@@ -333,7 +333,7 @@ sessions_spawn({
 | Flag | Values | Default | Purpose |
 |------|--------|---------|---------|
 | `-y` / `--yes` | (flag) | off | Auto-accept all interactive prompts. Always use this. |
-| `--effort` | low, medium, high, max, auto | auto | Sprint count and rigor |
+| `--effort` | fast, standard, high, max, auto | auto | Sprint count and rigor |
 | `--engine` | claude, codex, ollama | claude | Which LLM engine to use |
 | `--mode` | software, planning, writing | software | Build mode |
 | `--model` | opus[1m], sonnet, haiku | (engine default) | Override agent model |
@@ -354,8 +354,8 @@ sessions_spawn({
 
 | Level | Sprints | Alignment | Review | Audit | Use case |
 |-------|---------|-----------|--------|-------|----------|
-| low | 1-2 | Skip | No | No | Quick fixes, one-file changes |
-| medium | 2-4 | 3 attempts | No | Sprint only | Standard features |
+| fast | 1-2 | Skip | No | No | Quick fixes, one-file changes |
+| standard | 2-4 | 3 attempts | No | Sprint only | Standard features |
 | high | 4-10 | 10 + progress detection | Yes | Both | Complex features |
 | max | Max rigor | Unlimited + progress | Yes | Both + deep | Critical/large work |
 | auto | Triage decides | Based on triage | Based on triage | Based on triage | Let Fry decide |
@@ -579,7 +579,7 @@ the sprint may pass with deferred failures (below `@max_fail_percent` threshold)
 
 ### Sprint audit
 
-After each sprint (medium effort and above), Fry runs a semantic audit:
+After each sprint (standard effort and above), Fry runs a semantic audit:
 
 - **CRITICAL/HIGH** findings block the sprint — Fry attempts auto-fix.
 - **MODERATE** findings get one fix attempt.
@@ -645,7 +645,7 @@ fry audit --mode writing --project-dir /path/to/project
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--effort` | `high` | Audit rigor: low (quick), medium, high, max (thorough) |
+| `--effort` | `high` | Audit rigor: fast (quick), standard, high, max (thorough) |
 | `--engine` | `claude` | AI engine |
 | `--model` | (auto) | Override agent model |
 | `--mode` | `software` | Audit criteria: software (code quality) or writing (content quality) |
@@ -705,7 +705,7 @@ Implement the business logic layer...
 |-----------|---------|
 | `@epic <name>` | Epic title |
 | `@engine <claude\|codex\|ollama>` | LLM engine |
-| `@effort <low\|medium\|high\|max>` | Effort level |
+| `@effort <fast\|standard\|high\|max>` | Effort level |
 | `@verification <path>` | Sanity checks file |
 | `@model <name>` | Override agent model |
 | `@mcp_config <path>` | MCP server config (Claude only) |

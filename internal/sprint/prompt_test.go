@@ -36,7 +36,7 @@ func TestAssemblePrompt_LowEffort(t *testing.T) {
 		ProjectDir:   dir,
 		SprintPrompt: "Build the thing.",
 		Promise:      "DONE",
-		EffortLevel:  epic.EffortLow,
+		EffortLevel:  epic.EffortFast,
 	})
 	require.NoError(t, err)
 	assert.NotContains(t, prompt, "QUALITY DIRECTIVE")

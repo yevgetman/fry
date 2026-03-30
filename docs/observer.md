@@ -65,12 +65,12 @@ Wake-ups are gated by [effort level](effort-levels.md). Higher effort levels ena
 
 | Effort | After Sprint | After Build Audit | Build End |
 |---|---|---|---|
-| `low` | disabled | disabled | disabled |
-| `medium` | -- | -- | yes |
+| `fast` | disabled | disabled | disabled |
+| `standard` | -- | -- | yes |
 | `high` | yes | yes | yes |
 | `max` | yes | yes | yes |
 
-At `low` effort, the observer is fully disabled (no events, no wake-ups). At `medium`, only the final build-end wake-up runs. At `high` and `max`, the observer wakes after every sprint, after the build audit, and at build end.
+At `fast` effort, the observer is fully disabled (no events, no wake-ups). At `standard`, only the final build-end wake-up runs. At `high` and `max`, the observer wakes after every sprint, after the build audit, and at build end.
 
 ## How Observer Consciousness Works
 
@@ -108,10 +108,10 @@ fry identity --full                  # Print all identity layers including domai
 ```bash
 fry --no-observer                    # Run without observer
 fry --effort high                    # Observer active (high effort)
-fry --effort low                     # Observer disabled (low effort)
+fry --effort fast                    # Observer disabled (fast effort)
 ```
 
-The observer is also automatically disabled during `--dry-run` and at `low` effort.
+The observer is also automatically disabled during `--dry-run` and at `fast` effort.
 
 ## File Locations
 
@@ -128,7 +128,7 @@ Observer runtime files live under **`.fry/observer/`**, which is gitignored. Exp
 
 ## Model Selection
 
-The observer session uses the `observer` session type for [automatic model selection](engines.md#automatic-model-selection-tier-system). At `high`/`max` effort, it uses Standard-tier models. At `medium` effort, it uses Mini-tier models.
+The observer session uses the `observer` session type for [automatic model selection](engines.md#automatic-model-selection-tier-system). At `high`/`max` effort, it uses Standard-tier models. At `standard` effort, it uses Mini-tier models.
 
 ## Related Documentation
 

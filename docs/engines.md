@@ -123,7 +123,7 @@ To update models when new ones release, change only the tier mapping table in `i
 
 ### Session × Effort Rules
 
-| Session | low | medium | high | max |
+| Session | fast | standard | high | max |
 |---------|-----|--------|------|-----|
 | Sprint execution, Alignment, Audit fix, Review, Replan | Standard | Standard | Frontier | Frontier |
 | Audit, Audit verify, Build audit (Claude) | Standard | Standard | Standard | Frontier |
@@ -134,7 +134,7 @@ To update models when new ones release, change only the tier mapping table in `i
 | Project overview | Labor | Labor | Labor | Labor |
 | Prepare | Standard | Standard | Standard | **Frontier** |
 
-Empty effort level defaults to "medium" behavior.
+Empty effort level defaults to "standard" behavior.
 
 ## Model Override
 

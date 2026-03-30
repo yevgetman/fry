@@ -21,7 +21,7 @@ func TestWritePrompt(t *testing.T) {
 	p := &Prompt{
 		Type:    PromptTriageConfirm,
 		Message: "Accept this classification?",
-		Data:    map[string]any{"complexity": "SIMPLE", "effort": "low"},
+		Data:    map[string]any{"complexity": "SIMPLE", "effort": "fast"},
 		Options: []string{"accept", "adjust", "reject"},
 	}
 	require.NoError(t, WritePrompt(dir, p))

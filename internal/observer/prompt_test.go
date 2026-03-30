@@ -93,7 +93,7 @@ func TestBuildObserverPrompt_EmptyEvents(t *testing.T) {
 		ProjectDir:   t.TempDir(),
 		EpicName:     "Test",
 		WakePoint:    WakeBuildEnd,
-		EffortLevel:  epic.EffortMedium,
+		EffortLevel:  epic.EffortStandard,
 		TotalSprints: 1,
 	}
 

@@ -67,7 +67,7 @@ By default, up to **20%** of sanity checks can fail (after alignment) without bl
 Configure with the `@max_fail_percent` directive in the epic file (overrides effort-level default):
 
 ```
-@max_fail_percent 20    # Default for low/medium/high effort
+@max_fail_percent 20    # Default for fast/standard/high effort
 @max_fail_percent 10    # Default for max effort
 @max_fail_percent 0     # Strict mode: all checks must pass
 @max_fail_percent 100   # Never fail on sanity checks

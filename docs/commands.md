@@ -45,20 +45,20 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <codex\|claude\|ollama>` | AI engine to use (default: claude) |
-| `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
+| `--effort <fast\|standard\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
 | `--model <model>` | Override the agent model for sprints, alignment, review, and replan sessions (e.g. `opus[1m]`, `sonnet`, `haiku`). Takes precedence over `@model` in the epic and the effort-based automatic model selection. Use this to pair a lower effort level (fewer sprints) with a more capable model. |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). `planning` generates structured documents; `writing` generates human-language content (books, guides, reports). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--prepare-engine <codex\|claude\|ollama>` | Engine for auto-generating the epic (defaults to `--engine`, `FRY_ENGINE`, or claude) |
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
-| `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. Also offered interactively during the adjust flow for medium/high effort builds. Max effort auto-enables review. |
+| `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. Also offered interactively during the adjust flow for standard/high effort builds. Max effort auto-enables review. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
 | `--yes` / `-y` | Auto-accept all interactive confirmation prompts (triage, project overview, executive bootstrap). For CI/CD and AI agent automation. |
 | `--confirm-file` | Use file-based interactive prompts instead of stdin. Writes prompts to `.fry/confirm-prompt.json`, waits for responses at `.fry/confirm-response.json`. For AI agent automation where the user should review and confirm each step. |
 | `--no-project-overview` | Skip interactive confirmations (triage classification and project overview) |
 | `--no-audit` | Disable sprint and build audits for this run |
-| `--no-observer` | Disable the observer metacognitive layer (event stream and wake-ups). Observer is also disabled at `low` effort and during `--dry-run`. See [Observer](observer.md). |
+| `--no-observer` | Disable the observer metacognitive layer (event stream and wake-ups). Observer is also disabled at `fast` effort and during `--dry-run`. See [Observer](observer.md). |
 | `--simulate-review <verdict>` | Test the review pipeline without LLM calls. Verdict: `CONTINUE` or `DEVIATE` |
 | `--verbose` | Stream full agent output to terminal (default: status banners only) |
 | `--sprint <N>` | Start from sprint N. Alternative to the positional start sprint argument — no need to specify the epic file path. Cannot be combined with positional sprint arguments. |
@@ -86,8 +86,8 @@ fry                                               # Run all sprints (.fry/epic.m
 fry --dry-run                                     # Validate and preview
 fry --triage-only --user-prompt "add a CLI flag"  # Preview triage classification only
 fry --engine claude                               # Run all sprints with Claude Code
-fry --effort low                                  # Quick task: 1-2 sprints, minimal overhead
-fry --effort medium --engine claude               # Moderate task: 2-4 sprints
+fry --effort fast                                  # Quick task: 1-2 sprints, minimal overhead
+fry --effort standard --engine claude             # Moderate task: 2-4 sprints
 fry --effort max --engine claude                  # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md                                   # Run all sprints with Codex
 fry run epic-phase2.md                            # Use a custom epic filename
@@ -113,7 +113,7 @@ fry --git-strategy worktree                       # Force worktree isolation
 fry --git-strategy branch --branch-name feat/auth # Branch with explicit name
 fry --git-strategy current                        # Work on current branch (previous behavior)
 fry --always-verify                               # Force sanity checks+alignment+audit on all tasks
-fry --model opus[1m] --effort medium               # Medium sprint count with frontier model
+fry --model opus[1m] --effort standard             # Standard sprint count with frontier model
 fry --no-observer                                 # Disable the observer metacognitive layer
 fry --project-dir /path/to/project                # Operate on a different project
 FRY_ENGINE=claude fry                             # Set engine via environment variable
@@ -132,7 +132,7 @@ Results are written to `build-audit.md` in the project root.
 | Flag | Description |
 |---|---|
 | `--engine <claude\|codex\|ollama>` | Execution engine (default: `claude`) |
-| `--effort <low\|medium\|high\|max>` | Effort level controlling audit rigor — higher effort means more audit cycles and fix iterations (default: `high`) |
+| `--effort <fast\|standard\|high\|max>` | Effort level controlling audit rigor — higher effort means more audit cycles and fix iterations (default: `high`) |
 | `--model <name>` | Override the agent model (e.g. `opus`, `sonnet`, `haiku`) |
 | `--mode <software\|planning\|writing>` | Audit mode — controls the audit criteria (code quality vs content quality). Default: `software`. |
 | `--sarif` | Write `build-audit.sarif` in SARIF 2.1.0 format alongside `build-audit.md` |
@@ -143,7 +143,7 @@ Results are written to `build-audit.md` in the project root.
 ```bash
 fry audit                                    # Audit current project (high effort, claude)
 fry audit --effort max                       # Maximum rigor audit
-fry audit --effort low                       # Quick single-pass audit
+fry audit --effort fast                      # Quick single-pass audit
 fry audit --engine codex                     # Audit with Codex engine
 fry audit --sarif                            # Also write SARIF output for tooling
 fry audit --mode writing                     # Audit content quality (writing mode criteria)
@@ -174,7 +174,7 @@ fry prepare [epic_filename] [flags]
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <codex\|claude\|ollama>` | AI engine for generation (default: claude, or `FRY_ENGINE`) |
-| `--effort <low\|medium\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
+| `--effort <fast\|standard\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--user-prompt <text>` | Top-level directive to guide artifact generation. Can bootstrap the entire project when no plan files exist (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
@@ -206,7 +206,7 @@ All artifacts are **always regenerated** (overwritten) on each run.
 ```bash
 fry prepare                                        # Generate all with Claude (default)
 fry prepare --engine codex                         # Generate all with Codex
-fry prepare --effort low                           # Generate a compact 1-2 sprint epic
+fry prepare --effort fast                          # Generate a compact 1-2 sprint epic
 fry prepare --effort max --engine claude           # Generate with maximum detail
 fry prepare epic-phase1.md                         # Custom epic filename
 fry prepare --project-dir /path                    # Operate on a different project

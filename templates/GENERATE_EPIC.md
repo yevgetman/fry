@@ -75,14 +75,14 @@ If an `@effort` level is specified, it constrains sprint count and density:
 
 | Level    | Max Sprints | Max Iterations | Prompt Detail | Notes |
 |----------|------------|----------------|---------------|-------|
-| `low`    | 2          | 10-15          | Concise       | Combine layers, skip scaffolding sprint |
-| `medium` | 4          | 15-25          | Moderate      | Merge related layers |
+| `fast`    | 2          | 10-15          | Concise       | Combine layers, skip scaffolding sprint |
+| `standard` | 4          | 15-25          | Moderate      | Merge related layers |
 | `high`   | 10         | 15-35          | Full 7-part   | Current default behavior |
 | `max`    | 10         | 30-50          | Extended      | Add analysis + quality gate sections |
 
 If no effort level is specified, auto-detect based on plan complexity:
-- 1-3 files -> low
-- 4-15 files -> medium
+- 1-3 files -> fast
+- 4-15 files -> standard
 - 15+ files -> high
 
 ### 3. Writes specific, actionable sprint prompts

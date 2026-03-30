@@ -51,7 +51,7 @@ You should see the fry skill listed as `ready` with the frying pan emoji.
 From any messaging channel connected to OpenClaw:
 
 ```
-start a build on ~/code/myproject with medium effort
+start a build on ~/code/myproject with standard effort
 ```
 
 The agent will use the Fry CLI to start the build, detaching it as a background process, and use `fry status --json` to monitor progress.
@@ -121,7 +121,7 @@ $ fry status --json --project-dir ~/code/myproject
   "active": true,
   "project_dir": "/Users/yev/code/myproject",
   "epic": "REST API Build",
-  "effort": "medium",
+  "effort": "standard",
   "engine": "claude",
   "total_sprints": 4,
   "current_sprint": 2,

@@ -36,17 +36,17 @@ func (s *stubObserverEngine) Name() string { return "stub" }
 func TestShouldWakeUp_LowEffort(t *testing.T) {
 	t.Parallel()
 
-	assert.False(t, ShouldWakeUp(epic.EffortLow, WakeAfterSprint))
-	assert.False(t, ShouldWakeUp(epic.EffortLow, WakeAfterBuildAudit))
-	assert.False(t, ShouldWakeUp(epic.EffortLow, WakeBuildEnd))
+	assert.False(t, ShouldWakeUp(epic.EffortFast, WakeAfterSprint))
+	assert.False(t, ShouldWakeUp(epic.EffortFast, WakeAfterBuildAudit))
+	assert.False(t, ShouldWakeUp(epic.EffortFast, WakeBuildEnd))
 }
 
 func TestShouldWakeUp_MediumEffort(t *testing.T) {
 	t.Parallel()
 
-	assert.False(t, ShouldWakeUp(epic.EffortMedium, WakeAfterSprint))
-	assert.False(t, ShouldWakeUp(epic.EffortMedium, WakeAfterBuildAudit))
-	assert.True(t, ShouldWakeUp(epic.EffortMedium, WakeBuildEnd))
+	assert.False(t, ShouldWakeUp(epic.EffortStandard, WakeAfterSprint))
+	assert.False(t, ShouldWakeUp(epic.EffortStandard, WakeAfterBuildAudit))
+	assert.True(t, ShouldWakeUp(epic.EffortStandard, WakeBuildEnd))
 }
 
 func TestShouldWakeUp_HighEffort(t *testing.T) {
@@ -68,7 +68,7 @@ func TestShouldWakeUp_MaxEffort(t *testing.T) {
 func TestShouldWakeUp_EmptyEffort(t *testing.T) {
 	t.Parallel()
 
-	// Empty effort is treated like medium
+	// Empty effort is treated like standard
 	assert.False(t, ShouldWakeUp("", WakeAfterSprint))
 	assert.True(t, ShouldWakeUp("", WakeBuildEnd))
 }

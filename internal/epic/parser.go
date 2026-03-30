@@ -262,7 +262,7 @@ func ParseEpic(path string) (*Epic, error) {
 	// Allow deviations to touch any remaining sprint (capped at a safety
 	// limit to prevent runaway replan loops). Low effort never runs reviews,
 	// so it keeps the parsed/default scope as-is.
-	if ep.EffortLevel != EffortLow {
+	if ep.EffortLevel != EffortFast {
 		scope := ep.TotalSprints
 		if scope > config.MaxDeviationScopeCap {
 			scope = config.MaxDeviationScopeCap

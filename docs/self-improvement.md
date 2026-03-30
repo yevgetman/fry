@@ -133,7 +133,7 @@ Planning does not run every cycle. The orchestrator evaluates roadmap health:
 
 1. The orchestrator exports all open issues to `assets/existing-issues.json` for deduplication
 2. Scaffolds `plans/executive.md`
-3. Fry runs with the planning prompt (`--mode planning`, `--effort medium`, `--no-audit`)
+3. Fry runs with the planning prompt (`--mode planning`, `--effort standard`, `--no-audit`)
 4. Fry reads existing issues to avoid re-discovering known items
 5. New findings are written to `output/new-findings.json`
 6. The orchestrator creates a GitHub Issue for each finding with appropriate labels
@@ -299,7 +299,7 @@ The self-improvement loop uses several Fry features:
 | `--full-prepare` | Build phase forces full prepare so the LLM reads the approved items |
 | `--no-project-overview` | Both phases skip interactive confirmation (automated) |
 | `--no-audit` | Planning phase skips audit (analysis-only, no code to audit) |
-| `--effort medium` | Planning phase uses medium effort (sufficient for discovery) |
+| `--effort standard` | Planning phase uses standard effort (sufficient for discovery) |
 | `--git-strategy current` | Both phases work on the current branch/worktree (orchestrator manages worktrees externally) |
 | Worktrees | Orchestrator creates worktrees for build isolation |
 | Triage gate | Auto-classifies build complexity; complex tasks auto-elevate to `effort=high` |

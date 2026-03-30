@@ -225,9 +225,9 @@ Prompt four.
 		assert.Equal(t, 4, ep.MaxDeviationScope)
 	})
 
-	t.Run("medium effort expands scope to all sprints", func(t *testing.T) {
+	t.Run("standard effort expands scope to all sprints", func(t *testing.T) {
 		t.Parallel()
-		ep := parseTempEpic(t, "@epic Med\n@effort medium\n"+fourSprints)
+		ep := parseTempEpic(t, "@epic Med\n@effort standard\n"+fourSprints)
 		assert.Equal(t, 4, ep.TotalSprints)
 		assert.Equal(t, 4, ep.MaxDeviationScope)
 	})
@@ -239,9 +239,9 @@ Prompt four.
 		assert.Equal(t, 4, ep.MaxDeviationScope)
 	})
 
-	t.Run("low effort keeps default scope", func(t *testing.T) {
+	t.Run("fast effort keeps default scope", func(t *testing.T) {
 		t.Parallel()
-		ep := parseTempEpic(t, "@epic Low\n@effort low\n"+fourSprints)
+		ep := parseTempEpic(t, "@epic Low\n@effort fast\n"+fourSprints)
 		assert.Equal(t, 4, ep.TotalSprints)
 		assert.Equal(t, config.DefaultMaxDeviationScope, ep.MaxDeviationScope)
 	})
@@ -432,7 +432,7 @@ func TestParseEpic_EffortDirective(t *testing.T) {
 
 	ep := parseTempEpic(t, `
 @epic Effort Test
-@effort medium
+@effort standard
 @sprint 1
 @name One
 @max_iterations 2
@@ -441,7 +441,7 @@ func TestParseEpic_EffortDirective(t *testing.T) {
 Do it.
 `)
 
-	assert.Equal(t, EffortMedium, ep.EffortLevel)
+	assert.Equal(t, EffortStandard, ep.EffortLevel)
 }
 
 func TestParseEpic_EffortDirectiveInvalid(t *testing.T) {
@@ -556,7 +556,7 @@ func TestParseEpic_EffortDirectiveCaseInsensitive(t *testing.T) {
 
 	ep := parseTempEpic(t, `
 @epic Case Test
-@effort LOW
+@effort FAST
 @sprint 1
 @name One
 @max_iterations 2
@@ -565,14 +565,14 @@ func TestParseEpic_EffortDirectiveCaseInsensitive(t *testing.T) {
 Do it.
 `)
 
-	assert.Equal(t, EffortLow, ep.EffortLevel)
+	assert.Equal(t, EffortFast, ep.EffortLevel)
 }
 
-func TestValidateEpic_EffortLow_TooManySprints(t *testing.T) {
+func TestValidateEpic_EffortFast_TooManySprints(t *testing.T) {
 	t.Parallel()
 
 	ep := &Epic{
-		EffortLevel: EffortLow,
+		EffortLevel: EffortFast,
 		Sprints: []Sprint{
 			{Number: 1, Name: "One", MaxIterations: 1, Promise: "ONE", Prompt: "Prompt."},
 			{Number: 2, Name: "Two", MaxIterations: 1, Promise: "TWO", Prompt: "Prompt."},
@@ -581,14 +581,14 @@ func TestValidateEpic_EffortLow_TooManySprints(t *testing.T) {
 	}
 	err := ValidateEpic(ep)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "effort level \"low\" allows at most 2 sprints, but epic has 3")
+	assert.Contains(t, err.Error(), "effort level \"fast\" allows at most 2 sprints, but epic has 3")
 }
 
-func TestValidateEpic_EffortLow_Valid(t *testing.T) {
+func TestValidateEpic_EffortFast_Valid(t *testing.T) {
 	t.Parallel()
 
 	ep := &Epic{
-		EffortLevel: EffortLow,
+		EffortLevel: EffortFast,
 		Sprints: []Sprint{
 			{Number: 1, Name: "One", MaxIterations: 1, Promise: "ONE", Prompt: "Prompt."},
 			{Number: 2, Name: "Two", MaxIterations: 1, Promise: "TWO", Prompt: "Prompt."},
@@ -597,7 +597,7 @@ func TestValidateEpic_EffortLow_Valid(t *testing.T) {
 	assert.NoError(t, ValidateEpic(ep))
 }
 
-func TestValidateEpic_EffortMedium_TooManySprints(t *testing.T) {
+func TestValidateEpic_EffortStandard_TooManySprints(t *testing.T) {
 	t.Parallel()
 
 	sprints := make([]Sprint, 5)
@@ -605,12 +605,12 @@ func TestValidateEpic_EffortMedium_TooManySprints(t *testing.T) {
 		sprints[i] = Sprint{Number: i + 1, Name: fmt.Sprintf("Sprint %d", i+1), MaxIterations: 1, Promise: fmt.Sprintf("S%d", i+1), Prompt: "Prompt."}
 	}
 	ep := &Epic{
-		EffortLevel: EffortMedium,
+		EffortLevel: EffortStandard,
 		Sprints:     sprints,
 	}
 	err := ValidateEpic(ep)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "effort level \"medium\" allows at most 4 sprints, but epic has 5")
+	assert.Contains(t, err.Error(), "effort level \"standard\" allows at most 4 sprints, but epic has 5")
 }
 
 func TestValidateEpic_EffortUnset_AnySprints(t *testing.T) {

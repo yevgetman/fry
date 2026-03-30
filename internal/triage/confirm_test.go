@@ -13,7 +13,7 @@ import (
 func baseDecision() *TriageDecision {
 	return &TriageDecision{
 		Complexity:  ComplexityModerate,
-		EffortLevel: epic.EffortMedium,
+		EffortLevel: epic.EffortStandard,
 		Reason:      "REST endpoint with tests across 6 files.",
 		SprintCount: 2,
 	}
@@ -35,21 +35,21 @@ func TestConfirmDecision(t *testing.T) {
 			input:       "Y\n",
 			decision:    baseDecision(),
 			wantComplex: ComplexityModerate,
-			wantEffort:  epic.EffortMedium,
+			wantEffort:  epic.EffortStandard,
 		},
 		{
 			name:        "accept with empty",
 			input:       "\n",
 			decision:    baseDecision(),
 			wantComplex: ComplexityModerate,
-			wantEffort:  epic.EffortMedium,
+			wantEffort:  epic.EffortStandard,
 		},
 		{
 			name:        "accept with yes",
 			input:       "yes\n",
 			decision:    baseDecision(),
 			wantComplex: ComplexityModerate,
-			wantEffort:  epic.EffortMedium,
+			wantEffort:  epic.EffortStandard,
 		},
 		{
 			name:     "decline with n",
@@ -80,14 +80,14 @@ func TestConfirmDecision(t *testing.T) {
 			input:       "a\n\n\n",
 			decision:    baseDecision(),
 			wantComplex: ComplexityModerate,
-			wantEffort:  epic.EffortMedium,
+			wantEffort:  epic.EffortStandard,
 		},
 		{
 			name:        "adjust difficulty to complex",
 			input:       "a\ncomplex\n\n",
 			decision:    baseDecision(),
 			wantComplex: ComplexityComplex,
-			wantEffort:  epic.EffortMedium,
+			wantEffort:  epic.EffortStandard,
 		},
 		{
 			name:        "adjust effort to high",
@@ -98,31 +98,31 @@ func TestConfirmDecision(t *testing.T) {
 		},
 		{
 			name:        "adjust both",
-			input:       "a\nsimple\nlow\n",
+			input:       "a\nsimple\nfast\n",
 			decision:    baseDecision(),
 			wantComplex: ComplexitySimple,
-			wantEffort:  epic.EffortLow,
+			wantEffort:  epic.EffortFast,
 		},
 		{
 			name:        "invalid difficulty keeps original",
 			input:       "a\nEASY\n\n",
 			decision:    baseDecision(),
 			wantComplex: ComplexityModerate,
-			wantEffort:  epic.EffortMedium,
+			wantEffort:  epic.EffortStandard,
 		},
 		{
 			name:        "invalid effort keeps original",
 			input:       "a\n\nextreme\n",
 			decision:    baseDecision(),
 			wantComplex: ComplexityModerate,
-			wantEffort:  epic.EffortMedium,
+			wantEffort:  epic.EffortStandard,
 		},
 		{
 			name: "max on simple keeps previous effort",
 			input: "a\nsimple\nmax\n",
 			decision: baseDecision(),
 			wantComplex: ComplexitySimple,
-			wantEffort:  epic.EffortMedium,
+			wantEffort:  epic.EffortStandard,
 		},
 		{
 			name: "max on complex allowed",
@@ -199,13 +199,13 @@ func TestConfirmDecisionDisplay(t *testing.T) {
 			name: "simple display",
 			decision: &TriageDecision{
 				Complexity:  ComplexitySimple,
-				EffortLevel: epic.EffortLow,
+				EffortLevel: epic.EffortFast,
 				Reason:      "Fix a typo in README.",
 				SprintCount: 1,
 			},
 			contains: []string{
 				"SIMPLE",
-				"low",
+				"fast",
 				"Fix a typo in README.",
 				"1-sprint epic programmatically",
 			},
@@ -214,13 +214,13 @@ func TestConfirmDecisionDisplay(t *testing.T) {
 			name: "moderate display",
 			decision: &TriageDecision{
 				Complexity:  ComplexityModerate,
-				EffortLevel: epic.EffortMedium,
+				EffortLevel: epic.EffortStandard,
 				Reason:      "REST endpoint with tests.",
 				SprintCount: 2,
 			},
 			contains: []string{
 				"MODERATE",
-				"medium",
+				"standard",
 				"REST endpoint with tests.",
 				"2-sprint epic programmatically",
 			},
@@ -287,7 +287,7 @@ func TestConfirmDecisionWarnings(t *testing.T) {
 			Stdout:   &stdout,
 		})
 		require.NoError(t, err)
-		assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+		assert.Equal(t, epic.EffortStandard, result.EffortLevel)
 		assert.Contains(t, stdout.String(), "Invalid effort")
 	})
 
@@ -300,7 +300,7 @@ func TestConfirmDecisionWarnings(t *testing.T) {
 			Stdout:   &stdout,
 		})
 		require.NoError(t, err)
-		assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+		assert.Equal(t, epic.EffortStandard, result.EffortLevel)
 		assert.Contains(t, stdout.String(), "reserved for complex tasks")
 	})
 
@@ -470,12 +470,12 @@ func TestActionDescription(t *testing.T) {
 func TestConfirmDecision_AutoAccept(t *testing.T) {
 	t.Parallel()
 
-	t.Run("moderate with medium effort", func(t *testing.T) {
+	t.Run("moderate with standard effort", func(t *testing.T) {
 		t.Parallel()
 
 		decision := &TriageDecision{
 			Complexity:  ComplexityModerate,
-			EffortLevel: epic.EffortMedium,
+			EffortLevel: epic.EffortStandard,
 			Reason:      "test",
 			SprintCount: 2,
 		}
@@ -490,17 +490,17 @@ func TestConfirmDecision_AutoAccept(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, ComplexityModerate, result.Complexity)
-		assert.Equal(t, epic.EffortMedium, result.EffortLevel)
+		assert.Equal(t, epic.EffortStandard, result.EffortLevel)
 		assert.Empty(t, result.GitStrategy)
 		assert.Contains(t, buf.String(), "auto-accepted")
 	})
 
-	t.Run("simple with low effort", func(t *testing.T) {
+	t.Run("simple with fast effort", func(t *testing.T) {
 		t.Parallel()
 
 		decision := &TriageDecision{
 			Complexity:  ComplexitySimple,
-			EffortLevel: epic.EffortLow,
+			EffortLevel: epic.EffortFast,
 			Reason:      "trivial fix",
 			SprintCount: 1,
 		}
@@ -515,7 +515,7 @@ func TestConfirmDecision_AutoAccept(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, ComplexitySimple, result.Complexity)
-		assert.Equal(t, epic.EffortLow, result.EffortLevel)
+		assert.Equal(t, epic.EffortFast, result.EffortLevel)
 		assert.Empty(t, result.GitStrategy)
 		assert.Contains(t, buf.String(), "auto-accepted")
 	})

@@ -27,11 +27,11 @@ type SimpleEpicOpts struct {
 // Effort matrix for simple tasks (sprint-level settings only;
 // build audit is controlled by the CLI layer):
 //
-//	Low:    standard model, 12 iter, no alignment, no sprint audit
-//	Medium: standard model, 20 iter, no alignment, 1 audit+fix pass
-//	High:   frontier model, 25 iter, no alignment, 1 audit+fix pass
+//	Fast:     standard model, 12 iter, no alignment, no sprint audit
+//	Standard: standard model, 20 iter, no alignment, 1 audit+fix pass
+//	High:     frontier model, 25 iter, no alignment, 1 audit+fix pass
 //
-// Empty or max effort defaults to low within this function.
+// Empty or max effort defaults to fast within this function.
 // The CLI layer caps max→high before calling this function.
 func BuildSimpleEpic(opts SimpleEpicOpts) (*epic.Epic, error) {
 	prompt := opts.PlanContent
@@ -47,10 +47,10 @@ func BuildSimpleEpic(opts SimpleEpicOpts) (*epic.Epic, error) {
 
 	effort := opts.EffortLevel
 	if effort == "" || effort == epic.EffortMax {
-		effort = epic.EffortLow
+		effort = epic.EffortFast
 	}
 
-	auditAfterSprint := effort == epic.EffortMedium || effort == epic.EffortHigh
+	auditAfterSprint := effort == epic.EffortStandard || effort == epic.EffortHigh
 
 	ep := &epic.Epic{
 		Name:                  "Simple Task",
@@ -92,11 +92,11 @@ type ModerateEpicOpts struct {
 // Effort matrix for moderate tasks (sprint-level settings only;
 // build audit is controlled by the CLI layer):
 //
-//	Low:    standard model, 12 iter, no alignment, no sprint audit, 1 sprint
-//	Medium: standard model, 20 iter, 3 alignment attempts, default audit (3 outer, 3 inner), 1-2 sprints
-//	High:   frontier model, 25 iter, 10 alignment + progress detection, full audit (12 outer, 7 inner), 1-2 sprints
+//	Fast:     standard model, 12 iter, no alignment, no sprint audit, 1 sprint
+//	Standard: standard model, 20 iter, 3 alignment attempts, default audit (3 outer, 3 inner), 1-2 sprints
+//	High:     frontier model, 25 iter, 10 alignment + progress detection, full audit (12 outer, 7 inner), 1-2 sprints
 //
-// Empty effort defaults to medium. Max effort is capped to high.
+// Empty effort defaults to standard. Max effort is capped to high.
 func BuildModerateEpic(opts ModerateEpicOpts) (*epic.Epic, error) {
 	prompt := opts.PlanContent
 	if prompt == "" {
@@ -111,7 +111,7 @@ func BuildModerateEpic(opts ModerateEpicOpts) (*epic.Epic, error) {
 
 	effort := opts.EffortLevel
 	if effort == "" {
-		effort = epic.EffortMedium
+		effort = epic.EffortStandard
 	}
 	if effort == epic.EffortMax {
 		effort = epic.EffortHigh
@@ -124,18 +124,18 @@ func BuildModerateEpic(opts ModerateEpicOpts) (*epic.Epic, error) {
 	if sprintCount > 2 {
 		sprintCount = 2
 	}
-	// Low effort forces 1 sprint.
-	if effort == epic.EffortLow {
+	// Fast effort forces 1 sprint.
+	if effort == epic.EffortFast {
 		sprintCount = 1
 	}
 
 	var healAttempts int
 	var auditAfterSprint bool
 	switch effort {
-	case epic.EffortLow:
+	case epic.EffortFast:
 		healAttempts = 0
 		auditAfterSprint = false
-	case epic.EffortMedium:
+	case epic.EffortStandard:
 		healAttempts = config.DefaultMaxHealAttempts
 		auditAfterSprint = true
 	case epic.EffortHigh:

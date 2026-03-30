@@ -139,7 +139,7 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 				}
 			}
 
-			fmt.Fprintf(stdout, "Effort level [%s] (low/medium/high/max, or Enter to keep): ", effortLevel.String())
+			fmt.Fprintf(stdout, "Effort level [%s] (fast/standard/high/max, or Enter to keep): ", effortLevel.String())
 			effortInput, err := scanLine()
 			if err != nil {
 				return nil, err
@@ -154,17 +154,17 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 				}
 			}
 
-			// Offer sprint review toggle for non-low effort levels.
+			// Offer sprint review toggle for non-fast effort levels.
 			// Max effort auto-enables review and shows a confirmation message.
 			// Medium/high/auto get an interactive toggle.
 			effectiveEffort := effortLevel
 			if effectiveEffort == "" {
-				effectiveEffort = epic.EffortMedium // auto-detect defaults to at least medium
+				effectiveEffort = epic.EffortStandard // auto-detect defaults to at least standard
 			}
 			if effectiveEffort == epic.EffortMax {
 				enableReview = true
 				fmt.Fprintf(stdout, "Sprint review: %s (auto-enabled for max effort)\n", color.GreenText("enabled"))
-			} else if effectiveEffort != epic.EffortLow {
+			} else if effectiveEffort != epic.EffortFast {
 				reviewDefault := "n"
 				if enableReview {
 					reviewDefault = "y"
@@ -294,7 +294,7 @@ PROJECT_TYPE: <type> (<short descriptor>)
 GOAL: <1-2 sentence goal>
 EXPECTED_OUTPUT: <what the build will produce>
 KEY_TOPICS: <comma-separated key components or topics>
-EFFORT: <low|medium|high|max> (<N-M> sprints)
+EFFORT: <fast|standard|high|max> (<N-M> sprints)
 
 Rules:
 - Derive everything from the provided content. Do not invent information.
@@ -302,7 +302,7 @@ Rules:
 - GOAL should be specific and actionable
 - EXPECTED_OUTPUT should describe concrete deliverables
 - KEY_TOPICS should list 3-7 items
-- EFFORT must express scope as a sprint count — NEVER use hours or days. Use the format "level (N-M sprints)". Sprint ranges by level: low = 1-2, medium = 2-4, high = 4-10, max = 4-10.
+- EFFORT must express scope as a sprint count — NEVER use hours or days. Use the format "level (N-M sprints)". Sprint ranges by level: fast = 1-2, standard = 2-4, high = 4-10, max = 4-10.
 `)
 
 	if effort != "" {

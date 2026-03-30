@@ -57,7 +57,7 @@ type BuildState struct {
 	BuildAuditComplete bool
 
 	// AuditConfigured is true when the build audit is expected to run
-	// (AuditAfterSprint is true and effort level is not low without --always-verify).
+	// (AuditAfterSprint is true and effort level is not fast without --always-verify).
 	AuditConfigured bool
 
 	// Build exit reason (from .fry/build-exit-reason.txt)

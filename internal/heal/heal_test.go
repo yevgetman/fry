@@ -358,7 +358,7 @@ func TestHealLoopZeroThreshold(t *testing.T) {
 
 // --- Effort-level-aware alignment tests ---
 
-func TestHealLoopLowEffortNoAttempts(t *testing.T) {
+func TestHealLoopFastEffortNoAttempts(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
@@ -368,14 +368,14 @@ func TestHealLoopLowEffortNoAttempts(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
 
 	mockEngine := &stubEngine{name: "codex"}
-	// Low effort: 1/5 checks fail = 20%, within 20% threshold → pass with no alignment attempts
+	// Fast effort: 1/5 checks fail = 20%, within 20% threshold → pass with no alignment attempts
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir:  projectDir,
-		Sprint:      &epic.Sprint{Number: 1, Name: "Low effort"},
+		Sprint:      &epic.Sprint{Number: 1, Name: "Fast effort"},
 		Epic:        &epic.Epic{TotalSprints: 1},
 		Engine:      mockEngine,
 		SprintLogFile: sprintLog,
-		EffortLevel: epic.EffortLow,
+		EffortLevel: epic.EffortFast,
 		Checks: []verify.Check{
 			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
 			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
@@ -387,10 +387,10 @@ func TestHealLoopLowEffortNoAttempts(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.Healed)
 	assert.True(t, result.WithinThreshold, "should pass via threshold with no alignment")
-	assert.Empty(t, mockEngine.prompts, "low effort should make zero alignment attempts")
+	assert.Empty(t, mockEngine.prompts, "fast effort should make zero alignment attempts")
 }
 
-func TestHealLoopLowEffortExceedsThreshold(t *testing.T) {
+func TestHealLoopFastEffortExceedsThreshold(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
@@ -400,14 +400,14 @@ func TestHealLoopLowEffortExceedsThreshold(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
 
 	mockEngine := &stubEngine{name: "codex"}
-	// Low effort: 2/3 checks fail = 67%, exceeds 20% → fail with no alignment attempts
+	// Fast effort: 2/3 checks fail = 67%, exceeds 20% → fail with no alignment attempts
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir:  projectDir,
-		Sprint:      &epic.Sprint{Number: 1, Name: "Low fail"},
+		Sprint:      &epic.Sprint{Number: 1, Name: "Fast fail"},
 		Epic:        &epic.Epic{TotalSprints: 1},
 		Engine:      mockEngine,
 		SprintLogFile: sprintLog,
-		EffortLevel: epic.EffortLow,
+		EffortLevel: epic.EffortFast,
 		Checks: []verify.Check{
 			{Sprint: 1, Type: verify.CheckFile, Path: "present.txt"},
 			{Sprint: 1, Type: verify.CheckFile, Path: "missing1.txt"},
@@ -417,10 +417,10 @@ func TestHealLoopLowEffortExceedsThreshold(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.Healed)
 	assert.False(t, result.WithinThreshold, "should fail — too many failures")
-	assert.Empty(t, mockEngine.prompts, "low effort should make zero alignment attempts even on failure")
+	assert.Empty(t, mockEngine.prompts, "fast effort should make zero alignment attempts even on failure")
 }
 
-func TestHealLoopMediumEffort(t *testing.T) {
+func TestHealLoopStandardEffort(t *testing.T) {
 	t.Parallel()
 
 	projectDir := t.TempDir()
@@ -429,21 +429,21 @@ func TestHealLoopMediumEffort(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(sprintLog), 0o755))
 
 	mockEngine := &stubEngine{name: "codex"}
-	// Medium effort: should make exactly 3 alignment attempts
+	// Standard effort: should make exactly 3 alignment attempts
 	result, err := RunHealLoop(context.Background(), HealOpts{
 		ProjectDir:  projectDir,
-		Sprint:      &epic.Sprint{Number: 1, Name: "Medium"},
+		Sprint:      &epic.Sprint{Number: 1, Name: "Standard"},
 		Epic:        &epic.Epic{TotalSprints: 1},
 		Engine:      mockEngine,
 		SprintLogFile: sprintLog,
-		EffortLevel: epic.EffortMedium,
+		EffortLevel: epic.EffortStandard,
 		Checks: []verify.Check{
 			{Sprint: 1, Type: verify.CheckFile, Path: "missing.txt"},
 		},
 	})
 	require.NoError(t, err)
 	assert.False(t, result.Healed)
-	assert.Len(t, mockEngine.prompts, 3, "medium effort should make exactly 3 attempts")
+	assert.Len(t, mockEngine.prompts, 3, "standard effort should make exactly 3 attempts")
 }
 
 func TestHealLoopHighEffortStuckExit(t *testing.T) {
@@ -694,11 +694,11 @@ func TestEffectiveHealConfig(t *testing.T) {
 		wantFailPercent int
 	}{
 		{
-			name: "low effort defaults",
+			name: "fast effort defaults",
 			opts: HealOpts{
 				Sprint:      &epic.Sprint{Number: 1, Name: "s"},
 				Epic:        &epic.Epic{TotalSprints: 1},
-				EffortLevel: epic.EffortLow,
+				EffortLevel: epic.EffortFast,
 			},
 			wantMax:         0,
 			wantHardCap:     true,
@@ -707,11 +707,11 @@ func TestEffectiveHealConfig(t *testing.T) {
 			wantFailPercent: 20,
 		},
 		{
-			name: "medium effort defaults",
+			name: "standard effort defaults",
 			opts: HealOpts{
 				Sprint:      &epic.Sprint{Number: 1, Name: "s"},
 				Epic:        &epic.Epic{TotalSprints: 1},
-				EffortLevel: epic.EffortMedium,
+				EffortLevel: epic.EffortStandard,
 			},
 			wantMax:         3,
 			wantHardCap:     true,
@@ -815,7 +815,7 @@ func TestEffectiveHealConfig(t *testing.T) {
 			wantFailPercent: 30,
 		},
 		{
-			name: "always-verify with low effort uses explicit directive path",
+			name: "always-verify with fast effort uses explicit directive path",
 			opts: HealOpts{
 				Sprint: &epic.Sprint{Number: 1, Name: "s"},
 				Epic: &epic.Epic{
@@ -823,7 +823,7 @@ func TestEffectiveHealConfig(t *testing.T) {
 					MaxHealAttempts:    config.DefaultMaxHealAttempts, // 3, set by --always-verify
 					MaxHealAttemptsSet: true,                          // also set by --always-verify (post-fix)
 				},
-				EffortLevel: epic.EffortLow,
+				EffortLevel: epic.EffortFast,
 			},
 			wantMax:         config.DefaultMaxHealAttempts, // 3
 			wantHardCap:     true,

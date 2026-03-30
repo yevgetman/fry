@@ -94,7 +94,7 @@ When an audit finds only LOW-severity issues (no CRITICAL, HIGH, or MODERATE), t
 
 | Effort | LOW-only result | Behavior |
 |---|---|---|
-| low / medium / high | Immediate pass | No fix attempt; LOW findings are non-blocking |
+| fast / standard / high | Immediate pass | No fix attempt; LOW findings are non-blocking |
 | max | Single fix attempt, then pass | One fix agent pass targets the LOW findings. No re-audit after — the result is accepted regardless of whether the fix succeeded. This prevents the audit loop from cycling indefinitely on acknowledged LOWs while still giving max effort one chance to resolve them. |
 
 The max effort audit iteration cap is set high (100) as a safety valve. The actual exit is governed by stale detection (3 consecutive cycles without progress) and the LOW-only exit condition above.
@@ -250,8 +250,8 @@ The verify agent does not look for new issues and does not modify source code.
 
 ## Effort Level Interaction
 
-- **`low`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at low effort.
-- **`medium`** -- Bounded audit: runs up to `@max_audit_iterations` outer audit cycles (default: 3), each with up to 3 inner fix iterations. LOW findings are ignored by the fix agent. Stops when cycles are exhausted.
+- **`fast`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at fast effort.
+- **`standard`** -- Bounded audit: runs up to `@max_audit_iterations` outer audit cycles (default: 3), each with up to 3 inner fix iterations. LOW findings are ignored by the fix agent. Stops when cycles are exhausted.
 - **`high`** -- Progress-based audit: outer loop continues as long as progress is detected. Up to 12 outer cycles, 7 inner fix iterations per cycle. **LOW findings are included** in the fix agent's scope alongside higher-severity items (non-blocking). Stops early if 3 consecutive outer cycles show no progress (same findings persisting).
 - **`max`** -- Same progress-based behavior as `high`, but with up to 100 outer cycles and 10 inner fix iterations per cycle. **LOW findings are included** in fix scope. Allows more thorough remediation for mission-critical builds.
 

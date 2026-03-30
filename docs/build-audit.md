@@ -61,7 +61,7 @@ The build audit runs only when **all** of these conditions are met:
 - The full epic was executed (sprint 1 through the last sprint)
 - Audit is enabled (`@audit_after_sprint` or default; not `@no_audit`)
 - `--no-audit` flag was not passed
-- Effort level is not `low`
+- Effort level is not `fast`
 
 Partial sprint ranges (e.g., `fry run epic.md 3 5`) do **not** trigger the build audit, since the full epic has not been executed.
 
@@ -211,7 +211,7 @@ When the build audit completes without blocking issues, Fry writes a sentinel fi
 - It is written for both the **full build audit** (all sprints complete) and the **triage single-pass audit**.
 - It **is** written when the audit finds only advisory (non-blocking) issues, since those do not prevent the build from being considered audited.
 - It is **not** written if the audit errors out, finds blocking issues, or is skipped with `--no-audit`.
-- When the epic is configured to skip auditing (e.g., `@no_audit` directive, or low effort without `--always-verify`), the collector sets `BuildAuditComplete = true` so the analyzer never returns `AUDIT_INCOMPLETE` in the first place.
+- When the epic is configured to skip auditing (e.g., `@no_audit` directive, or fast effort without `--always-verify`), the collector sets `BuildAuditComplete = true` so the analyzer never returns `AUDIT_INCOMPLETE` in the first place.
 - When `--no-audit` is passed as a CLI flag to `fry run --continue`, the collector still sees the audit as configured (because `@audit_after_sprint` is set in the epic) and the sentinel file is absent, so `HeuristicAnalyze` returns `AUDIT_INCOMPLETE`. The run command then handles this by skipping the audit phase and returning complete, rather than re-running the audit.
 
 **Resume behavior:**
@@ -232,8 +232,8 @@ build_audit_20060102_150405.log
 
 ## Effort Level Interaction
 
-- **`low`** -- Build audit is skipped entirely, matching sprint audit behavior.
-- **`medium`**, **`high`**, **`max`** -- Build audit runs when the epic completes successfully.
+- **`fast`** -- Build audit is skipped entirely, matching sprint audit behavior.
+- **`standard`**, **`high`**, **`max`** -- Build audit runs when the epic completes successfully.
 
 ## Relationship to Sprint Audit
 

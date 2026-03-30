@@ -109,7 +109,7 @@ func effectiveHealConfig(opts HealOpts) healConfig {
 		cfg.maxAttempts = config.HealSafetyCapMax
 	}
 
-	// 5. Fallback for auto/empty effort level only — low effort intentionally uses 0
+	// 5. Fallback for auto/empty effort level only — fast effort intentionally uses 0
 	if effort == "" && cfg.maxAttempts <= 0 && cfg.hardCap {
 		cfg.maxAttempts = config.DefaultMaxHealAttempts
 	}
@@ -187,7 +187,7 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 
 	// Run an initial check to populate baseline results. This ensures
 	// lastResults/lastPass/lastTotal are always initialized even when
-	// maxAttempts is 0 (e.g., low effort) or when the loop exits early.
+	// maxAttempts is 0 (e.g., fast effort) or when the loop exits early.
 	initialChecks, initialErr := reloadChecks(opts)
 	if initialErr != nil {
 		return nil, fmt.Errorf("run heal loop: initial check reload: %w", initialErr)

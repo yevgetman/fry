@@ -55,15 +55,15 @@ Each failed attempt's report is appended to `.fry/sprint-progress.txt`, giving s
 
 The alignment loop adapts to the effort level, controlling how many attempts are made, whether progress detection is used, and what failure threshold applies:
 
-| Aspect | `low` | `medium` | `high` | `max` |
+| Aspect | `fast` | `standard` | `high` | `max` |
 |---|---|---|---|---|
 | Max alignment attempts | 0 (no alignment) | 3 (fixed) | 10 (with progress detection) | Unlimited (progress-based, safety cap 50) |
 | Progress detection | No | No | Yes (stuck after 2 no-progress) | Yes (stuck after 3 no-progress) |
 | Fail threshold | 20% | 20% | 20% | 10% |
 | Mid-loop threshold exit | N/A | N/A | N/A | After ≥10 attempts, exits if ≤10% fail |
 
-- **Low**: Skips alignment entirely. If ≤20% of checks fail, the sprint passes with deferred failures; otherwise it fails immediately.
-- **Medium**: Makes exactly 3 alignment attempts. After exhaustion, evaluates the 20% threshold.
+- **Fast**: Skips alignment entirely. If ≤20% of checks fail, the sprint passes with deferred failures; otherwise it fails immediately.
+- **Standard**: Makes exactly 3 alignment attempts. After exhaustion, evaluates the 20% threshold.
 - **High**: Makes up to 10 alignment attempts, but exits early if the agent is stuck (fail count did not decrease for 2 consecutive attempts). After exhaustion or stuck exit, evaluates the 20% threshold.
 - **Max**: Makes unlimited alignment attempts (safety cap: 50) while the agent makes progress. Exits when stuck (3 consecutive no-progress attempts). Can also exit early after ≥10 attempts if failures are within the 10% threshold.
 
@@ -75,7 +75,7 @@ The alignment loop adapts to the effort level, controlling how many attempts are
 | `@max_heal_attempts <N>` | Per-sprint | Inherits global | Override for a specific sprint |
 | `@max_fail_percent <N>` | Global | Effort-level default | Maximum failure percentage before sprint fails |
 
-When `@max_heal_attempts` is explicitly set, it overrides the effort-level default and disables progress detection — the loop runs a fixed number of attempts. **Exception:** for `@effort max`, any explicit `@max_heal_attempts` is ignored with a warning — max effort always uses unlimited progress-based alignment (safety cap: 50).
+When `@max_heal_attempts` is explicitly set, it overrides the effort-level default and disables progress detection -- the loop runs a fixed number of attempts. **Exception:** for `@effort max`, any explicit `@max_heal_attempts` is ignored with a warning -- max effort always uses unlimited progress-based alignment (safety cap: 50).
 
 ### Override Priority
 
@@ -152,8 +152,8 @@ The `normal_max` is determined by the effort-level default (or explicit `@max_he
 
 | Effort | Normal max | Resume budget |
 |---|---|---|
-| `low` | 0 | 6 (minimum applies) |
-| `medium` | 3 | 6 |
+| `fast` | 0 | 6 (minimum applies) |
+| `standard` | 3 | 6 |
 | `high` | 10 | 20 |
 | `max` | unlimited | 6 (minimum applies) |
 | Explicit `@max_heal_attempts 5` | 5 | 10 |

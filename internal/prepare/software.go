@@ -174,30 +174,30 @@ AGENTS.md:
 
 func effortSizingGuidance(effort epic.EffortLevel) string {
 	switch effort {
-	case epic.EffortLow:
+	case epic.EffortFast:
 		return `
-EFFORT LEVEL: LOW
-The user has indicated this is a low-effort task. You MUST:
+EFFORT LEVEL: FAST
+The user has indicated this is a fast effort task. You MUST:
 - Generate AT MOST 2 sprints total
 - Use max_iterations of 10-15 per sprint
 - Write concise sprint prompts — skip the REFERENCES and STUCK HINT sections
 - Combine all work into 1-2 dense but focused sprints
 - Skip scaffolding as a separate sprint — include it in Sprint 1's build list
 - Focus only on the core deliverables; omit exhaustive edge cases
-- Add the @effort low directive to the epic header
+- Add the @effort fast directive to the epic header
 
 If the plan is genuinely trivial (single file, simple config), use exactly 1 sprint.
 `
-	case epic.EffortMedium:
+	case epic.EffortStandard:
 		return `
-EFFORT LEVEL: MEDIUM
-The user has indicated this is a medium-effort task. You MUST:
+EFFORT LEVEL: STANDARD
+The user has indicated this is a standard effort task. You MUST:
 - Generate 2-4 sprints total (prefer the lower end)
 - Use max_iterations of 15-25 per sprint
 - Write moderately detailed sprint prompts — include all 7 parts but keep them concise
 - Merge layers that would be separate at HIGH effort (e.g., combine schema + domain types)
 - Include essential edge cases but don't be exhaustive
-- Add the @effort medium directive to the epic header
+- Add the @effort standard directive to the epic header
 `
 	case epic.EffortHigh:
 		return `
@@ -232,9 +232,9 @@ EFFORT LEVEL: AUTO-DETECT
 No effort level was specified. Analyze the plan document and determine the appropriate effort level:
 
 - If the plan describes a simple, well-bounded task (single page, config change, small utility,
-  1-3 files to create/modify): use LOW effort (1-2 sprints, @effort low)
+  1-3 files to create/modify): use FAST effort (1-2 sprints, @effort fast)
 - If the plan describes a moderate feature (multiple components, some integration,
-  4-15 files): use MEDIUM effort (2-4 sprints, @effort medium)
+  4-15 files): use STANDARD effort (2-4 sprints, @effort standard)
 - If the plan describes a complex system (many components, database, APIs, extensive
   testing, 15+ files): use HIGH effort (4-10 sprints, @effort high)
 

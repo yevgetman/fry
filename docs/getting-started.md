@@ -89,8 +89,8 @@ fry
 # Or use Claude Code for both prepare and build
 fry --engine claude
 
-# For a simple task, use low effort (1-2 sprints)
-fry --effort low
+# For a simple task, use fast effort (1-2 sprints)
+fry --effort fast
 
 # For a critical build, use max effort (extended prompts, thorough reviews)
 fry --effort max --engine claude

@@ -134,7 +134,7 @@ func init() {
 	prepareCmd.Flags().BoolVar(&prepareValidateOnly, "validate-only", false, "Validate without generating files")
 	prepareCmd.Flags().BoolVar(&preparePlanning, "planning", false, "Use planning prepare mode (alias for --mode planning)")
 	prepareCmd.Flags().StringVar(&prepareMode, "mode", "", "Execution mode: software, planning, writing")
-	prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
+	prepareCmd.Flags().StringVar(&prepareEffort, "effort", "", "Effort level: fast, standard, high, max (default: auto)")
 	prepareCmd.Flags().BoolVar(&prepareNoProjectOverview, "no-project-overview", false, "Skip the interactive project overview confirmation")
 	prepareCmd.Flags().BoolVar(&prepareNoProjectOverview, "no-sanity-check", false, "Deprecated alias for --no-project-overview")
 	_ = prepareCmd.Flags().MarkHidden("no-sanity-check")

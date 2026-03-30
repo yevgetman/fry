@@ -152,7 +152,7 @@ Results are written to build-audit.md in the project root.`,
 
 func init() {
 	auditCmd.Flags().StringVar(&auditEngine, "engine", "", "Execution engine (default: claude)")
-	auditCmd.Flags().StringVar(&auditEffort, "effort", "high", "Effort level: low, medium, high, max")
+	auditCmd.Flags().StringVar(&auditEffort, "effort", "high", "Effort level: fast, standard, high, max")
 	auditCmd.Flags().StringVar(&auditModel, "model", "", "Override agent model")
 	auditCmd.Flags().BoolVar(&auditSARIF, "sarif", false, "Write build-audit.sarif in SARIF 2.1.0 format")
 	auditCmd.Flags().StringVar(&auditMode, "mode", "", "Audit mode: software, planning, writing")

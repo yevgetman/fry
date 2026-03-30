@@ -77,7 +77,7 @@ func TestBuildExperiencePrompt_EmptyObservations(t *testing.T) {
 	opts := SummarizeOpts{
 		Record: BuildRecord{
 			Engine:       "codex",
-			EffortLevel:  "low",
+			EffortLevel:  "fast",
 			TotalSprints: 1,
 		},
 		BuildOutcome: "success",
@@ -126,7 +126,7 @@ func TestSummarizeExperience_Success(t *testing.T) {
 		Engine:     eng,
 		Record: BuildRecord{
 			Engine:       "claude",
-			EffortLevel:  "medium",
+			EffortLevel:  "standard",
 			TotalSprints: 2,
 		},
 		BuildOutcome: "success",
@@ -146,7 +146,7 @@ func TestSummarizeExperience_EmptyOutput(t *testing.T) {
 		Engine:     eng,
 		Record: BuildRecord{
 			Engine:       "claude",
-			EffortLevel:  "medium",
+			EffortLevel:  "standard",
 			TotalSprints: 1,
 		},
 		BuildOutcome: "success",

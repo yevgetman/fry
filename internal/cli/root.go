@@ -47,7 +47,7 @@ func init() {
 	rootCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")
 	rootCmd.Flags().BoolVar(&runPlanning, "planning", false, "Use planning mode (alias for --mode planning)")
 	rootCmd.Flags().StringVar(&runMode, "mode", "", "Execution mode: software, planning, writing")
-	rootCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
+	rootCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: fast, standard, high, max (default: auto)")
 	rootCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
 	rootCmd.Flags().BoolVar(&runResume, "resume", false, "Resume failed sprint: skip iterations, go straight to sanity checks + alignment with boosted attempts")
 	rootCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")

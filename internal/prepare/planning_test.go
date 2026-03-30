@@ -97,18 +97,18 @@ func TestPlanningPromptBuilders(t *testing.T) {
 			"@review_between_sprints",
 		},
 		{
-			"Step2_effort_low",
+			"Step2_effort_fast",
 			func() string {
-				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortLow, false, "", "")
+				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortFast, false, "", "")
 			},
-			"EFFORT LEVEL: LOW",
+			"EFFORT LEVEL: FAST",
 		},
 		{
-			"Step2_effort_medium",
+			"Step2_effort_standard",
 			func() string {
-				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortMedium, false, "", "")
+				return PlanningStep2Prompt("plan", "agents", "epic-ex.md", "", epic.EffortStandard, false, "", "")
 			},
-			"EFFORT LEVEL: MEDIUM",
+			"EFFORT LEVEL: STANDARD",
 		},
 		{
 			"Step2_effort_max",

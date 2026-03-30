@@ -484,8 +484,8 @@ func TestEffectiveOuterCycles(t *testing.T) {
 		wantProgress bool
 	}{
 		{
-			name:         "medium effort default",
-			epic:         &epic.Epic{EffortLevel: epic.EffortMedium, MaxAuditIterations: 3},
+			name:         "standard effort default",
+			epic:         &epic.Epic{EffortLevel: epic.EffortStandard, MaxAuditIterations: 3},
 			wantMax:      3,
 			wantProgress: false,
 		},
@@ -508,8 +508,8 @@ func TestEffectiveOuterCycles(t *testing.T) {
 			wantProgress: false,
 		},
 		{
-			name:         "low effort",
-			epic:         &epic.Epic{EffortLevel: epic.EffortLow, MaxAuditIterations: 3},
+			name:         "fast effort",
+			epic:         &epic.Epic{EffortLevel: epic.EffortFast, MaxAuditIterations: 3},
 			wantMax:      3,
 			wantProgress: false,
 		},
@@ -541,7 +541,7 @@ func TestEffectiveInnerIter(t *testing.T) {
 		want int
 	}{
 		{name: "default", epic: &epic.Epic{}, want: config.DefaultMaxInnerFixIter},
-		{name: "medium", epic: &epic.Epic{EffortLevel: epic.EffortMedium}, want: config.DefaultMaxInnerFixIter},
+		{name: "standard", epic: &epic.Epic{EffortLevel: epic.EffortStandard}, want: config.DefaultMaxInnerFixIter},
 		{name: "high", epic: &epic.Epic{EffortLevel: epic.EffortHigh}, want: config.MaxInnerFixIterHigh},
 		{name: "max", epic: &epic.Epic{EffortLevel: epic.EffortMax}, want: config.MaxInnerFixIterMax},
 	}
@@ -1248,7 +1248,7 @@ func TestRunAuditLoopMediumEffortBounded(t *testing.T) {
 		},
 	}
 	opts := makeOpts(t, eng)
-	opts.Epic.EffortLevel = epic.EffortMedium
+	opts.Epic.EffortLevel = epic.EffortStandard
 	opts.Epic.MaxAuditIterations = 3
 
 	result, err := RunAuditLoop(context.Background(), opts)
@@ -1384,8 +1384,8 @@ func TestCountUnresolvedLow(t *testing.T) {
 func TestFixIncludesLow(t *testing.T) {
 	t.Parallel()
 
-	assert.False(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortLow}))
-	assert.False(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortMedium}))
+	assert.False(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortFast}))
+	assert.False(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortStandard}))
 	assert.False(t, fixIncludesLow(&epic.Epic{EffortLevel: ""}))
 	assert.True(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortHigh}))
 	assert.True(t, fixIncludesLow(&epic.Epic{EffortLevel: epic.EffortMax}))
@@ -1456,7 +1456,7 @@ func TestRunAuditLoopMediumEffortIgnoresLow(t *testing.T) {
 		},
 	}
 	opts := makeOpts(t, eng)
-	opts.Epic.EffortLevel = epic.EffortMedium
+	opts.Epic.EffortLevel = epic.EffortStandard
 	opts.Epic.MaxAuditIterations = 5
 
 	result, err := RunAuditLoop(context.Background(), opts)
@@ -1506,7 +1506,7 @@ func TestRunAuditLoopLowOnlyNonMaxExitsImmediately(t *testing.T) {
 		},
 	}
 	opts := makeOpts(t, eng)
-	opts.Epic.EffortLevel = epic.EffortMedium
+	opts.Epic.EffortLevel = epic.EffortStandard
 
 	result, err := RunAuditLoop(context.Background(), opts)
 	require.NoError(t, err)

@@ -176,7 +176,7 @@ func TierModel(engineName string, tier ModelTier) string {
 }
 
 // TierForSession returns the model tier for a given session type, engine, and effort level.
-// Empty effort is treated as "medium".
+// Empty effort is treated as "standard".
 func TierForSession(engineName, effort string, session SessionType) ModelTier {
 	e := normalizeEffort(effort)
 
@@ -243,9 +243,9 @@ func TierForSession(engineName, effort string, session SessionType) ModelTier {
 func auditTier(engineName, effort string) ModelTier {
 	if engineName == "codex" {
 		switch effort {
-		case "low":
+		case "fast":
 			return TierMini
-		case "medium":
+		case "standard":
 			return TierStandard
 		default: // high, max
 			return TierFrontier
@@ -261,7 +261,7 @@ func auditTier(engineName, effort string) ModelTier {
 func normalizeEffort(effort string) string {
 	e := strings.ToLower(strings.TrimSpace(effort))
 	if e == "" {
-		return "medium"
+		return "standard"
 	}
 	return e
 }

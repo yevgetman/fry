@@ -6,12 +6,12 @@ Effort levels control how many sprints Fry generates, how dense each sprint is, 
 
 | Level | Sprint Count | Iteration Range (per sprint) | Default Iterations | Prompt Detail | Review Behavior |
 |---|---|---|---|---|---|
-| `low` | 1-2 | 10-15 | 12 | Concise, essentials only | Reviews skipped |
-| `medium` | 2-4 | 15-25 | 20 | Moderate, all 7 parts but brief | Reviews optional |
+| `fast` | 1-2 | 10-15 | 12 | Concise, essentials only | Reviews skipped |
+| `standard` | 2-4 | 15-25 | 20 | Moderate, all 7 parts but brief | Reviews optional |
 | `high` | 4-10 | 15-35 | 25 | Full 7-part prompts (current default) | Normal review bias |
 | `max` | 4-10 | 30-50 | 40 | Extended 9-part prompts | Thorough review, lower deviation threshold |
 
-### `low` — Quick Tasks
+### `fast` — Quick Tasks
 
 For simple, well-bounded work: a single page, a config change, a small utility, 1-3 files.
 
@@ -23,20 +23,20 @@ For simple, well-bounded work: a single page, a config change, a small utility, 
 - Focus is on core deliverables only; exhaustive edge cases are omitted
 
 ```bash
-fry --effort low --engine claude
+fry --effort fast --engine claude
 ```
 
-### `medium` — Moderate Features
+### `standard` — Moderate Features
 
 For multi-component features with some integration: 4-15 files, a few interconnected pieces.
 
 - Generates 2-4 sprints (prefers the lower end)
-- Merges layers that would be separate at `high` (e.g., schema + domain types in one sprint)
+- Merges layers that would be separate at higher effort (e.g., schema + domain types in one sprint)
 - Full 7-part prompt structure, but each section is concise
 - Essential edge cases included, exhaustive coverage skipped
 
 ```bash
-fry --effort medium --engine claude
+fry --effort standard --engine claude
 ```
 
 ### `high` — Complex Systems (Default)
@@ -66,7 +66,7 @@ For high-stakes projects where correctness is paramount. Same sprint count as `h
   - **Part 9: Quality Gates** — explicit quality criteria beyond sanity checks (performance targets, security considerations, code review checklist items)
 - Automatically enables `@review_between_sprints` and `@compact_with_agent`
 - Alignment uses unlimited progress-based attempts (no hard cap; exits when stuck after 3 consecutive no-progress attempts or when ≤10% of checks fail after ≥10 attempts). See [Alignment](alignment.md) for full effort-level alignment behavior
-- Deviation scope covers the entire epic (same as medium and high — all non-low effort levels expand `@max_deviation_scope` to `totalSprints`, capped at 10)
+- Deviation scope covers the entire epic (same as standard and high — all non-fast effort levels expand `@max_deviation_scope` to `totalSprints`, capped at 10)
 - Review bias shifts from CONTINUE to THOROUGH REVIEW — the reviewer applies heightened scrutiny and recommends DEVIATE for any deviation that could affect system correctness
 - No-op detection threshold is raised from 2 to 3 consecutive iterations, giving the agent more room to iterate
 - A quality directive is injected into every sprint prompt, instructing the agent to handle all edge cases, write defensive code, and validate assumptions
@@ -79,8 +79,8 @@ fry --effort max --engine claude
 
 When no `--effort` flag is specified, Fry instructs the AI to analyze the plan document and select the appropriate level automatically:
 
-- **1-3 files** described in the plan → `low`
-- **4-15 files** → `medium`
+- **1-3 files** described in the plan → `fast`
+- **4-15 files** → `standard`
 - **15+ files** → `high`
 
 The auto-detected level is written to the epic as an `@effort` directive so it persists across runs.
@@ -91,7 +91,7 @@ fry --engine claude
 
 # Check what it chose
 fry --dry-run
-# Output includes: Effort: medium
+# Output includes: Effort: standard
 ```
 
 Auto-detection watches for common over-engineering signals:
@@ -107,17 +107,18 @@ When the [triage gate](triage.md) classifies a task, it also suggests an effort 
 1. `--effort` CLI flag (if set by the user)
 2. User adjustment via [interactive confirmation](triage.md#interactive-confirmation) (if the user overrides effort during the `[Y/n/a]` prompt)
 3. Triage classifier suggestion
-4. Default per difficulty: `low` for simple, `medium` for moderate
+4. Default per difficulty: `fast` for simple, `standard` for moderate
 
 **Simple and moderate tasks are capped at `high`** — if `--effort max` is passed or the triage classifier suggests max, it is automatically reduced to `high` with a log warning. Max effort is reserved for complex tasks that go through the full prepare pipeline.
 
-This means effort level now affects behavior within each difficulty grade. For example, a simple task at medium effort gets sprint auditing (1 audit+fix pass), while a simple task at low effort skips auditing entirely. See [Triage — Difficulty × Effort Matrices](triage.md#difficulty--effort-matrices) for the full matrix.
+
+This means effort level now affects behavior within each difficulty grade. For example, a simple task at standard effort gets sprint auditing (1 audit+fix pass), while a simple task at fast effort skips auditing entirely. See [Triage — Difficulty × Effort Matrices](triage.md#difficulty--effort-matrices) for the full matrix.
 
 ## Model Selection
 
 Effort level directly affects which AI model is used for each session type. Higher effort levels use more capable (and more expensive) models. See [AI Engines — Automatic Model Selection](engines.md#automatic-model-selection-tier-system) for the full session × effort rules matrix.
 
-In summary: `low`/`medium` builds use **Standard**-tier models (e.g., Sonnet, gpt-5.3-codex) for most sessions, while `high`/`max` builds upgrade to **Frontier**-tier models (e.g., Opus, gpt-5.4). Lightweight tasks like compaction and project overviews always use cheaper models regardless of effort level.
+In summary: `fast`/`standard` builds use **Standard**-tier models (e.g., Sonnet, gpt-5.3-codex) for most sessions, while `high`/`max` builds upgrade to **Frontier**-tier models (e.g., Opus, gpt-5.4). Lightweight tasks like compaction and project overviews always use cheaper models regardless of effort level.
 
 ## Usage
 
@@ -127,8 +128,8 @@ The `--effort` flag is available on both `fry run` and `fry prepare`:
 
 ```bash
 # During a full run (prepare + execute)
-fry --effort low
-fry run --effort medium --engine claude
+fry --effort fast
+fry run --effort standard --engine claude
 
 # During preparation only
 fry prepare --effort high --engine claude
@@ -144,7 +145,7 @@ The effort level is stored in the epic file as a global directive:
 ```
 @epic My Project Phase 1
 @engine claude
-@effort medium
+@effort standard
 @docker_from_sprint 2
 ```
 
@@ -163,7 +164,7 @@ Epic: My Project Phase 1
 Project dir: /path/to/project
 Epic file: .fry/epic.md
 Engine: claude
-Effort: medium
+Effort: standard
 Sprints: 1-3 of 3
 ```
 
@@ -173,15 +174,15 @@ The epic validator enforces sprint count limits based on effort level:
 
 | Level | Max Sprints |
 |---|---|
-| `low` | 2 |
-| `medium` | 4 |
+| `fast` | 2 |
+| `standard` | 4 |
 | `high` | 10 |
 | `max` | 10 |
 
-If an epic has `@effort low` but contains 5 sprints, validation will fail:
+If an epic has `@effort fast` but contains 5 sprints, validation will fail:
 
 ```
-error: effort level "low" allows at most 2 sprints, but epic has 5
+error: effort level "fast" allows at most 2 sprints, but epic has 5
 ```
 
 This validation only applies when `@effort` is explicitly set. Epics without an `@effort` directive have no sprint count limit.
@@ -190,7 +191,7 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 
 ## Effort Level Effects Summary
 
-| Aspect | `low` | `medium` | `high` | `max` |
+| Aspect | `fast` | `standard` | `high` | `max` |
 |---|---|---|---|---|
 | Sprint count cap | 2 | 4 | 10 | 10 |
 | Default max iterations | 12 | 20 | 25 | 40 |
@@ -209,10 +210,10 @@ When no effort level is set (auto-detect or unset), the default max iterations p
 
 ## Writing Mode
 
-Effort levels apply identically in [writing mode](writing-mode.md). A `low` effort run produces 1-2 sprints for a short document or essay; `max` produces extended sprints with thorough review and higher word-count expectations. The sprint count caps, iteration ranges, review behavior, and audit settings from the table above all apply regardless of mode.
+Effort levels apply identically in [writing mode](writing-mode.md). A `fast` effort run produces 1-2 sprints for a short document or essay; `max` produces extended sprints with thorough review and higher word-count expectations. The sprint count caps, iteration ranges, review behavior, and audit settings from the table above all apply regardless of mode.
 
 ```bash
-fry --mode writing --effort low --user-prompt "Write a short essay on testing"
+fry --mode writing --effort fast --user-prompt "Write a short essay on testing"
 fry --mode writing --effort max --user-prompt "Write a comprehensive guide to distributed systems"
 ```
 
@@ -229,7 +230,7 @@ fry --mode writing --effort max --user-prompt "Write a comprehensive guide to di
 
 ```bash
 # Plan describes 2 HTML pages and a CSS file
-fry --effort low --engine claude
+fry --effort fast --engine claude
 # Result: 1 sprint, ~12 iterations, done in minutes
 ```
 
@@ -237,7 +238,7 @@ fry --effort low --engine claude
 
 ```bash
 # Plan describes Express + PostgreSQL + 5 endpoints
-fry --effort medium --engine claude
+fry --effort standard --engine claude
 # Result: 3 sprints (scaffold+schema, handlers, integration), ~20 iterations each
 ```
 

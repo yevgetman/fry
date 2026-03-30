@@ -66,7 +66,7 @@ func TestReadBuildState_WithEvents(t *testing.T) {
 
 	// Write events
 	events := []string{
-		`{"ts":"2026-03-27T10:00:00Z","type":"build_start","data":{"effort":"medium","epic":"Test Epic","total_sprints":"2"}}`,
+		`{"ts":"2026-03-27T10:00:00Z","type":"build_start","data":{"effort":"standard","epic":"Test Epic","total_sprints":"2"}}`,
 		`{"ts":"2026-03-27T10:05:00Z","type":"sprint_start","sprint":1,"data":{"name":"Setup"}}`,
 		`{"ts":"2026-03-27T10:10:00Z","type":"sprint_complete","sprint":1,"data":{"status":"PASS","duration":"5m"}}`,
 	}
@@ -92,7 +92,7 @@ func TestReadBuildState_CompletedBuild(t *testing.T) {
 	epicContent := "# Done Epic\n\n## Sprint 1: Only\n\n@prompt\nDo it\n@end\n"
 	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte(epicContent), 0o644))
 
-	events := `{"ts":"2026-03-27T10:00:00Z","type":"build_start","data":{"effort":"low","epic":"Done Epic","total_sprints":"1"}}
+	events := `{"ts":"2026-03-27T10:00:00Z","type":"build_start","data":{"effort":"fast","epic":"Done Epic","total_sprints":"1"}}
 {"ts":"2026-03-27T10:05:00Z","type":"build_end","data":{"outcome":"success"}}
 `
 	require.NoError(t, os.WriteFile(filepath.Join(obsDir, "events.jsonl"), []byte(events), 0o644))
@@ -182,7 +182,7 @@ func TestTailEvents_ReadsExisting(t *testing.T) {
 	obsDir := filepath.Join(dir, ".fry", "observer")
 	require.NoError(t, os.MkdirAll(obsDir, 0o755))
 
-	events := `{"ts":"2026-03-27T10:00:00Z","type":"build_start","data":{"effort":"medium"}}
+	events := `{"ts":"2026-03-27T10:00:00Z","type":"build_start","data":{"effort":"standard"}}
 {"ts":"2026-03-27T10:05:00Z","type":"sprint_start","sprint":1,"data":{"name":"Setup"}}
 `
 	require.NoError(t, os.WriteFile(filepath.Join(obsDir, "events.jsonl"), []byte(events), 0o644))
@@ -278,7 +278,7 @@ func TestBuildState_JSONRoundtrip(t *testing.T) {
 		Active:            true,
 		ProjectDir:        "/tmp/test",
 		Epic:              "Test",
-		Effort:            "medium",
+		Effort:            "standard",
 		Engine:            "claude",
 		TotalSprints:      4,
 		CurrentSprint:     2,

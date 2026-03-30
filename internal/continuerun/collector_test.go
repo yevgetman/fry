@@ -486,7 +486,7 @@ func TestCollectBuildState_SentinelAbsentNoAudit(t *testing.T) {
 	assert.True(t, state.BuildAuditComplete, "should be true when audit is disabled")
 }
 
-func TestCollectBuildState_SentinelAbsentEffortLow(t *testing.T) {
+func TestCollectBuildState_SentinelAbsentEffortFast(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	fryDir := filepath.Join(dir, config.FryDir)
@@ -497,7 +497,7 @@ func TestCollectBuildState_SentinelAbsentEffortLow(t *testing.T) {
 		Name:             "TestEpic",
 		TotalSprints:     1,
 		AuditAfterSprint: true,
-		EffortLevel:      epic.EffortLow,
+		EffortLevel:      epic.EffortFast,
 		Sprints:          []epic.Sprint{{Number: 1, Name: "Setup"}},
 	}
 
@@ -506,7 +506,7 @@ func TestCollectBuildState_SentinelAbsentEffortLow(t *testing.T) {
 	assert.True(t, state.BuildAuditComplete, "should be true for low-effort builds")
 }
 
-func TestCollectBuildState_SentinelAbsentEffortLowAlwaysVerify(t *testing.T) {
+func TestCollectBuildState_SentinelAbsentEffortFastAlwaysVerify(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	fryDir := filepath.Join(dir, config.FryDir)
@@ -518,7 +518,7 @@ func TestCollectBuildState_SentinelAbsentEffortLowAlwaysVerify(t *testing.T) {
 		Name:             "TestEpic",
 		TotalSprints:     1,
 		AuditAfterSprint: true,
-		EffortLevel:      epic.EffortLow,
+		EffortLevel:      epic.EffortFast,
 		Sprints:          []epic.Sprint{{Number: 1, Name: "Setup"}},
 	}
 

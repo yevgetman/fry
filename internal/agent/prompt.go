@@ -132,12 +132,12 @@ Effort controls the entire execution budget:
 
 | Level | Max Iterations | Max Sprints | Alignment Attempts | Audit Cycles | Observer |
 |-------|---------------|-------------|-------------------|-------------|---------|
-| low | 12 | 2 | 0 (skip) | 0 | disabled |
-| medium | 20 | 4 | 3 | 3 outer / 3 inner | build-end only |
+| fast | 12 | 2 | 0 (skip) | 0 | disabled |
+| standard | 20 | 4 | 3 | 3 outer / 3 inner | build-end only |
 | high | 25 | 10 | 10 (with stall detection) | 12 outer / 7 inner | full |
 | max | 40 | 10 | unlimited (with stall detection) | 100 outer / 10 inner | full |
 
-When the user asks for a "quick fix" or "simple change", suggest low effort.
+When the user asks for a "quick fix" or "simple change", suggest fast effort.
 When they describe something complex, suggest high or max.
 
 `

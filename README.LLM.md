@@ -195,7 +195,7 @@ fry/
 ```go
 type Epic struct {
     Name, Engine             string
-    EffortLevel              EffortLevel    // low|medium|high|max
+    EffortLevel              EffortLevel    // fast|standard|high|max
     DockerFromSprint         int
     DockerReadyCmd           string
     DockerReadyTimeout       int
@@ -247,8 +247,8 @@ All engines are wrapped in a `ResilientEngine` decorator (`internal/engine/resil
 
 | Level | MaxIterations | MaxSprints |
 |-------|---------------|------------|
-| low | 12 | 2 |
-| medium | 20 | 4 |
+| fast | 12 | 2 |
+| standard | 20 | 4 |
 | high | 25 | 10 |
 | max | 40 | 10 |
 
@@ -292,12 +292,12 @@ For each sprint (startSprint → endSprint):
      │    ├─ Check promise token → early exit if found
      │    └─ No-op detection (no git diff) → early exit
   8. Run sanity checks
-  9. If checks fail: alignment loop (effort-level-aware: low=skip, medium=3, high=up to 10 with progress detection, max=unlimited with progress detection)
- 10. Sprint audit (if enabled & effort != low) — two-level loop:
+  9. If checks fail: alignment loop (effort-level-aware: fast=skip, standard=3, high=up to 10 with progress detection, max=unlimited with progress detection)
+ 10. Sprint audit (if enabled & effort != fast) — two-level loop:
      │  ├─ Outer loop (audit cycles): audit agent reviews + verifies previous issues
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
      │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
-     │  ├─ medium: bounded (3 outer cycles, 3 inner fix iterations)
+     │  ├─ standard: bounded (3 outer cycles, 3 inner fix iterations)
      │  └─ high: progress-based (cap 12 outer, 7 inner), max: progress-based (cap 20 outer, 10 inner)
  11. Git checkpoint commit
  12. Compact sprint progress → .fry/epic-progress.txt
@@ -339,7 +339,7 @@ fry status                           # Show current build state (no LLM call)
 Key flags:
   --engine codex|claude|ollama       # AI engine for build
   --prepare-engine codex|claude      # AI engine for prepare phase
-  --effort low|medium|high|max       # Effort level (auto-detect if omitted)
+  --effort fast|standard|high|max       # Effort level (auto-detect if omitted)
   --model model-id                   # Override agent model (e.g. opus[1m], sonnet, haiku)
   --mode software|planning|writing   # Execution mode (default: software)
   --planning                         # Alias for --mode planning (backwards compat)
@@ -392,8 +392,8 @@ Key flags:
 | `HealMinAttemptsMax` | `10` | Min attempts before mid-loop threshold exit (max) |
 | `HealSafetyCapMax` | `50` | Hard safety cap for unlimited max-effort alignment |
 | `MaxFailPercentMax` | `10` | Stricter threshold for max effort |
-| `DefaultMaxOuterAuditCycles` | `3` | Outer audit cycles per sprint (medium/default) |
-| `DefaultMaxInnerFixIter` | `3` | Inner fix iterations per audit report (medium/default) |
+| `DefaultMaxOuterAuditCycles` | `3` | Outer audit cycles per sprint (standard/default) |
+| `DefaultMaxInnerFixIter` | `3` | Inner fix iterations per audit report (standard/default) |
 | `MaxOuterCyclesHighCap` | `12` | Outer audit cycles at high effort |
 | `MaxOuterCyclesMaxCap` | `100` | Outer audit cycles at max effort (safety valve; stale detection governs actual exit) |
 | `MaxInnerFixIterHigh` | `7` | Inner fix iterations at high effort |

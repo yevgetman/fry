@@ -15,7 +15,7 @@ This is fully opt-in. When disabled (the default), Fry proceeds directly from on
 The reviewer has an explicit **bias toward CONTINUE** — it only recommends deviation when a downstream sprint prompt references something that was built differently than assumed.
 
 **Effort level effects on reviews:**
-- At `low` effort, sprint reviews are **skipped entirely**, even if `@review_between_sprints` is enabled
+- At `fast` effort, sprint reviews are **skipped entirely**, even if `@review_between_sprints` is enabled
 - At `max` effort, the reviewer bias shifts to **THOROUGH REVIEW** — it applies heightened scrutiny and recommends DEVIATE for any deviation that could affect system correctness, not just downstream prompt mismatches
 
 See [Effort Levels](effort-levels.md) for full details.
@@ -26,7 +26,7 @@ See [Effort Levels](effort-levels.md) for full details.
 @review_between_sprints         # Enable the feature
 @review_engine claude           # Use a specific engine for the reviewer (optional)
 @review_model claude-sonnet-4-6 # Use a specific model for the reviewer (optional)
-@max_deviation_scope 3          # Max sprints a single deviation can touch (auto-expanded to totalSprints for all effort levels except low, capped at 10)
+@max_deviation_scope 3          # Max sprints a single deviation can touch (auto-expanded to totalSprints for all effort levels except fast, capped at 10)
 ```
 
 ### Enabling via CLI
@@ -38,7 +38,7 @@ fry run --review --effort high
 fry prepare --review
 ```
 
-When using the interactive adjust flow during the project summary, Fry also prompts `Enable sprint review? [n]` for medium and high effort builds. Max effort auto-enables review without prompting.
+When using the interactive adjust flow during the project summary, Fry also prompts `Enable sprint review? [n]` for standard and high effort builds. Max effort auto-enables review without prompting.
 
 ### Disabling at Runtime
 
@@ -76,7 +76,7 @@ When a deviation is approved, the replanner:
 2. Reads the original epic, plan, and deviation log
 3. Makes **surgical edits** to affected `@prompt` blocks only
 4. Validates the result:
-   - Scope check — can't affect more than `@max_deviation_scope` sprints (auto-expanded to all remaining sprints for medium/high/max, capped at 10)
+   - Scope check -- can't affect more than `@max_deviation_scope` sprints (auto-expanded to all remaining sprints for standard/high/max, capped at 10)
    - No completed sprints touched
    - No structural directives changed (`@sprint`, `@name`, `@promise`, `@max_iterations`)
 5. Backs up the original epic before writing changes

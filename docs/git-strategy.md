@@ -55,7 +55,7 @@ When adjusting (`a`), you can override the git strategy alongside difficulty and
 
 ```
 Difficulty [COMPLEX] (simple/moderate/complex, or Enter to keep):
-Effort [high] (low/medium/high/max, or Enter to keep):
+Effort [high] (fast/standard/high/max, or Enter to keep):
 Git strategy [worktree] (auto/current/branch/worktree, or Enter to keep):
 ```
 

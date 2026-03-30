@@ -56,9 +56,9 @@ type Directive struct {
 // given effort level.
 func ShouldWakeUp(effort epic.EffortLevel, point WakePoint) bool {
 	switch effort {
-	case epic.EffortLow:
+	case epic.EffortFast:
 		return false
-	case epic.EffortMedium, "":
+	case epic.EffortStandard, "":
 		return point == WakeBuildEnd
 	default:
 		// high, max

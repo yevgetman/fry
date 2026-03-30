@@ -278,7 +278,7 @@ func TestAlwaysVerifyFlagSetsHealConfig(t *testing.T) {
 
 	ep := &epic.Epic{
 		Name:        "Test",
-		EffortLevel: epic.EffortLow,
+		EffortLevel: epic.EffortFast,
 		Sprints:     []epic.Sprint{{Number: 1, Name: "s", MaxIterations: 1}},
 		TotalSprints: 1,
 	}

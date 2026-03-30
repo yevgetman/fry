@@ -509,7 +509,7 @@ run_planning_phase() {
         --full-prepare \
         --git-strategy current \
         --mode planning \
-        --effort medium \
+        --effort standard \
         --project-dir "$REPO_DIR" 2>&1 | tee -a "$LOG_FILE"; then
         log "WARNING: Planning run failed — skipping new findings"
         rm -rf "$REPO_DIR/plans" "$REPO_DIR/assets" "$REPO_DIR/output"

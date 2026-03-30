@@ -648,7 +648,7 @@ var runCmd = &cobra.Command{
 		writeBuildStatus(projectPath, buildStatus)
 
 		// Initialize observer metacognitive layer
-		observerEnabled := !runNoObserver && !runDryRun && ep.EffortLevel != epic.EffortLow
+		observerEnabled := !runNoObserver && !runDryRun && ep.EffortLevel != epic.EffortFast
 		var observerEngine engine.Engine
 		if observerEnabled {
 			observerEngine, err = newResilientEngine(engineName, mcpOpts...)
@@ -873,7 +873,7 @@ var runCmd = &cobra.Command{
 
 			if isPassStatus(result.Status) {
 				// Sprint audit
-				if ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
+				if ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortFast || runAlwaysVerify) {
 					auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
 					if err != nil {
 						return err
@@ -1098,7 +1098,7 @@ var runCmd = &cobra.Command{
 					// else: "continue" — proceed as planned
 				}
 
-				if ep.ReviewBetweenSprints && !runNoReview && spr.Number < ep.TotalSprints && ep.EffortLevel != epic.EffortLow {
+				if ep.ReviewBetweenSprints && !runNoReview && spr.Number < ep.TotalSprints && ep.EffortLevel != epic.EffortFast {
 					reviewSummary.ReviewsConducted++
 
 					reviewEngine, err := resolveReviewEngine(engineName, ep.ReviewEngine, mcpOpts...)
@@ -1296,7 +1296,7 @@ var runCmd = &cobra.Command{
 		// or from a resumed/continued run where prior sprints are recorded in epic-progress.txt.
 		var buildAuditResult *audit.AuditResult
 		fullBuildComplete := auditOnlyResume || startSprint == 1 || allSprintsCompleted(projectPath, ep.TotalSprints, startSprint, summaryCopy)
-		if exitErr == nil && fullBuildComplete && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortLow || runAlwaysVerify) {
+		if exitErr == nil && fullBuildComplete && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortFast || runAlwaysVerify) {
 			deferredContent := readDeferredFailuresArtifact(projectPath)
 			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
 			if err != nil {
@@ -1785,7 +1785,7 @@ func init() {
 	runCmd.Flags().StringVar(&runPrepareEngine, "prepare-engine", "", "Engine for auto-prepare")
 	runCmd.Flags().BoolVar(&runPlanning, "planning", false, "Use planning mode (alias for --mode planning)")
 	runCmd.Flags().StringVar(&runMode, "mode", "", "Execution mode: software, planning, writing")
-	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: low, medium, high, max (default: auto)")
+	runCmd.Flags().StringVar(&runEffort, "effort", "", "Effort level: fast, standard, high, max (default: auto)")
 	runCmd.Flags().BoolVar(&runNoAudit, "no-audit", false, "Disable sprint and build audits")
 	runCmd.Flags().BoolVar(&runResume, "resume", false, "Resume failed sprint: skip iterations, go straight to sanity checks + alignment with boosted attempts")
 	runCmd.Flags().IntVar(&runSprint, "sprint", 0, "Start from sprint N (alternative to positional sprint argument)")
@@ -2455,7 +2455,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			resolvedEffort = epic.EffortHigh
 		}
 		if resolvedEffort == "" {
-			resolvedEffort = epic.EffortLow
+			resolvedEffort = epic.EffortFast
 		}
 
 		ep, buildErr := triage.BuildSimpleEpic(triage.SimpleEpicOpts{
@@ -2481,7 +2481,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			resolvedEffort = epic.EffortHigh
 		}
 		if resolvedEffort == "" {
-			resolvedEffort = epic.EffortMedium
+			resolvedEffort = epic.EffortStandard
 		}
 
 		ep, buildErr := triage.BuildModerateEpic(triage.ModerateEpicOpts{
@@ -2513,7 +2513,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		// Complex tasks default to high effort for thorough audit cycles.
 		// Only auto-elevate when user didn't explicitly set --effort.
 		complexEffort := resolvedEffort
-		if effortLevel == "" && (complexEffort == "" || complexEffort == epic.EffortLow || complexEffort == epic.EffortMedium) {
+		if effortLevel == "" && (complexEffort == "" || complexEffort == epic.EffortFast || complexEffort == epic.EffortStandard) {
 			complexEffort = epic.EffortHigh
 			frlog.Log("  TRIAGE: complex task auto-elevated to effort=high")
 		}

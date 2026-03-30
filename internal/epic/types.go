@@ -11,20 +11,20 @@ import (
 type EffortLevel string
 
 const (
-	EffortLow    EffortLevel = "low"
-	EffortMedium EffortLevel = "medium"
-	EffortHigh   EffortLevel = "high"
-	EffortMax    EffortLevel = "max"
+	EffortFast     EffortLevel = "fast"
+	EffortStandard EffortLevel = "standard"
+	EffortHigh     EffortLevel = "high"
+	EffortMax      EffortLevel = "max"
 )
 
 // ParseEffortLevel parses a string into an EffortLevel.
 // Empty string is accepted and means auto-detect.
 func ParseEffortLevel(s string) (EffortLevel, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "low":
-		return EffortLow, nil
-	case "medium":
-		return EffortMedium, nil
+	case "fast":
+		return EffortFast, nil
+	case "standard":
+		return EffortStandard, nil
 	case "high":
 		return EffortHigh, nil
 	case "max":
@@ -32,7 +32,7 @@ func ParseEffortLevel(s string) (EffortLevel, error) {
 	case "":
 		return "", nil // auto-detect
 	default:
-		return "", fmt.Errorf("invalid effort level %q: must be low, medium, high, or max", s)
+		return "", fmt.Errorf("invalid effort level %q: must be fast, standard, high, or max", s)
 	}
 }
 
@@ -48,9 +48,9 @@ func (e EffortLevel) String() string {
 // at this effort level (used when @max_iterations is not set per-sprint).
 func (e EffortLevel) DefaultMaxIterations() int {
 	switch e {
-	case EffortLow:
+	case EffortFast:
 		return 12
-	case EffortMedium:
+	case EffortStandard:
 		return 20
 	case EffortHigh:
 		return 25
@@ -64,9 +64,9 @@ func (e EffortLevel) DefaultMaxIterations() int {
 // MaxSprintCount returns the maximum number of sprints for this effort level.
 func (e EffortLevel) MaxSprintCount() int {
 	switch e {
-	case EffortLow:
+	case EffortFast:
 		return 2
-	case EffortMedium:
+	case EffortStandard:
 		return 4
 	case EffortHigh:
 		return 10
@@ -78,19 +78,19 @@ func (e EffortLevel) MaxSprintCount() int {
 }
 
 // DefaultMaxHealAttempts returns the default number of alignment attempts for this
-// effort level. Returns 0 for low (no alignment) and max (unlimited/progress-based).
+// effort level. Returns 0 for fast (no alignment) and max (unlimited/progress-based).
 func (e EffortLevel) DefaultMaxHealAttempts() int {
 	switch e {
-	case EffortLow:
+	case EffortFast:
 		return 0
-	case EffortMedium:
+	case EffortStandard:
 		return config.DefaultMaxHealAttempts
 	case EffortHigh:
 		return config.HealAttemptsHigh
 	case EffortMax:
 		return 0 // unlimited, governed by progress detection
 	default:
-		return config.DefaultMaxHealAttempts // auto = medium default
+		return config.DefaultMaxHealAttempts // auto = standard default
 	}
 }
 
@@ -133,9 +133,9 @@ func (e EffortLevel) HealHasHardCap() bool {
 
 // deviationScopeUnlimited returns whether this effort level allows deviations
 // to touch any remaining sprint in the epic (up to the safety cap).
-// All effort levels except low expand deviation scope to cover remaining sprints.
+// All effort levels except fast expand deviation scope to cover remaining sprints.
 func (e EffortLevel) deviationScopeUnlimited() bool {
-	return e != EffortLow
+	return e != EffortFast
 }
 
 type Epic struct {
