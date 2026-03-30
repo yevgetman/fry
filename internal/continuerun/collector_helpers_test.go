@@ -10,32 +10,6 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 )
 
-func TestSevRank(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		input    string
-		expected int
-	}{
-		{"CRITICAL", 4},
-		{"HIGH", 3},
-		{"MODERATE", 2},
-		{"LOW", 1},
-		{"", 0},
-		{"UNKNOWN", 0},
-		{"low", 0},       // case-sensitive
-		{"critical", 0},  // case-sensitive
-		{"Medium", 0},    // not a valid severity
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.expected, sevRank(tt.input))
-		})
-	}
-}
-
 func TestExtractMaxSeverity_EdgeCases(t *testing.T) {
 	t.Parallel()
 

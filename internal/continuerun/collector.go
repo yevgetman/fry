@@ -14,6 +14,7 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
+	"github.com/yevgetman/fry/internal/severity"
 )
 
 var completedSprintRe = regexp.MustCompile(`(?m)^## Sprint (\d+):\s*(.+?)\s*—\s*(PASS.*)$`)
@@ -362,8 +363,8 @@ func extractMaxSeverity(content string) string {
 		if m == "" {
 			continue
 		}
-		if sevRank(m) > maxRank {
-			maxRank = sevRank(m)
+		if severity.Rank(m) > maxRank {
+			maxRank = severity.Rank(m)
 			maxSev = m
 		}
 		if maxSev == "CRITICAL" {
@@ -384,17 +385,3 @@ func ReadBuildMode(projectDir string) string {
 	return strings.TrimSpace(string(data))
 }
 
-func sevRank(sev string) int {
-	switch sev {
-	case "CRITICAL":
-		return 4
-	case "HIGH":
-		return 3
-	case "MODERATE":
-		return 2
-	case "LOW":
-		return 1
-	default:
-		return 0
-	}
-}

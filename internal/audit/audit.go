@@ -16,6 +16,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/severity"
 	"github.com/yevgetman/fry/internal/textutil"
 )
 
@@ -692,7 +693,7 @@ func parseAuditSeverity(content string) string {
 		if m == "" {
 			continue
 		}
-		if severityRank(m) > severityRank(maxSev) {
+		if severity.Rank(m) > severity.Rank(maxSev) {
 			maxSev = m
 		}
 		if maxSev == "CRITICAL" {
@@ -910,7 +911,7 @@ func sortFindingsFIFO(findings []Finding) {
 		if findings[i].OriginCycle != findings[j].OriginCycle {
 			return findings[i].OriginCycle < findings[j].OriginCycle
 		}
-		return severityRank(findings[i].Severity) > severityRank(findings[j].Severity)
+		return severity.Rank(findings[i].Severity) > severity.Rank(findings[j].Severity)
 	})
 }
 
@@ -1086,21 +1087,6 @@ func formatSeverityCounts(counts map[string]int) string {
 // FormatCounts formats a severity count map for external callers.
 func FormatCounts(counts map[string]int) string {
 	return formatSeverityCounts(counts)
-}
-
-func severityRank(sev string) int {
-	switch sev {
-	case "CRITICAL":
-		return 4
-	case "HIGH":
-		return 3
-	case "MODERATE":
-		return 2
-	case "LOW":
-		return 1
-	default:
-		return 0
-	}
 }
 
 func isAuditPass(maxSeverity string) bool {
