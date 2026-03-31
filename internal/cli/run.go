@@ -128,17 +128,9 @@ var runCmd = &cobra.Command{
 		}
 
 		// When --continue is used and no explicit --mode was given,
-		// auto-detect mode from the persisted build-mode.txt file.
+		// auto-detect mode from the canonical build state after any
+		// worktree/root selection has been resolved.
 		userSetMode := strings.TrimSpace(runMode) != "" || runPlanning
-		if (runContinue || runSimpleContinue) && !userSetMode {
-			if detected := continuerun.ReadBuildMode(projectPath); detected != "" {
-				parsedMode, parseErr := prepare.ParseMode(detected)
-				if parseErr == nil && parsedMode != mode {
-					mode = parsedMode
-					frlog.Log("▶ CONTINUE  auto-detected mode: %s", mode)
-				}
-			}
-		}
 
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
@@ -148,20 +140,34 @@ var runCmd = &cobra.Command{
 		var strategySetup *git.StrategySetup
 		originalProjectPath := projectPath
 		if runContinue || runSimpleContinue || runResume {
-			if persisted, readErr := git.ReadPersistedStrategy(projectPath); readErr == nil && persisted != nil {
-				if persisted.IsWorktree && git.IsInsideGitRepo(ctx, persisted.WorkDir) {
-					projectPath = persisted.WorkDir
-					strategySetup = persisted
-					frlog.Log("▶ CONTINUE  reattaching to worktree: %s", persisted.WorkDir)
-				} else if persisted.Strategy == git.StrategyBranch && persisted.BranchName != "" {
-					// Checkout the branch if we're not already on it.
-					if git.CurrentBranch(ctx, projectPath) != persisted.BranchName {
-						if coErr := git.CheckoutBranch(ctx, projectPath, persisted.BranchName); coErr != nil {
-							frlog.Log("WARNING: could not checkout branch %s: %v", persisted.BranchName, coErr)
-						}
+			target, resolveErr := continuerun.ResolveContinueTarget(ctx, projectPath)
+			if resolveErr != nil {
+				frlog.Log("WARNING: continue target resolution failed: %v", resolveErr)
+			} else if target != nil {
+				if target.Reason != "" {
+					frlog.Log("▶ CONTINUE  state selection: %s", target.Reason)
+				}
+				projectPath = target.ProjectDir
+				strategySetup = target.Strategy
+			}
+			if strategySetup != nil && strategySetup.IsWorktree {
+				frlog.Log("▶ CONTINUE  reattaching to worktree: %s", strategySetup.WorkDir)
+			} else if strategySetup != nil && strategySetup.Strategy == git.StrategyBranch && strategySetup.BranchName != "" {
+				// Checkout the branch if we're not already on it.
+				if git.CurrentBranch(ctx, projectPath) != strategySetup.BranchName {
+					if coErr := git.CheckoutBranch(ctx, projectPath, strategySetup.BranchName); coErr != nil {
+						frlog.Log("WARNING: could not checkout branch %s: %v", strategySetup.BranchName, coErr)
 					}
-					strategySetup = persisted
-					frlog.Log("▶ CONTINUE  reattaching to branch: %s", persisted.BranchName)
+				}
+				frlog.Log("▶ CONTINUE  reattaching to branch: %s", strategySetup.BranchName)
+			}
+		}
+		if (runContinue || runSimpleContinue) && !userSetMode {
+			if detected := continuerun.ReadBuildMode(projectPath); detected != "" {
+				parsedMode, parseErr := prepare.ParseMode(detected)
+				if parseErr == nil && parsedMode != mode {
+					mode = parsedMode
+					frlog.Log("▶ CONTINUE  auto-detected mode: %s", mode)
 				}
 			}
 		}

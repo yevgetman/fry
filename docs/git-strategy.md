@@ -64,9 +64,10 @@ Git strategy [worktree] (auto/current/branch/worktree, or Enter to keep):
 The resolved strategy is persisted to `.fry/git-strategy.txt` after setup. When `--continue` or `--resume` is used:
 
 1. Fry reads `.fry/git-strategy.txt` to recover the strategy, branch name, and working directory
-2. For `branch` strategy: checks out the existing branch
-3. For `worktree` strategy: reattaches to the existing worktree directory
-4. For `current` strategy: no action needed
+2. If both the original project and the persisted worktree contain build artifacts, Fry compares their state and prefers the more advanced/newer one
+3. For `branch` strategy: checks out the existing branch
+4. For `worktree` strategy: reattaches to the existing worktree directory only when its state is still canonical
+5. For `current` strategy: no action needed
 
 If the persisted strategy file does not exist (builds started before this feature), `--continue`/`--resume` defaults to `current`.
 
