@@ -46,6 +46,9 @@ fry/
 │   │   ├── types.go             # Epic, Sprint, EffortLevel types
 │   │   ├── parser.go            # State-machine .md parser for epic files
 │   │   └── validator.go         # Epic structural validation
+│   ├── githubissue/
+│   │   ├── githubissue.go       # GitHub issue URL parsing, gh auth validation, fetch, prompt/context rendering
+│   │   └── githubissue_test.go  # Tests for URL parsing, gh validation, persistence
 │   ├── sprint/
 │   │   ├── runner.go            # Sprint execution loop (iterations, no-op detection)
 │   │   ├── prompt.go            # Layered prompt assembly (10 layers, 0.5 through 5)
@@ -162,6 +165,7 @@ fry/
 | `sprint-progress.txt` | Append-only iteration log within current sprint |
 | `epic-progress.txt` | Compacted summaries of completed sprints |
 | `user-prompt.txt` | Persisted user directive |
+| `github-issue.md` | Persisted fetched GitHub issue context when `--gh-issue` is used |
 | `build-mode.txt` | Persisted build mode (software/planning/writing) for `--continue` auto-detection |
 | `deviation-log.md` | Deviations detected during sprint reviews |
 | `deferred-failures.md` | Sanity check failures below threshold, deferred to build audit |
@@ -314,7 +318,7 @@ Final: build audit (if full epic completed) → deferred check re-run → build 
 |-------|---------|-------|
 | 1 | Executive context | `plans/executive.md` (optional) |
 | 1.25 | Media manifest | categorized list of `media/` files (optional) |
-| 1.5 | User directive | `--user-prompt` or `.fry/user-prompt.txt` (optional) |
+| 1.5 | User directive | `--user-prompt`, `--gh-issue` (resolved), or `.fry/user-prompt.txt` (optional) |
 | 1.625 | Agent disposition | identity disposition loaded from `templates/identity/disposition.md` |
 | 1.75 | Quality directive | injected only at `max` effort |
 | 2 | Strategic plan | reference to `plans/plan.md` |
@@ -345,6 +349,7 @@ Key flags:
   --planning                         # Alias for --mode planning (backwards compat)
   --user-prompt "..."                # Inject directive into prompts
   --user-prompt-file path            # Load directive from file
+  --gh-issue https://.../issues/N    # Fetch GitHub issue via gh CLI and use it as the task definition
   --dry-run                          # Validate without executing
   --sprint N                         # Start from sprint N
   --resume                           # Skip iterations, sanity check + align with boosted attempts
@@ -483,6 +488,7 @@ make clean     # rm -rf bin/
 | `writing-mode.md` | Human-language content (books, guides, reports) |
 | `media-assets.md` | Binary asset handling |
 | `supplementary-assets.md` | Text asset injection |
+| `github-issues.md` | GitHub issue URL ingestion via `--gh-issue` |
 | `user-prompt.md` | Prompt injection, hierarchy, persistence |
 | `project-structure.md` | Directory layout, file reference |
 | `terminal-output.md` | Output format, logging |

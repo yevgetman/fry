@@ -15,6 +15,7 @@ Fry can code, write [planning documents](docs/planning-mode.md), or write human-
 Fry takes one or all of the following as input:
 
 - **A [user prompt](docs/user-prompt.md)** — provided as text on the command line or a path to a text file.
+- **A [GitHub issue URL](docs/github-issues.md)** — fetched through the authenticated `gh` CLI and converted into Fry artifacts automatically.
 - **An executive.md file** — a high-level description of the project. Think of this as the "What and Why" for the project.
 - **A plan.md file** — a detailed plan to build/write the output. Think of this as the "How" for the project.
 
@@ -70,6 +71,8 @@ plans/executive.md     You write this -- why to build it       required)
 --user-prompt "..."    You describe it -- Fry generates the rest
   OR
 --user-prompt-file f   Same, but reads the prompt from a local file
+  OR
+--gh-issue URL         Fry fetches a GitHub issue and generates the rest
 media/                 Optional binary assets (images, PDFs, fonts) referenced in plans
 assets/                Optional text documents (specs, schemas) read during plan generation
         |
@@ -103,6 +106,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Triage gate** -- before running the full prepare pipeline, a single cheap LLM call classifies task complexity as `simple`, `moderate`, or `complex` and suggests an effort level. After classification, an interactive confirmation prompt lets you review, accept, or adjust the difficulty and effort before the build starts (`--yes` / `-y` auto-accepts, `--no-project-overview` skips entirely). Simple and moderate tasks skip prepare entirely (zero LLM calls for planning) with effort-aware iteration budgets, alignment, and audit depth. Complex tasks get the full pipeline. Max effort is reserved for complex tasks. Biased toward over-classification to avoid wasting tokens. See [Triage](docs/triage.md). Use `--full-prepare` to bypass.
 - **Project overview** -- after `plan.md` exists, Fry shows an AI-generated project summary and asks for confirmation before generating build artifacts (`--yes` / `-y` auto-accepts, `--no-project-overview` skips entirely)
 - **Effort-level triage** -- `--effort fast|standard|high|max` controls sprint count, density, and rigor. Auto-detects when unspecified. See [Effort Levels](docs/effort-levels.md).
+- **GitHub issue ingestion** -- `--gh-issue <url>` fetches issue metadata, body, labels, and recent comments through the authenticated `gh` CLI, persists the fetched context to `.fry/github-issue.md`, and routes the result through normal triage/prepare/build flow. See [GitHub Issues](docs/github-issues.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
 - **Supplementary assets** -- optional `assets/` directory for text reference documents (specs, schemas, requirements) whose full contents are read during plan and epic generation
 - **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, operational disposition, plan references, sprint tasks, iteration memory, and completion signals
@@ -145,6 +149,7 @@ See [Self-Improvement Pipeline](docs/self-improvement.md) for the full architect
 - **Go 1.22+** — to build fry from source
 - **git** — for automatic sprint checkpointing
 - **bash** — used by AI engine CLIs and sanity check commands
+- **gh** (optional) — required only when using `--gh-issue`
 - At least one AI engine CLI:
   - [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code): `npm i -g @anthropic-ai/claude-code` (default engine)
   - [OpenAI Codex CLI](https://www.npmjs.com/package/@openai/codex): `npm i -g @openai/codex`
@@ -161,7 +166,10 @@ make install
 # Option A: Start from just a prompt (no files needed)
 fry --user-prompt "build a REST API for a todo app with PostgreSQL" --engine claude
 
-# Option B: Create a plan file first
+# Option B: Start from a GitHub issue
+fry --gh-issue https://github.com/yevgetman/fry/issues/74 --engine claude
+
+# Option C: Create a plan file first
 mkdir -p plans
 cat > plans/plan.md << 'EOF'
 # My Project -- Build Plan
@@ -170,7 +178,7 @@ cat > plans/plan.md << 'EOF'
 EOF
 fry --engine claude
 
-# Option C: Write a book or guide
+# Option D: Write a book or guide
 fry --mode writing --user-prompt "Write a comprehensive guide to Go concurrency"
 
 # Validate without running
@@ -200,6 +208,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 fry                                    # Run all sprints (prepare: claude, build: claude)
 fry --engine codex                     # Use OpenAI Codex for build stage
 fry --engine ollama                    # Use local Ollama models (no API key)
+fry --gh-issue https://github.com/yevgetman/fry/issues/74  # Start from a GitHub issue
 fry --effort fast                       # Simple task: 1-2 sprints, minimal overhead
 fry --effort max                       # Maximum rigor: extended prompts, thorough reviews
 fry run epic.md 3 5                    # Run sprints 3-5
@@ -243,6 +252,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Writing Mode](docs/writing-mode.md) | Human-language content: books, guides, reports, documentation |
 | [Media Assets](docs/media-assets.md) | Optional `media/` directory for images, PDFs, fonts, and other build assets |
 | [Supplementary Assets](docs/supplementary-assets.md) | Optional `assets/` directory for text reference documents read during plan generation |
+| [GitHub Issues](docs/github-issues.md) | Use a GitHub issue URL as the task definition via `--gh-issue` |
 | [User Prompt](docs/user-prompt.md) | Injecting directives, prompt hierarchy, persistence |
 | [Project Structure](docs/project-structure.md) | Directory layout, generated artifacts, file reference |
 | [Terminal Output](docs/terminal-output.md) | Status banners, verbose mode, log format |

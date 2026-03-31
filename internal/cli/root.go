@@ -41,6 +41,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "Preview actions without executing")
 	rootCmd.Flags().StringVar(&runUserPrompt, "user-prompt", "", "Additional user prompt")
 	rootCmd.Flags().StringVar(&runUserPromptFile, "user-prompt-file", "", "Path to file containing user prompt")
+	rootCmd.Flags().StringVar(&runGitHubIssue, "gh-issue", "", "GitHub issue URL to use as the task definition (requires gh auth)")
 	rootCmd.Flags().BoolVar(&runReview, "review", false, "Enable sprint review between sprints")
 	rootCmd.Flags().BoolVar(&runNoReview, "no-review", false, "Disable sprint review")
 	rootCmd.Flags().StringVar(&runSimulateReview, "simulate-review", "", "Simulate review verdict")

@@ -52,6 +52,7 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 | `--planning` | Alias for `--mode planning`. Kept for backwards compatibility. |
 | `--user-prompt <text>` | Top-level directive injected into every sprint prompt. When no `plan.md` or `executive.md` exists, bootstraps the entire project from this prompt (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
+| `--gh-issue <url>` | GitHub issue URL to use as the task definition. Requires authenticated `gh` CLI access to the issue host. Cannot be combined with `--user-prompt` or `--user-prompt-file`. See [GitHub Issues](github-issues.md). |
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. Also offered interactively during the adjust flow for standard/high effort builds. Max effort auto-enables review. |
 | `--no-review` | Disable sprint review even if the epic enables `@review_between_sprints` |
 | `--yes` / `-y` | Auto-accept all interactive confirmation prompts (triage, project overview, executive bootstrap). For CI/CD and AI agent automation. |
@@ -86,6 +87,7 @@ fry                                               # Run all sprints (.fry/epic.m
 fry --dry-run                                     # Validate and preview
 fry --triage-only --user-prompt "add a CLI flag"  # Preview triage classification only
 fry --engine claude                               # Run all sprints with Claude Code
+fry --gh-issue https://github.com/yevgetman/fry/issues/74  # Start directly from a GitHub issue
 fry --effort fast                                  # Quick task: 1-2 sprints, minimal overhead
 fry --effort standard --engine claude             # Moderate task: 2-4 sprints
 fry --effort max --engine claude                  # Maximum rigor: extended prompts, thorough reviews
@@ -162,7 +164,7 @@ fry audit --project-dir /path/to/project     # Audit a different directory
 
 ## `fry prepare`
 
-Generates `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan. Requires at least one of `plans/plan.md`, `plans/executive.md`, `--user-prompt`, or `--user-prompt-file`.
+Generates `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan. Requires at least one of `plans/plan.md`, `plans/executive.md`, `--user-prompt`, `--user-prompt-file`, or `--gh-issue`.
 
 ```
 fry prepare [epic_filename] [flags]
@@ -177,6 +179,7 @@ fry prepare [epic_filename] [flags]
 | `--effort <fast\|standard\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--user-prompt <text>` | Top-level directive to guide artifact generation. Can bootstrap the entire project when no plan files exist (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
+| `--gh-issue <url>` | GitHub issue URL to use as the task definition. Requires authenticated `gh` CLI access to the issue host. Cannot be combined with `--user-prompt` or `--user-prompt-file`. See [GitHub Issues](github-issues.md). |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
 | `--validate-only` | Check that the epic is valid, then exit |
 | `--review` | Enable sprint review between sprints. Instructs the epic generator to include `@review_between_sprints`. |
@@ -194,7 +197,7 @@ All artifacts are **always regenerated** (overwritten) on each run.
 
 | Step | Condition | Output |
 |---|---|---|
-| Bootstrap | Both files missing, `--user-prompt` provided | Generates `plans/executive.md` from user prompt (interactive review) |
+| Bootstrap | Both files missing, `--user-prompt` or `--gh-issue` provided | Generates `plans/executive.md` from the resolved prompt (interactive review) |
 | Step 0 | `plan.md` missing, `executive.md` exists | Generates `plans/plan.md` from executive context |
 | Project Overview | `plan.md` exists, `--no-project-overview` not set | Displays AI-generated project overview for user confirmation |
 | Step 1 | Always | Generates `.fry/AGENTS.md` (numbered operational rules) |
@@ -213,6 +216,7 @@ fry prepare --project-dir /path                    # Operate on a different proj
 fry prepare --user-prompt "no ORMs, use raw SQL only"
 fry prepare --user-prompt "build a blog engine" --engine claude  # Bootstrap from prompt
 fry prepare --user-prompt-file ./requirements.txt --engine claude # Prompt from file
+fry prepare --gh-issue https://github.com/yevgetman/fry/issues/74 # Bootstrap from a GitHub issue
 fry prepare --mode writing --user-prompt "Write a guide to Go concurrency"  # Writing mode
 fry prepare --no-project-overview                   # Skip project overview confirmation
 fry prepare --validate-only                        # Validate existing epic only

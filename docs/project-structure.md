@@ -27,6 +27,7 @@ your-project/
     verification.md                      #   Independent sanity checks
     prompt.md                            #   Assembled per sprint
     user-prompt.txt                      #   Persisted user directive (optional)
+    github-issue.md                      #   Persisted fetched GitHub issue context (optional)
     build-mode.txt                       #   Persisted build mode for --continue
     sprint-progress.txt                  #   Per-sprint iteration memory
     epic-progress.txt                    #   Cross-sprint compacted summary
@@ -61,7 +62,7 @@ your-project/
 
 Unlike the bash version, Fry is installed as a standalone binary — it does not live inside your project's `.fry/` directory. The `.fry/` directory contains only generated artifacts.
 
-To scaffold this structure in a new project, run `fry init`. This creates `plans/`, `assets/`, and `media/` directories with a `plan.example.md` template, initializes git, and configures `.gitignore`. If run in an existing project, `fry init` also performs a structural codebase scan and writes `.fry/file-index.txt`. You then write your own `plans/plan.md` or provide a `--user-prompt` to let fry generate one.
+To scaffold this structure in a new project, run `fry init`. This creates `plans/`, `assets/`, and `media/` directories with a `plan.example.md` template, initializes git, and configures `.gitignore`. If run in an existing project, `fry init` also performs a structural codebase scan and writes `.fry/file-index.txt`. You then write your own `plans/plan.md`, provide a `--user-prompt`, or use `--gh-issue` to let fry generate the rest.
 
 ## File Reference
 
@@ -69,8 +70,8 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 
 | File | Purpose | Required |
 |---|---|---|
-| `plans/plan.md` | Detailed build plan with technical decisions | At least one of plan.md, executive.md, or `--user-prompt` |
-| `plans/executive.md` | Executive context: vision, goals, scope | At least one of plan.md, executive.md, or `--user-prompt` |
+| `plans/plan.md` | Detailed build plan with technical decisions | At least one of plan.md, executive.md, `--user-prompt`, or `--gh-issue` |
+| `plans/executive.md` | Executive context: vision, goals, scope | At least one of plan.md, executive.md, `--user-prompt`, or `--gh-issue` |
 | `output/` | Planning and writing mode deliverables (ordered `.md` files) | Created automatically in `--mode planning` or `--mode writing` |
 | `media/` | Images, PDFs, fonts, data files, and other assets referenced in plans | No -- entirely optional |
 | `assets/` | Text reference documents (specs, schemas, requirements) read during plan generation | No -- entirely optional |
@@ -84,6 +85,7 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `.fry/verification.md` | Independent sanity checks | `fry prepare` (Step 3) |
 | `.fry/prompt.md` | Assembled per-sprint prompt | `fry run` at runtime |
 | `.fry/user-prompt.txt` | Persisted user directive | `fry run` or `fry prepare` |
+| `.fry/github-issue.md` | Persisted fetched GitHub issue context | `fry run --gh-issue` or `fry prepare --gh-issue` |
 | `.fry/build-mode.txt` | Persisted build mode (software/planning/writing) for `--continue` | `fry run` at runtime |
 | `.fry/sprint-progress.txt` | Per-sprint iteration memory | `fry run` at runtime |
 | `.fry/epic-progress.txt` | Cross-sprint compacted summary | `fry run` at runtime |
@@ -124,7 +126,7 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 
 - **`fry run`** calls `fry prepare` only when the epic file does not exist on disk
 - **`fry prepare`** always **overwrites** all `.fry/` artifacts when run
-- When `--user-prompt` is provided with no plan files, `fry prepare` generates `plans/executive.md` (with interactive review) and then `plans/plan.md` before proceeding to Steps 1-3
+- When `--user-prompt` or `--gh-issue` is provided with no plan files, `fry prepare` generates `plans/executive.md` (with interactive review) and then `plans/plan.md` before proceeding to Steps 1-3
 - If `executive.md` or `plan.md` was auto-generated, it persists in `plans/` and is treated as user-authored on subsequent runs — delete it manually to force re-generation
 - To re-run Fry with a new plan, update your input files and delete `.fry/epic.md` (or run `fry prepare` directly)
 

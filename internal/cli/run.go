@@ -27,6 +27,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
+	"github.com/yevgetman/fry/internal/githubissue"
 	"github.com/yevgetman/fry/internal/lock"
 	frlog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/metrics"
@@ -46,38 +47,40 @@ import (
 )
 
 var (
-	runEngine            string
-	runDryRun            bool
-	runUserPrompt        string
-	runUserPromptFile    string
-	runNoReview          bool
-	runReview            bool
-	runSimulateReview    string
-	runPrepareEngine     string
-	runPlanning          bool
-	runMode              string
-	runEffort            string
-	runNoAudit           bool
-	runResume            bool
-	runSprint            int
-	runContinue          bool
-	runNoProjectOverview bool
-	runYes               bool
-	runFullPrepare       bool
-	runGitStrategy       string
-	runBranchName        string
-	runAlwaysVerify      bool
-	runSimpleContinue    bool
-	runSARIF             bool
-	runJSONReport        bool
-	runShowTokens        bool
-	runNoObserver        bool
-	runTriageOnly        bool
-	runModel             string
-	runTelemetry         bool
-	runNoTelemetry       bool
-	runMCPConfig         string
-	runConfirmFile       bool
+	runEngine                string
+	runDryRun                bool
+	runUserPrompt            string
+	runUserPromptFile        string
+	runGitHubIssue           string
+	runNoReview              bool
+	runReview                bool
+	runSimulateReview        string
+	runPrepareEngine         string
+	runPlanning              bool
+	runMode                  string
+	runEffort                string
+	runNoAudit               bool
+	runResume                bool
+	runSprint                int
+	runContinue              bool
+	runNoProjectOverview     bool
+	runYes                   bool
+	runFullPrepare           bool
+	runGitStrategy           string
+	runBranchName            string
+	runAlwaysVerify          bool
+	runSimpleContinue        bool
+	runSARIF                 bool
+	runJSONReport            bool
+	runShowTokens            bool
+	runNoObserver            bool
+	runTriageOnly            bool
+	runModel                 string
+	runTelemetry             bool
+	runNoTelemetry           bool
+	runMCPConfig             string
+	runConfirmFile           bool
+	resolveGitHubIssuePrompt = githubissue.ResolvePrompt
 )
 
 type deferredEntry struct {
@@ -173,11 +176,10 @@ var runCmd = &cobra.Command{
 			epicArg = args[0]
 		}
 
-		userPrompt, err := resolveUserPrompt(projectPath, runUserPrompt, runUserPromptFile, !runDryRun)
+		userPrompt, promptSource, err := resolveTopLevelPrompt(cmd.Context(), projectPath, runUserPrompt, runUserPromptFile, runGitHubIssue, !runDryRun)
 		if err != nil {
 			return err
 		}
-		promptSource := userPromptSource(userPrompt, runUserPrompt, runUserPromptFile)
 
 		epicPath, epicExists, err := resolveEpicPath(projectPath, epicArg)
 		if err != nil {
@@ -1057,14 +1059,14 @@ var runCmd = &cobra.Command{
 							Details:         userInstructions,
 						}
 						if rpErr := review.RunReplan(ctx, review.ReplanOpts{
-							ProjectDir:    projectPath,
-							EpicPath:      epicPath,
-							DeviationSpec: devSpec,
+							ProjectDir:      projectPath,
+							EpicPath:        epicPath,
+							DeviationSpec:   devSpec,
 							CompletedSprint: spr.Number,
-							MaxScope:      ep.MaxDeviationScope,
-							Engine:        replanEngine,
-							Model:         replanModel,
-							Verbose:       frlog.Verbose,
+							MaxScope:        ep.MaxDeviationScope,
+							Engine:          replanEngine,
+							Model:           replanModel,
+							Verbose:         frlog.Verbose,
 						}); rpErr != nil {
 							return fmt.Errorf("steering replan: %w", rpErr)
 						}
@@ -1779,6 +1781,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "Preview actions without executing")
 	runCmd.Flags().StringVar(&runUserPrompt, "user-prompt", "", "Additional user prompt")
 	runCmd.Flags().StringVar(&runUserPromptFile, "user-prompt-file", "", "Path to file containing user prompt")
+	runCmd.Flags().StringVar(&runGitHubIssue, "gh-issue", "", "GitHub issue URL to use as the task definition (requires gh auth)")
 	runCmd.Flags().BoolVar(&runReview, "review", false, "Enable sprint review between sprints")
 	runCmd.Flags().BoolVar(&runNoReview, "no-review", false, "Disable sprint review")
 	runCmd.Flags().StringVar(&runSimulateReview, "simulate-review", "", "Simulate review verdict")
@@ -1852,6 +1855,32 @@ func resolveUserPrompt(projectDir, provided, promptFile string, persist bool) (s
 		return "", err
 	}
 	return string(data), nil
+}
+
+func resolveTopLevelPrompt(ctx context.Context, projectDir, provided, promptFile, issueURL string, persist bool) (string, string, error) {
+	if strings.TrimSpace(issueURL) != "" {
+		if strings.TrimSpace(provided) != "" || strings.TrimSpace(promptFile) != "" {
+			return "", "", fmt.Errorf("cannot use --gh-issue with --user-prompt or --user-prompt-file")
+		}
+		prompt, _, err := resolveGitHubIssuePrompt(ctx, projectDir, issueURL, persist)
+		if err != nil {
+			return "", "", err
+		}
+		return prompt, "--gh-issue " + issueURL, nil
+	}
+
+	prompt, err := resolveUserPrompt(projectDir, provided, promptFile, persist)
+	if err != nil {
+		return "", "", err
+	}
+	if persist && (strings.TrimSpace(provided) != "" || strings.TrimSpace(promptFile) != "") {
+		clearGitHubIssueArtifact(projectDir)
+	}
+	return prompt, userPromptSource(prompt, provided, promptFile), nil
+}
+
+func clearGitHubIssueArtifact(projectDir string) {
+	_ = os.Remove(filepath.Join(projectDir, config.GitHubIssueFile))
 }
 
 // userPromptSource returns a human-readable description of where the user prompt

@@ -13,18 +13,19 @@ import (
 )
 
 var (
-	prepareEngine         string
-	prepareUserPrompt     string
-	prepareUserPromptFile string
-	prepareValidateOnly   bool
-	preparePlanning       bool
-	prepareMode           string
-	prepareEffort         string
-	prepareNoProjectOverview  bool
-	prepareReview         bool
-	prepareYes            bool
-	prepareMCPConfig      string
-	prepareConfirmFile    bool
+	prepareEngine            string
+	prepareUserPrompt        string
+	prepareUserPromptFile    string
+	prepareGitHubIssue       string
+	prepareValidateOnly      bool
+	preparePlanning          bool
+	prepareMode              string
+	prepareEffort            string
+	prepareNoProjectOverview bool
+	prepareReview            bool
+	prepareYes               bool
+	prepareMCPConfig         string
+	prepareConfirmFile       bool
 )
 
 var prepareCmd = &cobra.Command{
@@ -42,32 +43,11 @@ var prepareCmd = &cobra.Command{
 			return err
 		}
 
-		userPromptVal, _ := cmd.Flags().GetString("user-prompt")
-		userPromptFileVal, _ := cmd.Flags().GetString("user-prompt-file")
-		userPrompt, err := resolveUserPrompt(projectPath, userPromptVal, userPromptFileVal, true)
-		if err != nil {
-			return err
-		}
-
+		validateOnly, _ := cmd.Flags().GetBool("validate-only")
 		epicArg := "epic.md"
 		if len(args) > 0 {
 			epicArg = args[0]
 		}
-
-		effortVal, _ := cmd.Flags().GetString("effort")
-		effortLevel, err := epic.ParseEffortLevel(effortVal)
-		if err != nil {
-			return err
-		}
-
-		modeVal, _ := cmd.Flags().GetString("mode")
-		planningVal, _ := cmd.Flags().GetBool("planning")
-		mode, err := resolveMode(modeVal, planningVal)
-		if err != nil {
-			return err
-		}
-
-		validateOnly, _ := cmd.Flags().GetBool("validate-only")
 		if validateOnly {
 			epicPath, _, err := resolveEpicPath(projectPath, epicArg)
 			if err != nil {
@@ -84,7 +64,25 @@ var prepareCmd = &cobra.Command{
 			return nil
 		}
 
-		promptSource := userPromptSource(userPrompt, userPromptVal, userPromptFileVal)
+		userPromptVal, _ := cmd.Flags().GetString("user-prompt")
+		userPromptFileVal, _ := cmd.Flags().GetString("user-prompt-file")
+		userPrompt, promptSource, err := resolveTopLevelPrompt(cmd.Context(), projectPath, userPromptVal, userPromptFileVal, prepareGitHubIssue, true)
+		if err != nil {
+			return err
+		}
+
+		effortVal, _ := cmd.Flags().GetString("effort")
+		effortLevel, err := epic.ParseEffortLevel(effortVal)
+		if err != nil {
+			return err
+		}
+
+		modeVal, _ := cmd.Flags().GetString("mode")
+		planningVal, _ := cmd.Flags().GetBool("planning")
+		mode, err := resolveMode(modeVal, planningVal)
+		if err != nil {
+			return err
+		}
 
 		engineVal, _ := cmd.Flags().GetString("engine")
 		noProjectOverview, _ := cmd.Flags().GetBool("no-project-overview")
@@ -131,6 +129,7 @@ func init() {
 	prepareCmd.Flags().StringVar(&prepareEngine, "engine", "", "Preparation engine")
 	prepareCmd.Flags().StringVar(&prepareUserPrompt, "user-prompt", "", "Additional user prompt")
 	prepareCmd.Flags().StringVar(&prepareUserPromptFile, "user-prompt-file", "", "Path to file containing user prompt")
+	prepareCmd.Flags().StringVar(&prepareGitHubIssue, "gh-issue", "", "GitHub issue URL to use as the task definition (requires gh auth)")
 	prepareCmd.Flags().BoolVar(&prepareValidateOnly, "validate-only", false, "Validate without generating files")
 	prepareCmd.Flags().BoolVar(&preparePlanning, "planning", false, "Use planning prepare mode (alias for --mode planning)")
 	prepareCmd.Flags().StringVar(&prepareMode, "mode", "", "Execution mode: software, planning, writing")

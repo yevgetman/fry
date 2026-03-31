@@ -2,6 +2,8 @@
 
 The `--user-prompt` flag lets you inject a top-level directive that applies to every sprint. It can also bootstrap an entire project from scratch when no plan files exist.
 
+GitHub issues can use the same pathway through `--gh-issue <url>`. Fry fetches the issue through the authenticated `gh` CLI, converts it into a directive, persists the fetched context to `.fry/github-issue.md`, and then treats the result exactly like a user prompt. See [GitHub Issues](github-issues.md).
+
 ## Usage
 
 ```bash
@@ -29,9 +31,11 @@ fry prepare --user-prompt-file ./detailed-requirements.txt
 
 The file contents are read and used exactly as if they were passed inline via `--user-prompt`. The two flags cannot be combined — use one or the other.
 
+`--gh-issue` is mutually exclusive with both `--user-prompt` and `--user-prompt-file`.
+
 ## Bootstrapping from a Prompt
 
-When `--user-prompt` is provided and neither `plans/plan.md` nor `plans/executive.md` exists, Fry bootstraps the entire project:
+When `--user-prompt` or `--gh-issue` is provided and neither `plans/plan.md` nor `plans/executive.md` exists, Fry bootstraps the entire project:
 
 1. Generates an executive context document from your prompt using the AI engine
 2. Displays the generated content in the terminal for your review
@@ -58,7 +62,7 @@ The user prompt is:
 |---|---|---|
 | 1 | Executive context | `plans/executive.md` |
 | 1.25 | Media assets | Manifest of files in `media/` (if directory exists) |
-| **1.5** | **User directive** | `--user-prompt` or `--user-prompt-file` |
+| **1.5** | **User directive** | `--user-prompt`, `--user-prompt-file`, or `--gh-issue` |
 | 1.75 | Quality directive | Injected at `max` effort only |
 | 2 | Strategic plan reference | `plans/plan.md` |
 | 3 | Sprint instructions | `@prompt` block from epic |
@@ -67,13 +71,13 @@ The user prompt is:
 
 ## Persistence
 
-The user prompt is persisted to `.fry/user-prompt.txt`:
+The resolved directive is persisted to `.fry/user-prompt.txt`:
 
 - **Saved on first use** and automatically reused on subsequent runs
-- **Override** by passing a new `--user-prompt` or `--user-prompt-file` value
+- **Override** by passing a new `--user-prompt`, `--user-prompt-file`, or `--gh-issue` value
 - **Clear** by deleting `.fry/user-prompt.txt`
 
-When `--dry-run` is used with `--user-prompt`, the directive is displayed in the dry-run report but **not** persisted to disk.
+When `--dry-run` is used with `--user-prompt` or `--gh-issue`, the directive is used for planning but **not** persisted to disk.
 
 ## Examples
 
@@ -95,4 +99,7 @@ fry --user-prompt "only implement the auth and user modules for now"
 
 # Framework preference
 fry --user-prompt "use Gin for HTTP routing, not net/http"
+
+# Use a GitHub issue directly
+fry --gh-issue https://github.com/yevgetman/fry/issues/74
 ```

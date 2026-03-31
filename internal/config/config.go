@@ -28,6 +28,7 @@ const (
 	DeviationLogFile          = ".fry/deviation-log.md"
 	LockFile                  = ".fry/.fry.lock"
 	UserPromptFile            = ".fry/user-prompt.txt"
+	GitHubIssueFile           = ".fry/github-issue.md"
 	PlanFile                  = "plans/plan.md"
 	ExecutiveFile             = "plans/executive.md"
 	PlanningOutputDir         = "output"
@@ -60,12 +61,12 @@ const (
 	AuditFixInvocationPrompt  = "Read and execute ALL instructions in .fry/audit-prompt.md. Fix the issues described in the prompt."
 
 	// Two-level audit loop constants
-	DefaultMaxOuterAuditCycles = 3  // outer audit cycles (medium/default)
-	DefaultMaxInnerFixIter     = 3  // fix attempts per audit report (medium/default)
-	MaxOuterCyclesHighCap      = 12 // outer audit cycles at high effort
+	DefaultMaxOuterAuditCycles = 3   // outer audit cycles (medium/default)
+	DefaultMaxInnerFixIter     = 3   // fix attempts per audit report (medium/default)
+	MaxOuterCyclesHighCap      = 12  // outer audit cycles at high effort
 	MaxOuterCyclesMaxCap       = 100 // outer audit cycles at max effort (safety valve; stale detection governs actual exit)
-	MaxInnerFixIterHigh        = 7  // inner fix cap at high effort
-	MaxInnerFixIterMax         = 10 // inner fix cap at max effort
+	MaxInnerFixIterHigh        = 7   // inner fix cap at high effort
+	MaxInnerFixIterMax         = 10  // inner fix cap at max effort
 
 	DeferredFailuresFile = ".fry/deferred-failures.md"
 
@@ -144,7 +145,7 @@ const (
 	// File-based interactive prompt constants
 	ConfirmPromptFile   = ".fry/confirm-prompt.json"
 	ConfirmResponseFile = ".fry/confirm-response.json"
-	ConfirmPollInterval = 2  // seconds between polls for response file
+	ConfirmPollInterval = 2   // seconds between polls for response file
 	ConfirmTimeoutSec   = 300 // 5 minutes
 
 	// Build steering constants (Layer 1: file-based IPC)

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/githubissue"
 	"github.com/yevgetman/fry/internal/sprint"
 	"github.com/yevgetman/fry/internal/verify"
 )
@@ -274,6 +276,46 @@ func TestResolveUserPrompt(t *testing.T) {
 		got, err := resolveUserPrompt(dir, "", "", false)
 		require.NoError(t, err)
 		assert.Equal(t, "", got)
+	})
+}
+
+func TestResolveTopLevelPrompt(t *testing.T) {
+	t.Run("gh issue conflicts with user prompt flags", func(t *testing.T) {
+		_, _, err := resolveTopLevelPrompt(context.Background(), t.TempDir(), "hello", "", "https://github.com/yevgetman/fry/issues/74", false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot use --gh-issue")
+	})
+
+	t.Run("gh issue delegates to resolver", func(t *testing.T) {
+		oldResolver := resolveGitHubIssuePrompt
+		t.Cleanup(func() { resolveGitHubIssuePrompt = oldResolver })
+		dir := t.TempDir()
+
+		resolveGitHubIssuePrompt = func(_ context.Context, projectDir, issueURL string, persist bool) (string, *githubissue.Issue, error) {
+			assert.Equal(t, dir, projectDir)
+			assert.Equal(t, "https://github.com/yevgetman/fry/issues/74", issueURL)
+			assert.True(t, persist)
+			return "issue prompt", &githubissue.Issue{Title: "Test"}, nil
+		}
+
+		prompt, source, err := resolveTopLevelPrompt(context.Background(), dir, "", "", "https://github.com/yevgetman/fry/issues/74", true)
+		require.NoError(t, err)
+		assert.Equal(t, "issue prompt", prompt)
+		assert.Equal(t, "--gh-issue https://github.com/yevgetman/fry/issues/74", source)
+	})
+
+	t.Run("explicit user prompt clears stale github issue artifact", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.GitHubIssueFile), []byte("stale"), 0o644))
+
+		prompt, source, err := resolveTopLevelPrompt(context.Background(), dir, "hello", "", "", true)
+		require.NoError(t, err)
+		assert.Equal(t, "hello", prompt)
+		assert.Equal(t, "--user-prompt flag", source)
+
+		_, statErr := os.Stat(filepath.Join(dir, config.GitHubIssueFile))
+		assert.True(t, os.IsNotExist(statErr))
 	})
 }
 

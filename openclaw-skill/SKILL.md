@@ -26,8 +26,10 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 |--------|---------|
 | Initialize project | `fry init --project-dir <dir>` |
 | Prepare artifacts only | `fry prepare --project-dir <dir>` |
+| Prepare from GitHub issue | `fry prepare --gh-issue <url> --project-dir <dir>` |
 | Validate prepare | `fry prepare --validate-only --project-dir <dir>` |
 | Start a build | `fry run -y --project-dir <dir> --json-report --telemetry` |
+| Start from GitHub issue | `fry run -y --gh-issue <url> --project-dir <dir> --json-report --telemetry` |
 | Check status | `fry status --json --project-dir <dir>` |
 | Resume (LLM-driven) | `fry run -y --continue --project-dir <dir> --json-report --telemetry` |
 | Resume (lightweight) | `fry run -y --simple-continue --project-dir <dir> --json-report --telemetry` |
@@ -53,6 +55,25 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 `plans/executive.md` unless the user explicitly asks you to. Fry has its own
 triage, prepare, and epic generation pipeline — your job is to pass the task
 description and let Fry do the rest.
+
+### GitHub-tracked tasks: prefer `--gh-issue`
+
+When the task already exists as a GitHub issue, pass the issue URL directly:
+
+```bash
+fry run -y --project-dir /path/to/project \
+  --gh-issue https://github.com/owner/repo/issues/123 \
+  --json-report --telemetry
+```
+
+Fry will fetch the issue through the authenticated `gh` CLI, persist the fetched
+context to `.fry/github-issue.md`, convert it into a top-level directive, and run
+its normal triage/prepare/build pipeline from there.
+
+Requirements:
+- `gh` must be installed
+- The current user must already be authenticated for the issue host (`gh auth login`)
+- Do not combine `--gh-issue` with `--user-prompt` or `--user-prompt-file`
 
 ### Small tasks: use `--user-prompt`
 
@@ -103,6 +124,7 @@ fry run -y --project-dir /path/to/project --json-report --telemetry
 
 | Scenario | What to do |
 |----------|-----------|
+| User gives a GitHub issue URL | Use `--gh-issue` |
 | User says "build X" or "fix Y" | Use `--user-prompt` with their request |
 | User gives a detailed multi-part task | Write to temp file, use `--user-prompt-file` |
 | `plans/plan.md` already exists in project | Run without `--user-prompt` — Fry uses the plan |
@@ -184,7 +206,7 @@ This runs the triage gate and generates `.fry/epic.md`, `.fry/AGENTS.md`, and
 `.fry/verification.md`. Use `--validate-only` to check existing artifacts
 without regenerating.
 
-Prepare respects `--effort`, `--mode`, `--user-prompt`, and `--engine` flags.
+Prepare respects `--effort`, `--mode`, `--user-prompt`, `--gh-issue`, and `--engine` flags.
 Use `--full-prepare` to skip triage and run the full 3-step LLM pipeline
 regardless of complexity.
 
@@ -343,6 +365,7 @@ sessions_spawn({
 | `--always-verify` | (flag) | off | Force all quality gates |
 | `--user-prompt` | string | (none) | Additional directive for the build |
 | `--user-prompt-file` | path | (none) | Load user prompt from a file |
+| `--gh-issue` | URL | (none) | Fetch a GitHub issue through `gh` and use it as the task definition |
 | `--mcp-config` | path | (none) | MCP server config file (Claude engine only) |
 | `--confirm-file` | (flag) | off | Use file-based interactive prompts instead of stdin |
 | `--dry-run` | (flag) | off | Preview without executing |
