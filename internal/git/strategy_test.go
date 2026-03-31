@@ -584,6 +584,115 @@ func TestMergeAndCleanupWorktree(t *testing.T) {
 	assert.Contains(t, string(phaseData), "complete")
 }
 
+func TestMergeAndCleanupWorktree_UntrackedConflict(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	// Initialize a real git repo with an initial commit
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %s: %s", strings.Join(args, " "), string(out))
+	}
+	run("init")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "test")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("init"), 0o644))
+	run("add", "README.md")
+	run("commit", "-m", "initial")
+
+	// Create a worktree with a branch
+	branchName := "fry/untracked-conflict"
+	worktreeDir := filepath.Join(dir, ".fry-worktrees", "untracked-conflict")
+	require.NoError(t, os.MkdirAll(filepath.Dir(worktreeDir), 0o755))
+	run("worktree", "add", "-b", branchName, worktreeDir)
+
+	// In the worktree, commit files that also exist as untracked in the main dir.
+	// This simulates fry copying plans/ to the worktree at setup, then the AI
+	// agent committing those files in the worktree branch.
+	plansDir := filepath.Join(worktreeDir, "plans")
+	require.NoError(t, os.MkdirAll(plansDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "plan.md"), []byte("plan from branch"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prompt.md"), []byte("prompt from branch"), 0o644))
+
+	wtRun := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = worktreeDir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %s: %s", strings.Join(args, " "), string(out))
+	}
+	wtRun("add", "plans/plan.md", "plans/prompt.md")
+	wtRun("commit", "-m", "add plans")
+
+	// Create the same files as untracked in the main worktree (the conflict trigger)
+	mainPlansDir := filepath.Join(dir, "plans")
+	require.NoError(t, os.MkdirAll(mainPlansDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(mainPlansDir, "plan.md"), []byte("plan local"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(mainPlansDir, "prompt.md"), []byte("prompt local"), 0o644))
+
+	setup := &StrategySetup{
+		WorkDir:        worktreeDir,
+		OriginalDir:    dir,
+		BranchName:     branchName,
+		OriginalBranch: "main",
+		Strategy:       StrategyWorktree,
+		IsWorktree:     true,
+	}
+
+	// This would fail without the untracked-conflict retry logic
+	err := MergeAndCleanupWorktree(ctx, setup)
+	require.NoError(t, err)
+
+	// Verify: plans from the branch are now on main (tracked versions win)
+	data, err := os.ReadFile(filepath.Join(dir, "plans", "plan.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "plan from branch", string(data))
+
+	data, err = os.ReadFile(filepath.Join(dir, "plans", "prompt.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "prompt from branch", string(data))
+
+	// Verify: backup directory is cleaned up
+	_, err = os.Stat(filepath.Join(dir, ".fry-merge-backup"))
+	assert.True(t, os.IsNotExist(err), ".fry-merge-backup should be removed")
+}
+
+func TestParseUntrackedConflicts(t *testing.T) {
+	t.Parallel()
+
+	t.Run("parses git error", func(t *testing.T) {
+		t.Parallel()
+		errMsg := `git merge fry/my-branch --no-edit: error: The following untracked working tree files would be overwritten by merge:
+        plans/executive.md
+        plans/plan.md
+        plans/prompt.md
+Please move or remove them before you merge.
+Aborting`
+		files := parseUntrackedConflicts(errMsg)
+		assert.Equal(t, []string{"plans/executive.md", "plans/plan.md", "plans/prompt.md"}, files)
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		t.Parallel()
+		files := parseUntrackedConflicts("some other error")
+		assert.Nil(t, files)
+	})
+
+	t.Run("single file", func(t *testing.T) {
+		t.Parallel()
+		errMsg := `error: The following untracked working tree files would be overwritten by merge:
+        foo.txt
+Please move or remove them before you merge.`
+		files := parseUntrackedConflicts(errMsg)
+		assert.Equal(t, []string{"foo.txt"}, files)
+	})
+}
+
 func TestMergeAndCleanupWorktree_NilSetup(t *testing.T) {
 	t.Parallel()
 	assert.NoError(t, MergeAndCleanupWorktree(context.Background(), nil))

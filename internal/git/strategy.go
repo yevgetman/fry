@@ -257,7 +257,13 @@ func MergeAndCleanupWorktreeWith(ctx context.Context, setup *StrategySetup, ex E
 
 	// 2. Merge the worktree branch (fast-forward when possible)
 	if err := runGit(ctx, origDir, "merge", branchName, "--no-edit"); err != nil {
-		return fmt.Errorf("merge %s into %s: %w", branchName, origBranch, err)
+		// If merge failed because untracked files would be overwritten,
+		// temporarily move them aside and retry. This commonly happens
+		// when plans/ (gitignored) was copied into the worktree at setup
+		// and the AI agent committed those files in the worktree branch.
+		if retryErr := retryMergeMovingUntracked(ctx, origDir, branchName, err); retryErr != nil {
+			return fmt.Errorf("merge %s into %s: %w", branchName, origBranch, retryErr)
+		}
 	}
 
 	// 3. Copy key .fry/ artifacts from worktree to original dir before removal.
@@ -382,6 +388,81 @@ func ReadPersistedStrategy(projectDir string) (*StrategySetup, error) {
 
 	setup.IsWorktree = setup.Strategy == StrategyWorktree
 	return setup, nil
+}
+
+// retryMergeMovingUntracked handles a merge failure caused by untracked working
+// tree files that would be overwritten. It parses the conflicting file paths from
+// the git error, moves them to a temporary backup directory, retries the merge,
+// and cleans up. If the original error is not an untracked-file conflict, or if the
+// retry fails, it returns the relevant error. On retry success it returns nil.
+func retryMergeMovingUntracked(ctx context.Context, dir, branchName string, mergeErr error) error {
+	files := parseUntrackedConflicts(mergeErr.Error())
+	if len(files) == 0 {
+		return mergeErr
+	}
+
+	backupDir := filepath.Join(dir, ".fry-merge-backup")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return mergeErr
+	}
+
+	type movedFile struct{ orig, backup string }
+	var moved []movedFile
+	for _, f := range files {
+		orig := filepath.Join(dir, f)
+		backup := filepath.Join(backupDir, f)
+		if err := os.MkdirAll(filepath.Dir(backup), 0o755); err != nil {
+			continue
+		}
+		if err := os.Rename(orig, backup); err != nil {
+			continue
+		}
+		moved = append(moved, movedFile{orig, backup})
+	}
+
+	// Retry the merge
+	if err := runGit(ctx, dir, "merge", branchName, "--no-edit"); err != nil {
+		// Restore files on failure
+		for _, m := range moved {
+			_ = os.MkdirAll(filepath.Dir(m.orig), 0o755)
+			_ = os.Rename(m.backup, m.orig)
+		}
+		_ = os.RemoveAll(backupDir)
+		return err
+	}
+
+	// Merge succeeded — remove backups
+	_ = os.RemoveAll(backupDir)
+	return nil
+}
+
+// parseUntrackedConflicts extracts file paths from a git merge error that
+// contains "untracked working tree files would be overwritten by merge".
+func parseUntrackedConflicts(errMsg string) []string {
+	const startMarker = "untracked working tree files would be overwritten by merge:"
+	const endMarker = "Please move or remove them before you merge."
+
+	startIdx := strings.Index(errMsg, startMarker)
+	if startIdx < 0 {
+		return nil
+	}
+	startIdx += len(startMarker)
+
+	endIdx := strings.Index(errMsg[startIdx:], endMarker)
+	if endIdx < 0 {
+		endIdx = len(errMsg)
+	} else {
+		endIdx += startIdx
+	}
+
+	var files []string
+	for _, line := range strings.Split(errMsg[startIdx:endIdx], "\n") {
+		f := strings.TrimSpace(line)
+		if f != "" {
+			files = append(files, f)
+		}
+	}
+	return files
 }
 
 // --- helpers ---
