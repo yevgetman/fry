@@ -125,9 +125,37 @@ func TestTelemetryEnabled_SettingsFile(t *testing.T) {
 	assert.True(t, result)
 }
 
-func TestTelemetryEnabled_DefaultOff(t *testing.T) {
+func TestTelemetryEnabled_DefaultOn(t *testing.T) {
 	t.Parallel()
 
 	result := TelemetryEnabled(nil, Settings{})
-	assert.False(t, result)
+	assert.True(t, result)
+}
+
+func TestEnsureSettings_CreatesFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.SettingsFile)
+
+	err := ensureSettingsInDir(dir)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"telemetry": true`)
+}
+
+func TestEnsureSettings_DoesNotOverwrite(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeSettings(t, dir, `{"telemetry": false}`)
+
+	err := ensureSettingsInDir(dir)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(dir, config.SettingsFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"telemetry": false`, "existing settings should not be overwritten")
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/consciousness"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/git"
 	frylog "github.com/yevgetman/fry/internal/log"
@@ -44,6 +45,11 @@ var initCmd = &cobra.Command{
 
 		if err := git.InitGit(ctx, projectPath); err != nil {
 			return fmt.Errorf("init: %w", err)
+		}
+
+		// Ensure ~/.fry/settings.json exists with telemetry enabled.
+		if err := consciousness.EnsureSettings(); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "fry: warning: could not create settings: %v\n", err)
 		}
 
 		for _, path := range created {

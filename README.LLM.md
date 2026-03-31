@@ -423,7 +423,7 @@ Key flags:
 | `IdentityJSONFile` | `identity/identity.json` | JSON identity (go:embed, produced by Reflection) |
 | `ExperiencesDir` | `.fry/experiences` | Build experience records |
 | `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient, deleted after use) |
-| `SettingsFile` | `.fry/settings.json` | User settings (telemetry opt-in) |
+| `SettingsFile` | `.fry/settings.json` | User settings (telemetry enabled by default; created by `fry init`) |
 | `PendingUploadsDir` | `.fry/experiences/pending` | Cached uploads for retry |
 | `ConsciousnessAPIURL` | `https://fry-consciousness-api.yevgetman.workers.dev` | Consciousness API endpoint |
 | `UploadTimeoutSeconds` | `10` | Background upload timeout |

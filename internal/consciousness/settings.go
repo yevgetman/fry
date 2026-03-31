@@ -42,9 +42,34 @@ func loadSettingsFromDir(baseDir string) Settings {
 	return s
 }
 
-// TelemetryEnabled resolves telemetry opt-in from the priority chain:
+// EnsureSettings creates ~/.fry/settings.json with default settings if it does
+// not already exist. This is called during fry init so that telemetry is enabled
+// from the first build. Existing settings files are never overwritten.
+func EnsureSettings() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home dir: %w", err)
+	}
+	return ensureSettingsInDir(home)
+}
+
+// ensureSettingsInDir creates settings.json under the given base directory if it
+// does not already exist.
+func ensureSettingsInDir(baseDir string) error {
+	path := filepath.Join(baseDir, config.SettingsFile)
+	if _, err := os.Stat(path); err == nil {
+		return nil // already exists
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create settings dir: %w", err)
+	}
+	data := []byte("{\n  \"telemetry\": true\n}\n")
+	return os.WriteFile(path, data, 0o644)
+}
+
+// TelemetryEnabled resolves telemetry from the priority chain:
 //
-//	CLI flag > env var > settings file > default (false)
+//	CLI flag > env var > settings file > default (true)
 //
 // cliFlag is nil when the flag was not provided.
 func TelemetryEnabled(cliFlag *bool, settings Settings) bool {
@@ -70,6 +95,6 @@ func TelemetryEnabled(cliFlag *bool, settings Settings) bool {
 		return *settings.Telemetry
 	}
 
-	// 4. Default: off
-	return false
+	// 4. Default: on
+	return true
 }

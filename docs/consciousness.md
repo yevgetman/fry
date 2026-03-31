@@ -48,12 +48,12 @@ The build ID is generated at collector creation time via `generateBuildID()` (UU
 
 When telemetry is enabled, `UploadInBackground()` sends the finalized `BuildRecord` to the central consciousness API (`POST /ingest`). The upload runs in a background goroutine with a 10-second timeout so it does not delay build exit.
 
-**Telemetry opt-in** is resolved from a priority chain:
+**Telemetry** is resolved from a priority chain:
 
 1. CLI flag: `--telemetry` / `--no-telemetry` (highest priority; `--no-telemetry` wins if both set)
 2. Environment variable: `FRY_TELEMETRY=1` or `FRY_TELEMETRY=0`
-3. Settings file: `~/.fry/settings.json` → `{"telemetry": true}`
-4. Default: **off**
+3. Settings file: `~/.fry/settings.json` → `{"telemetry": true}` or `{"telemetry": false}`
+4. Default: **on** (`fry init` creates `~/.fry/settings.json` with telemetry enabled)
 
 Authentication uses a compiled-in write-only key (same pattern as Sentry DSNs). The key only permits POSTing anonymized experience summaries — no read access to the Memory Store. The API enforces rate limiting (10 uploads per instance per hour) and payload validation.
 
