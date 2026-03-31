@@ -1,12 +1,12 @@
 # Git Strategy
 
-Fry supports multiple **git strategies** for isolating build work. By default, the [triage gate](triage.md) auto-selects the strategy based on task complexity — complex tasks get a worktree, simpler tasks get a branch. You can override this with `--git-strategy`.
+Fry supports multiple **git strategies** for isolating build work. By default, the [triage gate](triage.md) auto-selects the strategy based on task complexity — complex tasks get a worktree, simpler tasks get a branch. On the first build in a directory where Fry has to create the git repository, Fry stays on the primary branch instead of creating a branch or worktree. You can override this with `--git-strategy`.
 
 ## Strategies
 
 | Strategy | Description |
 |---|---|
-| `auto` | Triage auto-selects: COMPLEX -> worktree, SIMPLE/MODERATE -> branch. When no triage runs (epic already exists), defaults to `current` for backwards compatibility. |
+| `auto` | Triage auto-selects: COMPLEX -> worktree, SIMPLE/MODERATE -> branch. Fresh repos created by Fry for the first build use `current`. When no triage runs (epic already exists), defaults to `current` for backwards compatibility. |
 | `current` | Work directly on the current branch. No branch or worktree created. This is the previous default behavior. |
 | `branch` | Create a new git branch for the build. Switches to it before the first sprint. |
 | `worktree` | Create an isolated git worktree under `.fry-worktrees/`. Build runs entirely inside the worktree. |
@@ -25,8 +25,9 @@ The `auto` strategy resolves to a concrete strategy at runtime:
 1. **Triage runs** (no epic exists) -- the triage classifier determines complexity, then:
    - COMPLEX -> `worktree`
    - SIMPLE or MODERATE -> `branch`
-2. **No triage** (epic already exists, or `--continue`/`--resume`) -- defaults to `current` for backwards compatibility.
-3. **Explicit `--git-strategy`** -- always takes precedence over auto-resolution.
+2. **Fresh repo created by Fry for this build** -- resolves to `current` so the first build runs directly on the primary branch.
+3. **No triage** (epic already exists, or `--continue`/`--resume`) -- defaults to `current` for backwards compatibility.
+4. **Explicit `--git-strategy`** -- always takes precedence over auto-resolution.
 
 ## Branch Names
 

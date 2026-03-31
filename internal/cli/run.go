@@ -102,6 +102,7 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		repoExistedBeforeRun := fileExists(filepath.Join(projectPath, ".git"))
 
 		effortLevel, err := epic.ParseEffortLevel(runEffort)
 		if err != nil {
@@ -477,25 +478,13 @@ var runCmd = &cobra.Command{
 
 		// --- Git strategy setup ---
 		if strategySetup == nil && gitStrategy != git.StrategyCurrent {
-			// Resolve "auto" strategy
-			if gitStrategy == git.StrategyAuto {
-				if triageDecision != nil {
-					if triageDecision.GitStrategyOverride != "" {
-						// User explicitly chose a strategy during triage confirmation
-						parsed, gsErr := git.ParseGitStrategy(triageDecision.GitStrategyOverride)
-						if gsErr == nil {
-							gitStrategy = parsed
-						}
-					}
-					if gitStrategy == git.StrategyAuto {
-						gitStrategy = git.ResolveAutoStrategy(string(triageDecision.Complexity))
-					}
-				} else {
-					// No triage decision (epic already existed). Default to current for backwards compat.
-					gitStrategy = git.StrategyCurrent
-					if runBranchName != "" {
-						frlog.Log("WARNING: --branch-name ignored because git strategy resolved to current (epic already exists; use --git-strategy branch to force)")
-					}
+			gitStrategy = resolveRunGitStrategy(gitStrategy, triageDecision, repoExistedBeforeRun)
+			if gitStrategy == git.StrategyCurrent && runBranchName != "" {
+				switch {
+				case !repoExistedBeforeRun:
+					frlog.Log("WARNING: --branch-name ignored because git strategy resolved to current (new repo initialized for first build)")
+				case triageDecision == nil:
+					frlog.Log("WARNING: --branch-name ignored because git strategy resolved to current (epic already exists; use --git-strategy branch to force)")
 				}
 			}
 
@@ -1784,6 +1773,31 @@ var runCmd = &cobra.Command{
 
 		return exitErr
 	},
+}
+
+func resolveRunGitStrategy(requested git.GitStrategy, triageDecision *triage.TriageDecision, repoExistedBeforeRun bool) git.GitStrategy {
+	if requested != git.StrategyAuto {
+		return requested
+	}
+
+	// A repo created for this build has no existing history to isolate, so keep
+	// the first run on the primary branch instead of branching or using a worktree.
+	if !repoExistedBeforeRun {
+		return git.StrategyCurrent
+	}
+
+	if triageDecision != nil {
+		if triageDecision.GitStrategyOverride != "" {
+			parsed, err := git.ParseGitStrategy(triageDecision.GitStrategyOverride)
+			if err == nil {
+				return parsed
+			}
+		}
+		return git.ResolveAutoStrategy(string(triageDecision.Complexity))
+	}
+
+	// No triage decision (epic already existed). Default to current for backwards compat.
+	return git.StrategyCurrent
 }
 
 func init() {

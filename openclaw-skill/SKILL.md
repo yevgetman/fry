@@ -397,7 +397,7 @@ Override with `--engine <name>`, `@engine` in the epic, or `FRY_ENGINE` env var.
 
 | Strategy | Behavior | When to use |
 |----------|----------|-------------|
-| auto | Triage decides: complex → worktree, simple/moderate → branch | Default. Let Fry choose. |
+| auto | Triage decides: complex → worktree, simple/moderate → branch; brand-new repos stay on current branch for the first build | Default. Let Fry choose. |
 | branch | Creates `fry/<slug>` branch | Standard isolation |
 | worktree | Creates isolated checkout at `.fry-worktrees/<slug>/` | Maximum isolation for complex work |
 | current | Works on current branch | When you want changes in-place |

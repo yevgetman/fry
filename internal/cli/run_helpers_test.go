@@ -14,7 +14,9 @@ import (
 	"github.com/yevgetman/fry/internal/color"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/sprint"
+	"github.com/yevgetman/fry/internal/triage"
 )
 
 func TestFormatAffectedSprints(t *testing.T) {
@@ -185,6 +187,63 @@ func TestResolvePrepareEngine_EnvFallback(t *testing.T) {
 	t.Setenv("FRY_ENGINE", "test-engine")
 	got := resolvePrepareEngine("", "")
 	assert.Equal(t, "test-engine", got)
+}
+
+func TestResolveRunGitStrategy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                 string
+		requested            git.GitStrategy
+		triageDecision       *triage.TriageDecision
+		repoExistedBeforeRun bool
+		want                 git.GitStrategy
+	}{
+		{
+			name:                 "explicit strategy is preserved",
+			requested:            git.StrategyWorktree,
+			repoExistedBeforeRun: false,
+			want:                 git.StrategyWorktree,
+		},
+		{
+			name:                 "first build in newly initialized repo stays current",
+			requested:            git.StrategyAuto,
+			repoExistedBeforeRun: false,
+			triageDecision:       &triage.TriageDecision{Complexity: triage.ComplexityComplex},
+			want:                 git.StrategyCurrent,
+		},
+		{
+			name:                 "existing repo uses triage complexity",
+			requested:            git.StrategyAuto,
+			repoExistedBeforeRun: true,
+			triageDecision:       &triage.TriageDecision{Complexity: triage.ComplexityComplex},
+			want:                 git.StrategyWorktree,
+		},
+		{
+			name:                 "triage override wins in existing repo",
+			requested:            git.StrategyAuto,
+			repoExistedBeforeRun: true,
+			triageDecision: &triage.TriageDecision{
+				Complexity:          triage.ComplexityModerate,
+				GitStrategyOverride: "current",
+			},
+			want: git.StrategyCurrent,
+		},
+		{
+			name:                 "no triage defaults current",
+			requested:            git.StrategyAuto,
+			repoExistedBeforeRun: true,
+			want:                 git.StrategyCurrent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := resolveRunGitStrategy(tt.requested, tt.triageDecision, tt.repoExistedBeforeRun)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestTruncateString(t *testing.T) {

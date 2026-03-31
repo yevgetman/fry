@@ -118,7 +118,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
 - **Build archiving** -- on successful full builds, `.fry/` and root-level outputs are auto-archived to `.fry-archive/`; run `fry clean` to archive manually
-- **Git strategy** -- `--git-strategy auto|current|branch|worktree` controls build isolation. Auto mode lets triage decide: complex tasks get an isolated worktree, simpler tasks get a new branch. Use `current` for the previous behavior (work on the current branch). See [Git Strategy](docs/git-strategy.md).
+- **Git strategy** -- `--git-strategy auto|current|branch|worktree` controls build isolation. Auto mode lets triage decide: complex tasks get an isolated worktree, simpler tasks get a new branch, but a first build in a freshly initialized repo stays on the primary branch. Use `current` for the previous behavior (work on the current branch). See [Git Strategy](docs/git-strategy.md).
 - **Git checkpoints** -- automatic commits after each sprint
 - **Rate-limit resilience** -- automatic retry with exponential backoff when engines hit API rate limits (429, overloaded, etc.); see [Engines](docs/engines.md#rate-limit-resilience)
 - **MCP config passthrough** -- `--mcp-config` flag and `@mcp_config` directive pass MCP server configuration to Claude Code for extended agent capabilities (LSP, AST tools, etc.); see [Engines](docs/engines.md#mcp-server-configuration)

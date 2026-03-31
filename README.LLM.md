@@ -281,7 +281,7 @@ media/                ──┘    MODERATE → programmatic epic + auto-sanity-
 Before sprint loop:
   1. Preflight checks (required tools + custom commands)
   2. Git init (if needed)
-  3. Git strategy setup (branch/worktree creation, artifact copy; persisted to .fry/git-strategy.txt)
+  3. Git strategy setup (new repos stay on current branch for the first build; otherwise branch/worktree creation and artifact copy; persisted to .fry/git-strategy.txt)
   4. --continue: collect build state + LLM analysis (auto-detect resume point, reattach to persisted strategy)
 
 For each sprint (startSprint → endSprint):
