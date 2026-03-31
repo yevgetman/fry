@@ -11,6 +11,16 @@ import (
 	"github.com/yevgetman/fry/internal/continuerun"
 )
 
+var verboseMonitorEventTypes = map[string]struct{}{
+	"agent_deploy":       {},
+	"audit_cycle_start":  {},
+	"audit_fix_start":    {},
+	"audit_verify_start": {},
+	"review_start":       {},
+	"observer_wake":      {},
+	"build_audit_start":  {},
+}
+
 // RenderEvent writes a single enriched event line to w.
 func RenderEvent(w io.Writer, evt EnrichedEvent, useColor bool) {
 	ts := evt.Timestamp.Format("15:04:05")
@@ -255,6 +265,8 @@ func RenderBuildEnded(w io.Writer, snap Snapshot, useColor bool) {
 // colorizeEventType applies color based on event type.
 func colorizeEventType(evtType string) string {
 	switch {
+	case isVerboseMonitorEventType(evtType):
+		return color.CyanText(evtType)
 	case strings.HasSuffix(evtType, "_complete") || strings.HasSuffix(evtType, "_done") || evtType == "build_end":
 		return color.GreenText(evtType)
 	case strings.HasSuffix(evtType, "_start"):
@@ -264,6 +276,12 @@ func colorizeEventType(evtType string) string {
 	default:
 		return evtType
 	}
+}
+
+func isVerboseMonitorEventType(evtType string) bool {
+	evtType = strings.TrimPrefix(evtType, "*")
+	_, ok := verboseMonitorEventTypes[evtType]
+	return ok
 }
 
 // colorizeStatus applies color based on sprint status.

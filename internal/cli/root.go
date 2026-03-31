@@ -30,7 +30,7 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&projectDir, "project-dir", ".", "Project directory")
-	rootCmd.PersistentFlags().BoolVar(&frlog.Verbose, "verbose", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().BoolVarP(&frlog.Verbose, "verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 
 	// These flags are intentionally registered on both rootCmd and runCmd.

@@ -198,3 +198,93 @@ func TestMonitor_ConfigDefaults(t *testing.T) {
 	assert.Equal(t, time.Duration(config.MonitorDefaultIntervalSec)*time.Second, mon.cfg.Interval)
 	assert.Equal(t, config.MonitorDefaultLogTailLines, mon.cfg.LogTailLines)
 }
+
+func TestMonitor_SnapshotVerboseIncludesSyntheticLogEvents(t *testing.T) {
+	t.Parallel()
+
+	dir := setupTestProject(t)
+	writeTestLock(t, dir)
+	writeTestEvent(t, dir, "build_start", 0)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, config.BuildPhaseFile),
+		[]byte("sprint\n"), 0o644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, config.BuildLogsDir, "sprint1_audit2_20260331_120000.log"),
+		[]byte("audit\n"), 0o644,
+	))
+
+	mon := New(Config{
+		ProjectDir:  dir,
+		WorktreeDir: dir,
+		Verbose:     true,
+	})
+
+	snap, err := mon.Snapshot()
+	require.NoError(t, err)
+
+	var found bool
+	for _, evt := range snap.Events {
+		if evt.Type == "audit_cycle_start" {
+			found = true
+			assert.True(t, evt.Synthetic)
+			assert.Equal(t, "2", evt.Data["cycle"])
+		}
+	}
+	assert.True(t, found)
+}
+
+func TestMonitor_SnapshotVerboseFiltersHistoricalLogEvents(t *testing.T) {
+	t.Parallel()
+
+	dir := setupTestProject(t)
+	writeTestLock(t, dir)
+
+	oldTime := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+	newTime := oldTime.Add(10 * time.Minute)
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, config.BuildLogsDir, "sprint1_audit1_20260331_100000.log"),
+		[]byte("old audit\n"), 0o644,
+	))
+	require.NoError(t, os.Chtimes(
+		filepath.Join(dir, config.BuildLogsDir, "sprint1_audit1_20260331_100000.log"),
+		oldTime, oldTime,
+	))
+
+	buildStart := agent.BuildEvent{
+		Type:      "build_start",
+		Timestamp: newTime,
+		Data:      map[string]string{"test": "true"},
+	}
+	data, err := json.Marshal(buildStart)
+	require.NoError(t, err)
+	eventsPath := filepath.Join(dir, config.ObserverEventsFile)
+	require.NoError(t, os.WriteFile(eventsPath, append(data, '\n'), 0o644))
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, config.BuildLogsDir, "sprint1_audit2_20260331_101000.log"),
+		[]byte("current audit\n"), 0o644,
+	))
+	require.NoError(t, os.Chtimes(
+		filepath.Join(dir, config.BuildLogsDir, "sprint1_audit2_20260331_101000.log"),
+		newTime, newTime,
+	))
+
+	mon := New(Config{
+		ProjectDir:  dir,
+		WorktreeDir: dir,
+		Verbose:     true,
+	})
+
+	snap, err := mon.Snapshot()
+	require.NoError(t, err)
+
+	var cycles []string
+	for _, evt := range snap.Events {
+		if evt.Type == "audit_cycle_start" {
+			cycles = append(cycles, evt.Data["cycle"])
+		}
+	}
+	assert.Equal(t, []string{"2"}, cycles)
+}

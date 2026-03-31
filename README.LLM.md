@@ -21,7 +21,7 @@ fry/
 ├── cmd/fry/main.go              # Entry point — calls cli.Execute()
 ├── internal/
 │   ├── cli/                     # Cobra commands: root, run, init, prepare, replan, clean, version, status, identity
-│   │   ├── root.go              # Persistent flags (--project-dir, --verbose, --engine, etc.)
+│   │   ├── root.go              # Persistent flags (--project-dir, --verbose/-v, --engine, etc.)
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
 │   │   ├── init.go              # Scaffold project structure; auto-detect and scan existing codebases
 │   │   ├── prepare.go           # Generate .fry/ artifacts from plans
@@ -124,7 +124,8 @@ fry/
 │   │   └── prompt.go            # Wake-up prompt builder, response parser, directive extraction
 │   ├── monitor/
 │   │   ├── snapshot.go          # Snapshot and EnrichedEvent types
-│   │   ├── source.go            # Source interface + 7 implementations (event, phase, status, lock, progress, log, exit)
+│   │   ├── source.go            # Source interface + core polling implementations (event, phase, status, lock, progress, log, exit)
+│   │   ├── logevents.go         # Verbose synthetic events derived from build-log filenames
 │   │   ├── enrichment.go        # Pure event enrichment: elapsed times, sprint fractions, phase transitions
 │   │   ├── stream.go            # Monitor orchestrator: New, Run (continuous), Snapshot (one-shot)
 │   │   └── render.go            # Rendering: stream, dashboard, log tail, waiting/ended messages
@@ -364,7 +365,7 @@ Key flags:
   --no-observer                      # Disable observer metacognitive layer
   --no-review                        # Skip mid-build sprint review
   --no-audit                         # Skip audits
-  --verbose                          # Verbose logging
+  --verbose, -v                      # Verbose logging; monitor also shows granular synthetic events
   --no-color                         # Disable colored output (also: NO_COLOR env, TERM=dumb)
   --sarif                            # Write build-audit.sarif in SARIF 2.1.0 format alongside build-audit.md
   --json-report                      # Write build-report.json with structured sprint results

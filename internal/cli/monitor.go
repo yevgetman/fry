@@ -15,6 +15,7 @@ import (
 	"github.com/yevgetman/fry/internal/color"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/git"
+	frlog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/monitor"
 )
 
@@ -70,6 +71,7 @@ active build log.`,
 			Interval:     interval,
 			Wait:         !monitorNoWait,
 			LogTailLines: config.MonitorDefaultLogTailLines,
+			Verbose:      frlog.Verbose,
 		}
 
 		ctx, cancel := context.WithCancel(cmd.Context())

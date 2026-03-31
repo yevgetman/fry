@@ -371,7 +371,7 @@ sessions_spawn({
 | `--dry-run` | (flag) | off | Preview without executing |
 | `--sarif` | (flag) | off | Write SARIF 2.1.0 audit output |
 | `--show-tokens` | (flag) | off | Print per-sprint token usage |
-| `--verbose` | (flag) | off | Verbose logging |
+| `--verbose`, `-v` | (flag) | off | Verbose logging; on `fry monitor`, include granular synthetic events |
 
 ### Effort levels
 
@@ -544,9 +544,10 @@ it requires no subprocess and updates in real time.
 fry monitor --json --project-dir /path/to/project   # NDJSON snapshots
 fry monitor --dashboard --project-dir /path/to/project  # Refreshing dashboard
 fry monitor --logs --project-dir /path/to/project    # Tail active build log
+fry monitor --verbose --project-dir /path/to/project # Include granular synthetic events
 ```
 
-The monitor composes data from events, build status, sprint progress, build logs, and process liveness. It enriches events with elapsed times, sprint fractions (`2/5`), and phase transitions. The `--json` output emits one snapshot per state change, including `new_events` with enrichment fields.
+The monitor composes data from events, build status, sprint progress, build logs, and process liveness. It enriches events with elapsed times, sprint fractions (`2/5`), and phase transitions. With `--verbose`, it also emits synthetic granular events derived from build-log file creation, including agent deploys, audit/fix/verify session starts, review starts, observer wake-ups, and build-audit launches. The `--json` output emits one snapshot per state change, including `new_events` with enrichment fields.
 
 By default, the monitor waits for a build to start. Use `--no-wait` to exit immediately if no build is active.
 

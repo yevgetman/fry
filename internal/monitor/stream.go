@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/config"
 )
 
@@ -15,6 +16,7 @@ type Config struct {
 	Interval     time.Duration // polling interval (default: 2s)
 	Wait         bool          // wait for build to start before streaming
 	LogTailLines int           // lines to tail from active log (default: 20)
+	Verbose      bool          // include granular synthetic events derived from build logs
 }
 
 // Monitor polls all data sources and emits composed Snapshots.
@@ -29,6 +31,7 @@ type Monitor struct {
 	sprintProg *ProgressSource
 	epicProg   *ProgressSource
 	logSrc     *LogSource
+	logEvents  *LogEventSource
 	exitReason *ExitReasonSource
 
 	// Ordered list of all sources for sequential polling.
@@ -60,6 +63,9 @@ func New(cfg Config) *Monitor {
 		logSrc:     NewLogSource(buildDir, cfg.LogTailLines),
 		exitReason: NewExitReasonSource(buildDir),
 	}
+	if cfg.Verbose {
+		m.logEvents = NewLogEventSource(buildDir)
+	}
 
 	// Poll order: cheapest first, most expensive last.
 	m.sources = []Source{
@@ -71,6 +77,9 @@ func New(cfg Config) *Monitor {
 		m.sprintProg,
 		m.epicProg,
 		m.logSrc,
+	}
+	if m.logEvents != nil {
+		m.sources = append(m.sources, m.logEvents)
 	}
 
 	return m
@@ -201,12 +210,23 @@ func (m *Monitor) pollAll() bool {
 // compose assembles a Snapshot from all source states.
 func (m *Monitor) compose() Snapshot {
 	totalSprints := 0
+	var statusStart time.Time
 	if st := m.status.Status(); st != nil {
 		totalSprints = st.Build.TotalSprints
+		if !st.Build.StartedAt.IsZero() {
+			statusStart = st.Build.StartedAt
+		}
 	}
 
 	allEvents := m.events.Events()
 	newRaw := m.events.NewEvents()
+	if m.logEvents != nil {
+		allEvents = mergeEventsByTimestamp(allEvents, m.logEvents.Events())
+		newRaw = mergeEventsByTimestamp(newRaw, m.logEvents.NewEvents())
+	}
+	buildStart := currentBuildStartTime(allEvents, statusStart)
+	allEvents = filterEventsFrom(allEvents, buildStart)
+	newRaw = filterEventsFrom(newRaw, buildStart)
 
 	var enrichedAll []EnrichedEvent
 	var enrichedNew []EnrichedEvent
@@ -252,4 +272,28 @@ func (m *Monitor) compose() Snapshot {
 		BuildEnded:     buildEnded,
 		ExitReason:     m.exitReason.Reason(),
 	}
+}
+
+func currentBuildStartTime(events []agent.BuildEvent, fallback time.Time) time.Time {
+	for _, evt := range events {
+		if evt.Type == "build_start" {
+			return evt.Timestamp
+		}
+	}
+	return fallback
+}
+
+func filterEventsFrom(events []agent.BuildEvent, cutoff time.Time) []agent.BuildEvent {
+	if cutoff.IsZero() || len(events) == 0 {
+		return events
+	}
+
+	filtered := events[:0]
+	for _, evt := range events {
+		if evt.Timestamp.Before(cutoff) {
+			continue
+		}
+		filtered = append(filtered, evt)
+	}
+	return filtered
 }

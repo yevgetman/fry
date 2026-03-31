@@ -200,7 +200,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry reflect` | Trigger identity reflection from accumulated memories |
 | `fry audit` | Run a standalone AI-powered build-level audit on any codebase |
 | `fry status` | Show current build state, or archived/worktree build history if no active build |
-| `fry monitor` | Real-time build monitoring — enriched event stream, dashboard, or log tail |
+| `fry monitor` | Real-time build monitoring — enriched event stream, verbose granular mode, dashboard, or log tail |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
 | `fry destroy` | Remove all fry artifacts as if fry was never run |
 | `fry version` | Print fry version |

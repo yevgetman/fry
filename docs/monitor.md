@@ -46,6 +46,25 @@ Enrichments added to each event:
 - **Sprint fraction**: `1/3` — current sprint out of total
 - **Phase change**: `[triage -> sprint]` — when the build transitions between phases
 
+### Stream (`--verbose`)
+
+Adds granular synthetic events derived from build-log session files. This surfaces internal activity that is not persisted in `events.jsonl`, such as sprint agent deploys, audit/fix/verify session starts, review starts, observer wake-ups, and build-audit launches.
+
+```bash
+fry monitor --verbose
+fry monitor -v
+```
+
+Output:
+```
+[10:05:19]  +5m14s   *agent_deploy        2/3  iteration=1 log=sprint2_iter1_20260331_100519.log session=sprint
+[10:25:02]  +25m2s   *audit_cycle_start   2/3  cycle=1 log=sprint2_audit1_20260331_102502.log  [sprint -> audit]
+[10:25:18]  +25m18s  *audit_fix_start     2/3  cycle=1 fix=1 log=sprint2_auditfix_1_1_20260331_102518.log
+[10:31:44]  +31m44s  *observer_wake            log=observer_after_sprint_20260331_103144.log wake=after_sprint
+```
+
+Synthetic verbose events are prefixed with `*` in the stream renderer.
+
 ### Dashboard
 
 Refreshing status overview that updates in-place (ANSI-aware on TTY; falls back to separator-delimited blocks on non-TTY).
@@ -93,6 +112,7 @@ fry monitor --json | jq '.new_events[]'
 | `--json` | `false` | NDJSON snapshot output |
 | `--no-wait` | `false` | Exit immediately if no active build |
 | `--interval` | `2s` | Polling interval (e.g. `1s`, `500ms`) |
+| `--verbose`, `-v` | `false` | Include synthetic granular events derived from build-log file creation |
 
 ## Data Sources
 
@@ -107,6 +127,7 @@ The monitor polls these artifacts with change detection to minimize syscalls:
 | Sprint progress | `.fry/sprint-progress.txt` | File size |
 | Epic progress | `.fry/epic-progress.txt` | File size |
 | Build logs | `.fry/build-logs/*.log` | Directory scan + size |
+| Verbose log events | `.fry/build-logs/*.log` | New-file detection + filename parsing |
 | Exit reason | `.fry/build-exit-reason.txt` | File existence |
 
 **Polling cost when idle**: ~9 syscalls per tick (mostly `Stat` calls). After 10 unchanged ticks the interval slows from 2s to 5s automatically.
@@ -131,7 +152,8 @@ For builds using the worktree git strategy, the monitor automatically resolves t
 The monitoring logic lives in `internal/monitor/` as a composable library package:
 
 - **`snapshot.go`** — `Snapshot` and `EnrichedEvent` types
-- **`source.go`** — `Source` interface with 7 implementations (one per artifact)
+- **`source.go`** — `Source` interface with the core artifact pollers
+- **`logevents.go`** — Verbose synthetic events derived from build-log filenames
 - **`enrichment.go`** — Pure functions for event enrichment
 - **`stream.go`** — `Monitor` orchestrator with `Run()` (continuous) and `Snapshot()` (one-shot)
 - **`render.go`** — Rendering functions for each view mode

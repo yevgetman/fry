@@ -472,6 +472,7 @@ fry monitor [project-dir] [flags]
 | `--json` | Output snapshots as NDJSON (one JSON object per line) |
 | `--no-wait` | Exit immediately if no active build (default: wait for build to start) |
 | `--interval <duration>` | Polling interval (e.g. `1s`, `500ms`; default: `2s`) |
+| `--verbose`, `-v` | Include granular synthetic events such as agent deploys, audit cycles, review starts, and observer wake-ups |
 
 ### Examples
 
@@ -481,6 +482,7 @@ fry monitor /path/to/project                # Monitor a build in another directo
 fry monitor --dashboard                     # Refreshing dashboard view
 fry monitor --logs                          # Tail the active build log
 fry monitor --json                          # Machine-readable NDJSON output
+fry monitor --verbose                      # Include granular log-derived events
 fry monitor --no-wait                       # Exit if no active build
 fry monitor --interval 500ms                # Faster polling
 ```
@@ -492,6 +494,15 @@ fry monitor --interval 500ms                # Faster polling
 [10:00:15]  +10s     sprint_start      1/3  name=Setup
 [10:05:15]  +5m10s   sprint_complete   1/3  status=PASS duration=5m
 [10:05:18]  +5m13s   sprint_start      2/3  name=API  [triage -> sprint]
+```
+
+Example output (`--verbose`):
+
+```
+[10:05:19]  +5m14s   *agent_deploy        2/3  iteration=1 log=sprint2_iter1_20260331_100519.log session=sprint
+[10:25:02]  +25m2s   *audit_cycle_start   2/3  cycle=1 log=sprint2_audit1_20260331_102502.log  [sprint -> audit]
+[10:25:18]  +25m18s  *audit_fix_start     2/3  cycle=1 fix=1 log=sprint2_auditfix_1_1_20260331_102518.log
+[10:31:44]  +31m44s  *observer_wake            log=observer_after_sprint_20260331_103144.log wake=after_sprint
 ```
 
 ---

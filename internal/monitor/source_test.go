@@ -281,6 +281,55 @@ func TestExitReasonSource_DetectsFile(t *testing.T) {
 	assert.Equal(t, "After sprint 2: audit failed", src.Reason())
 }
 
+func TestLogEventSource_EmitsSyntheticVerboseEvents(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	logsDir := filepath.Join(dir, config.BuildLogsDir)
+	require.NoError(t, os.MkdirAll(logsDir, 0o755))
+
+	src := NewLogEventSource(dir)
+
+	logNames := []string{
+		"sprint2_iter3_20260331_120000.log",
+		"sprint2_audit4_20260331_120010.log",
+		"sprint2_auditfix_4_1_20260331_120020.log",
+		"sprint2_auditverify_4_1_20260331_120030.log",
+		"sprint2_review_20260331_120040.log",
+		"observer_after_build_audit_20260331_120050.log",
+		"build_audit_20260331_120100.log",
+	}
+	for _, name := range logNames {
+		require.NoError(t, os.WriteFile(filepath.Join(logsDir, name), []byte("test\n"), 0o644))
+	}
+
+	changed, err := src.Poll()
+	require.NoError(t, err)
+	assert.True(t, changed)
+	assert.Len(t, src.NewEvents(), len(logNames))
+
+	eventsByType := make(map[string]agent.BuildEvent, len(src.NewEvents()))
+	for _, evt := range src.NewEvents() {
+		eventsByType[evt.Type] = evt
+	}
+
+	require.Contains(t, eventsByType, "agent_deploy")
+	assert.Equal(t, 2, eventsByType["agent_deploy"].Sprint)
+	assert.Equal(t, "3", eventsByType["agent_deploy"].Data["iteration"])
+
+	require.Contains(t, eventsByType, "audit_cycle_start")
+	assert.Equal(t, "4", eventsByType["audit_cycle_start"].Data["cycle"])
+
+	require.Contains(t, eventsByType, "audit_fix_start")
+	assert.Equal(t, "1", eventsByType["audit_fix_start"].Data["fix"])
+
+	require.Contains(t, eventsByType, "audit_verify_start")
+	require.Contains(t, eventsByType, "review_start")
+	require.Contains(t, eventsByType, "observer_wake")
+	assert.Equal(t, "after_build_audit", eventsByType["observer_wake"].Data["wake"])
+	require.Contains(t, eventsByType, "build_audit_start")
+}
+
 func TestLastNLines(t *testing.T) {
 	t.Parallel()
 

@@ -17,8 +17,14 @@ var phaseMap = map[string]string{
 	"sprint_start":       "sprint",
 	"sprint_complete":    "sprint",
 	"alignment_complete": "sprint",
+	"agent_deploy":       "sprint",
+	"audit_cycle_start":  "audit",
+	"audit_fix_start":    "audit",
+	"audit_verify_start": "audit",
 	"audit_complete":     "audit",
+	"review_start":       "review",
 	"review_complete":    "review",
+	"build_audit_start":  "audit",
 	"build_audit_done":   "audit",
 	"build_end":          "complete",
 }
@@ -79,6 +85,9 @@ func EnrichEvents(events []agent.BuildEvent, totalSprints int) []EnrichedEvent {
 
 		// Terminal event.
 		e.IsTerminal = evt.Type == "build_end"
+		if _, ok := verboseMonitorEventTypes[evt.Type]; ok {
+			e.Synthetic = true
+		}
 
 		enriched[i] = e
 	}
