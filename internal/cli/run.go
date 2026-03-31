@@ -544,6 +544,10 @@ var runCmd = &cobra.Command{
 		epicName := ep.Name // guarded by mu; updated after replan
 		var buildStatus *agent.BuildStatus
 
+		// Clear any stale exit reason from a prior failed run before this build
+		// starts so monitors and status readers see a clean active state.
+		writeExitReason(projectPath, nil, 0)
+
 		// Persist exit reason so `fry status` can show why the build stopped.
 		defer func() {
 			mu.Lock()
@@ -644,7 +648,7 @@ var runCmd = &cobra.Command{
 				StartedAt:    buildStart,
 				GitBranch:    gitBranchFromHead(projectPath),
 			},
-			Sprints: make([]agent.SprintStatus, 0, endSprint-startSprint+1),
+			Sprints: initialSprintStatuses(projectPath, ep, startSprint, endSprint, runResume || runContinue || runSimpleContinue || auditOnlyResume),
 		}
 		writeBuildStatus(projectPath, buildStatus)
 
@@ -2305,6 +2309,38 @@ func markBuildFailed(projectPath, originalProjectPath string, buildStatus *agent
 	buildStatus.Build.Status = "failed"
 	buildStatus.Build.Phase = "failed"
 	writeBuildStatus(projectPath, buildStatus)
+}
+
+func initialSprintStatuses(projectDir string, ep *epic.Epic, startSprint, endSprint int, restoreHistory bool) []agent.SprintStatus {
+	if !restoreHistory || startSprint <= 1 {
+		return make([]agent.SprintStatus, 0, endSprint)
+	}
+
+	completedBySprint := make(map[int]continuerun.CompletedSprint)
+	if data, err := os.ReadFile(filepath.Join(projectDir, config.EpicProgressFile)); err == nil {
+		for _, cs := range continuerun.ParseCompletedSprints(string(data)) {
+			completedBySprint[cs.Number] = cs
+		}
+	}
+
+	statuses := make([]agent.SprintStatus, 0, endSprint)
+	for i := 1; i < startSprint && i <= len(ep.Sprints); i++ {
+		sp := agent.SprintStatus{
+			Number: i,
+			Name:   ep.Sprints[i-1].Name,
+			Status: "PASS",
+		}
+		if cs, ok := completedBySprint[i]; ok {
+			if cs.Name != "" {
+				sp.Name = cs.Name
+			}
+			if cs.Status != "" {
+				sp.Status = cs.Status
+			}
+		}
+		statuses = append(statuses, sp)
+	}
+	return statuses
 }
 
 // updateBuildStatusSprint updates the build status with a completed sprint's results.

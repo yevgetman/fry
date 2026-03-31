@@ -228,7 +228,9 @@ func (m *Monitor) compose() Snapshot {
 			break
 		}
 	}
-	if !buildEnded && m.exitReason.Exists() {
+	// A stale exit-reason file from a prior run should not terminate an
+	// active restarted build.
+	if !buildEnded && !m.lock.Active() && m.exitReason.Exists() {
 		buildEnded = true
 	}
 

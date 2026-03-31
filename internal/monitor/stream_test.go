@@ -82,6 +82,30 @@ func TestMonitor_Snapshot(t *testing.T) {
 	assert.Equal(t, "sprint_start", snap.Events[1].Type)
 }
 
+func TestMonitor_SnapshotIgnoresStaleExitReasonWhileBuildActive(t *testing.T) {
+	t.Parallel()
+	dir := setupTestProject(t)
+
+	writeTestLock(t, dir)
+	writeTestEvent(t, dir, "build_start", 0)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, config.BuildExitReasonFile),
+		[]byte("After sprint 4: prior failure\n"), 0o644,
+	))
+
+	mon := New(Config{
+		ProjectDir:  dir,
+		WorktreeDir: dir,
+	})
+
+	snap, err := mon.Snapshot()
+	require.NoError(t, err)
+
+	assert.True(t, snap.BuildActive)
+	assert.False(t, snap.BuildEnded)
+	assert.Equal(t, "After sprint 4: prior failure", snap.ExitReason)
+}
+
 func TestMonitor_RunDetectsBuildEnd(t *testing.T) {
 	t.Parallel()
 	dir := setupTestProject(t)

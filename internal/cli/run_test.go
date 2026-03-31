@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/githubissue"
 	"github.com/yevgetman/fry/internal/sprint"
 	"github.com/yevgetman/fry/internal/verify"
@@ -161,6 +163,70 @@ func TestMarkBuildFailed(t *testing.T) {
 	originalPhaseData, err := os.ReadFile(filepath.Join(originalDir, config.BuildPhaseFile))
 	require.NoError(t, err)
 	assert.Equal(t, "failed\n", string(originalPhaseData))
+}
+
+func TestInitialSprintStatuses(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fresh build has no prefilled sprints", func(t *testing.T) {
+		t.Parallel()
+
+		ep := &epic.Epic{
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "One"},
+				{Number: 2, Name: "Two"},
+			},
+		}
+
+		got := initialSprintStatuses(t.TempDir(), ep, 1, 2, false)
+		assert.Empty(t, got)
+	})
+
+	t.Run("manual partial run does not invent prior history", func(t *testing.T) {
+		t.Parallel()
+
+		ep := &epic.Epic{
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "One"},
+				{Number: 2, Name: "Two"},
+				{Number: 3, Name: "Three"},
+				{Number: 4, Name: "Four"},
+			},
+		}
+
+		got := initialSprintStatuses(t.TempDir(), ep, 4, 4, false)
+		assert.Empty(t, got)
+	})
+
+	t.Run("resume backfills prior completed sprints", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(dir, config.EpicProgressFile),
+			[]byte(strings.Join([]string{
+				"## Sprint 1: Setup — PASS",
+				"## Sprint 2: Auth — PASS (aligned)",
+			}, "\n")),
+			0o644,
+		))
+
+		ep := &epic.Epic{
+			Sprints: []epic.Sprint{
+				{Number: 1, Name: "One"},
+				{Number: 2, Name: "Two"},
+				{Number: 3, Name: "Three"},
+				{Number: 4, Name: "Four"},
+			},
+		}
+
+		got := initialSprintStatuses(dir, ep, 4, 4, true)
+		require.Len(t, got, 3)
+		assert.Equal(t, agent.SprintStatus{Number: 1, Name: "Setup", Status: "PASS"}, got[0])
+		assert.Equal(t, agent.SprintStatus{Number: 2, Name: "Auth", Status: "PASS (aligned)"}, got[1])
+		assert.Equal(t, agent.SprintStatus{Number: 3, Name: "Three", Status: "PASS"}, got[2])
+	})
 }
 
 // ---------------------------------------------------------------------------

@@ -50,7 +50,7 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic, al
 			state.HighestCompleted = cs.Number
 		}
 	}
-	state.FailedSprints = parseFailedSprints(epicData)
+	state.FailedSprints = ParseFailedSprints(epicData)
 
 	// Collect active state for all incomplete sprints that have evidence on disk
 	knownSet := make(map[int]bool, len(state.CompletedSprints)+len(state.FailedSprints))
@@ -150,8 +150,8 @@ func ParseCompletedSprints(content string) []CompletedSprint {
 	return completed
 }
 
-// parseFailedSprints extracts failed sprint entries from epic-progress content.
-func parseFailedSprints(content string) []FailedSprint {
+// ParseFailedSprints extracts failed sprint entries from epic-progress content.
+func ParseFailedSprints(content string) []FailedSprint {
 	matches := failedSprintRe.FindAllStringSubmatch(content, -1)
 	var failed []FailedSprint
 	for _, m := range matches {
@@ -384,4 +384,3 @@ func ReadBuildMode(projectDir string) string {
 	}
 	return strings.TrimSpace(string(data))
 }
-

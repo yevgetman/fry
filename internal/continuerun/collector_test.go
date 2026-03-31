@@ -111,7 +111,7 @@ func TestParseFailedSprints(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := parseFailedSprints(tt.content)
+			result := ParseFailedSprints(tt.content)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

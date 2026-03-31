@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -124,6 +125,96 @@ func TestRenderDashboard_Basic(t *testing.T) {
 	assert.Contains(t, output, "API")
 	assert.Contains(t, output, "running")
 	assert.Contains(t, output, "Sprint 3/3")
+	assert.Contains(t, output, "pending")
+}
+
+func TestRenderDashboard_ResumeBuildBackfillsCompletedSprints(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	finished := now.Add(-2 * time.Minute)
+
+	snap := Snapshot{
+		Timestamp:   now,
+		ProjectDir:  "/tmp/test",
+		BuildActive: true,
+		PID:         12345,
+		Phase:       "sprint",
+		BuildStatus: &agent.BuildStatus{
+			Version: 1,
+			Build: agent.BuildInfo{
+				Epic:         "MyFeature",
+				Engine:       "claude",
+				Mode:         "software",
+				Effort:       "high",
+				TotalSprints: 5,
+			},
+			Sprints: []agent.SprintStatus{
+				{Number: 5, Name: "Booking", Status: "PASS", FinishedAt: &finished, DurationSec: 1289},
+			},
+		},
+		EpicProgress: strings.Join([]string{
+			"## Sprint 1: Setup — PASS",
+			"## Sprint 2: Auth — PASS",
+			"## Sprint 3: Calendar — PASS",
+			"## Sprint 4: Availability — PASS",
+		}, "\n"),
+	}
+
+	var buf bytes.Buffer
+	RenderDashboard(&buf, snap, false, false)
+	output := buf.String()
+
+	assert.Contains(t, output, "Sprint 1/5: Setup")
+	assert.Contains(t, output, "Sprint 2/5: Auth")
+	assert.Contains(t, output, "Sprint 3/5: Calendar")
+	assert.Contains(t, output, "Sprint 4/5: Availability")
+	assert.Contains(t, output, "Sprint 5/5: Booking")
+	assert.NotContains(t, output, "Sprint 2/5 ....................................... pending")
+	assert.NotContains(t, output, "Sprint 5/5 ...................................... pending")
+}
+
+func TestRenderDashboard_ResumeBuildBackfillsFailedSprints(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+
+	snap := Snapshot{
+		Timestamp:   now,
+		ProjectDir:  "/tmp/test",
+		BuildActive: true,
+		PID:         12345,
+		Phase:       "sprint",
+		BuildStatus: &agent.BuildStatus{
+			Version: 1,
+			Build: agent.BuildInfo{
+				Epic:         "MyFeature",
+				Engine:       "claude",
+				Mode:         "software",
+				Effort:       "high",
+				TotalSprints: 4,
+			},
+			Sprints: []agent.SprintStatus{
+				{Number: 3, Name: "Repair", Status: "running", StartedAt: &now},
+			},
+		},
+		EpicProgress: strings.Join([]string{
+			"## Sprint 1: Setup — PASS",
+			"## Sprint 2: Auth — FAIL (audit: HIGH)",
+		}, "\n"),
+	}
+
+	var buf bytes.Buffer
+	RenderDashboard(&buf, snap, false, false)
+	output := buf.String()
+
+	assert.Contains(t, output, "Sprint 1/4: Setup")
+	assert.Contains(t, output, "PASS")
+	assert.Contains(t, output, "Sprint 2/4: Auth")
+	assert.Contains(t, output, "FAIL (audit: HIGH)")
+	assert.Contains(t, output, "Sprint 3/4: Repair")
+	assert.Contains(t, output, "running")
+	assert.Contains(t, output, "Sprint 4/4")
 	assert.Contains(t, output, "pending")
 }
 

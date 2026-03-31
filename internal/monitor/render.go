@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/color"
+	"github.com/yevgetman/fry/internal/continuerun"
 )
 
 // RenderEvent writes a single enriched event line to w.
@@ -82,29 +84,76 @@ func RenderDashboard(w io.Writer, snap Snapshot, useColor bool, clearScreen bool
 		fmt.Fprintf(w, "Phase: %-28s %s\n", phase, branchStr)
 		fmt.Fprintln(w, sep)
 
-		// Sprint table.
+		// Sprint table. Build status may contain only the current run's sprints on
+		// resumed builds, so render by sprint number and backfill completed rows
+		// from epic-progress where available.
+		statusBySprint := make(map[int]agent.SprintStatus, len(st.Sprints))
 		for _, sp := range st.Sprints {
-			statusStr := sp.Status
-			if useColor {
-				statusStr = colorizeStatus(sp.Status)
-			}
-			durStr := ""
-			if sp.DurationSec > 0 {
-				durStr = formatDuration(time.Duration(sp.DurationSec * float64(time.Second)))
-			} else if sp.Status == "running" && sp.StartedAt != nil {
-				durStr = "+" + formatDuration(time.Since(*sp.StartedAt))
-			}
-
-			label := fmt.Sprintf("Sprint %d/%d: %s", sp.Number, st.Build.TotalSprints, sp.Name)
-			dots := 50 - len(label)
-			if dots < 2 {
-				dots = 2
-			}
-			fmt.Fprintf(w, "%s %s %s  %s\n", label, strings.Repeat(".", dots), statusStr, durStr)
+			statusBySprint[sp.Number] = sp
+		}
+		completedBySprint := make(map[int]continuerun.CompletedSprint)
+		for _, cs := range continuerun.ParseCompletedSprints(snap.EpicProgress) {
+			completedBySprint[cs.Number] = cs
+		}
+		failedBySprint := make(map[int]continuerun.FailedSprint)
+		for _, fs := range continuerun.ParseFailedSprints(snap.EpicProgress) {
+			failedBySprint[fs.Number] = fs
 		}
 
-		// Show pending sprints.
-		for i := len(st.Sprints) + 1; i <= st.Build.TotalSprints; i++ {
+		for i := 1; i <= st.Build.TotalSprints; i++ {
+			if sp, ok := statusBySprint[i]; ok {
+				statusStr := sp.Status
+				if useColor {
+					statusStr = colorizeStatus(sp.Status)
+				}
+				durStr := ""
+				if sp.DurationSec > 0 {
+					durStr = formatDuration(time.Duration(sp.DurationSec * float64(time.Second)))
+				} else if sp.Status == "running" && sp.StartedAt != nil {
+					durStr = "+" + formatDuration(time.Since(*sp.StartedAt))
+				}
+
+				label := fmt.Sprintf("Sprint %d/%d: %s", sp.Number, st.Build.TotalSprints, sp.Name)
+				dots := 50 - len(label)
+				if dots < 2 {
+					dots = 2
+				}
+				fmt.Fprintf(w, "%s %s %s", label, strings.Repeat(".", dots), statusStr)
+				if durStr != "" {
+					fmt.Fprintf(w, "  %s", durStr)
+				}
+				fmt.Fprintln(w)
+				continue
+			}
+
+			if cs, ok := completedBySprint[i]; ok {
+				statusStr := cs.Status
+				if useColor {
+					statusStr = colorizeStatus(cs.Status)
+				}
+				label := fmt.Sprintf("Sprint %d/%d: %s", cs.Number, st.Build.TotalSprints, cs.Name)
+				dots := 50 - len(label)
+				if dots < 2 {
+					dots = 2
+				}
+				fmt.Fprintf(w, "%s %s %s\n", label, strings.Repeat(".", dots), statusStr)
+				continue
+			}
+
+			if fs, ok := failedBySprint[i]; ok {
+				statusStr := fs.Status
+				if useColor {
+					statusStr = colorizeStatus(fs.Status)
+				}
+				label := fmt.Sprintf("Sprint %d/%d: %s", fs.Number, st.Build.TotalSprints, fs.Name)
+				dots := 50 - len(label)
+				if dots < 2 {
+					dots = 2
+				}
+				fmt.Fprintf(w, "%s %s %s\n", label, strings.Repeat(".", dots), statusStr)
+				continue
+			}
+
 			label := fmt.Sprintf("Sprint %d/%d", i, st.Build.TotalSprints)
 			dots := 50 - len(label)
 			if dots < 2 {
