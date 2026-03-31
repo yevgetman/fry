@@ -28,6 +28,7 @@ func TriggerReflection(ctx context.Context, apiURL, apiToken string) (*Reflectio
 		return nil, fmt.Errorf("trigger reflection: create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

@@ -15,6 +15,10 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 )
 
+// userAgent identifies Fry to Cloudflare so requests are not blocked by
+// bot protection (error 1010). Go's default "Go-http-client/1.1" gets flagged.
+const userAgent = "fry/" + config.Version
+
 // pendingMaxAge is the maximum age for pending upload files before they are
 // pruned. Files older than this are removed without upload attempt.
 const pendingMaxAge = 7 * 24 * time.Hour
@@ -68,6 +72,7 @@ func UploadExperience(ctx context.Context, apiURL, apiToken string, record Build
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

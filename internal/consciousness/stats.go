@@ -47,6 +47,7 @@ func FetchPipelineStats(ctx context.Context, apiURL string) (*PipelineStats, err
 	if err != nil {
 		return nil, fmt.Errorf("fetch pipeline stats: create request: %w", err)
 	}
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
