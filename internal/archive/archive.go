@@ -13,8 +13,8 @@ import (
 // persistentArtifacts are .fry/ paths that survive fry clean.
 // These are project-level infrastructure, not build artifacts.
 var persistentArtifacts = []string{
-	config.CodebaseFile,       // .fry/codebase.md
-	config.FileIndexFile,      // .fry/file-index.txt
+	config.CodebaseFile,        // .fry/codebase.md
+	config.FileIndexFile,       // .fry/file-index.txt
 	config.CodebaseMemoriesDir, // .fry/codebase-memories/
 }
 
@@ -67,7 +67,9 @@ func Archive(projectDir string) (string, error) {
 
 	// Restore persistent artifacts into fresh .fry/.
 	if len(preserved) > 0 {
-		restoreArtifacts(projectDir, tempDir, preserved)
+		if err := restoreArtifacts(projectDir, tempDir, preserved); err != nil {
+			return "", fmt.Errorf("archive: restore preserved artifacts: %w", err)
+		}
 	}
 
 	return destPath, nil
@@ -99,9 +101,11 @@ func preserveArtifacts(projectDir, tempDir string) []string {
 }
 
 // restoreArtifacts copies preserved artifacts back into .fry/.
-func restoreArtifacts(projectDir, tempDir string, preserved []string) {
+func restoreArtifacts(projectDir, tempDir string, preserved []string) error {
 	fryPath := filepath.Join(projectDir, config.FryDir)
-	_ = os.MkdirAll(fryPath, 0o755)
+	if err := os.MkdirAll(fryPath, 0o755); err != nil {
+		return err
+	}
 
 	for _, relPath := range preserved {
 		src := filepath.Join(tempDir, relPath)
@@ -109,17 +113,25 @@ func restoreArtifacts(projectDir, tempDir string, preserved []string) {
 
 		info, err := os.Stat(src)
 		if err != nil {
-			continue
+			return err
 		}
 
-		_ = os.MkdirAll(filepath.Dir(dst), 0o755)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
 
 		if info.IsDir() {
-			_ = copyDir(src, dst)
+			if err := copyDir(src, dst); err != nil {
+				return err
+			}
 		} else {
-			_ = copyFile(src, dst)
+			if err := copyFile(src, dst); err != nil {
+				return err
+			}
 		}
 	}
+
+	return nil
 }
 
 func copyFile(src, dst string) error {

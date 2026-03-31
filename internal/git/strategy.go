@@ -13,7 +13,6 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 )
 
-
 // StrategyOpts configures SetupStrategy.
 type StrategyOpts struct {
 	ProjectDir string
@@ -268,7 +267,9 @@ func MergeAndCleanupWorktreeWith(ctx context.Context, setup *StrategySetup, ex E
 
 	// 3. Copy key .fry/ artifacts from worktree to original dir before removal.
 	// These artifacts are gitignored and would be lost when the worktree is deleted.
-	copyWorktreeArtifacts(setup.WorkDir, origDir)
+	if err := copyWorktreeArtifacts(setup.WorkDir, origDir); err != nil {
+		return fmt.Errorf("copy worktree artifacts: %w", err)
+	}
 
 	// 4. Remove the worktree (--force to handle untracked .fry files)
 	if err := runGit(ctx, origDir, "worktree", "remove", "--force", setup.WorkDir); err != nil {
@@ -307,20 +308,26 @@ var worktreeArtifacts = []string{
 
 // copyWorktreeArtifacts copies key .fry/ artifacts from the worktree to the
 // original project dir so that fry status and fry run --continue work after
-// the worktree is removed. Best-effort: errors are silently ignored.
-func copyWorktreeArtifacts(worktreeDir, origDir string) {
+// the worktree is removed.
+func copyWorktreeArtifacts(worktreeDir, origDir string) error {
 	for _, relPath := range worktreeArtifacts {
 		src := filepath.Join(worktreeDir, relPath)
 		data, err := os.ReadFile(src)
 		if err != nil {
-			continue // file may not exist in the worktree
+			if os.IsNotExist(err) {
+				continue // file may not exist in the worktree
+			}
+			return fmt.Errorf("read %s: %w", relPath, err)
 		}
 		dst := filepath.Join(origDir, relPath)
 		if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-			continue
+			return fmt.Errorf("create directory for %s: %w", relPath, mkErr)
 		}
-		_ = os.WriteFile(dst, data, 0o644)
+		if err := os.WriteFile(dst, data, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", relPath, err)
+		}
 	}
+	return nil
 }
 
 // runGit is a thin helper for one-off git commands not in the Executor interface.

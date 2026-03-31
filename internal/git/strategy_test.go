@@ -704,6 +704,21 @@ func TestMergeAndCleanupWorktree_NonWorktree(t *testing.T) {
 	assert.NoError(t, MergeAndCleanupWorktree(context.Background(), setup))
 }
 
+func TestCopyWorktreeArtifactsReturnsErrorOnWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	worktreeDir := t.TempDir()
+	origDir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(worktreeDir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(worktreeDir, config.BuildStatusFile), []byte(`{"version":1}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(origDir, config.FryDir), []byte("blocked"), 0o644))
+
+	err := copyWorktreeArtifacts(worktreeDir, origDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), config.BuildStatusFile)
+}
+
 func TestMarkCleanedUp(t *testing.T) {
 	t.Parallel()
 

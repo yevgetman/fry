@@ -165,3 +165,18 @@ func TestArchiveMultipleBuilds(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "build 2", string(data2))
 }
+
+func TestRestoreArtifactsReturnsErrorWhenFryPathBlocked(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, config.FryDir), []byte("blocked"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tempDir, filepath.Dir(config.CodebaseFile)), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, config.CodebaseFile), []byte("codebase"), 0o644))
+
+	err := restoreArtifacts(projectDir, tempDir, []string{config.CodebaseFile})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), config.FryDir)
+}
