@@ -31,7 +31,7 @@ type BuildAuditOpts struct {
 	Results          []sprint.SprintResult
 	Verbose          bool
 	Model            string
-	DeferredFailures string    // content of .fry/deferred-failures.md
+	DeferredFailures string // content of .fry/deferred-failures.md
 	Mode             string
 	Stdout           io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
@@ -42,6 +42,12 @@ type BuildAuditOpts struct {
 // The returned AuditResult contains structured findings parsed from the agent's
 // report, enabling downstream consumers (e.g., build summary) to include audit results.
 func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if opts.Epic == nil {
 		return nil, fmt.Errorf("run build audit: epic is required")
 	}
@@ -61,6 +67,7 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
 		return nil, fmt.Errorf("run build audit: write prompt: %w", err)
 	}
+	defer func() { _ = os.Remove(promptPath) }()
 
 	// Create log file
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
@@ -74,7 +81,7 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 	if err != nil {
 		return nil, fmt.Errorf("run build audit: create log: %w", err)
 	}
-	defer logFile.Close()
+	defer func() { _ = logFile.Close() }()
 
 	runOpts := engine.RunOpts{
 		Model:   opts.Model,
@@ -95,24 +102,30 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 	}
 
 	_, _, runErr := opts.Engine.Run(ctx, config.BuildAuditInvocationPrompt, runOpts)
-	if runErr != nil && ctx.Err() == nil {
-		frylog.Log("  BUILD AUDIT: agent exited with error (non-fatal): %v", runErr)
-	} else if runErr != nil {
-		return nil, fmt.Errorf("run build audit: %w", runErr)
+	if runErr != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("run build audit: agent run: %w", runErr)
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	// Parse audit results from the report file
 	auditPath := filepath.Join(opts.ProjectDir, config.BuildAuditFile)
 	content, readErr := os.ReadFile(auditPath)
 	if readErr != nil {
-		frylog.Log("  BUILD AUDIT: WARNING — agent did not produce %s", config.BuildAuditFile)
-		return &AuditResult{Passed: true, Iterations: 1}, nil
+		if os.IsNotExist(readErr) {
+			return nil, fmt.Errorf("run build audit: build audit session did not write %s", config.BuildAuditFile)
+		}
+		return nil, fmt.Errorf("run build audit: read report: %w", readErr)
+	}
+	if strings.TrimSpace(string(content)) == "" {
+		return nil, fmt.Errorf("run build audit: build audit session wrote an empty %s", config.BuildAuditFile)
 	}
 
 	frylog.Log("  BUILD AUDIT: report written to %s", config.BuildAuditFile)
-
-	// Cleanup prompt file
-	_ = os.Remove(promptPath)
 
 	// Parse structured results from the report
 	maxSev := parseAuditSeverity(string(content))
@@ -133,7 +146,11 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	var b strings.Builder
 
 	b.WriteString("# FINAL BUILD AUDIT\n\n")
-	b.WriteString(fmt.Sprintf("Holistic post-build audit for epic: **%s**\n\n", opts.Epic.Name))
+	fmt.Fprintf(&b, "Holistic post-build audit for epic: **%s**\n\n", opts.Epic.Name)
+	b.WriteString("Use the current repository state as primary evidence.\n")
+	b.WriteString("Treat generated progress artifacts as supporting context, not proof.\n\n")
+
+	appendCodebaseContext(&b, opts.ProjectDir)
 
 	// --- Project context from selected artifacts ---
 
@@ -191,8 +208,8 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	b.WriteString("| Sprint | Name | Status | Duration |\n")
 	b.WriteString("|--------|------|--------|----------|\n")
 	for _, r := range opts.Results {
-		b.WriteString(fmt.Sprintf("| %d | %s | %s | %s |\n",
-			r.Number, r.Name, r.Status, r.Duration.Round(time.Second)))
+		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
+			r.Number, r.Name, r.Status, r.Duration.Round(time.Second))
 	}
 	b.WriteString("\n")
 
@@ -213,7 +230,7 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	if opts.Epic != nil && opts.Epic.EffortLevel == epic.EffortMax {
 		iterCap = config.MaxOuterCyclesMaxCap
 	}
-	b.WriteString(fmt.Sprintf("Repeat the following cycle until the EXIT CONDITION is met (max %d iterations).\n\n", iterCap))
+	fmt.Fprintf(&b, "Repeat the following cycle until the EXIT CONDITION is met (max %d iterations).\n\n", iterCap)
 
 	b.WriteString("### Step 1 — Audit\n\n")
 	if opts.Mode == "writing" {
@@ -253,20 +270,20 @@ func buildBuildAuditPrompt(opts BuildAuditOpts) string {
 	}
 
 	b.WriteString("### Step 3 — Report\n\n")
-	b.WriteString(fmt.Sprintf("Save a comprehensive report to `%s` in the project root. For each finding include: location, description, severity, and recommended fix.\n\n", config.BuildAuditFile))
+	fmt.Fprintf(&b, "Save a comprehensive report to `%s` in the project root. For each finding include: location, description, severity, and recommended fix.\n\n", config.BuildAuditFile)
 
 	b.WriteString("### Step 4 — Evaluate exit condition\n\n")
-	b.WriteString(fmt.Sprintf("- **If no issues exist, or all remaining issues are LOW severity → save the final report to `%s` and stop.** ← EXIT CONDITION\n", config.BuildAuditFile))
+	fmt.Fprintf(&b, "- **If no issues exist, or all remaining issues are LOW severity → save the final report to `%s` and stop.** ← EXIT CONDITION\n", config.BuildAuditFile)
 	b.WriteString("- **Otherwise → continue to Step 5.**\n\n")
 
 	b.WriteString("### Step 5 — Remediate\n\n")
-	b.WriteString(fmt.Sprintf("Using `%s` as your plan, fix **all** issues (including LOW severity). Also fix any deferred sanity check failures listed above. Then return to **Step 1** and re-audit the modified codebase.\n\n", config.BuildAuditFile))
+	fmt.Fprintf(&b, "Using `%s` as your plan, fix **all** issues (including LOW severity). Also fix any deferred sanity check failures listed above. Then return to **Step 1** and re-audit the modified codebase.\n\n", config.BuildAuditFile)
 
 	b.WriteString("---\n\n")
 	b.WriteString("### Guardrails\n\n")
-	b.WriteString(fmt.Sprintf("- Each iteration must produce a fresh `%s` that reflects the *current* state of the code.\n", config.BuildAuditFile))
+	fmt.Fprintf(&b, "- Each iteration must produce a fresh `%s` that reflects the *current* state of the code.\n", config.BuildAuditFile)
 	b.WriteString("- Do not skip issues to force an early exit; report honestly.\n")
-	b.WriteString(fmt.Sprintf("- If you reach %d iterations without meeting the exit condition, stop and report the remaining issues with an explanation of why they persist.\n", iterCap))
+	fmt.Fprintf(&b, "- If you reach %d iterations without meeting the exit condition, stop and report the remaining issues with an explanation of why they persist.\n", iterCap)
 
 	return b.String()
 }

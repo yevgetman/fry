@@ -369,6 +369,7 @@ fry init [flags]
 
 When `.fry/codebase.md` exists, it is automatically used by:
 - **Sprint prompts** — injected as Layer 0.5 (CODEBASE CONTEXT) before the project context
+- **Sprint audit/fix/build-audit prompts** — included as architecture and conventions context for audit remediation
 - **Prepare pipeline** — included in plan, epic, and sanity check generation so sprints are decomposed with awareness of existing code
 - **Triage classification** — included in complexity assessment to account for existing code patterns
 

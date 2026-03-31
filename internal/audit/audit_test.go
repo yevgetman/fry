@@ -20,6 +20,7 @@ type stubEngine struct {
 	name       string
 	outputs    []string
 	prompts    []string
+	errs       []error
 	sideEffect func(projectDir string, callIndex int)
 	callIndex  int
 }
@@ -34,11 +35,16 @@ func (s *stubEngine) Run(_ context.Context, prompt string, opts engine.RunOpts) 
 	if s.sideEffect != nil {
 		s.sideEffect(opts.WorkDir, s.callIndex)
 	}
+	var runErr error
+	if len(s.errs) > 0 {
+		runErr = s.errs[0]
+		s.errs = s.errs[1:]
+	}
 	s.callIndex++
 	if opts.Stdout != nil {
 		_, _ = opts.Stdout.Write([]byte(output))
 	}
-	return output, 0, nil
+	return output, 0, runErr
 }
 
 func (s *stubEngine) Name() string {
@@ -91,6 +97,15 @@ func TestFindingKey(t *testing.T) {
 	assert.Equal(t, "sql injection", Finding{Description: "SQL Injection"}.key())
 	assert.Equal(t, "sql injection", Finding{Description: "  SQL Injection  "}.key())
 	assert.Equal(t, "sql injection", Finding{Description: "sql injection"}.key())
+	assert.Equal(t, "src/handler.go::sql injection", Finding{
+		Location:    " src/handler.go:42 ",
+		Description: " SQL Injection ",
+	}.key())
+	assert.Equal(t, "src/handler.go::sql injection", Finding{
+		Location:    "src/handler.go#L99C3",
+		Description: "SQL Injection",
+	}.key())
+	assert.Equal(t, "service returned code: 500", Finding{Description: "Service returned code: 500"}.key())
 }
 
 func TestFindingIsActionable(t *testing.T) {
@@ -115,14 +130,14 @@ func TestParseFindings(t *testing.T) {
 		expected []Finding
 	}{
 		{
-			name: "standard format with location",
+			name:    "standard format with location",
 			content: "## Findings\n- **Location:** src/handler.go:42\n- **Description:** SQL injection\n- **Severity:** HIGH\n- **Recommended Fix:** Use parameterized queries\n",
 			expected: []Finding{
 				{Location: "src/handler.go:42", Description: "SQL injection", Severity: "HIGH", RecommendedFix: "Use parameterized queries"},
 			},
 		},
 		{
-			name: "multiple findings",
+			name:    "multiple findings",
 			content: "- **Location:** a.go:1\n- **Description:** Issue A\n- **Severity:** HIGH\n- **Location:** b.go:2\n- **Description:** Issue B\n- **Severity:** MODERATE\n",
 			expected: []Finding{
 				{Location: "a.go:1", Description: "Issue A", Severity: "HIGH"},
@@ -130,14 +145,14 @@ func TestParseFindings(t *testing.T) {
 			},
 		},
 		{
-			name: "no location",
+			name:    "no location",
 			content: "- **Description:** Missing validation\n- **Severity:** MODERATE\n",
 			expected: []Finding{
 				{Description: "Missing validation", Severity: "MODERATE"},
 			},
 		},
 		{
-			name: "description only no severity",
+			name:    "description only no severity",
 			content: "- **Description:** Some issue\n",
 			expected: []Finding{
 				{Description: "Some issue"},
@@ -154,7 +169,7 @@ func TestParseFindings(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "consecutive descriptions without location",
+			name:    "consecutive descriptions without location",
 			content: "- **Description:** Issue A\n- **Severity:** HIGH\n- **Description:** Issue B\n- **Severity:** LOW\n",
 			expected: []Finding{
 				{Description: "Issue A", Severity: "HIGH"},
@@ -162,14 +177,14 @@ func TestParseFindings(t *testing.T) {
 			},
 		},
 		{
-			name: "plain format without bold",
+			name:    "plain format without bold",
 			content: "- Location: file.go:10\n- Description: Buffer overflow\n- Severity: CRITICAL\n- Recommended Fix: Bounds check\n",
 			expected: []Finding{
 				{Location: "file.go:10", Description: "Buffer overflow", Severity: "CRITICAL", RecommendedFix: "Bounds check"},
 			},
 		},
 		{
-			name: "word boundary severity parsing",
+			name:    "word boundary severity parsing",
 			content: "- **Description:** HIGHLY unusual pattern\n- **Severity:** LOW\n",
 			expected: []Finding{
 				{Description: "HIGHLY unusual pattern", Severity: "LOW"},
@@ -625,6 +640,28 @@ func TestAuditPromptWithPreviousFindings(t *testing.T) {
 	assert.Contains(t, prompt, "RESOLVED | STILL PRESENT")
 }
 
+func TestAuditPromptIncludesCodebaseContextAndMemories(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	writeFile(t, filepath.Join(opts.ProjectDir, config.CodebaseFile), "# Codebase: Fry\n\nExisting architecture details.")
+	writeFile(t, filepath.Join(opts.ProjectDir, config.CodebaseMemoriesDir, "001-memory.md"), `---
+confidence: high
+source: build-1
+sprint: 1
+date: 2026-03-31
+reinforced: 0
+---
+Audit changes usually need matching updates in docs/sprint-audit.md.`)
+
+	prompt := buildAuditPrompt(opts, nil)
+
+	assert.Contains(t, prompt, "## Codebase Context")
+	assert.Contains(t, prompt, "Existing architecture details.")
+	assert.Contains(t, prompt, "## Codebase Memories")
+	assert.Contains(t, prompt, "Audit changes usually need matching updates")
+}
+
 func TestAuditPromptNoPreviousFindings(t *testing.T) {
 	t.Parallel()
 
@@ -691,6 +728,19 @@ func TestAuditFixPromptWritingMode(t *testing.T) {
 	prompt := buildAuditFixPrompt(opts, []Finding{{Description: "weak transition", Severity: "MODERATE", OriginCycle: 1}})
 	assert.Contains(t, prompt, "content audit found issues")
 	assert.Contains(t, prompt, "minimal editorial changes")
+}
+
+func TestAuditFixPromptIncludesCodebaseContext(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	writeFile(t, filepath.Join(opts.ProjectDir, config.CodebaseFile), "# Codebase: Fry\n\nFollow grouped imports and contextual errors.")
+
+	prompt := buildAuditFixPrompt(opts, []Finding{{Description: "weak error context", Severity: "HIGH", OriginCycle: 1}})
+
+	assert.Contains(t, prompt, "## Codebase Context")
+	assert.Contains(t, prompt, "Follow grouped imports and contextual errors.")
+	assert.Contains(t, prompt, "Preserve unrelated behavior")
 }
 
 func TestBuildVerifyPrompt(t *testing.T) {
@@ -992,10 +1042,9 @@ func TestRunAuditLoopNoFindingsFile(t *testing.T) {
 	eng := &stubEngine{name: "codex"}
 	opts := makeOpts(t, eng)
 
-	result, err := RunAuditLoop(context.Background(), opts)
-	require.NoError(t, err)
-	assert.True(t, result.Passed)
-	assert.Equal(t, 1, result.Iterations)
+	_, err := RunAuditLoop(context.Background(), opts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "audit session did not write")
 }
 
 func TestRunAuditLoopContextCancellation(t *testing.T) {
@@ -1087,13 +1136,13 @@ func TestRunAuditLoopInnerLoopResolvesAll(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result.Passed)
 	assert.Equal(t, 2, result.Iterations)
+	require.Len(t, eng.prompts, 4)
+	assert.Equal(t, config.AuditVerifyInvocationPrompt, eng.prompts[2])
 }
 
 func TestRunAuditLoopInnerLoopPartialResolution(t *testing.T) {
 	t.Parallel()
 
-	// Use a prompt-based approach to distinguish call types.
-	// Audit/verify calls use AuditInvocationPrompt, fix calls use AuditFixInvocationPrompt.
 	eng := &stubEngine{
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
@@ -1113,6 +1162,42 @@ func TestRunAuditLoopInnerLoopPartialResolution(t *testing.T) {
 	assert.True(t, result.Blocking)
 	assert.Equal(t, "CRITICAL", result.MaxSeverity)
 	assert.Equal(t, 1, result.Iterations)
+}
+
+func TestRunAuditLoopVerifyRequiresOutputFile(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			path := filepath.Join(projectDir, config.SprintAuditFile)
+			if callIndex == 0 {
+				writeFile(t, path,
+					"## Findings\n- **Description:** Issue A\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n")
+			}
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.MaxAuditIterations = 1
+
+	_, err := RunAuditLoop(context.Background(), opts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "verify session did not write")
+}
+
+func TestRunAuditLoopPropagatesAgentErrors(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name: "codex",
+		errs: []error{fmt.Errorf("engine crashed")},
+	}
+	opts := makeOpts(t, eng)
+
+	_, err := RunAuditLoop(context.Background(), opts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "agent run")
+	assert.Contains(t, err.Error(), "engine crashed")
 }
 
 func TestRunAuditLoopNewIssuesInReAudit(t *testing.T) {
@@ -1281,13 +1366,30 @@ func TestApplyResolutionsByKey(t *testing.T) {
 	assert.False(t, all[2].Resolved, "Issue C was not resolved")
 }
 
+func TestApplyResolutionsByKeyUsesLocationAwareIdentity(t *testing.T) {
+	t.Parallel()
+
+	all := []Finding{
+		{Location: "a.go:10", Description: "Duplicate issue", Severity: "HIGH"},
+		{Location: "b.go:20", Description: "Duplicate issue", Severity: "HIGH"},
+	}
+	checked := []Finding{
+		{Location: "a.go:10", Description: "Duplicate issue", Severity: "HIGH"},
+	}
+
+	applyResolutionsByKey(all, checked, []bool{true})
+
+	assert.True(t, all[0].Resolved)
+	assert.False(t, all[1].Resolved)
+}
+
 // --- findingKeySet tests ---
 
 func TestFindingKeySet(t *testing.T) {
 	t.Parallel()
 
 	findings := []Finding{
-		{Description: "Active HIGH", Severity: "HIGH"},
+		{Location: "a.go:1", Description: "Active HIGH", Severity: "HIGH"},
 		{Description: "Active MODERATE", Severity: "MODERATE"},
 		{Description: "Low Issue", Severity: "LOW"},
 		{Description: "Resolved", Severity: "HIGH", Resolved: true},
@@ -1296,8 +1398,46 @@ func TestFindingKeySet(t *testing.T) {
 
 	keys := findingKeySet(findings)
 	assert.Len(t, keys, 2)
-	assert.Contains(t, keys, "active high")
+	assert.Contains(t, keys, "a.go::active high")
 	assert.Contains(t, keys, "active moderate")
+}
+
+func TestClassifyFindingsKeepsSameDescriptionDifferentLocationsDistinct(t *testing.T) {
+	t.Parallel()
+
+	known := []Finding{
+		{Location: "a.go:10", Description: "Nil check missing", Severity: "HIGH", OriginCycle: 1},
+		{Location: "b.go:20", Description: "Nil check missing", Severity: "HIGH", OriginCycle: 1},
+	}
+	current := []Finding{
+		{Location: "b.go:20", Description: "Nil check missing", Severity: "HIGH"},
+	}
+
+	resolved, persisting, newFindings := classifyFindings(known, current)
+
+	require.Len(t, resolved, 1)
+	require.Len(t, persisting, 1)
+	assert.Empty(t, newFindings)
+	assert.Equal(t, "a.go:10", resolved[0].Location)
+	assert.Equal(t, "b.go:20", persisting[0].Location)
+}
+
+func TestClassifyFindingsIgnoresLineNumberChurnForSameFile(t *testing.T) {
+	t.Parallel()
+
+	known := []Finding{
+		{Location: "a.go:10", Description: "Nil check missing", Severity: "HIGH", OriginCycle: 1},
+	}
+	current := []Finding{
+		{Location: "a.go:24", Description: "Nil check missing", Severity: "HIGH"},
+	}
+
+	resolved, persisting, newFindings := classifyFindings(known, current)
+
+	assert.Empty(t, resolved)
+	assert.Len(t, persisting, 1)
+	assert.Empty(t, newFindings)
+	assert.Equal(t, 1, persisting[0].OriginCycle)
 }
 
 // --- UnresolvedFindings in result test ---
@@ -1364,8 +1504,8 @@ func TestCountFixable(t *testing.T) {
 
 	// countFixable counts ALL findings matching severity filter (resolved or not)
 	// because it serves as the total denominator in progress logs.
-	assert.Equal(t, 2, countFixable(findings, false))  // HIGH + resolved MODERATE
-	assert.Equal(t, 4, countFixable(findings, true))   // all four
+	assert.Equal(t, 2, countFixable(findings, false)) // HIGH + resolved MODERATE
+	assert.Equal(t, 4, countFixable(findings, true))  // all four
 }
 
 func TestCountUnresolvedLow(t *testing.T) {

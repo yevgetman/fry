@@ -61,7 +61,8 @@ For each audit report, the **fix agent** runs repeatedly until all issues above 
 
 ### Issue tracking across cycles
 
-Each finding has a stable identity (normalized description) and tracks:
+Each finding has a stable identity and tracks:
+- **Finding key** -- normalized file location plus description when a location is available; otherwise normalized description only
 - **Origin cycle** -- which outer audit cycle discovered it (for FIFO ordering)
 - **Resolution status** -- whether it has been verified as resolved
 
@@ -70,7 +71,7 @@ When the re-audit runs (cycle 2+), findings are classified as:
 - **Persisting** -- previously known issue still present (keeps its original cycle number)
 - **New** -- issue not seen in previous cycles (assigned current cycle number)
 
-This ensures older issues are always addressed before newer ones, and fix effort is not wasted on re-discovering known issues.
+This ensures older issues are always addressed before newer ones, avoids collapsing distinct same-worded issues in different files, and reduces wasted fix effort on re-discovering known issues.
 
 ## Blocking vs Advisory
 
@@ -217,6 +218,8 @@ The audit prompt includes:
 
 | Context | Source | Limit |
 |---|---|---|
+| Codebase context | `.fry/codebase.md` | First 8,000 characters |
+| Codebase memories | `.fry/codebase-memories/*.md` | Up to 10KB total |
 | Executive summary | `plans/executive.md` | First 2,000 characters |
 | Sprint goals | `@prompt` block from the epic | Full content |
 | What was done | `.fry/sprint-progress.txt` | First 50KB |
@@ -224,6 +227,8 @@ The audit prompt includes:
 | Previously identified issues | Findings from prior audit cycles | Cycle 2+ only |
 
 The git diff is refreshed before each audit cycle (via a callback) so that fixes made by the fix agent are reflected in subsequent audits.
+The audit agent uses the current repository state and sprint diff as primary evidence. `sprint-progress.txt` is supporting context only.
+When `.fry/codebase.md` exists, the auditor uses it as ground truth for architecture and conventions. Pre-existing issues should only be raised when the sprint introduced, worsened, or clearly exposed them.
 
 ## Context Provided to Fix Agent
 
@@ -231,11 +236,13 @@ The fix prompt includes:
 
 | Context | Source |
 |---|---|
+| Codebase context | `.fry/codebase.md` (if present) |
+| Codebase memories | `.fry/codebase-memories/*.md` (if present) |
 | Sprint goals | `@prompt` block from the epic |
 | Issues to fix | Structured list, FIFO ordered (oldest first, highest severity within age group) |
 | Context pointers | References to `sprint-progress.txt` and `plans/plan.md` |
 
-Issues are grouped by origin audit cycle when multiple cycles have contributed findings. The fix agent is explicitly instructed to focus only on the listed issues and not search for new ones.
+Issues are grouped by origin audit cycle when multiple cycles have contributed findings. The fix agent is explicitly instructed to focus only on the listed issues, preserve unrelated behavior, follow existing patterns, and not search for new ones.
 
 ## Context Provided to Verify Agent
 
@@ -246,7 +253,7 @@ After each fix iteration, a lightweight verify agent checks resolution:
 | Issues to verify | Numbered list of unresolved issues with location and severity |
 | Instructions | Check each issue, report RESOLVED or STILL PRESENT |
 
-The verify agent does not look for new issues and does not modify source code.
+The verify agent does not look for new issues and does not modify source code. Each verify session must write explicit statuses to `.fry/sprint-audit.txt`; missing output is treated as an audit failure rather than an implicit pass.
 
 ## Effort Level Interaction
 
@@ -289,7 +296,7 @@ Within each fix cycle, the inner loop tracks how many issues are resolved after 
 [2026-03-10 12:12:01]   AUDIT FIX  cycle 1  fix 1/3 — targeting 3 issues (oldest first)
 [2026-03-10 12:14:00]   AUDIT VERIFY  cycle 1  fix 1/3 — 2 of 3 resolved
 [2026-03-10 12:14:01]   AUDIT FIX  cycle 1  fix 2/3 — targeting 1 issues (oldest first)
-[2026-03-10 12:16:00]   AUDIT VERIFY  cycle 1  fix 2/3 — all resolved (no findings file)
+[2026-03-10 12:16:00]   AUDIT VERIFY  cycle 1  fix 2/3 — 1 of 1 resolved
 [2026-03-10 12:16:01] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 2/3  engine=claude
 [2026-03-10 12:18:00]   AUDIT: pass (1 LOW)
 ```

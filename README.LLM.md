@@ -171,7 +171,7 @@ fry/
 | `deviation-log.md` | Deviations detected during sprint reviews |
 | `deferred-failures.md` | Sanity check failures below threshold, deferred to build audit |
 | `sprint-audit.txt` | Current sprint's audit findings |
-| `audit-prompt.md` | Assembled audit prompt |
+| `audit-prompt.md` | Assembled audit, fix, or verify prompt |
 | `review-prompt.md` | Assembled review prompt |
 | `summary-prompt.md` | Assembled summary prompt |
 | `build-logs/` | Timestamped per-iteration/alignment/audit/continue logs |
@@ -302,8 +302,10 @@ For each sprint (startSprint → endSprint):
      │  ├─ Outer loop (audit cycles): audit agent reviews + verifies previous issues
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
      │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
+     │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
+     │  ├─ Verify agent must emit explicit RESOLVED/STILL PRESENT statuses; missing output fails the audit
      │  ├─ standard: bounded (3 outer cycles, 3 inner fix iterations)
-     │  └─ high: progress-based (cap 12 outer, 7 inner), max: progress-based (cap 20 outer, 10 inner)
+     │  └─ high: progress-based (cap 12 outer, 7 inner), max: progress-based (cap 100 outer, 10 inner)
  11. Git checkpoint commit
  12. Compact sprint progress → .fry/epic-progress.txt
  13. Optional sprint review:

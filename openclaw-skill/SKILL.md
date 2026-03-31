@@ -186,6 +186,7 @@ fry init --force --project-dir /path/to/project  # Force re-index
 **Pipeline integration:** When `.fry/codebase.md` exists, it is automatically used
 throughout the build pipeline:
 - **Sprint prompts:** Injected as Layer 0.5 (CODEBASE CONTEXT) before executive context
+- **Sprint audit/fix/build-audit prompts:** Included as architecture and conventions context during audit remediation
 - **Prepare pipeline:** Included in plan, epic, and sanity check generation
 - **Triage:** Included in complexity classification
 - **File index:** Auto-refreshed on each `fry run` if stale (newer git commits exist)
@@ -608,6 +609,7 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **CRITICAL/HIGH** findings block the sprint — Fry attempts auto-fix.
 - **MODERATE** findings get one fix attempt.
 - **LOW** findings are advisory (non-blocking except at high/max effort).
+- When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
 
 Read audit findings:
 
