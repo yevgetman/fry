@@ -148,7 +148,6 @@ func (m *Monitor) Run(ctx context.Context) <-chan Snapshot {
 
 			// Detect build end.
 			if snap.BuildEnded && !sawBuildEnd {
-				sawBuildEnd = true
 				select {
 				case ch <- snap:
 				case <-ctx.Done():
