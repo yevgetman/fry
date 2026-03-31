@@ -140,11 +140,9 @@ func TestRunBuildAuditHandlesNoFile(t *testing.T) {
 	}
 	opts := makeBuildOpts(t, eng)
 
-	result, err := RunBuildAudit(context.Background(), opts)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, result.Passed)
-	assert.Equal(t, 1, result.Iterations)
+	_, err := RunBuildAudit(context.Background(), opts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "did not write")
 }
 
 func TestRunBuildAuditPopulatesSeverityCounts(t *testing.T) {
@@ -210,14 +208,9 @@ func TestRunBuildAuditContextCancellation(t *testing.T) {
 		Model:      "sonnet",
 	}
 
-	// The stubEngine returns nil error, but the context is already cancelled.
-	// The function should still succeed because it checks ctx.Err() only on run errors.
-	// However, if the engine itself respects context, it would fail.
-	// In our stub, the engine does not fail, so the result depends on whether the file exists.
-	result, err := RunBuildAudit(ctx, opts)
-	// Stub engine doesn't check context, so this completes with no-file result
-	require.NoError(t, err)
-	assert.True(t, result.Passed)
+	_, err := RunBuildAudit(ctx, opts)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestRunBuildAuditPassOnLowOnly(t *testing.T) {
@@ -240,4 +233,42 @@ func TestRunBuildAuditPassOnLowOnly(t *testing.T) {
 	assert.True(t, result.Passed)
 	assert.False(t, result.Blocking)
 	assert.Equal(t, "LOW", result.MaxSeverity)
+}
+
+func TestRunBuildAuditPropagatesAgentError(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name: "claude",
+		errs: []error{context.DeadlineExceeded},
+	}
+	opts := makeBuildOpts(t, eng)
+
+	_, err := RunBuildAudit(context.Background(), opts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "agent run")
+}
+
+func TestBuildAuditPromptIncludesCodebaseContext(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{name: "claude"}
+	opts := makeBuildOpts(t, eng)
+	require.NoError(t, os.MkdirAll(filepath.Join(opts.ProjectDir, config.CodebaseMemoriesDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(opts.ProjectDir, config.CodebaseFile), []byte("# Codebase: Fry\n\nPersistent architecture details."), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(opts.ProjectDir, config.CodebaseMemoriesDir, "001-memory.md"), []byte(`---
+confidence: high
+source: build-1
+sprint: 1
+date: 2026-03-31
+reinforced: 0
+---
+Build audit findings should be reconciled with established package boundaries.`), 0o644))
+
+	prompt := buildBuildAuditPrompt(opts)
+
+	assert.Contains(t, prompt, "## Codebase Context")
+	assert.Contains(t, prompt, "Persistent architecture details.")
+	assert.Contains(t, prompt, "## Codebase Memories")
+	assert.Contains(t, prompt, "established package boundaries")
 }

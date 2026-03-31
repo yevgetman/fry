@@ -52,13 +52,14 @@ const (
 	MaxFailPercentMax      = 10 // stricter threshold for max effort
 
 	// Audit constants
-	SprintAuditFile           = ".fry/sprint-audit.txt"
-	SprintReviewLogPattern    = "sprint%d_review_%s.log"
-	AuditPromptFile           = ".fry/audit-prompt.md"
-	DefaultMaxAuditIterations = 3
-	MaxAuditDiffBytes         = 100_000
-	AuditInvocationPrompt     = "Read and execute ALL instructions in .fry/audit-prompt.md. You are a code auditor. Review the sprint's work and write your findings to .fry/sprint-audit.txt. Do NOT modify any source code."
-	AuditFixInvocationPrompt  = "Read and execute ALL instructions in .fry/audit-prompt.md. Fix the issues described in the prompt."
+	SprintAuditFile             = ".fry/sprint-audit.txt"
+	SprintReviewLogPattern      = "sprint%d_review_%s.log"
+	AuditPromptFile             = ".fry/audit-prompt.md"
+	DefaultMaxAuditIterations   = 3
+	MaxAuditDiffBytes           = 100_000
+	AuditInvocationPrompt       = "Read and execute ALL instructions in .fry/audit-prompt.md. This is a sprint audit session. Follow the role, scope, and output instructions in the prompt file. Do NOT modify source or content files."
+	AuditVerifyInvocationPrompt = "Read and execute ALL instructions in .fry/audit-prompt.md. This is an audit verify session. Verify only the listed issues, write the results to .fry/sprint-audit.txt, and do NOT modify source or content files."
+	AuditFixInvocationPrompt    = "Read and execute ALL instructions in .fry/audit-prompt.md. This is an audit fix session. Fix only the listed issues and preserve unrelated behavior."
 
 	// Two-level audit loop constants
 	DefaultMaxOuterAuditCycles = 3   // outer audit cycles (medium/default)

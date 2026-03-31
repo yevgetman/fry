@@ -281,7 +281,7 @@ Sprint audits run by default after each sprint passes sanity checks. The audit u
 [2026-03-10 12:12:01]   AUDIT FIX  cycle 1  fix 1/3 — targeting 3 issues (oldest first)
 [2026-03-10 12:14:00]   AUDIT VERIFY  cycle 1  fix 1/3 — 2 of 3 resolved
 [2026-03-10 12:14:01]   AUDIT FIX  cycle 1  fix 2/3 — targeting 1 issues (oldest first)
-[2026-03-10 12:16:00]   AUDIT VERIFY  cycle 1  fix 2/3 — all resolved (no findings file)
+[2026-03-10 12:16:00]   AUDIT VERIFY  cycle 1  fix 2/3 — 1 of 1 resolved
 [2026-03-10 12:16:01] ▶ AUDIT  sprint 3/8 "Auth & Permissions"  cycle 2/3  engine=claude
 [2026-03-10 12:18:00]   AUDIT: pass (1 LOW)
 ```
@@ -318,9 +318,9 @@ After all sprints complete successfully, a final holistic audit runs on the enti
 [2026-03-10 13:15:00]   BUILD AUDIT: 2 MODERATE remain (advisory)
 ```
 
-### Agent does not produce a report:
+### Audit agent fails to produce a report:
 ```
-[2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce build-audit.md
+[2026-03-10 13:15:00] WARNING: build audit failed: run build audit: build audit session did not write build-audit.md
 ```
 
 ## Sprint Review and Replan

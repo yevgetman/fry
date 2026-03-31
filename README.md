@@ -109,12 +109,12 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **GitHub issue ingestion** -- `--gh-issue <url>` fetches issue metadata, body, labels, and recent comments through the authenticated `gh` CLI, persists the fetched context to `.fry/github-issue.md`, and routes the result through normal triage/prepare/build flow. See [GitHub Issues](docs/github-issues.md).
 - **Media assets** -- optional `media/` directory for images, PDFs, fonts, and other files referenced in plans and copied into builds
 - **Supplementary assets** -- optional `assets/` directory for text reference documents (specs, schemas, requirements) whose full contents are read during plan and epic generation
-- **Layered prompts** -- assembled per sprint with executive context, media manifest, user directives, operational disposition, plan references, sprint tasks, iteration memory, and completion signals
+- **Layered prompts** -- assembled per sprint with codebase context, executive context, media manifest, user directives, operational disposition, plan references, sprint tasks, iteration memory, and completion signals
 - **Two-file progress tracking** -- per-sprint iteration log + cross-sprint compacted summary for bounded context
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
 - **Sanity checks** -- machine-executable checks run after each sprint with a configurable failure threshold (`@max_fail_percent`, default 20%) — minor failures are deferred rather than blocking the build
 - **Alignment** -- automatic re-runs with targeted fix prompts on sanity check failure; `--resume` picks up where a failed build left off with boosted alignment attempts; `--continue` uses an LLM agent to analyze build state and auto-resume (automatically restores the build mode from the previous run)
-- **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop (CRITICAL/HIGH block the build; MODERATE is advisory)
+- **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop and architecture-aware context from `.fry/codebase.md` when available (CRITICAL/HIGH block the build; MODERATE is advisory)
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
 - **Build archiving** -- on successful full builds, `.fry/` and root-level outputs are auto-archived to `.fry-archive/`; run `fry clean` to archive manually
