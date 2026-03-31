@@ -2,6 +2,7 @@ package sprint
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/engine"
 )
 
 func TestMechanicalCompactionCases(t *testing.T) {
@@ -158,4 +160,37 @@ func TestCompactSprintProgressWithAgent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "## Sprint 2: API — PASSED")
 	assert.Contains(t, result, "Agent summarized: work done")
+}
+
+type failingCompactionEngine struct {
+	name     string
+	output   string
+	exitCode int
+	err      error
+}
+
+func (f *failingCompactionEngine) Run(_ context.Context, _ string, _ engine.RunOpts) (string, int, error) {
+	return f.output, f.exitCode, f.err
+}
+
+func (f *failingCompactionEngine) Name() string {
+	return f.name
+}
+
+func TestCompactSprintProgressWithAgentIncludesFailureDetails(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte("## Iteration 1\nwork done"), 0o644))
+
+	_, err := CompactSprintProgress(context.Background(), dir, 2, "API", "PASSED", &failingCompactionEngine{
+		name:     "claude",
+		output:   "authentication expired\nplease run claude login",
+		exitCode: 1,
+		err:      errors.New("exit status 1"),
+	}, true, "sonnet")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "compact sprint progress with agent: engine=claude model=sonnet exit_code=1")
+	assert.Contains(t, err.Error(), "authentication expired")
 }

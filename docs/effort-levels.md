@@ -118,7 +118,7 @@ This means effort level now affects behavior within each difficulty grade. For e
 
 Effort level directly affects which AI model is used for each session type. Higher effort levels use more capable (and more expensive) models. See [AI Engines — Automatic Model Selection](engines.md#automatic-model-selection-tier-system) for the full session × effort rules matrix.
 
-In summary: `fast`/`standard` builds use **Standard**-tier models (e.g., Sonnet, gpt-5.3-codex) for most sessions, while `high`/`max` builds upgrade to **Frontier**-tier models (e.g., Opus, gpt-5.4). Lightweight tasks like compaction and project overviews always use cheaper models regardless of effort level.
+In summary: `fast`/`standard` builds use **Standard**-tier models (e.g., Sonnet, gpt-5.3-codex) for most sessions, while `high`/`max` builds upgrade to **Frontier**-tier models (e.g., Opus, gpt-5.4). Lightweight tasks like project overviews always use cheaper models regardless of effort level; compaction stays cheap for `fast`/`standard`/`high`, but `max` effort upgrades compaction to the **Standard** tier (`sonnet` for Claude, `gpt-5.3-codex` for Codex).
 
 ## Usage
 

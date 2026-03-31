@@ -16,7 +16,7 @@
 # From source
 git clone https://github.com/yevgetman/fry.git
 cd fry
-make install    # builds and copies to /usr/local/bin/fry
+make install    # builds and copies to ~/.local/bin/fry by default
 
 # Or build without installing
 make build      # outputs to bin/fry

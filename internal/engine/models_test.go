@@ -214,10 +214,11 @@ func TestTierForSession(t *testing.T) {
 		{"summary-claude-high", "claude", "high", SessionBuildSummary, TierStandard},
 		{"summary-claude-max", "claude", "max", SessionBuildSummary, TierStandard},
 
-		// Compaction: Labor for fast/standard/high, Mini for max
+		// Compaction: Labor for fast/standard/high, Standard for max
 		{"compact-claude-fast", "claude", "fast", SessionCompaction, TierLabor},
 		{"compact-claude-high", "claude", "high", SessionCompaction, TierLabor},
-		{"compact-claude-max", "claude", "max", SessionCompaction, TierMini},
+		{"compact-claude-max", "claude", "max", SessionCompaction, TierStandard},
+		{"compact-codex-max", "codex", "max", SessionCompaction, TierStandard},
 
 		// Continue: Mini for fast/standard, Standard for high/max
 		{"continue-claude-fast", "claude", "fast", SessionContinue, TierMini},
@@ -280,8 +281,10 @@ func TestResolveModelForSession(t *testing.T) {
 	assert.Equal(t, "gpt-5.4", ResolveModelForSession("codex", "max", SessionSprint))
 	// Claude project overview → labor → haiku
 	assert.Equal(t, "haiku", ResolveModelForSession("claude", "max", SessionProjectOverview))
-	// Codex compaction at max → mini → gpt-5.4-mini
-	assert.Equal(t, "gpt-5.4-mini", ResolveModelForSession("codex", "max", SessionCompaction))
+	// Claude compaction at max → standard → sonnet
+	assert.Equal(t, "sonnet", ResolveModelForSession("claude", "max", SessionCompaction))
+	// Codex compaction at max → standard → gpt-5.3-codex
+	assert.Equal(t, "gpt-5.3-codex", ResolveModelForSession("codex", "max", SessionCompaction))
 }
 
 func TestResolveModel(t *testing.T) {

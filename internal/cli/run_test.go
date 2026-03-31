@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/githubissue"
 	"github.com/yevgetman/fry/internal/sprint"
@@ -126,6 +127,40 @@ func TestWriteExitReason(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "bad config", string(data))
 	})
+}
+
+func TestMarkBuildFailed(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	originalDir := t.TempDir()
+	status := &agent.BuildStatus{
+		Version: 1,
+		Build: agent.BuildInfo{
+			Epic:   "Test Epic",
+			Status: "running",
+			Phase:  "sprint",
+		},
+	}
+
+	markBuildFailed(dir, originalDir, status)
+
+	assert.Equal(t, "failed", status.Build.Status)
+	assert.Equal(t, "failed", status.Build.Phase)
+
+	buildStatusPath := filepath.Join(dir, config.BuildStatusFile)
+	data, err := os.ReadFile(buildStatusPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"status": "failed"`)
+	assert.Contains(t, string(data), `"phase": "failed"`)
+
+	phaseData, err := os.ReadFile(filepath.Join(dir, config.BuildPhaseFile))
+	require.NoError(t, err)
+	assert.Equal(t, "failed\n", string(phaseData))
+
+	originalPhaseData, err := os.ReadFile(filepath.Join(originalDir, config.BuildPhaseFile))
+	require.NoError(t, err)
+	assert.Equal(t, "failed\n", string(originalPhaseData))
 }
 
 // ---------------------------------------------------------------------------

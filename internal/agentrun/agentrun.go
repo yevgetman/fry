@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/yevgetman/fry/internal/engine"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/textutil"
 )
+
+const maxNonFatalEngineOutputBytes = 1000
 
 // DualLogOpts holds the configuration for a dual-log agent invocation.
 type DualLogOpts struct {
@@ -51,7 +55,7 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 		writer := io.MultiWriter(stdout, iterLog, sprintLog)
 		runOpts.Stdout = writer
 		runOpts.Stderr = writer
-		output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
+		output, exitCode, runErr := opts.Engine.Run(ctx, prompt, runOpts)
 		if err := iterLog.Sync(); err != nil {
 			return output, fmt.Errorf("sync iter log: %w", err)
 		}
@@ -59,7 +63,7 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 			return output, fmt.Errorf("sync sprint log: %w", err)
 		}
 		if runErr != nil && ctx.Err() == nil {
-			frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
+			frylog.Log("WARNING: %s", formatNonFatalEngineError(opts.Engine, opts.Model, exitCode, runErr, output))
 			return output, nil
 		}
 		return output, runErr
@@ -68,7 +72,7 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 	writer := io.MultiWriter(iterLog, sprintLog)
 	runOpts.Stdout = writer
 	runOpts.Stderr = writer
-	output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
+	output, exitCode, runErr := opts.Engine.Run(ctx, prompt, runOpts)
 	if err := iterLog.Sync(); err != nil {
 		return output, fmt.Errorf("sync iter log: %w", err)
 	}
@@ -76,8 +80,27 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 		return output, fmt.Errorf("sync sprint log: %w", err)
 	}
 	if runErr != nil && ctx.Err() == nil {
-		frylog.Log("WARNING: agent exited with error (non-fatal): %v", runErr)
+		frylog.Log("WARNING: %s", formatNonFatalEngineError(opts.Engine, opts.Model, exitCode, runErr, output))
 		return output, nil
 	}
 	return output, runErr
+}
+
+func formatNonFatalEngineError(eng engine.Engine, model string, exitCode int, runErr error, output string) string {
+	msg := fmt.Sprintf("agent exited with error (non-fatal): engine=%s model=%s exit_code=%d err=%v", eng.Name(), model, exitCode, runErr)
+	if details := summarizeEngineOutput(output); details != "" {
+		msg += "\nengine output:\n" + details
+	}
+	return msg
+}
+
+func summarizeEngineOutput(output string) string {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) > maxNonFatalEngineOutputBytes {
+		return textutil.TruncateUTF8(trimmed, maxNonFatalEngineOutputBytes) + "\n...(truncated)"
+	}
+	return trimmed
 }

@@ -29,24 +29,24 @@ const (
 type SessionType string
 
 const (
-	SessionSprint       SessionType = "sprint"
-	SessionHeal         SessionType = "heal"
-	SessionAudit        SessionType = "audit"
-	SessionAuditFix     SessionType = "audit-fix"
-	SessionAuditVerify  SessionType = "audit-verify"
-	SessionReview       SessionType = "review"
-	SessionReplan       SessionType = "replan"
-	SessionBuildAudit   SessionType = "build-audit"
-	SessionBuildSummary SessionType = "build-summary"
-	SessionCompaction   SessionType = "compaction"
-	SessionContinue     SessionType = "continue"
-	SessionProjectOverview  SessionType = "project-overview"
-	SessionPrepare      SessionType = "prepare"
-	SessionTriage       SessionType = "triage"
-	SessionObserver           SessionType = "observer"
+	SessionSprint            SessionType = "sprint"
+	SessionHeal              SessionType = "heal"
+	SessionAudit             SessionType = "audit"
+	SessionAuditFix          SessionType = "audit-fix"
+	SessionAuditVerify       SessionType = "audit-verify"
+	SessionReview            SessionType = "review"
+	SessionReplan            SessionType = "replan"
+	SessionBuildAudit        SessionType = "build-audit"
+	SessionBuildSummary      SessionType = "build-summary"
+	SessionCompaction        SessionType = "compaction"
+	SessionContinue          SessionType = "continue"
+	SessionProjectOverview   SessionType = "project-overview"
+	SessionPrepare           SessionType = "prepare"
+	SessionTriage            SessionType = "triage"
+	SessionObserver          SessionType = "observer"
 	SessionExperienceSummary SessionType = "experience-summary"
-	SessionCodebaseScan     SessionType = "codebase-scan"
-	SessionCodebaseMemory  SessionType = "codebase-memory"
+	SessionCodebaseScan      SessionType = "codebase-scan"
+	SessionCodebaseMemory    SessionType = "codebase-memory"
 )
 
 // Tier-to-model mapping tables.
@@ -198,7 +198,7 @@ func TierForSession(engineName, effort string, session SessionType) ModelTier {
 
 	case SessionCompaction:
 		if e == "max" {
-			return TierMini
+			return TierStandard
 		}
 		return TierLabor
 

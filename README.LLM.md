@@ -184,7 +184,7 @@ fry/
 | `observer/scratchpad.md` | Observer working memory (reset per build) |
 | `observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) |
 | `build-phase.txt` | Current build phase (triage, prepare, sprint, complete, failed) for `fry status` |
-| `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change for agent polling |
+| `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change, including early failures, for agent polling |
 | `build-report.json` | Machine-readable BuildReport JSON (written at build end with `--json-report`) |
 | `confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, `--confirm-file`) |
 | `confirm-response.json` | Agent response to interactive prompt (transient, `--confirm-file`) |
@@ -459,7 +459,7 @@ Key flags:
 make build     # go build -o bin/fry ./cmd/fry
 make test      # go test -race ./...
 make lint      # golangci-lint run
-make install   # build + cp bin/fry /usr/local/bin/fry
+make install   # build + cp bin/fry ~/.local/bin/fry
 make clean     # rm -rf bin/
 ```
 

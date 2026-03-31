@@ -370,7 +370,9 @@ The observer emits status lines at each wake-up point. Wake-ups are effort-level
 
 ### Observer warnings (non-fatal):
 ```
-[2026-03-10 12:10:37]   OBSERVER: agent exited with error (non-fatal): exit status 1
+[2026-03-10 12:10:37]   OBSERVER: agent exited with error (non-fatal): engine=claude model=sonnet exit_code=1 err=exit status 1
+[2026-03-10 12:10:37]   OBSERVER: engine output:
+[2026-03-10 12:10:37]   OBSERVER: authentication expired
 [2026-03-10 12:10:37]   OBSERVER: parse warning: no structured tags found in response
 ```
 
@@ -379,8 +381,10 @@ The observer emits status lines at each wake-up point. Wake-ups are effort-level
 When `@compact_with_agent` is enabled:
 
 ```
-[2026-03-10 12:18:01] Compacting sprint progress with agent...
+[2026-03-10 12:18:01] Compacting sprint progress with agent...  model=sonnet
 ```
+
+If compaction fails, Fry records the engine, model, exit code, and a truncated preview of the agent output in the terminal log and `.fry/build-exit-reason.txt`.
 
 ## Build Archiving
 

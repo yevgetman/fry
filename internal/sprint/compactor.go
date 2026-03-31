@@ -7,7 +7,10 @@ import (
 
 	"github.com/yevgetman/fry/internal/engine"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/textutil"
 )
+
+const maxCompactionErrorOutputBytes = 2000
 
 func CompactSprintProgress(ctx context.Context, projectDir string, sprintNum int, sprintName, status string, eng engine.Engine, useAgent bool, model string) (string, error) {
 	progress, err := ReadSprintProgress(projectDir)
@@ -22,12 +25,21 @@ func CompactSprintProgress(ctx context.Context, projectDir string, sprintNum int
 			return "", fmt.Errorf("compact sprint progress: engine is required for agent compaction")
 		}
 		prompt := "Summarize the sprint progress below in 3-8 lines. Focus on what was completed, what remains, and any important gotchas.\n\n" + progress
-		output, _, runErr := eng.Run(ctx, prompt, engine.RunOpts{
+		output, exitCode, runErr := eng.Run(ctx, prompt, engine.RunOpts{
 			Model:   model,
 			WorkDir: projectDir,
 		})
 		if runErr != nil {
-			return "", fmt.Errorf("compact sprint progress with agent: %w", runErr)
+			details := summarizeCompactionFailureOutput(output)
+			frylog.Log("  Compaction agent failed: engine=%s  model=%s  exit_code=%d  err=%v", eng.Name(), model, exitCode, runErr)
+			if details != "" {
+				frylog.Log("  Compaction agent output:\n%s", details)
+			}
+			msg := fmt.Sprintf("compact sprint progress with agent: engine=%s model=%s exit_code=%d: %v", eng.Name(), model, exitCode, runErr)
+			if details != "" {
+				msg += "\nagent output:\n" + details
+			}
+			return "", fmt.Errorf("%s", msg)
 		}
 		compacted = strings.TrimSpace(output)
 	}
@@ -51,4 +63,15 @@ func mechanicalCompaction(progress string) string {
 	}
 
 	return strings.TrimSpace(strings.Join(lines[lastIndex:], "\n"))
+}
+
+func summarizeCompactionFailureOutput(output string) string {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) > maxCompactionErrorOutputBytes {
+		return textutil.TruncateUTF8(trimmed, maxCompactionErrorOutputBytes) + "\n...(truncated)"
+	}
+	return trimmed
 }

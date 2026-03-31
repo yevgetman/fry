@@ -129,7 +129,7 @@ To update models when new ones release, change only the tier mapping table in `i
 | Audit, Audit verify, Build audit (Claude) | Standard | Standard | Standard | Frontier |
 | Audit, Audit verify, Build audit (Codex) | Mini | Standard | Frontier | Frontier |
 | Build summary | Mini | Mini | Standard | Standard |
-| Compaction | Labor | Labor | Labor | Mini |
+| Compaction | Labor | Labor | Labor | Standard |
 | Continue analysis | Mini | Mini | Standard | Standard |
 | Project overview | Labor | Labor | Labor | Labor |
 | Prepare | Standard | Standard | Standard | **Frontier** |

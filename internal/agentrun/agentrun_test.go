@@ -17,8 +17,9 @@ import (
 
 // mockEngine implements engine.Engine for testing.
 type mockEngine struct {
-	output string
-	err    error
+	output   string
+	err      error
+	exitCode int
 }
 
 func (m *mockEngine) Run(ctx context.Context, prompt string, opts engine.RunOpts) (string, int, error) {
@@ -30,7 +31,7 @@ func (m *mockEngine) Run(ctx context.Context, prompt string, opts engine.RunOpts
 	if opts.Stdout != nil {
 		fmt.Fprint(opts.Stdout, m.output)
 	}
-	return m.output, 0, m.err
+	return m.output, m.exitCode, m.err
 }
 
 func (m *mockEngine) Name() string {
@@ -210,11 +211,21 @@ func TestRunWithDualLogsEngineError(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	eng := &mockEngine{output: "partial output", err: errors.New("engine failure")}
+	eng := &mockEngine{output: "partial output", err: errors.New("engine failure"), exitCode: 1}
 	opts := DualLogOpts{Engine: eng, WorkDir: dir, Verbose: false}
 
 	_, err := RunWithDualLogs(context.Background(), "prompt", filepath.Join(dir, "iter.log"), filepath.Join(dir, "sprint.log"), opts)
 	require.NoError(t, err)
+}
+
+func TestFormatNonFatalEngineError(t *testing.T) {
+	t.Parallel()
+
+	msg := formatNonFatalEngineError(&mockEngine{}, "sonnet", 1, errors.New("exit status 1"), "authentication expired")
+	assert.Contains(t, msg, "engine=mock")
+	assert.Contains(t, msg, "model=sonnet")
+	assert.Contains(t, msg, "exit_code=1")
+	assert.Contains(t, msg, "authentication expired")
 }
 
 // Test: custom Stdout — verbose output routes to the provided writer.

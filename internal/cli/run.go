@@ -547,6 +547,7 @@ var runCmd = &cobra.Command{
 		var mu sync.Mutex
 		currentSprint := 0
 		epicName := ep.Name // guarded by mu; updated after replan
+		var buildStatus *agent.BuildStatus
 
 		// Persist exit reason so `fry status` can show why the build stopped.
 		defer func() {
@@ -554,6 +555,9 @@ var runCmd = &cobra.Command{
 			lastSprint := currentSprint
 			mu.Unlock()
 			writeExitReason(projectPath, retErr, lastSprint)
+			if retErr != nil {
+				markBuildFailed(projectPath, originalProjectPath, buildStatus)
+			}
 		}()
 
 		buildStart := time.Now()
@@ -632,7 +636,7 @@ var runCmd = &cobra.Command{
 		}
 
 		// Initialize machine-readable build status for agent polling.
-		buildStatus := &agent.BuildStatus{
+		buildStatus = &agent.BuildStatus{
 			Version: 1,
 			Build: agent.BuildInfo{
 				Epic:         ep.Name,
@@ -2268,6 +2272,19 @@ func writeBuildStatus(projectDir string, status *agent.BuildStatus) {
 	if err := agent.WriteBuildStatus(projectDir, status); err != nil {
 		frlog.Log("WARNING: could not write build status: %v", err)
 	}
+}
+
+func markBuildFailed(projectPath, originalProjectPath string, buildStatus *agent.BuildStatus) {
+	writeBuildPhase(projectPath, "failed")
+	if originalProjectPath != "" && originalProjectPath != projectPath {
+		writeBuildPhase(originalProjectPath, "failed")
+	}
+	if buildStatus == nil {
+		return
+	}
+	buildStatus.Build.Status = "failed"
+	buildStatus.Build.Phase = "failed"
+	writeBuildStatus(projectPath, buildStatus)
 }
 
 // updateBuildStatusSprint updates the build status with a completed sprint's results.
