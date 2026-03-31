@@ -17,6 +17,7 @@
 git clone https://github.com/yevgetman/fry.git
 cd fry
 make install    # builds and copies to ~/.local/bin/fry by default
+# macOS: ad-hoc signs ~/.local/bin/fry after copying
 
 # Or build without installing
 make build      # outputs to bin/fry

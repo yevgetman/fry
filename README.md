@@ -162,6 +162,7 @@ See [Self-Improvement Pipeline](docs/self-improvement.md) for the full architect
 # Install
 git clone https://github.com/yevgetman/fry.git && cd fry
 make install   # installs to ~/.local/bin/fry by default
+# macOS: ad-hoc signs ~/.local/bin/fry after copying
 
 # Option A: Start from just a prompt (no files needed)
 fry --user-prompt "build a REST API for a todo app with PostgreSQL" --engine claude

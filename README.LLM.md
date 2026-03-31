@@ -459,7 +459,7 @@ Key flags:
 make build     # go build -o bin/fry ./cmd/fry
 make test      # go test -race ./...
 make lint      # golangci-lint run
-make install   # build + cp bin/fry ~/.local/bin/fry
+make install   # build + cp bin/fry ~/.local/bin/fry; on Darwin also ad-hoc codesign the installed binary
 make clean     # rm -rf bin/
 ```
 
