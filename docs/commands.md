@@ -45,6 +45,8 @@ fry run --sprint 3         # Start from sprint 3 (uses .fry/epic.md)
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <codex\|claude\|ollama>` | AI engine to use (default: claude) |
+| `--fallback-engine <codex\|claude\|ollama>` | Sticky fallback engine to use if the primary engine exhausts retries on a transient failure. Default: Claude fails over to Codex, Codex fails over to Claude. See [AI Engines](engines.md#cross-engine-failover). |
+| `--no-engine-failover` | Disable cross-engine failover and stay on the selected engine. |
 | `--effort <fast\|standard\|high\|max>` | Effort level — controls sprint count, density, and review rigor (default: auto-detect). Ignored with a warning if the epic already has an `@effort` directive. See [Effort Levels](effort-levels.md). |
 | `--model <model>` | Override the agent model for sprints, alignment, review, and replan sessions (e.g. `opus[1m]`, `sonnet`, `haiku`). Takes precedence over `@model` in the epic and the effort-based automatic model selection. Use this to pair a lower effort level (fewer sprints) with a more capable model. |
 | `--mode <software\|planning\|writing>` | Execution mode (default: `software`). `planning` generates structured documents; `writing` generates human-language content (books, guides, reports). See [Planning Mode](planning-mode.md), [Writing Mode](writing-mode.md). |
@@ -87,6 +89,7 @@ fry                                               # Run all sprints (.fry/epic.m
 fry --dry-run                                     # Validate and preview
 fry --triage-only --user-prompt "add a CLI flag"  # Preview triage classification only
 fry --engine claude                               # Run all sprints with Claude Code
+fry --engine claude --fallback-engine codex      # Prefer Claude, pin to Codex if Claude hits a transient failure
 fry --gh-issue https://github.com/yevgetman/fry/issues/74  # Start directly from a GitHub issue
 fry --effort fast                                  # Quick task: 1-2 sprints, minimal overhead
 fry --effort standard --engine claude             # Moderate task: 2-4 sprints
@@ -171,6 +174,8 @@ Results are written to `build-audit.md` in the project root.
 | Flag | Description |
 |---|---|
 | `--engine <claude\|codex\|ollama>` | Execution engine (default: `claude`) |
+| `--fallback-engine <codex\|claude\|ollama>` | Sticky fallback engine for transient audit-engine failures. See [AI Engines](engines.md#cross-engine-failover). |
+| `--no-engine-failover` | Disable cross-engine failover and stay on the selected engine. |
 | `--effort <fast\|standard\|high\|max>` | Effort level controlling audit rigor — higher effort means more audit cycles and fix iterations (default: `high`) |
 | `--model <name>` | Override the agent model (e.g. `opus`, `sonnet`, `haiku`) |
 | `--mode <software\|planning\|writing>` | Audit mode — controls the audit criteria (code quality vs content quality). Default: `software`. |
@@ -184,6 +189,7 @@ fry audit                                    # Audit current project (high effor
 fry audit --effort max                       # Maximum rigor audit
 fry audit --effort fast                      # Quick single-pass audit
 fry audit --engine codex                     # Audit with Codex engine
+fry audit --engine claude --fallback-engine codex  # Prefer Claude, fail over to Codex on transient failures
 fry audit --sarif                            # Also write SARIF output for tooling
 fry audit --mode writing                     # Audit content quality (writing mode criteria)
 fry audit --project-dir /path/to/project     # Audit a different directory
@@ -213,6 +219,8 @@ fry prepare [epic_filename] [flags]
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <codex\|claude\|ollama>` | AI engine for generation (default: claude, or `FRY_ENGINE`) |
+| `--fallback-engine <codex\|claude\|ollama>` | Sticky fallback engine for transient prepare-engine failures. See [AI Engines](engines.md#cross-engine-failover). |
+| `--no-engine-failover` | Disable cross-engine failover and stay on the selected engine. |
 | `--effort <fast\|standard\|high\|max>` | Effort level — controls sprint count and density in the generated epic (default: auto-detect). See [Effort Levels](effort-levels.md). |
 | `--user-prompt <text>` | Top-level directive to guide artifact generation. Can bootstrap the entire project when no plan files exist (interactive review). |
 | `--user-prompt-file <path>` | Path to a file containing the user prompt. Alternative to `--user-prompt` for longer prompts. Cannot be combined with `--user-prompt`. |
@@ -246,6 +254,7 @@ All artifacts are **always regenerated** (overwritten) on each run.
 ```bash
 fry prepare                                        # Generate all with Claude (default)
 fry prepare --engine codex                         # Generate all with Codex
+fry prepare --engine claude --fallback-engine codex  # Prefer Claude, pin to Codex if Claude is transiently unavailable
 fry prepare --effort fast                          # Generate a compact 1-2 sprint epic
 fry prepare --effort max --engine claude           # Generate with maximum detail
 fry prepare epic-phase1.md                         # Custom epic filename
@@ -277,6 +286,8 @@ fry replan <deviation_spec> [flags]
 | `--completed <N>` | Completed sprint count |
 | `--max-scope <N>` | Maximum deviation scope (default: 3) |
 | `--engine <codex\|claude\|ollama>` | Replanning engine |
+| `--fallback-engine <codex\|claude\|ollama>` | Sticky fallback engine for transient replanning failures. See [AI Engines](engines.md#cross-engine-failover). |
+| `--no-engine-failover` | Disable cross-engine failover and stay on the selected engine. |
 | `--model <model>` | Model override |
 | `--mcp-config <path>` | Path to MCP server configuration file (Claude engine only). See [Engines: MCP](engines.md#mcp-server-configuration). |
 | `--dry-run` | Preview replanning prompt without executing |
@@ -385,6 +396,8 @@ fry init [flags]
 |---|---|
 | `--project-dir <path>` | Project directory to operate on (default: current directory) |
 | `--engine <name>` | Override engine for semantic codebase scan (`claude`, `codex`, `ollama`). Default: auto-resolved via `FRY_ENGINE` or config default. |
+| `--fallback-engine <codex\|claude\|ollama>` | Sticky fallback engine for transient semantic-scan failures. See [AI Engines](engines.md#cross-engine-failover). |
+| `--no-engine-failover` | Disable cross-engine failover and stay on the selected engine. |
 | `--heuristic-only` | Skip semantic LLM scan; only run structural heuristics (file tree, language detection, dependency parsing). |
 | `--force` | Force re-index even if codebase index files already exist. |
 
@@ -432,6 +445,7 @@ fry init                                # Initialize in the current directory
 fry init --project-dir /path/to/proj    # Initialize a different directory
 cd existing-project && fry init         # Scan existing codebase and scaffold fry
 fry init --engine claude                # Override engine for semantic scan
+fry init --engine claude --fallback-engine codex  # Prefer Claude, pin to Codex if the scan fails transiently
 fry init --heuristic-only               # Structural scan only, no LLM call
 fry init --force                        # Re-index even if already indexed
 ```

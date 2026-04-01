@@ -305,11 +305,13 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		)
 		healAgentRuns++
 		if _, err := agentrun.RunWithDualLogs(ctx, config.HealInvocationPrompt, healLogPath, opts.SprintLogFile, agentrun.DualLogOpts{
-			Engine:     opts.Engine,
-			Model:      resolvedModel,
-			ExtraFlags: strings.Fields(opts.Epic.AgentFlags),
-			WorkDir:    opts.ProjectDir,
-			Verbose:    opts.Verbose,
+			Engine:      opts.Engine,
+			Model:       resolvedModel,
+			SessionType: engine.SessionHeal,
+			EffortLevel: string(opts.EffortLevel),
+			ExtraFlags:  strings.Fields(opts.Epic.AgentFlags),
+			WorkDir:     opts.ProjectDir,
+			Verbose:     opts.Verbose,
 		}); err != nil {
 			return nil, err
 		}

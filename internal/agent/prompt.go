@@ -107,6 +107,7 @@ is a JSON line with fields: ts (ISO 8601), type, sprint (optional), data (option
 | build_start | Build begins | effort, epic, total_sprints |
 | sprint_start | Sprint begins | name |
 | sprint_complete | Sprint ends | status (PASS/FAIL), duration, heal_attempts |
+| engine_failover | Sticky engine fallback promoted | from, to |
 | alignment_complete | Alignment (healing) loop ends | attempts, status |
 | audit_complete | Sprint audit ends | findings_count |
 | review_complete | Sprint review ends | verdict (CONTINUE/DEVIATE) |

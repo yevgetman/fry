@@ -23,23 +23,23 @@ import (
 )
 
 type PrepareOpts struct {
-	ProjectDir       string
-	EpicFilename     string
-	Engine           string
-	UserPrompt       string
-	UserPromptSource string // human-readable origin, e.g. "--user-prompt-file path" or "--user-prompt flag"
-	ValidateOnly     bool
-	SkipProjectOverview  bool
-	AutoAccept       bool
-	ConfirmFile      bool // use file-based prompts instead of stdin
-	EngineFactory    func(string) (engine.Engine, error)       // optional; defaults to engine.NewEngine
-	LogFunc          func(format string, args ...interface{})   // optional; defaults to frylog.Log
-	Mode             Mode
-	EffortLevel      epic.EffortLevel
-	EnableReview     bool      // include @review_between_sprints in the generated epic
-	Stdin            io.Reader // for interactive confirmation (defaults to os.Stdin)
-	Stdout           io.Writer // for displaying generated content (defaults to os.Stdout)
-	CodebaseContent  string    // contents of .fry/codebase.md (may be empty for new projects)
+	ProjectDir          string
+	EpicFilename        string
+	Engine              string
+	UserPrompt          string
+	UserPromptSource    string // human-readable origin, e.g. "--user-prompt-file path" or "--user-prompt flag"
+	ValidateOnly        bool
+	SkipProjectOverview bool
+	AutoAccept          bool
+	ConfirmFile         bool                                     // use file-based prompts instead of stdin
+	EngineFactory       func(string) (engine.Engine, error)      // optional; defaults to engine.NewEngine
+	LogFunc             func(format string, args ...interface{}) // optional; defaults to frylog.Log
+	Mode                Mode
+	EffortLevel         epic.EffortLevel
+	EnableReview        bool      // include @review_between_sprints in the generated epic
+	Stdin               io.Reader // for interactive confirmation (defaults to os.Stdin)
+	Stdout              io.Writer // for displaying generated content (defaults to os.Stdout)
+	CodebaseContent     string    // contents of .fry/codebase.md (may be empty for new projects)
 }
 
 var numberedRulePattern = regexp.MustCompile(`(?m)^[0-9]+\.`)
@@ -83,8 +83,6 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if err != nil {
 		return fmt.Errorf("run prepare: %w", err)
 	}
-	prepModel := engine.ResolveModelForSession(engName, string(opts.EffortLevel), engine.SessionPrepare)
-
 	fryDir := filepath.Join(projectDir, config.FryDir)
 	if err := os.MkdirAll(fryDir, 0o755); err != nil {
 		return fmt.Errorf("run prepare: create fry dir: %w", err)
@@ -94,7 +92,9 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if err != nil {
 		return fmt.Errorf("run prepare: create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
 
 	epicExamplePath, verificationExamplePath, generateEpicPath, err := writeEmbeddedTemplates(tempDir)
 	if err != nil {
@@ -174,7 +174,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 
 	// Bootstrap: generate executive.md from user prompt if neither plan nor executive exists.
 	if planMissing && execMissing {
-		if err := bootstrapExecutive(ctx, eng, engName, opts, executivePath, mediaManifest, assetsSection); err != nil {
+		if err := bootstrapExecutive(ctx, eng, opts, executivePath, mediaManifest, assetsSection); err != nil {
 			return err
 		}
 	} else if !execMissing {
@@ -190,7 +190,8 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		if hasMedia {
 			step0Inputs = append(step0Inputs, fmt.Sprintf("%s/ manifest", config.MediaDir))
 		}
-		logf("Step 0: Generating %s from %s (engine: %s, model: %s)...", config.PlanFile, strings.Join(step0Inputs, ", "), engName, prepModel)
+		prepModel := engine.ResolveModelForSession(eng.Name(), string(opts.EffortLevel), engine.SessionPrepare)
+		logf("Step 0: Generating %s from %s (engine: %s, model: %s)...", config.PlanFile, strings.Join(step0Inputs, ", "), eng.Name(), prepModel)
 		executiveContent, err := os.ReadFile(executivePath)
 		if err != nil {
 			return fmt.Errorf("run prepare: read executive: %w", err)
@@ -200,7 +201,7 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		}
 		prompt := step0Prompt(opts.Mode, string(executiveContent), mediaManifest, assetsSection, opts.CodebaseContent)
 		beforeSize := textutil.FileSize(planPath)
-		output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
+		output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel, opts.EffortLevel)
 		if err != nil {
 			return err
 		}
@@ -234,7 +235,6 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 		opts.EnableReview = result.EnableReview
 		// Refresh derived flags — user may have added a prompt or changed effort via adjust.
 		hasUserPrompt = strings.TrimSpace(opts.UserPrompt) != ""
-		prepModel = engine.ResolveModelForSession(engName, string(opts.EffortLevel), engine.SessionPrepare)
 	}
 
 	agentsPath := filepath.Join(projectDir, config.AgentsFile)
@@ -246,10 +246,11 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step1Inputs = append(step1Inputs, config.MediaDir+"/ manifest")
 	}
-	logf("Step 1: Generating %s from %s (engine: %s, model: %s)...", config.AgentsFile, strings.Join(step1Inputs, ", "), engName, prepModel)
+	prepModel := engine.ResolveModelForSession(eng.Name(), string(opts.EffortLevel), engine.SessionPrepare)
+	logf("Step 1: Generating %s from %s (engine: %s, model: %s)...", config.AgentsFile, strings.Join(step1Inputs, ", "), eng.Name(), prepModel)
 	prompt := step1Prompt(opts.Mode, planContent, executiveContent, mediaManifest)
 	beforeSize := textutil.FileSize(agentsPath)
-	output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
+	output, err := runPrepareStep(ctx, eng, projectDir, prompt, prepModel, opts.EffortLevel)
 	if err != nil {
 		return err
 	}
@@ -287,10 +288,11 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step2Inputs = append(step2Inputs, config.MediaDir+"/ manifest")
 	}
-	logf("Step 2: Generating %s from %s (engine: %s, model: %s)...", epicFilename, strings.Join(step2Inputs, ", "), engName, prepModel)
+	prepModel = engine.ResolveModelForSession(eng.Name(), string(opts.EffortLevel), engine.SessionPrepare)
+	logf("Step 2: Generating %s from %s (engine: %s, model: %s)...", epicFilename, strings.Join(step2Inputs, ", "), eng.Name(), prepModel)
 	prompt = step2Prompt(opts.Mode, planContent, agentsContent, epicExamplePath, generateEpicPath, opts.UserPrompt, opts.EffortLevel, opts.EnableReview, mediaManifest, assetsSection, opts.CodebaseContent)
 	beforeSize = textutil.FileSize(epicPath)
-	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
+	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel, opts.EffortLevel)
 	if err != nil {
 		return err
 	}
@@ -315,11 +317,12 @@ func RunPrepare(ctx context.Context, opts PrepareOpts) error {
 	if hasMedia {
 		step3Inputs = append(step3Inputs, config.MediaDir+"/ manifest")
 	}
-	logf("Step 3: Generating %s from %s (engine: %s, model: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), engName, prepModel)
+	prepModel = engine.ResolveModelForSession(eng.Name(), string(opts.EffortLevel), engine.SessionPrepare)
+	logf("Step 3: Generating %s from %s (engine: %s, model: %s)...", config.DefaultVerificationFile, strings.Join(step3Inputs, ", "), eng.Name(), prepModel)
 	prompt = step3Prompt(opts.Mode, planContent, string(epicContentBytes), verificationExamplePath, opts.UserPrompt, mediaManifest, opts.CodebaseContent)
 	verificationPath := filepath.Join(projectDir, config.DefaultVerificationFile)
 	beforeSize = textutil.FileSize(verificationPath)
-	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel)
+	output, err = runPrepareStep(ctx, eng, projectDir, prompt, prepModel, opts.EffortLevel)
 	if err != nil {
 		return err
 	}
@@ -350,7 +353,7 @@ func validatePreparePrerequisites(projectDir, userPrompt string) error {
 	return fmt.Errorf("prepare requires %s, %s, or --user-prompt", config.PlanFile, config.ExecutiveFile)
 }
 
-func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, opts PrepareOpts, executivePath, mediaManifest, assetsSection string) error {
+func bootstrapExecutive(ctx context.Context, eng engine.Engine, opts PrepareOpts, executivePath, mediaManifest, assetsSection string) error {
 	logf := resolveLogFunc(opts)
 
 	// UserPrompt is guaranteed non-empty by the caller (validatePreparePrerequisites passed).
@@ -362,11 +365,16 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 	if strings.TrimSpace(mediaManifest) != "" {
 		bootstrapInputs = append(bootstrapInputs, config.MediaDir+"/ manifest")
 	}
-	prepModel := engine.ResolveModelForSession(engName, string(opts.EffortLevel), engine.SessionPrepare)
-	logf("Generating %s from %s (engine: %s, model: %s)...", config.ExecutiveFile, strings.Join(bootstrapInputs, ", "), engName, prepModel)
+	prepModel := engine.ResolveModelForSession(eng.Name(), string(opts.EffortLevel), engine.SessionPrepare)
+	logf("Generating %s from %s (engine: %s, model: %s)...", config.ExecutiveFile, strings.Join(bootstrapInputs, ", "), eng.Name(), prepModel)
 
 	prompt := executiveFromUserPromptPrompt(opts.Mode, opts.UserPrompt, mediaManifest, assetsSection)
-	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: prepModel})
+	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{
+		Model:       prepModel,
+		SessionType: engine.SessionPrepare,
+		EffortLevel: string(opts.EffortLevel),
+		WorkDir:     opts.ProjectDir,
+	})
 	if err != nil && strings.TrimSpace(output) == "" {
 		return fmt.Errorf("run prepare: generate executive: %w", err)
 	}
@@ -380,14 +388,14 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 		stdin = os.Stdin
 	}
 
-	fmt.Fprintln(stdout, "")
-	fmt.Fprintln(stdout, "── Generated executive context ──────────────────────────────────")
-	fmt.Fprintln(stdout, "")
-	fmt.Fprintln(stdout, output)
-	fmt.Fprintln(stdout, "")
-	fmt.Fprintln(stdout, "─────────────────────────────────────────────────────────────────")
+	_, _ = fmt.Fprintln(stdout, "")
+	_, _ = fmt.Fprintln(stdout, "── Generated executive context ──────────────────────────────────")
+	_, _ = fmt.Fprintln(stdout, "")
+	_, _ = fmt.Fprintln(stdout, output)
+	_, _ = fmt.Fprintln(stdout, "")
+	_, _ = fmt.Fprintln(stdout, "─────────────────────────────────────────────────────────────────")
 	if opts.SkipProjectOverview || opts.AutoAccept {
-		fmt.Fprintln(stdout, "Proceed with this executive context? [y/N] y (auto-accepted)")
+		_, _ = fmt.Fprintln(stdout, "Proceed with this executive context? [y/N] y (auto-accepted)")
 	} else if opts.ConfirmFile {
 		p := &confirm.Prompt{
 			Type:    confirm.PromptExecutiveContext,
@@ -406,7 +414,7 @@ func bootstrapExecutive(ctx context.Context, eng engine.Engine, engName string, 
 			return ErrUserDeclined
 		}
 	} else {
-		fmt.Fprint(stdout, "Proceed with this executive context? [y/N] ")
+		_, _ = fmt.Fprint(stdout, "Proceed with this executive context? [y/N] ")
 
 		scanner := bufio.NewScanner(stdin)
 		if !scanner.Scan() {
@@ -486,8 +494,13 @@ func validateStep3(verificationPath string) error {
 	return nil
 }
 
-func runPrepareStep(ctx context.Context, eng engine.Engine, projectDir, prompt, model string) (string, error) {
-	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: projectDir, Model: model})
+func runPrepareStep(ctx context.Context, eng engine.Engine, projectDir, prompt, model string, effort epic.EffortLevel) (string, error) {
+	output, _, err := eng.Run(ctx, prompt, engine.RunOpts{
+		Model:       model,
+		SessionType: engine.SessionPrepare,
+		EffortLevel: string(effort),
+		WorkDir:     projectDir,
+	})
 	if err != nil && strings.TrimSpace(output) == "" {
 		return "", fmt.Errorf("run prepare step: %w", err)
 	}
@@ -601,4 +614,3 @@ func countDirective(content, prefix string) int {
 	}
 	return count
 }
-

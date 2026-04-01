@@ -12,7 +12,7 @@ import (
 
 const maxCompactionErrorOutputBytes = 2000
 
-func CompactSprintProgress(ctx context.Context, projectDir string, sprintNum int, sprintName, status string, eng engine.Engine, useAgent bool, model string) (string, error) {
+func CompactSprintProgress(ctx context.Context, projectDir string, sprintNum int, sprintName, status string, eng engine.Engine, useAgent bool, model, effortLevel string) (string, error) {
 	progress, err := ReadSprintProgress(projectDir)
 	if err != nil {
 		return "", fmt.Errorf("read sprint progress for compaction: %w", err)
@@ -26,8 +26,10 @@ func CompactSprintProgress(ctx context.Context, projectDir string, sprintNum int
 		}
 		prompt := "Summarize the sprint progress below in 3-8 lines. Focus on what was completed, what remains, and any important gotchas.\n\n" + progress
 		output, exitCode, runErr := eng.Run(ctx, prompt, engine.RunOpts{
-			Model:   model,
-			WorkDir: projectDir,
+			Model:       model,
+			SessionType: engine.SessionCompaction,
+			EffortLevel: effortLevel,
+			WorkDir:     projectDir,
 		})
 		if runErr != nil {
 			details := summarizeCompactionFailureOutput(output)

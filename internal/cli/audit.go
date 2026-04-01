@@ -72,8 +72,9 @@ Results are written to build-audit.md in the project root.`,
 			}
 			engineOpts = append(engineOpts, engine.WithMCPConfig(mcpPath))
 		}
+		planner := newEnginePlanner(engineName)
 
-		eng, err := newResilientEngine(engineName, engineOpts...)
+		eng, err := planner.Build(engineName, engineOpts...)
 		if err != nil {
 			return fmt.Errorf("audit: create engine: %w", err)
 		}
@@ -97,12 +98,12 @@ Results are written to build-audit.md in the project root.`,
 
 		buildAuditModel := auditModel
 		if buildAuditModel == "" {
-			buildAuditModel = engine.ResolveModel(ep.AuditModel, engineName, string(ep.EffortLevel), engine.SessionBuildAudit)
+			buildAuditModel = engine.ResolveModel(ep.AuditModel, planner.Current(), string(ep.EffortLevel), engine.SessionBuildAudit)
 		}
 
 		ctx := cmd.Context()
 
-		frylog.Log("▶ BUILD AUDIT  standalone audit...  engine=%s  model=%s  effort=%s", engineName, buildAuditModel, ep.EffortLevel)
+		frylog.Log("▶ BUILD AUDIT  standalone audit...  engine=%s  model=%s  effort=%s", planner.Current(), buildAuditModel, ep.EffortLevel)
 
 		result, err := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
 			ProjectDir: projectPath,

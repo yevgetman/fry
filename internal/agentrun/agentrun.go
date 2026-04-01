@@ -16,12 +16,14 @@ const maxNonFatalEngineOutputBytes = 1000
 
 // DualLogOpts holds the configuration for a dual-log agent invocation.
 type DualLogOpts struct {
-	Engine     engine.Engine // required
-	Model      string        // resolved model string (e.g. "claude-opus-4-5")
-	ExtraFlags []string      // agent extra flags from epic (e.g. --verbose)
-	WorkDir    string        // project directory for the agent
-	Verbose    bool          // if true, also write to Stdout (or os.Stdout if nil)
-	Stdout     io.Writer     // optional; defaults to os.Stdout when Verbose is true
+	Engine      engine.Engine // required
+	Model       string        // resolved model string (e.g. "claude-opus-4-5")
+	SessionType engine.SessionType
+	EffortLevel string
+	ExtraFlags  []string  // agent extra flags from epic (e.g. --verbose)
+	WorkDir     string    // project directory for the agent
+	Verbose     bool      // if true, also write to Stdout (or os.Stdout if nil)
+	Stdout      io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
 // RunWithDualLogs runs the engine with the given prompt, writing output to both
@@ -37,18 +39,24 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 	if err != nil {
 		return "", fmt.Errorf("open iter log: %w", err)
 	}
-	defer iterLog.Close()
+	defer func() {
+		_ = iterLog.Close()
+	}()
 
 	sprintLog, err := os.OpenFile(sprintLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return "", fmt.Errorf("open sprint log: %w", err)
 	}
-	defer sprintLog.Close()
+	defer func() {
+		_ = sprintLog.Close()
+	}()
 
 	runOpts := engine.RunOpts{
-		Model:      opts.Model,
-		ExtraFlags: opts.ExtraFlags,
-		WorkDir:    opts.WorkDir,
+		Model:       opts.Model,
+		SessionType: opts.SessionType,
+		EffortLevel: opts.EffortLevel,
+		ExtraFlags:  opts.ExtraFlags,
+		WorkDir:     opts.WorkDir,
 	}
 
 	if opts.Verbose {
@@ -63,7 +71,8 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 			return output, fmt.Errorf("sync sprint log: %w", err)
 		}
 		if runErr != nil && ctx.Err() == nil {
-			frylog.Log("WARNING: %s", formatNonFatalEngineError(opts.Engine, opts.Model, exitCode, runErr, output))
+			effectiveRunOpts, _ := engine.AdaptRunOptsForEngine(opts.Engine.Name(), runOpts)
+			frylog.Log("WARNING: %s", formatNonFatalEngineError(opts.Engine, effectiveRunOpts.Model, exitCode, runErr, output))
 			return output, nil
 		}
 		return output, runErr
@@ -80,7 +89,8 @@ func RunWithDualLogs(ctx context.Context, prompt, iterPath, sprintLogPath string
 		return output, fmt.Errorf("sync sprint log: %w", err)
 	}
 	if runErr != nil && ctx.Err() == nil {
-		frylog.Log("WARNING: %s", formatNonFatalEngineError(opts.Engine, opts.Model, exitCode, runErr, output))
+		effectiveRunOpts, _ := engine.AdaptRunOptsForEngine(opts.Engine.Name(), runOpts)
+		frylog.Log("WARNING: %s", formatNonFatalEngineError(opts.Engine, effectiveRunOpts.Model, exitCode, runErr, output))
 		return output, nil
 	}
 	return output, runErr

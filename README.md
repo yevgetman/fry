@@ -121,6 +121,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Git strategy** -- `--git-strategy auto|current|branch|worktree` controls build isolation. Auto mode lets triage decide: complex tasks get an isolated worktree, simpler tasks get a new branch, but a first build in a freshly initialized repo stays on the primary branch. Use `current` for the previous behavior (work on the current branch). See [Git Strategy](docs/git-strategy.md).
 - **Git checkpoints** -- automatic commits after each sprint
 - **Rate-limit resilience** -- automatic retry with exponential backoff when engines hit API rate limits (429, overloaded, etc.); see [Engines](docs/engines.md#rate-limit-resilience)
+- **Sticky cross-engine failover** -- after same-engine retries are exhausted, Claude and Codex builds can automatically fail over to the other engine on transient failures (rate limits, timeouts, 5xx, connection errors). Once the fallback succeeds, Fry pins the build to that engine for the rest of the run and re-resolves models using the normal session-by-effort matrix for the new engine. Control with `--fallback-engine` and `--no-engine-failover`. See [Engines](docs/engines.md#cross-engine-failover).
 - **MCP config passthrough** -- `--mcp-config` flag and `@mcp_config` directive pass MCP server configuration to Claude Code for extended agent capabilities (LSP, AST tools, etc.); see [Engines](docs/engines.md#mcp-server-configuration)
 - **Dynamic sprint review** -- optional mid-build review with replanning
 - **Observer** -- metacognitive layer that watches builds, notices patterns, and collects build experience records for the consciousness pipeline. Identity is compiled into the binary and read-only during builds. Non-fatal; effort-level gated. See [Observer](docs/observer.md).
@@ -154,6 +155,7 @@ See [Self-Improvement Pipeline](docs/self-improvement.md) for the full architect
   - [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code): `npm i -g @anthropic-ai/claude-code` (default engine)
   - [OpenAI Codex CLI](https://www.npmjs.com/package/@openai/codex): `npm i -g @openai/codex`
   - [Ollama](https://ollama.com): `brew install ollama` — local models, no API key required (required only when using `--engine ollama`)
+- Install both Claude Code and Codex CLI if you want automatic cross-engine failover between them.
 - **Docker** (optional) — only needed if your project uses `@docker_from_sprint`
 
 ## Quick Start
@@ -209,6 +211,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 ```bash
 fry                                    # Run all sprints (prepare: claude, build: claude)
 fry --engine codex                     # Use OpenAI Codex for build stage
+fry --engine claude --fallback-engine codex  # Prefer Claude, fail over to Codex if Claude is transiently unavailable
 fry --engine ollama                    # Use local Ollama models (no API key)
 fry --gh-issue https://github.com/yevgetman/fry/issues/74  # Start from a GitHub issue
 fry --effort fast                       # Simple task: 1-2 sprints, minimal overhead

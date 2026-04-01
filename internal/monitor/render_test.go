@@ -72,6 +72,28 @@ func TestRenderEvent_Synthetic(t *testing.T) {
 	assert.Contains(t, output, "*monitor:process_exited")
 }
 
+func TestRenderEvent_EngineFailover(t *testing.T) {
+	t.Parallel()
+
+	evt := EnrichedEvent{
+		BuildEvent: agent.BuildEvent{
+			Type:      "engine_failover",
+			Timestamp: time.Date(2026, 3, 30, 10, 0, 15, 0, time.UTC),
+			Data:      map[string]string{"from": "claude", "to": "codex"},
+		},
+		ElapsedBuild: 15 * time.Second,
+	}
+
+	var buf bytes.Buffer
+	RenderEvent(&buf, evt, false)
+	output := buf.String()
+
+	assert.Contains(t, output, "engine_failover")
+	assert.Contains(t, output, "from=claude")
+	assert.Contains(t, output, "to=codex")
+	assert.NotContains(t, output, "*engine_failover")
+}
+
 func TestRenderDashboard_Basic(t *testing.T) {
 	t.Parallel()
 

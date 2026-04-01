@@ -97,6 +97,7 @@ var prepareCmd = &cobra.Command{
 			}
 			prepareEngineOpts = append(prepareEngineOpts, engine.WithMCPConfig(mcpPath))
 		}
+		planner := newEnginePlanner(engineVal)
 
 		return prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
 			ProjectDir:          projectPath,
@@ -113,14 +114,12 @@ var prepareCmd = &cobra.Command{
 			EnableReview:        reviewVal,
 			Stdin:               os.Stdin,
 			Stdout:              cmd.OutOrStdout(),
-			EngineFactory: func() func(string) (engine.Engine, error) {
-				if len(prepareEngineOpts) > 0 {
-					return engine.NewResilientEngineFactory(
-						engine.WithEngineOpts(prepareEngineOpts...),
-					)
+			EngineFactory: func(name string) (engine.Engine, error) {
+				if len(prepareEngineOpts) == 0 {
+					return planner.Build(name)
 				}
-				return nil
-			}(),
+				return planner.Build(name, prepareEngineOpts...)
+			},
 		})
 	},
 }

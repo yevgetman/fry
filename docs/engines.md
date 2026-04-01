@@ -83,6 +83,56 @@ Claude is the default engine for all modes and stages. Use `--engine codex` or `
 
 These defaults apply only when no explicit engine is specified via CLI flag, epic directive, or environment variable.
 
+## Cross-Engine Failover
+
+After Fry exhausts the normal same-engine retry loop, Claude and Codex builds can fail over to each other on transient failures.
+
+### What triggers failover
+
+Failover is considered only after the active engine's exponential-backoff retries are exhausted, and only for transient failure classes:
+
+- rate limits (`429`, `rate limit`, `overloaded`, `too many requests`)
+- timeouts / `deadline exceeded`
+- `500` / `502` / `503` / `504`
+- service unavailable / temporary unavailability
+- connection reset / refused / transport / upstream network failures
+
+Fry does **not** fail over on deterministic configuration problems such as invalid model names, bad engine flags, missing authentication, or other hard setup errors.
+
+### Sticky promotion
+
+When the fallback engine succeeds once, Fry promotes it for the rest of the build. It does not switch back and forth between engines.
+
+This sticky promotion applies across the rest of the pipeline: sprint execution, audit, review, replan, build summary, codebase scans, and other later engine sessions all stay on the promoted engine.
+
+When this happens, Fry prints a failover message on the main CLI output, updates the build status engine field, and emits an `engine_failover` event into the observer stream so `fry monitor` can show the switch.
+
+### Model remapping on failover
+
+When Fry switches engines, it keeps using the same session-selection matrix described below. If the requested model is not valid for the fallback engine, Fry re-resolves the model for the fallback engine using the same `session × effort` rules.
+
+Example:
+
+- sprint build starts on Claude with `sonnet`
+- Claude rate-limits after same-engine retries
+- Fry fails over to Codex
+- the sprint session is remapped to Codex's sprint tier for that effort level (for example `gpt-5.3-codex` or `gpt-5.4`)
+
+### Flags
+
+Use these persistent CLI flags on `fry run`, `fry prepare`, `fry audit`, `fry replan`, or `fry init`:
+
+| Flag | Description |
+|------|-------------|
+| `--fallback-engine <claude\|codex\|ollama>` | Override the fallback engine. If omitted, Fry uses `claude -> codex` and `codex -> claude`. |
+| `--no-engine-failover` | Disable cross-engine failover entirely and stay on the selected engine. |
+
+Notes:
+
+- Automatic implicit failover is only configured between Claude and Codex.
+- Ollama has no implicit fallback target.
+- If the fallback engine CLI is not installed or cannot be created, Fry logs a warning and continues on the primary engine.
+
 ## Mixing Engines
 
 CLI flags take absolute precedence over all other engine settings. For example, use Codex for sprint execution while keeping Claude for preparation:
@@ -220,7 +270,7 @@ Ollama runs models locally and does not hit HTTP rate limits. Rate-limit detecti
 
 ### Implementation
 
-Rate-limit resilience is implemented as a `ResilientEngine` decorator that wraps any `Engine`. The decorator is transparent -- callers (sprint execution, alignment, audit, review, etc.) are unaware of the retry layer. See `internal/engine/resilient.go` and `internal/engine/ratelimit.go`.
+Rate-limit resilience is implemented as a `ResilientEngine` decorator that wraps any `Engine`. Sticky cross-engine promotion is implemented by a `FailoverEngine` decorator layered above the resilient engines. Both are transparent to callers (sprint execution, alignment, audit, review, etc.). See `internal/engine/resilient.go`, `internal/engine/failover.go`, `internal/engine/failure.go`, and `internal/engine/ratelimit.go`.
 
 ## MCP Server Configuration
 

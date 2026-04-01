@@ -27,6 +27,7 @@ type ReplanOpts struct {
 	MaxScope          int
 	Engine            engine.Engine
 	Model             string
+	EffortLevel       string
 	DryRun            bool
 	Verbose           bool
 	Stdout            io.Writer // optional; defaults to os.Stdout when Verbose is true
@@ -97,8 +98,10 @@ func RunReplan(ctx context.Context, opts ReplanOpts) error {
 
 	frylog.Log("  Running replanner agent...  engine=%s  model=%s", opts.Engine.Name(), opts.Model)
 	runOpts := engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionReplan,
+		EffortLevel: opts.EffortLevel,
+		WorkDir:     opts.ProjectDir,
 	}
 	if opts.Verbose {
 		stdout := opts.Stdout

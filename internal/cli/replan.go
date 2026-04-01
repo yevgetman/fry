@@ -44,6 +44,7 @@ var replanCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
+			planner := newEnginePlanner(engineName)
 			var mcpOpts []engine.EngineOpt
 			if replanMCPConfig != "" {
 				mcpPath := replanMCPConfig
@@ -52,7 +53,7 @@ var replanCmd = &cobra.Command{
 				}
 				mcpOpts = append(mcpOpts, engine.WithMCPConfig(mcpPath))
 			}
-			replanner, err = newResilientEngine(engineName, mcpOpts...)
+			replanner, err = planner.Build(engineName, mcpOpts...)
 			if err != nil {
 				return err
 			}
@@ -70,6 +71,7 @@ var replanCmd = &cobra.Command{
 			MaxScope:          maxScope,
 			Engine:            replanner,
 			Model:             model,
+			EffortLevel:       "",
 			DryRun:            dryRun,
 		}); err != nil {
 			return err

@@ -114,6 +114,16 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		runPlanner := newEnginePlanner(resolvePrepareEngine(runPrepareEngine, runEngine))
+		currentEngineName := func() string { return runPlanner.Current() }
+		var buildStatus *agent.BuildStatus
+		writeCurrentBuildStatus := func() {
+			if buildStatus == nil {
+				return
+			}
+			buildStatus.Build.Engine = currentEngineName()
+			writeBuildStatus(projectPath, buildStatus)
+		}
 
 		gitStrategy, err := git.ParseGitStrategy(runGitStrategy)
 		if err != nil {
@@ -141,6 +151,16 @@ var runCmd = &cobra.Command{
 		// projectPath before any file reads (epic, user-prompt, etc.)
 		var strategySetup *git.StrategySetup
 		originalProjectPath := projectPath
+		runPlanner.SetSwitchCallback(func(from, to string) {
+			_ = observer.EmitEvent(projectPath, observer.Event{
+				Type: observer.EventEngineFailover,
+				Data: map[string]string{
+					"from": from,
+					"to":   to,
+				},
+			})
+			writeCurrentBuildStatus()
+		})
 		if runContinue || runSimpleContinue || runResume {
 			target, resolveErr := continuerun.ResolveContinueTarget(ctx, projectPath)
 			if resolveErr != nil {
@@ -212,24 +232,24 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("--simple-continue requires existing build artifacts; epic file not found at %s", epicArg)
 			}
 			prepareEngineName := resolvePrepareEngine(runPrepareEngine, runEngine)
+			runPlanner.SetDefault(prepareEngineName)
 			// Build engine factory with MCP config for auto-prepare paths
-			var earlyPrepareFactory func(string) (engine.Engine, error)
-			if runMCPConfig != "" {
+			earlyPrepareFactory := func(name string) (engine.Engine, error) {
+				if runMCPConfig == "" {
+					return runPlanner.Build(name)
+				}
 				mcpPath := runMCPConfig
 				if abs, err := filepath.Abs(runMCPConfig); err == nil {
 					mcpPath = abs
 				}
-				earlyPrepareFactory = engine.NewResilientEngineFactory(
-					engine.WithLogFunc(frlog.Log),
-					engine.WithEngineOpts(engine.WithMCPConfig(mcpPath)),
-				)
+				return runPlanner.Build(name, engine.WithMCPConfig(mcpPath))
 			}
 			if runFullPrepare {
 				writeBuildPhase(projectPath, "prepare")
 				if err := prepare.RunPrepare(cmd.Context(), prepare.PrepareOpts{
 					ProjectDir:          projectPath,
 					EpicFilename:        filepath.Base(epicPath),
-					Engine:              prepareEngineName,
+					Engine:              runPlanner.Current(),
 					UserPrompt:          userPrompt,
 					UserPromptSource:    promptSource,
 					SkipProjectOverview: runNoProjectOverview || runDryRun,
@@ -247,7 +267,7 @@ var runCmd = &cobra.Command{
 			} else {
 				writeBuildPhase(projectPath, "triage")
 				var err error
-				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, promptSource, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoProjectOverview || runDryRun, runYes, runTriageOnly, runConfirmFile)
+				triageDecision, err = runTriageGate(cmd.Context(), projectPath, epicPath, prepareEngineName, userPrompt, promptSource, effortLevel, mode, os.Stdin, cmd.OutOrStdout(), runNoProjectOverview || runDryRun, runYes, runTriageOnly, runConfirmFile, runPlanner)
 				if err != nil {
 					return err
 				}
@@ -316,6 +336,7 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		runPlanner.SetDefault(engineName)
 
 		mcpConfig := runMCPConfig
 		if mcpConfig == "" {
@@ -332,7 +353,7 @@ var runCmd = &cobra.Command{
 			mcpOpts = append(mcpOpts, engine.WithMCPConfig(mcpConfig))
 		}
 
-		buildEngine, err := newResilientEngine(engineName, mcpOpts...)
+		buildEngine, err := runPlanner.Build(engineName, mcpOpts...)
 		if err != nil {
 			return err
 		}
@@ -386,14 +407,15 @@ var runCmd = &cobra.Command{
 				if continueOverride == "" {
 					continueOverride = ep.AgentModel
 				}
-				continueModel := engine.ResolveModel(continueOverride, engineName, string(ep.EffortLevel), engine.SessionContinue)
+				continueModel := engine.ResolveModel(continueOverride, currentEngineName(), string(ep.EffortLevel), engine.SessionContinue)
 				var analyzeErr error
 				decision, analyzeErr = continuerun.Analyze(cmd.Context(), continuerun.AnalyzeOpts{
-					ProjectDir: projectPath,
-					State:      state,
-					Engine:     buildEngine,
-					Model:      continueModel,
-					Verbose:    frlog.Verbose,
+					ProjectDir:  projectPath,
+					State:       state,
+					Engine:      buildEngine,
+					Model:       continueModel,
+					EffortLevel: string(ep.EffortLevel),
+					Verbose:     frlog.Verbose,
 				})
 				if analyzeErr != nil {
 					return fmt.Errorf("continue: %w", analyzeErr)
@@ -474,7 +496,7 @@ var runCmd = &cobra.Command{
 				fmt.Fprintln(cmd.OutOrStdout(), "Nothing to run — will resume from build audit only.")
 				return nil
 			}
-			return printDryRunReport(cmd.OutOrStdout(), projectPath, epicPath, ep, engineName, startSprint, endSprint)
+			return printDryRunReport(cmd.OutOrStdout(), projectPath, epicPath, ep, currentEngineName(), startSprint, endSprint)
 		}
 
 		// Ensure git is initialised before strategy setup; branch/worktree
@@ -519,7 +541,11 @@ var runCmd = &cobra.Command{
 				// Re-resolve epicPath relative to redirected projectPath
 				epicPath = filepath.Join(projectPath, epicArg)
 
-				defer strategySetup.Cleanup()
+				defer func() {
+					if cleanupErr := strategySetup.Cleanup(); cleanupErr != nil {
+						fmt.Fprintf(os.Stderr, "fry: warning: %v\n", cleanupErr)
+					}
+				}()
 
 				if persistErr := git.PersistStrategy(originalProjectPath, strategySetup); persistErr != nil {
 					frlog.Log("WARNING: could not persist git strategy: %v", persistErr)
@@ -529,7 +555,11 @@ var runCmd = &cobra.Command{
 			}
 		} else if strategySetup != nil {
 			// Already set up from --continue detection
-			defer strategySetup.Cleanup()
+			defer func() {
+				if cleanupErr := strategySetup.Cleanup(); cleanupErr != nil {
+					fmt.Fprintf(os.Stderr, "fry: warning: %v\n", cleanupErr)
+				}
+			}()
 		}
 
 		if err := lock.AcquireIfNotDryRun(originalProjectPath, runDryRun); err != nil {
@@ -549,8 +579,6 @@ var runCmd = &cobra.Command{
 		var mu sync.Mutex
 		currentSprint := 0
 		epicName := ep.Name // guarded by mu; updated after replan
-		var buildStatus *agent.BuildStatus
-
 		// Clear any stale exit reason from a prior failed run before this build
 		// starts so monitors and status readers see a clean active state.
 		writeExitReason(projectPath, nil, 0)
@@ -563,6 +591,9 @@ var runCmd = &cobra.Command{
 			mu.Unlock()
 			writeExitReason(projectPath, retErr, lastSprint)
 			if retErr != nil {
+				if buildStatus != nil {
+					buildStatus.Build.Engine = currentEngineName()
+				}
 				markBuildFailed(projectPath, originalProjectPath, buildStatus)
 			}
 		}()
@@ -608,7 +639,7 @@ var runCmd = &cobra.Command{
 		}
 		if err := preflight.RunPreflight(preflight.PreflightConfig{
 			ProjectDir:       projectPath,
-			Engine:           engineName,
+			Engine:           currentEngineName(),
 			DockerFromSprint: ep.DockerFromSprint,
 			CurrentSprint:    preflightSprint,
 			RequiredTools:    ep.RequiredTools,
@@ -648,7 +679,7 @@ var runCmd = &cobra.Command{
 			Build: agent.BuildInfo{
 				Epic:         ep.Name,
 				Effort:       string(ep.EffortLevel),
-				Engine:       engineName,
+				Engine:       currentEngineName(),
 				Mode:         modeStr,
 				TotalSprints: ep.TotalSprints,
 				Status:       "running",
@@ -658,18 +689,10 @@ var runCmd = &cobra.Command{
 			},
 			Sprints: initialSprintStatuses(projectPath, ep, startSprint, endSprint, runResume || runContinue || runSimpleContinue || auditOnlyResume),
 		}
-		writeBuildStatus(projectPath, buildStatus)
+		writeCurrentBuildStatus()
 
 		// Initialize observer metacognitive layer
 		observerEnabled := !runNoObserver && !runDryRun && ep.EffortLevel != epic.EffortFast
-		var observerEngine engine.Engine
-		if observerEnabled {
-			observerEngine, err = newResilientEngine(engineName, mcpOpts...)
-			if err != nil {
-				frlog.Log("WARNING: observer: could not create engine: %v", err)
-				observerEnabled = false
-			}
-		}
 		if observerEnabled {
 			if initErr := observer.InitBuild(projectPath, ep.Name, string(ep.EffortLevel), ep.TotalSprints); initErr != nil {
 				frlog.Log("WARNING: observer: init failed: %v", initErr)
@@ -686,7 +709,7 @@ var runCmd = &cobra.Command{
 		// Create observation collector for the consciousness pipeline
 		var collector *consciousness.Collector
 		if observerEnabled {
-			collector = consciousness.NewCollector(engineName, string(ep.EffortLevel), ep.TotalSprints)
+			collector = consciousness.NewCollector(currentEngineName(), string(ep.EffortLevel), ep.TotalSprints)
 		}
 
 		exitErr := error(nil)
@@ -717,7 +740,7 @@ var runCmd = &cobra.Command{
 				Status:    "running",
 				StartedAt: &sprintStartedAt,
 			})
-			writeBuildStatus(projectPath, buildStatus)
+			writeCurrentBuildStatus()
 
 			if ep.DockerFromSprint > 0 && sprintNum >= ep.DockerFromSprint {
 				if err := docker.EnsureDockerUp(ctx, projectPath, ep.DockerReadyCmd, ep.DockerReadyTimeout); err != nil {
@@ -877,7 +900,7 @@ var runCmd = &cobra.Command{
 			var sprintTokenUsage *metrics.TokenUsage
 			if (runShowTokens || runJSONReport) && result.SprintLogPath != "" {
 				if logData, readErr := os.ReadFile(result.SprintLogPath); readErr == nil {
-					u := metrics.ParseTokens(engineName, string(logData))
+					u := metrics.ParseTokens(currentEngineName(), string(logData))
 					if u.Total > 0 {
 						sprintTokenUsage = &u
 					}
@@ -914,7 +937,7 @@ var runCmd = &cobra.Command{
 
 			// Update build status with sprint result
 			updateBuildStatusSprint(buildStatus, spr.Number, result)
-			writeBuildStatus(projectPath, buildStatus)
+			writeCurrentBuildStatus()
 
 			if isPassStatus(result.Status) {
 				if steering.HasStopRequest(projectPath) {
@@ -940,12 +963,12 @@ var runCmd = &cobra.Command{
 				// Sprint audit
 				if ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortFast || runAlwaysVerify) {
 					buildStatus.Build.Phase = "audit"
-					writeBuildStatus(projectPath, buildStatus)
+					writeCurrentBuildStatus()
 					writeBuildPhase(projectPath, "audit")
 					if originalProjectPath != projectPath {
 						writeBuildPhase(originalProjectPath, "audit:worktree")
 					}
-					auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
+					auditEngine, err := resolveAuditEngine(runPlanner, currentEngineName(), ep.AuditEngine, mcpOpts...)
 					if err != nil {
 						return err
 					}
@@ -1051,9 +1074,9 @@ var runCmd = &cobra.Command{
 
 					// Update build status with audit result
 					updateBuildStatusAudit(buildStatus, spr.Number, auditResult)
-					writeBuildStatus(projectPath, buildStatus)
+					writeCurrentBuildStatus()
 					buildStatus.Build.Phase = "sprint"
-					writeBuildStatus(projectPath, buildStatus)
+					writeCurrentBuildStatus()
 					writeBuildPhase(projectPath, "sprint")
 					if originalProjectPath != projectPath {
 						writeBuildPhase(originalProjectPath, "sprint:worktree")
@@ -1085,12 +1108,12 @@ var runCmd = &cobra.Command{
 					return err
 				}
 
-				compactEngine, err := newResilientEngine(engineName, mcpOpts...)
+				compactEngine, err := runPlanner.Build(currentEngineName(), mcpOpts...)
 				if err != nil {
 					return err
 				}
-				compactModel := engine.ResolveModel(ep.AgentModel, engineName, string(ep.EffortLevel), engine.SessionCompaction)
-				compacted, err := sprint.CompactSprintProgress(ctx, projectPath, spr.Number, spr.Name, result.Status, compactEngine, ep.CompactWithAgent, compactModel)
+				compactModel := engine.ResolveModel(ep.AgentModel, currentEngineName(), string(ep.EffortLevel), engine.SessionCompaction)
+				compacted, err := sprint.CompactSprintProgress(ctx, projectPath, spr.Number, spr.Name, result.Status, compactEngine, ep.CompactWithAgent, compactModel, string(ep.EffortLevel))
 				if err != nil {
 					return err
 				}
@@ -1198,7 +1221,7 @@ var runCmd = &cobra.Command{
 					if strings.HasPrefix(lowerDecision, "replan:") || lowerDecision == "replan" {
 						// Trigger replan with user's instructions
 						frlog.Log("  STEERING: triggering replan of remaining sprints")
-						replanEngine, rErr := resolveReviewEngine(engineName, ep.ReviewEngine, mcpOpts...)
+						replanEngine, rErr := resolveReviewEngine(runPlanner, currentEngineName(), ep.ReviewEngine, mcpOpts...)
 						if rErr != nil {
 							return rErr
 						}
@@ -1230,6 +1253,7 @@ var runCmd = &cobra.Command{
 							MaxScope:        ep.MaxDeviationScope,
 							Engine:          replanEngine,
 							Model:           replanModel,
+							EffortLevel:     string(ep.EffortLevel),
 							Verbose:         frlog.Verbose,
 						}); rpErr != nil {
 							return fmt.Errorf("steering replan: %w", rpErr)
@@ -1267,7 +1291,7 @@ var runCmd = &cobra.Command{
 				if ep.ReviewBetweenSprints && !runNoReview && spr.Number < ep.TotalSprints && ep.EffortLevel != epic.EffortFast {
 					reviewSummary.ReviewsConducted++
 
-					reviewEngine, err := resolveReviewEngine(engineName, ep.ReviewEngine, mcpOpts...)
+					reviewEngine, err := resolveReviewEngine(runPlanner, currentEngineName(), ep.ReviewEngine, mcpOpts...)
 					if err != nil {
 						return err
 					}
@@ -1313,7 +1337,7 @@ var runCmd = &cobra.Command{
 
 					// Update build status with review verdict
 					updateBuildStatusReview(buildStatus, spr.Number, string(reviewResult.Verdict))
-					writeBuildStatus(projectPath, buildStatus)
+					writeCurrentBuildStatus()
 
 					entry := review.DeviationLogEntry{
 						SprintNum:  spr.Number,
@@ -1350,6 +1374,7 @@ var runCmd = &cobra.Command{
 							MaxScope:        ep.MaxDeviationScope,
 							Engine:          reviewEngine,
 							Model:           replanModel,
+							EffortLevel:     string(ep.EffortLevel),
 							Verbose:         frlog.Verbose,
 						}); err != nil {
 							return err
@@ -1408,11 +1433,14 @@ var runCmd = &cobra.Command{
 
 				// Observer wake-up: after sprint
 				if observerEnabled && observer.ShouldWakeUp(ep.EffortLevel, observer.WakeAfterSprint) {
-					observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
+					observerModel := engine.ResolveModel("", currentEngineName(), string(ep.EffortLevel), engine.SessionObserver)
 					frlog.Log("  OBSERVER: wake-up after sprint %d...  model=%s", spr.Number, observerModel)
-					if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+					obsEngine, engErr := runPlanner.Build(currentEngineName(), mcpOpts...)
+					if engErr != nil {
+						frlog.Log("WARNING: observer: could not create engine: %v", engErr)
+					} else if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
 						ProjectDir:   projectPath,
-						Engine:       observerEngine,
+						Engine:       obsEngine,
 						Model:        observerModel,
 						EpicName:     ep.Name,
 						WakePoint:    observer.WakeAfterSprint,
@@ -1510,12 +1538,12 @@ var runCmd = &cobra.Command{
 			}
 
 			deferredContent := readDeferredFailuresArtifact(projectPath)
-			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
+			auditEngine, err := resolveAuditEngine(runPlanner, currentEngineName(), ep.AuditEngine, mcpOpts...)
 			if err != nil {
 				frlog.Log("WARNING: could not create engine for build audit: %v", err)
 			} else {
 				buildStatus.Build.Phase = "build-audit"
-				writeBuildStatus(projectPath, buildStatus)
+				writeCurrentBuildStatus()
 				writeBuildPhase(projectPath, "build-audit")
 				if originalProjectPath != projectPath {
 					writeBuildPhase(originalProjectPath, "build-audit:worktree")
@@ -1574,7 +1602,7 @@ var runCmd = &cobra.Command{
 					}
 				}
 				buildStatus.Build.Phase = "sprint"
-				writeBuildStatus(projectPath, buildStatus)
+				writeCurrentBuildStatus()
 				writeBuildPhase(projectPath, "sprint")
 				if originalProjectPath != projectPath {
 					writeBuildPhase(originalProjectPath, "sprint:worktree")
@@ -1602,12 +1630,12 @@ var runCmd = &cobra.Command{
 		// Run a single-pass build audit for triaged tasks that skipped the main
 		// build audit gate (e.g. simple+low, moderate+low where AuditAfterSprint=false).
 		if exitErr == nil && buildAuditResult == nil && !runNoAudit && triageDecision != nil {
-			auditEngine, auditEngErr := newResilientEngine(engineName, mcpOpts...)
+			auditEngine, auditEngErr := runPlanner.Build(currentEngineName(), mcpOpts...)
 			if auditEngErr != nil {
 				frlog.Log("WARNING: could not create engine for triage build audit: %v", auditEngErr)
 			} else {
-				buildAuditModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionBuildAudit)
-				frlog.Log("▶ BUILD AUDIT  single-pass audit for triaged task...  engine=%s  model=%s", engineName, buildAuditModel)
+				buildAuditModel := engine.ResolveModelForSession(currentEngineName(), string(ep.EffortLevel), engine.SessionBuildAudit)
+				frlog.Log("▶ BUILD AUDIT  single-pass audit for triaged task...  engine=%s  model=%s", currentEngineName(), buildAuditModel)
 				result, auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
 					ProjectDir: projectPath,
 					Epic:       ep,
@@ -1646,7 +1674,7 @@ var runCmd = &cobra.Command{
 				Blocking: buildAuditResult.Blocking,
 				Findings: buildAuditResult.SeverityCounts,
 			}
-			writeBuildStatus(projectPath, buildStatus)
+			writeCurrentBuildStatus()
 		}
 
 		// Observer: build audit event and wake-up
@@ -1664,11 +1692,14 @@ var runCmd = &cobra.Command{
 			})
 
 			if observer.ShouldWakeUp(ep.EffortLevel, observer.WakeAfterBuildAudit) {
-				observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
+				observerModel := engine.ResolveModel("", currentEngineName(), string(ep.EffortLevel), engine.SessionObserver)
 				frlog.Log("  OBSERVER: wake-up after build audit...  model=%s", observerModel)
-				if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+				obsEngine, engErr := runPlanner.Build(currentEngineName(), mcpOpts...)
+				if engErr != nil {
+					frlog.Log("WARNING: observer: could not create engine: %v", engErr)
+				} else if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
 					ProjectDir:   projectPath,
-					Engine:       observerEngine,
+					Engine:       obsEngine,
 					Model:        observerModel,
 					EpicName:     ep.Name,
 					WakePoint:    observer.WakeAfterBuildAudit,
@@ -1685,17 +1716,18 @@ var runCmd = &cobra.Command{
 		}
 
 		// Generate build summary document (after build audit so results can be included)
-		summaryEngine, err := newResilientEngine(engineName, mcpOpts...)
+		summaryEngine, err := runPlanner.Build(currentEngineName(), mcpOpts...)
 		if err != nil {
 			frlog.Log("WARNING: could not create engine for build summary: %v", err)
 		} else {
-			summaryModel := engine.ResolveModel(ep.AgentModel, engineName, string(ep.EffortLevel), engine.SessionBuildSummary)
-			frlog.Log("▶ BUILD SUMMARY  generating...  engine=%s  model=%s", engineName, summaryModel)
+			summaryModel := engine.ResolveModel(ep.AgentModel, currentEngineName(), string(ep.EffortLevel), engine.SessionBuildSummary)
+			frlog.Log("▶ BUILD SUMMARY  generating...  engine=%s  model=%s", currentEngineName(), summaryModel)
 			if summaryErr := summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
 				ProjectDir:       projectPath,
 				EpicName:         ep.Name,
 				Engine:           summaryEngine,
 				Results:          summaryCopy,
+				EffortLevel:      string(ep.EffortLevel),
 				Verbose:          frlog.Verbose,
 				Model:            summaryModel,
 				BuildAuditResult: buildAuditResult,
@@ -1744,11 +1776,14 @@ var runCmd = &cobra.Command{
 			})
 
 			if observer.ShouldWakeUp(ep.EffortLevel, observer.WakeBuildEnd) {
-				observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
+				observerModel := engine.ResolveModel("", currentEngineName(), string(ep.EffortLevel), engine.SessionObserver)
 				frlog.Log("  OBSERVER: final wake-up...  model=%s", observerModel)
-				if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
+				obsEngine, engErr := runPlanner.Build(currentEngineName(), mcpOpts...)
+				if engErr != nil {
+					frlog.Log("WARNING: observer: could not create engine: %v", engErr)
+				} else if obs, obsErr := observer.WakeUp(ctx, observer.ObserverOpts{
 					ProjectDir:   projectPath,
-					Engine:       observerEngine,
+					Engine:       obsEngine,
 					Model:        observerModel,
 					EpicName:     ep.Name,
 					WakePoint:    observer.WakeBuildEnd,
@@ -1766,11 +1801,11 @@ var runCmd = &cobra.Command{
 
 		// Synthesize observations into experience summary
 		if collector != nil && collector.ObservationCount() > 0 {
-			consciousnessEngine, cErr := newResilientEngine(engineName, mcpOpts...)
+			consciousnessEngine, cErr := runPlanner.Build(currentEngineName(), mcpOpts...)
 			if cErr != nil {
 				frlog.Log("WARNING: could not create engine for experience summary: %v", cErr)
 			} else {
-				cModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionExperienceSummary)
+				cModel := engine.ResolveModel("", currentEngineName(), string(ep.EffortLevel), engine.SessionExperienceSummary)
 				frlog.Log("  CONSCIOUSNESS: synthesizing experience summary...  model=%s", cModel)
 
 				sprintOutcomes := make([]consciousness.SprintOutcome, len(summaryCopy))
@@ -1787,6 +1822,7 @@ var runCmd = &cobra.Command{
 					ProjectDir:    projectPath,
 					Engine:        consciousnessEngine,
 					Model:         cModel,
+					EffortLevel:   string(ep.EffortLevel),
 					Record:        collector.GetRecord(),
 					SprintResults: sprintOutcomes,
 					BuildOutcome:  buildOutcome,
@@ -1812,11 +1848,11 @@ var runCmd = &cobra.Command{
 
 		// Extract codebase-specific memories from this build.
 		{
-			memEngine, memErr := newResilientEngine(engineName, mcpOpts...)
+			memEngine, memErr := runPlanner.Build(currentEngineName(), mcpOpts...)
 			if memErr != nil {
 				frlog.Log("WARNING: could not create engine for memory extraction: %v", memErr)
 			} else {
-				memModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionCodebaseMemory)
+				memModel := engine.ResolveModel("", currentEngineName(), string(ep.EffortLevel), engine.SessionCodebaseMemory)
 				frlog.Log("  MEMORY: extracting codebase learnings...  model=%s", memModel)
 
 				// Collect build context for memory extraction.
@@ -1840,6 +1876,7 @@ var runCmd = &cobra.Command{
 					ProjectDir:    projectPath,
 					Engine:        memEngine,
 					Model:         memModel,
+					EffortLevel:   string(ep.EffortLevel),
 					BuildID:       buildID,
 					SprintCount:   ep.TotalSprints,
 					Scratchpad:    string(scratchpad),
@@ -1856,7 +1893,7 @@ var runCmd = &cobra.Command{
 				// Compact if over threshold.
 				if scan.NeedsCompaction(projectPath) {
 					frlog.Log("  MEMORY: compacting memories (over %d threshold)...", config.MaxMemoryCount)
-					if compactErr := scan.CompactMemories(ctx, projectPath, memEngine, memModel); compactErr != nil {
+					if compactErr := scan.CompactMemories(ctx, projectPath, memEngine, memModel, string(ep.EffortLevel)); compactErr != nil {
 						frlog.Log("WARNING: memory compaction failed (non-fatal): %v", compactErr)
 					} else {
 						frlog.Log("  MEMORY: compaction complete")
@@ -1874,9 +1911,9 @@ var runCmd = &cobra.Command{
 				// Existing codebase.md — check if incremental update is warranted.
 				if diffStat, dsErr := git.GitDiffForAudit(ctx, projectPath); dsErr == nil {
 					if scan.ShouldUpdateCodebaseDoc(diffStat) {
-						scanEng, sErr := newResilientEngine(engineName, mcpOpts...)
+						scanEng, sErr := runPlanner.Build(currentEngineName(), mcpOpts...)
 						if sErr == nil {
-							scanModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionCodebaseScan)
+							scanModel := engine.ResolveModelForSession(currentEngineName(), string(ep.EffortLevel), engine.SessionCodebaseScan)
 							frlog.Log("  SCAN: updating codebase.md (significant changes detected)")
 							if updateErr := scan.UpdateCodebaseDoc(ctx, projectPath, diffStat, scanEng, scanModel); updateErr != nil {
 								frlog.Log("WARNING: codebase.md update failed (non-fatal): %v", updateErr)
@@ -1886,17 +1923,18 @@ var runCmd = &cobra.Command{
 				}
 			} else if os.IsNotExist(codebaseExists) {
 				// No codebase.md — generate one for the first time (from-scratch project).
-				scanEng, sErr := newResilientEngine(engineName, mcpOpts...)
+				scanEng, sErr := runPlanner.Build(currentEngineName(), mcpOpts...)
 				if sErr == nil {
 					snap, snapErr := scan.RunStructuralScan(ctx, projectPath)
 					if snapErr == nil {
-						scanModel := engine.ResolveModelForSession(engineName, string(ep.EffortLevel), engine.SessionCodebaseScan)
+						scanModel := engine.ResolveModelForSession(currentEngineName(), string(ep.EffortLevel), engine.SessionCodebaseScan)
 						frlog.Log("  SCAN: generating initial codebase.md (first build complete)")
 						if genErr := scan.RunSemanticScan(ctx, scan.SemanticScanOpts{
-							ProjectDir: projectPath,
-							Snapshot:   snap,
-							Engine:     scanEng,
-							Model:      scanModel,
+							ProjectDir:  projectPath,
+							Snapshot:    snap,
+							Engine:      scanEng,
+							Model:       scanModel,
+							EffortLevel: string(ep.EffortLevel),
 						}); genErr != nil {
 							frlog.Log("WARNING: initial codebase.md generation failed (non-fatal): %v", genErr)
 						}
@@ -1975,7 +2013,7 @@ var runCmd = &cobra.Command{
 			fmt.Fprintln(tw, "------\t------------\t-------------\t-----")
 			var totalIn, totalOut int
 			for _, st := range sprintTokens {
-				if st.Usage.Total == 0 && strings.EqualFold(engineName, "ollama") {
+				if st.Usage.Total == 0 && strings.EqualFold(currentEngineName(), "ollama") {
 					fmt.Fprintf(tw, "%d\t-\t-\t-\n", st.SprintNum)
 				} else {
 					fmt.Fprintf(tw, "%d\t%d\t%d\t%d\n", st.SprintNum, st.Usage.Input, st.Usage.Output, st.Usage.Total)
@@ -1983,7 +2021,7 @@ var runCmd = &cobra.Command{
 				totalIn += st.Usage.Input
 				totalOut += st.Usage.Output
 			}
-			if strings.EqualFold(engineName, "ollama") && totalIn == 0 && totalOut == 0 {
+			if strings.EqualFold(currentEngineName(), "ollama") && totalIn == 0 && totalOut == 0 {
 				fmt.Fprintln(tw, "TOTAL\t-\t-\t-")
 			} else {
 				fmt.Fprintf(tw, "TOTAL\t%d\t%d\t%d\n", totalIn, totalOut, totalIn+totalOut)
@@ -2021,7 +2059,7 @@ var runCmd = &cobra.Command{
 			buildStatus.Build.Phase = "complete"
 			writeBuildPhase(projectPath, "complete")
 		}
-		writeBuildStatus(projectPath, buildStatus)
+		writeCurrentBuildStatus()
 		if originalProjectPath != projectPath {
 			if exitErr != nil {
 				writeBuildPhase(originalProjectPath, "failed")
@@ -2375,34 +2413,20 @@ func isPassStatus(status string) bool {
 	return strings.HasPrefix(status, "PASS")
 }
 
-func resolveAuditEngine(buildEngineName, auditEngineName string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
+func resolveAuditEngine(planner *enginePlanner, buildEngineName, auditEngineName string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
 	name := buildEngineName
 	if strings.TrimSpace(auditEngineName) != "" {
 		name = auditEngineName
 	}
-	return newResilientEngine(name, engineOpts...)
+	return planner.Build(name, engineOpts...)
 }
 
-func resolveReviewEngine(buildEngineName, reviewEngineName string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
+func resolveReviewEngine(planner *enginePlanner, buildEngineName, reviewEngineName string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
 	name := buildEngineName
 	if strings.TrimSpace(reviewEngineName) != "" {
 		name = reviewEngineName
 	}
-	return newResilientEngine(name, engineOpts...)
-}
-
-func newResilientEngine(name string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
-	eng, err := engine.NewEngine(name, engineOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return engine.NewResilientEngine(eng,
-		engine.WithMaxRetries(config.RateLimitMaxRetries),
-		engine.WithBaseDelay(time.Duration(config.RateLimitBaseDelaySec)*time.Second),
-		engine.WithMaxDelay(time.Duration(config.RateLimitMaxDelaySec)*time.Second),
-		engine.WithJitter(config.RateLimitJitter),
-		engine.WithLogFunc(frlog.Log),
-	), nil
+	return planner.Build(name, engineOpts...)
 }
 
 func startSprintCount(startSprint, endSprint int) int {
@@ -2418,7 +2442,7 @@ func writeDeferredFailuresArtifact(projectDir string, entries []deferredEntry) {
 	var b strings.Builder
 	b.WriteString("# Deferred Sanity Check Failures\n\n")
 	for _, entry := range entries {
-		b.WriteString(fmt.Sprintf("## Sprint %d: %s\n\n", entry.SprintNumber, entry.SprintName))
+		_, _ = fmt.Fprintf(&b, "## Sprint %d: %s\n\n", entry.SprintNumber, entry.SprintName)
 		b.WriteString(verify.CollectDeferredSummary(entry.Failures))
 		b.WriteString("\n")
 	}
@@ -2447,16 +2471,16 @@ func writeBuildAuditSentinel(projectDir string) error {
 	}
 	tmpPath := tmpFile.Name()
 	if _, err := tmpFile.WriteString(time.Now().UTC().Format(time.RFC3339) + "\n"); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write build audit sentinel: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write build audit sentinel: %w", err)
 	}
 	if err := os.Rename(tmpPath, finalPath); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write build audit sentinel: %w", err)
 	}
 	return nil
@@ -2875,7 +2899,7 @@ func resolveMode(modeFlag string, planningFlag bool) (prepare.Mode, error) {
 // For SIMPLE tasks, it builds the epic programmatically. For MODERATE, it builds
 // a programmatic epic with auto-generated sanity checks. For COMPLEX, it falls
 // through to full prepare.
-func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt, promptSource string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool, autoAccept bool, triageOnly bool, confirmFile bool) (*triage.TriageDecision, error) {
+func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName, userPrompt, promptSource string, effortLevel epic.EffortLevel, mode prepare.Mode, stdin io.Reader, stdout io.Writer, skipConfirm bool, autoAccept bool, triageOnly bool, confirmFile bool, planner *enginePlanner) (*triage.TriageDecision, error) {
 	// Read available inputs.
 	planPath := filepath.Join(projectPath, config.PlanFile)
 	executivePath := filepath.Join(projectPath, config.ExecutiveFile)
@@ -2893,6 +2917,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 	if err != nil {
 		return nil, fmt.Errorf("triage: resolve engine: %w", err)
 	}
+	planner.SetDefault(engName)
 	var triageMCPOpts []engine.EngineOpt
 	if runMCPConfig != "" {
 		mcpPath := runMCPConfig
@@ -2901,7 +2926,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		}
 		triageMCPOpts = append(triageMCPOpts, engine.WithMCPConfig(mcpPath))
 	}
-	eng, err := newResilientEngine(engName, triageMCPOpts...)
+	eng, err := planner.Build(engName, triageMCPOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("triage: create engine: %w", err)
 	}
@@ -2921,6 +2946,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		CodebaseContent: triageCodebaseContent,
 		Engine:          eng,
 		Model:           triageModel,
+		EffortLevel:     string(effortLevel),
 		Mode:            mode,
 		Verbose:         frlog.Verbose,
 	})
@@ -2965,6 +2991,8 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 		frlog.Log("  TRIAGE: non-software mode (%s) — routing to full prepare pipeline", mode)
 	}
 
+	activeEngineName := planner.Current()
+
 	switch decision.Complexity {
 	case triage.ComplexitySimple:
 		// Cap max → high for simple tasks.
@@ -2981,7 +3009,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			UserPrompt:  userPrompt,
 			PlanContent: planContent,
 			ExecContent: execContent,
-			EngineName:  engName,
+			EngineName:  activeEngineName,
 			EffortLevel: resolvedEffort,
 		})
 		if buildErr != nil {
@@ -3007,7 +3035,7 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			UserPrompt:  userPrompt,
 			PlanContent: planContent,
 			ExecContent: execContent,
-			EngineName:  engName,
+			EngineName:  activeEngineName,
 			EffortLevel: resolvedEffort,
 			SprintCount: decision.SprintCount,
 		})
@@ -3035,25 +3063,23 @@ func runTriageGate(ctx context.Context, projectPath, epicPath, prepareEngineName
 			complexEffort = epic.EffortHigh
 			frlog.Log("  TRIAGE: complex task auto-elevated to effort=high")
 		}
-		resolvedEffort = complexEffort
 
 		frlog.Log("  TRIAGE: task classified as complex — running full prepare pipeline")
 		writeBuildPhase(projectPath, "prepare")
-		var triagePrepareFactory func(string) (engine.Engine, error)
-		if runMCPConfig != "" {
+		triagePrepareFactory := func(name string) (engine.Engine, error) {
+			if runMCPConfig == "" {
+				return planner.Build(name)
+			}
 			mcpPath := runMCPConfig
 			if abs, err := filepath.Abs(runMCPConfig); err == nil {
 				mcpPath = abs
 			}
-			triagePrepareFactory = engine.NewResilientEngineFactory(
-				engine.WithLogFunc(frlog.Log),
-				engine.WithEngineOpts(engine.WithMCPConfig(mcpPath)),
-			)
+			return planner.Build(name, engine.WithMCPConfig(mcpPath))
 		}
 		if err := prepare.RunPrepare(ctx, prepare.PrepareOpts{
 			ProjectDir:          projectPath,
 			EpicFilename:        filepath.Base(epicPath),
-			Engine:              prepareEngineName,
+			Engine:              planner.Current(),
 			UserPrompt:          userPrompt,
 			UserPromptSource:    promptSource,
 			SkipProjectOverview: runNoProjectOverview || runDryRun,

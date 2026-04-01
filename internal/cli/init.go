@@ -123,8 +123,9 @@ func runSemanticScan(ctx context.Context, cmd *cobra.Command, projectDir string,
 	if err != nil {
 		return fmt.Errorf("resolve engine: %w", err)
 	}
+	planner := newEnginePlanner(engineName)
 
-	eng, err := newResilientEngine(engineName)
+	eng, err := planner.Build(engineName)
 	if err != nil {
 		return fmt.Errorf("create engine: %w", err)
 	}
@@ -135,10 +136,11 @@ func runSemanticScan(ctx context.Context, cmd *cobra.Command, projectDir string,
 	fmt.Fprintln(cmd.OutOrStdout(), "  Generating codebase understanding (this may take a moment)...")
 
 	return scan.RunSemanticScan(ctx, scan.SemanticScanOpts{
-		ProjectDir: projectDir,
-		Snapshot:   snap,
-		Engine:     eng,
-		Model:      model,
+		ProjectDir:  projectDir,
+		Snapshot:    snap,
+		Engine:      eng,
+		Model:       model,
+		EffortLevel: "",
 	})
 }
 

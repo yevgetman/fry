@@ -265,6 +265,8 @@ func RenderBuildEnded(w io.Writer, snap Snapshot, useColor bool) {
 // colorizeEventType applies color based on event type.
 func colorizeEventType(evtType string) string {
 	switch {
+	case evtType == "engine_failover":
+		return color.YellowText(evtType)
 	case isVerboseMonitorEventType(evtType):
 		return color.CyanText(evtType)
 	case strings.HasSuffix(evtType, "_complete") || strings.HasSuffix(evtType, "_done") || evtType == "build_end":

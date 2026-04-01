@@ -82,6 +82,26 @@ func TestMonitor_Snapshot(t *testing.T) {
 	assert.Equal(t, "sprint_start", snap.Events[1].Type)
 }
 
+func TestMonitor_SnapshotReadsEventsFromWorktreeDir(t *testing.T) {
+	t.Parallel()
+
+	projectDir := setupTestProject(t)
+	worktreeDir := setupTestProject(t)
+
+	writeTestLock(t, projectDir)
+	writeTestEvent(t, worktreeDir, "engine_failover", 0)
+
+	mon := New(Config{
+		ProjectDir:  projectDir,
+		WorktreeDir: worktreeDir,
+	})
+
+	snap, err := mon.Snapshot()
+	require.NoError(t, err)
+	require.Len(t, snap.Events, 1)
+	assert.Equal(t, "engine_failover", snap.Events[0].Type)
+}
+
 func TestMonitor_SnapshotIgnoresStaleExitReasonWhileBuildActive(t *testing.T) {
 	t.Parallel()
 	dir := setupTestProject(t)

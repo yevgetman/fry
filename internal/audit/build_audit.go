@@ -84,8 +84,10 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 	defer func() { _ = logFile.Close() }()
 
 	runOpts := engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionBuildAudit,
+		EffortLevel: string(opts.Epic.EffortLevel),
+		WorkDir:     opts.ProjectDir,
 	}
 
 	if opts.Verbose {

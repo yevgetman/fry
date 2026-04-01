@@ -161,6 +161,28 @@ func buildModelSet(models []Model) map[string]int {
 	return m
 }
 
+// IsModelValidForEngine reports whether model is recognised for the given
+// engine. Ollama accepts any non-empty model name because its model list is not
+// statically enumerable.
+func IsModelValidForEngine(engineName, model string) bool {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	switch engineName {
+	case "claude":
+		_, ok := claudeModelSet[model]
+		return ok
+	case "codex":
+		_, ok := codexModelSet[model]
+		return ok
+	case "ollama":
+		return true
+	default:
+		return false
+	}
+}
+
 // TierModel returns the concrete model ID for a tier and engine.
 func TierModel(engineName string, tier ModelTier) string {
 	switch engineName {
