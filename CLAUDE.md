@@ -48,6 +48,21 @@ bash .self-improve/test-orchestrator.sh
 
 This tests config loading, category classification, label mapping, and syntax validation. All tests must pass before committing orchestrator changes.
 
+### Always run a second pass on your own work
+
+Before declaring a task complete, review the full change set again. Treat this as a mandatory quality pass, especially for high-complexity work: look for missed bugs, edge cases, regressions, unclear logic, incomplete tests, and documentation drift, then fix anything you find.
+
+### Always complete the post-task workflow
+
+After the code and documentation are done and all required checks pass:
+
+1. `git add` the relevant files
+2. Create a commit with a focused message
+3. If you used a worktree, merge that branch back into `master`; `cd` out of the worktree directory before removing it so you do not get stuck in a deleted path
+4. Run `make install`
+5. Push the resulting branch or `master` to the remote
+6. Clean up any worktree you created for the task
+
 ---
 
 ## 3. Documentation Requirements
@@ -307,6 +322,8 @@ A worktree is **not** needed for:
 - Tweaking constants or config values
 
 When using a worktree, create a descriptive branch name (e.g., `feature/add-ollama-engine`) and ensure all mandatory checks (`make test && make build`) pass inside the worktree before presenting the work.
+
+When finishing work in a worktree, merge the branch back into `master`, push the updated branch state to the remote, and then remove the worktree. `cd` out of the worktree directory before cleaning it up.
 
 ---
 
