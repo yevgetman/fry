@@ -1,6 +1,6 @@
 # Plan: Fry Team Runtime Modular Rollout
 
-> **Status:** Milestone A complete in feature branch `feature/team-runtime-milestone-a` at commit `cf193dc`; explicit `fry run` integration and triage auto-selection remain pending
+> **Status:** Milestone A complete in feature branch `feature/team-runtime-milestone-a` (implementation commit `cf193dc`, staged-plan update commit `f5e6746`); explicit `fry run` integration and triage auto-selection remain pending
 > **Date:** 2026-04-01
 > **Scope:** Build an OMX-style tmux-backed team runtime for Fry as a standalone subsystem first, then integrate it into the main Fry CLI without weakening Fry's current sanity-check, alignment, audit, and review spine
 > **Recommended rollout:** working `fry team` product first, then explicit `fry run --execution-mode parallel`, then triage-driven auto-selection
@@ -112,7 +112,7 @@ Do not mix Milestone A runtime construction with Milestone B `fry run` integrati
 
 ### 2026-04-01: Milestone A completed
 
-Milestone A has now been implemented in the standalone worktree branch `feature/team-runtime-milestone-a` at commit `cf193dc`.
+Milestone A has now been implemented in the standalone worktree branch `feature/team-runtime-milestone-a`. The runtime implementation landed at commit `cf193dc`, and this staged-plan completion note was recorded at commit `f5e6746`.
 
 Delivered scope:
 
@@ -912,7 +912,7 @@ These should be explicit runtime cases with tests.
 
 Milestone A is complete only when all of the following are true:
 
-Status on 2026-04-01: complete in feature branch `feature/team-runtime-milestone-a` at commit `cf193dc`.
+Status on 2026-04-01: complete in feature branch `feature/team-runtime-milestone-a` (implementation `cf193dc`, staged-plan note `f5e6746`).
 
 1. `fry team` can start, attach, pause, resume, scale, and shut down cleanly.
 2. workers can claim tasks, heartbeat, fail, recover, and requeue safely.
