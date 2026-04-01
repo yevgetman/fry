@@ -53,6 +53,10 @@ func ParseVerification(path string) ([]Check, error) {
 			if pathValue == "" {
 				return nil, fmt.Errorf("parse sanity checks line %d: @check_file requires a path", lineNo)
 			}
+			pathValue, parseErr := parsePathToken(pathValue)
+			if parseErr != nil {
+				return nil, fmt.Errorf("parse sanity checks line %d: %w", lineNo, parseErr)
+			}
 			checks = append(checks, Check{Sprint: currentSprint, Type: CheckFile, Path: pathValue})
 		case strings.HasPrefix(line, "@check_cmd_output "):
 			if currentSprint == 0 {
@@ -97,13 +101,10 @@ func parseFileContains(line string, sprint int) (Check, error) {
 		return Check{}, fmt.Errorf("@check_file_contains requires a path and pattern")
 	}
 
-	sep := strings.Index(remaining, " ")
-	if sep < 0 {
-		return Check{}, fmt.Errorf("@check_file_contains requires a path and pattern")
+	path, pattern, err := parsePathAndRemainder(remaining)
+	if err != nil {
+		return Check{}, err
 	}
-
-	path := strings.TrimSpace(remaining[:sep])
-	pattern := strings.TrimSpace(remaining[sep+1:])
 	if path == "" || pattern == "" {
 		return Check{}, fmt.Errorf("@check_file_contains requires a path and pattern")
 	}
@@ -158,4 +159,60 @@ func unquotePattern(s string) string {
 	}
 
 	return b.String()
+}
+
+func parsePathAndRemainder(s string) (string, string, error) {
+	path, rest, err := parseLeadingToken(s)
+	if err != nil {
+		return "", "", err
+	}
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return "", "", fmt.Errorf("@check_file_contains requires a path and pattern")
+	}
+	return path, rest, nil
+}
+
+func parsePathToken(s string) (string, error) {
+	path, rest, err := parseLeadingToken(s)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(rest) != "" {
+		return "", fmt.Errorf("@check_file requires a single path")
+	}
+	return path, nil
+}
+
+func parseLeadingToken(s string) (string, string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", "", fmt.Errorf("path is required")
+	}
+
+	if s[0] != '"' {
+		sep := strings.IndexAny(s, " \t")
+		if sep < 0 {
+			return s, "", nil
+		}
+		return s[:sep], s[sep+1:], nil
+	}
+
+	var b strings.Builder
+	for i := 1; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			switch s[i+1] {
+			case '\\', '"':
+				b.WriteByte(s[i+1])
+				i++
+				continue
+			}
+		}
+		if s[i] == '"' {
+			return b.String(), s[i+1:], nil
+		}
+		b.WriteByte(s[i])
+	}
+
+	return "", "", fmt.Errorf("unterminated quoted path")
 }

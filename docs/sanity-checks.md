@@ -27,6 +27,13 @@ Fry supports independent sanity checks of each sprint's deliverables. When a `.f
 @check_cmd go test ./...
 ```
 
+Paths for `@check_file` and `@check_file_contains` may be wrapped in double quotes. Quote paths when they contain spaces or route-segment characters such as `[` and `]`:
+
+```markdown
+@check_file "apps/web/src/app/(booking)/[brandSlug]/page.tsx"
+@check_file_contains "apps/web/src/app/(booking)/book/[bookingId]/manage/page.tsx" "cancel|Cancel|reschedule|Reschedule"
+```
+
 ## Custom Sanity Check File
 
 The `@verification` directive (backward-compatible name) in the epic file can override the default path:

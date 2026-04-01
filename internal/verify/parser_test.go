@@ -132,3 +132,46 @@ func TestParseVerificationCheckBeforeSprintAllTypes(t *testing.T) {
 	}
 	assert.Equal(t, 5, strings.Count(buf.String(), "WARNING"), "each check before @sprint should emit exactly one warning")
 }
+
+func TestParseVerificationQuotedPaths(t *testing.T) {
+	t.Parallel()
+
+	path := writeVerificationFile(t,
+		"@sprint 9\n"+
+			"@check_file \"apps/web/src/app/(booking)/[brandSlug]/page.tsx\"\n"+
+			"@check_file_contains \"apps/web/src/app/(booking)/book/[bookingId]/manage/page.tsx\" \"cancel|Cancel|reschedule|Reschedule\"\n")
+
+	checks, err := ParseVerification(path)
+	require.NoError(t, err)
+	require.Len(t, checks, 2)
+
+	assert.Equal(t, "apps/web/src/app/(booking)/[brandSlug]/page.tsx", checks[0].Path)
+	assert.Equal(t, "apps/web/src/app/(booking)/book/[bookingId]/manage/page.tsx", checks[1].Path)
+	assert.Equal(t, "cancel|Cancel|reschedule|Reschedule", checks[1].Pattern)
+}
+
+func TestParseVerificationQuotedPathWithSpaces(t *testing.T) {
+	t.Parallel()
+
+	path := writeVerificationFile(t,
+		"@sprint 1\n"+
+			"@check_file \"docs/build output/report.md\"\n"+
+			"@check_file_contains \"docs/build output/report.md\" \"summary\"\n")
+
+	checks, err := ParseVerification(path)
+	require.NoError(t, err)
+	require.Len(t, checks, 2)
+
+	assert.Equal(t, "docs/build output/report.md", checks[0].Path)
+	assert.Equal(t, "docs/build output/report.md", checks[1].Path)
+	assert.Equal(t, "summary", checks[1].Pattern)
+}
+
+func TestParseVerificationRejectsExtraTokensAfterCheckFilePath(t *testing.T) {
+	t.Parallel()
+
+	path := writeVerificationFile(t, "@sprint 1\n@check_file go.mod unexpected\n")
+	_, err := ParseVerification(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "@check_file requires a single path")
+}
