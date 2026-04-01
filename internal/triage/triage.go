@@ -25,6 +25,7 @@ type TriageOpts struct {
 	CodebaseContent string // contents of .fry/codebase.md, may be empty
 	Engine          engine.Engine
 	Model           string
+	EffortLevel     string
 	Mode            prepare.Mode
 	Verbose         bool
 }
@@ -68,8 +69,10 @@ func Classify(ctx context.Context, opts TriageOpts) *TriageDecision {
 	logPath := filepath.Join(buildLogsDir, fmt.Sprintf("triage_%s.log", time.Now().Format("20060102_150405")))
 
 	runOpts := engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionTriage,
+		EffortLevel: opts.EffortLevel,
+		WorkDir:     opts.ProjectDir,
 	}
 	logFile, logErr := os.Create(logPath)
 	if logErr == nil {

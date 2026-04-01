@@ -62,7 +62,7 @@ func TestCompactMemories(t *testing.T) {
 
 	eng := &compactStubEngine{output: compactedOutput}
 
-	err := CompactMemories(context.Background(), dir, eng, "haiku")
+	err := CompactMemories(context.Background(), dir, eng, "haiku", "")
 	require.NoError(t, err)
 
 	// Verify compacted count.
@@ -91,7 +91,7 @@ func TestCompactMemories_BelowThreshold(t *testing.T) {
 	eng := &compactStubEngine{output: "should not be called"}
 
 	// Should be a no-op.
-	err := CompactMemories(context.Background(), dir, eng, "haiku")
+	err := CompactMemories(context.Background(), dir, eng, "haiku", "")
 	assert.NoError(t, err)
 
 	// Count unchanged.
@@ -102,7 +102,7 @@ func TestCompactMemories_BelowThreshold(t *testing.T) {
 func TestCompactMemories_NoEngine(t *testing.T) {
 	t.Parallel()
 
-	err := CompactMemories(context.Background(), t.TempDir(), nil, "")
+	err := CompactMemories(context.Background(), t.TempDir(), nil, "", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "engine is required")
 }

@@ -14,7 +14,7 @@ import (
 // CompactMemories reduces the memory count when it exceeds MaxMemoryCount.
 // Sends all memories to a cheap LLM to merge redundant ones and drop
 // low-confidence unconfirmed entries. Target count: CompactedMemoryCount.
-func CompactMemories(ctx context.Context, projectDir string, eng engine.Engine, model string) error {
+func CompactMemories(ctx context.Context, projectDir string, eng engine.Engine, model, effortLevel string) error {
 	if eng == nil {
 		return fmt.Errorf("compact memories: engine is required")
 	}
@@ -32,8 +32,10 @@ func CompactMemories(ctx context.Context, projectDir string, eng engine.Engine, 
 	prompt := buildCompactionPrompt(memories)
 
 	output, _, runErr := eng.Run(ctx, prompt, engine.RunOpts{
-		Model:   model,
-		WorkDir: projectDir,
+		Model:       model,
+		SessionType: engine.SessionCodebaseMemory,
+		EffortLevel: effortLevel,
+		WorkDir:     projectDir,
 	})
 	if runErr != nil && strings.TrimSpace(output) == "" {
 		return fmt.Errorf("compact memories: engine run: %w", runErr)

@@ -93,7 +93,7 @@ func TestCompactSprintProgressWithIteration(t *testing.T) {
 	progressContent := "## Iteration 1 — 2026-01-01\nCompleted task A\nCompleted task B"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte(progressContent), 0o644))
 
-	result, err := CompactSprintProgress(context.Background(), dir, 1, "Foundation", "PASSED", nil, false, "")
+	result, err := CompactSprintProgress(context.Background(), dir, 1, "Foundation", "PASSED", nil, false, "", "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "## Sprint 1: Foundation — PASSED")
 	assert.Contains(t, result, "## Iteration 1")
@@ -107,7 +107,7 @@ func TestCompactSprintProgressNonAgentFormatPrefix(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte("some notes"), 0o644))
 
-	result, err := CompactSprintProgress(context.Background(), dir, 3, "Finish", "SKIPPED", nil, false, "")
+	result, err := CompactSprintProgress(context.Background(), dir, 3, "Finish", "SKIPPED", nil, false, "", "")
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(result, "## Sprint 3: Finish — SKIPPED\n\n"))
 }
@@ -120,7 +120,7 @@ func TestCompactSprintProgressNoMarkers(t *testing.T) {
 	progressContent := "Some progress notes\nAll done\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte(progressContent), 0o644))
 
-	result, err := CompactSprintProgress(context.Background(), dir, 1, "TestSprint", "COMPLETE", nil, false, "")
+	result, err := CompactSprintProgress(context.Background(), dir, 1, "TestSprint", "COMPLETE", nil, false, "", "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "Some progress notes")
 	assert.Contains(t, result, "All done")
@@ -131,7 +131,7 @@ func TestCompactSprintProgressMissingFile(t *testing.T) {
 
 	dir := t.TempDir()
 
-	result, err := CompactSprintProgress(context.Background(), dir, 1, "TestSprint", "COMPLETE", nil, false, "")
+	result, err := CompactSprintProgress(context.Background(), dir, 1, "TestSprint", "COMPLETE", nil, false, "", "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "## Sprint 1: TestSprint — COMPLETE")
 }
@@ -143,7 +143,7 @@ func TestCompactSprintProgressAgentNilEngine(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte("## Iteration 1\nsome work"), 0o644))
 
-	_, err := CompactSprintProgress(context.Background(), dir, 1, "Sprint", "PASS", nil, true, "")
+	_, err := CompactSprintProgress(context.Background(), dir, 1, "Sprint", "PASS", nil, true, "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "engine is required")
 }
@@ -156,7 +156,7 @@ func TestCompactSprintProgressWithAgent(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, config.SprintProgressFile), []byte("## Iteration 1\nwork done"), 0o644))
 
 	stub := &stubEngine{name: "stub", outputs: []string{"Agent summarized: work done"}}
-	result, err := CompactSprintProgress(context.Background(), dir, 2, "API", "PASSED", stub, true, "gpt-4")
+	result, err := CompactSprintProgress(context.Background(), dir, 2, "API", "PASSED", stub, true, "gpt-4", "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "## Sprint 2: API — PASSED")
 	assert.Contains(t, result, "Agent summarized: work done")
@@ -189,7 +189,7 @@ func TestCompactSprintProgressWithAgentIncludesFailureDetails(t *testing.T) {
 		output:   "authentication expired\nplease run claude login",
 		exitCode: 1,
 		err:      errors.New("exit status 1"),
-	}, true, "sonnet")
+	}, true, "sonnet", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "compact sprint progress with agent: engine=claude model=sonnet exit_code=1")
 	assert.Contains(t, err.Error(), "authentication expired")

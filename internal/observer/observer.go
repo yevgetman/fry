@@ -190,12 +190,16 @@ func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("observer wake-up: create log: %w", err)
 	}
-	defer logFile.Close()
+	defer func() {
+		_ = logFile.Close()
+	}()
 
 	// 5. Invoke engine with ObserverInvocationPrompt
 	runOpts := engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionObserver,
+		EffortLevel: string(opts.EffortLevel),
+		WorkDir:     opts.ProjectDir,
 	}
 
 	if opts.Verbose {
@@ -241,4 +245,3 @@ func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 
 	return obs, nil
 }
-

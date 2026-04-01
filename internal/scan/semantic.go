@@ -32,11 +32,12 @@ const (
 
 // SemanticScanOpts configures the semantic scan.
 type SemanticScanOpts struct {
-	ProjectDir string
-	Snapshot   *StructuralSnapshot
-	Engine     engine.Engine
-	Model      string // resolved model (Sonnet-class)
-	Verbose    bool
+	ProjectDir  string
+	Snapshot    *StructuralSnapshot
+	Engine      engine.Engine
+	Model       string // resolved model (Sonnet-class)
+	EffortLevel string
+	Verbose     bool
 }
 
 // RunSemanticScan uses an LLM to produce .fry/codebase.md from the structural
@@ -70,8 +71,10 @@ func RunSemanticScan(ctx context.Context, opts SemanticScanOpts) error {
 	)
 
 	runOpts := engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionCodebaseScan,
+		EffortLevel: opts.EffortLevel,
+		WorkDir:     opts.ProjectDir,
 	}
 
 	_, _, err := opts.Engine.Run(ctx, invocation, runOpts)
@@ -113,8 +116,9 @@ func UpdateCodebaseDoc(ctx context.Context, projectDir string, diffSummary strin
 	)
 
 	_, _, runErr := eng.Run(ctx, invocation, engine.RunOpts{
-		Model:   model,
-		WorkDir: projectDir,
+		Model:       model,
+		SessionType: engine.SessionCodebaseScan,
+		WorkDir:     projectDir,
 	})
 
 	_ = os.Remove(promptPath)

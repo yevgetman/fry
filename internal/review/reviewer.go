@@ -18,7 +18,6 @@ import (
 	"github.com/yevgetman/fry/internal/textutil"
 )
 
-
 type ReviewPromptOpts struct {
 	ProjectDir             string
 	SprintNum              int
@@ -257,8 +256,10 @@ func RunSprintReview(ctx context.Context, opts RunReviewOpts) (*ReviewResult, er
 	frylog.Log("  REVIEW  engine=%s  model=%s", opts.Engine.Name(), resolvedModel)
 
 	runOpts := engine.RunOpts{
-		Model:   resolvedModel,
-		WorkDir: opts.ProjectDir,
+		Model:       resolvedModel,
+		SessionType: engine.SessionReview,
+		EffortLevel: effortStr,
+		WorkDir:     opts.ProjectDir,
 	}
 	if opts.Verbose {
 		stdout := opts.Stdout

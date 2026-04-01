@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,6 +103,30 @@ func TestReadBuildState_CompletedBuild(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, state.Active)
 	assert.Equal(t, "completed", state.Status)
+}
+
+func TestReadBuildState_EngineFailoverEventStaysRunning(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	obsDir := filepath.Join(dir, ".fry", "observer")
+	require.NoError(t, os.MkdirAll(obsDir, 0o755))
+	fryDir := filepath.Join(dir, ".fry")
+
+	epicContent := "# Test Epic\n\n## Sprint 1: Only\n\n@prompt\nDo it\n@end\n"
+	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte(epicContent), 0o644))
+
+	events := `{"ts":"2026-03-27T10:00:00Z","type":"build_start","data":{"effort":"standard","epic":"Test Epic","total_sprints":"1"}}
+{"ts":"2026-03-27T10:02:00Z","type":"engine_failover","data":{"from":"claude","to":"codex"}}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(obsDir, "events.jsonl"), []byte(events), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(fryDir, ".fry.lock"), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644))
+
+	state, err := ReadBuildState(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "running", state.Status)
+	require.NotNil(t, state.LastEvent)
+	assert.Equal(t, "engine_failover", state.LastEvent.Type)
 }
 
 // --- ReadProgress tests ---

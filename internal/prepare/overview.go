@@ -69,7 +69,12 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 		frylog.Log("Project overview: summarizing project (engine: %s, model: %s)...", eng.Name(), overviewModel)
 
 		prompt := overviewPrompt(opts.Mode, planContent, executiveContent, userPrompt, effortLevel, mediaManifest, assetsSection)
-		output, _, err := eng.Run(ctx, prompt, engine.RunOpts{WorkDir: opts.ProjectDir, Model: overviewModel})
+		output, _, err := eng.Run(ctx, prompt, engine.RunOpts{
+			Model:       overviewModel,
+			SessionType: engine.SessionProjectOverview,
+			EffortLevel: string(effortLevel),
+			WorkDir:     opts.ProjectDir,
+		})
 		if err != nil && strings.TrimSpace(output) == "" {
 			return nil, fmt.Errorf("run prepare: project overview: %w", err)
 		}
@@ -78,7 +83,7 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 		displayOverviewSummary(stdout, summary)
 
 		if opts.AutoAccept {
-			fmt.Fprintln(stdout, "Does this look right? [Y/n/a] (a = adjust) Y (auto-accepted)")
+			_, _ = fmt.Fprintln(stdout, "Does this look right? [Y/n/a] (a = adjust) Y (auto-accepted)")
 			return &OverviewResult{UserPrompt: userPrompt, EffortLevel: effortLevel, EnableReview: enableReview}, nil
 		}
 
@@ -113,7 +118,7 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 			}
 		}
 
-		fmt.Fprint(stdout, "Does this look right? [Y/n/a] (a = adjust) ")
+		_, _ = fmt.Fprint(stdout, "Does this look right? [Y/n/a] (a = adjust) ")
 
 		answer, err := scanLine()
 		if err != nil {
@@ -126,7 +131,7 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 		}
 
 		if answer == "a" || answer == "adjust" {
-			fmt.Fprint(stdout, "\nPrompt adjustment (describe any change, or leave blank to skip): ")
+			_, _ = fmt.Fprint(stdout, "\nPrompt adjustment (describe any change, or leave blank to skip): ")
 			adjustment, err := scanLine()
 			if err != nil {
 				return nil, err
@@ -139,7 +144,7 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 				}
 			}
 
-			fmt.Fprintf(stdout, "Effort level [%s] (fast/standard/high/max, or Enter to keep): ", effortLevel.String())
+			_, _ = fmt.Fprintf(stdout, "Effort level [%s] (fast/standard/high/max, or Enter to keep): ", effortLevel.String())
 			effortInput, err := scanLine()
 			if err != nil {
 				return nil, err
@@ -148,7 +153,7 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 			if effortInput != "" {
 				parsed, parseErr := epic.ParseEffortLevel(effortInput)
 				if parseErr != nil {
-					fmt.Fprintf(stdout, "Invalid effort level %q — keeping %s.\n", effortInput, effortLevel.String())
+					_, _ = fmt.Fprintf(stdout, "Invalid effort level %q — keeping %s.\n", effortInput, effortLevel.String())
 				} else {
 					effortLevel = parsed
 				}
@@ -163,13 +168,13 @@ func runProjectOverview(ctx context.Context, eng engine.Engine, opts PrepareOpts
 			}
 			if effectiveEffort == epic.EffortMax {
 				enableReview = true
-				fmt.Fprintf(stdout, "Sprint review: %s (auto-enabled for max effort)\n", color.GreenText("enabled"))
+				_, _ = fmt.Fprintf(stdout, "Sprint review: %s (auto-enabled for max effort)\n", color.GreenText("enabled"))
 			} else if effectiveEffort != epic.EffortFast {
 				reviewDefault := "n"
 				if enableReview {
 					reviewDefault = "y"
 				}
-				fmt.Fprintf(stdout, "Enable sprint review? [%s] (y/n, or Enter to keep): ", reviewDefault)
+				_, _ = fmt.Fprintf(stdout, "Enable sprint review? [%s] (y/n, or Enter to keep): ", reviewDefault)
 				reviewInput, err := scanLine()
 				if err != nil {
 					return nil, err
@@ -224,14 +229,14 @@ func parseOverviewSummary(output string) OverviewSummary {
 }
 
 func displayOverviewSummary(w io.Writer, s OverviewSummary) {
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, color.CyanText("── Project summary ─────────────────────────────────────────────"))
-	fmt.Fprintf(w, "%s    %s\n", color.CyanText("Project type:"), fieldOrUnknown(s.ProjectType))
-	fmt.Fprintf(w, "%s            %s\n", color.CyanText("Goal:"), fieldOrUnknown(s.Goal))
-	fmt.Fprintf(w, "%s %s\n", color.CyanText("Expected output:"), fieldOrUnknown(s.ExpectedOutput))
-	fmt.Fprintf(w, "%s      %s\n", color.CyanText("Key topics:"), fieldOrUnknown(s.KeyTopics))
-	fmt.Fprintf(w, "%s          %s\n", color.CyanText("Effort:"), fieldOrUnknown(s.EffortEstimate))
-	fmt.Fprintln(w, color.CyanText("─────────────────────────────────────────────────────────────────"))
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, color.CyanText("── Project summary ─────────────────────────────────────────────"))
+	_, _ = fmt.Fprintf(w, "%s    %s\n", color.CyanText("Project type:"), fieldOrUnknown(s.ProjectType))
+	_, _ = fmt.Fprintf(w, "%s            %s\n", color.CyanText("Goal:"), fieldOrUnknown(s.Goal))
+	_, _ = fmt.Fprintf(w, "%s %s\n", color.CyanText("Expected output:"), fieldOrUnknown(s.ExpectedOutput))
+	_, _ = fmt.Fprintf(w, "%s      %s\n", color.CyanText("Key topics:"), fieldOrUnknown(s.KeyTopics))
+	_, _ = fmt.Fprintf(w, "%s          %s\n", color.CyanText("Effort:"), fieldOrUnknown(s.EffortEstimate))
+	_, _ = fmt.Fprintln(w, color.CyanText("─────────────────────────────────────────────────────────────────"))
 }
 
 func fieldOrUnknown(v string) string {

@@ -191,11 +191,13 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 
 		iterPath := filepath.Join(buildLogsDir, fmt.Sprintf("sprint%d_iter%d_%s.log", cfg.Sprint.Number, iter, time.Now().Format("20060102_150405")))
 		output, err := agentrun.RunWithDualLogs(ctx, config.AgentInvocationPrompt, iterPath, sprintLogPath, agentrun.DualLogOpts{
-			Engine:     cfg.Engine,
-			Model:      resolvedModel,
-			ExtraFlags: strings.Fields(cfg.Epic.AgentFlags),
-			WorkDir:    cfg.ProjectDir,
-			Verbose:    cfg.Verbose,
+			Engine:      cfg.Engine,
+			Model:       resolvedModel,
+			SessionType: engine.SessionSprint,
+			EffortLevel: string(cfg.Epic.EffortLevel),
+			ExtraFlags:  strings.Fields(cfg.Epic.AgentFlags),
+			WorkDir:     cfg.ProjectDir,
+			Verbose:     cfg.Verbose,
 		})
 		if err != nil {
 			return nil, err

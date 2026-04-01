@@ -22,6 +22,7 @@ const (
 	EventBuildStart        EventType = "build_start"
 	EventSprintStart       EventType = "sprint_start"
 	EventSprintComplete    EventType = "sprint_complete"
+	EventEngineFailover    EventType = "engine_failover"
 	EventAlignmentComplete EventType = "alignment_complete"
 	EventAuditComplete     EventType = "audit_complete"
 	EventReviewComplete    EventType = "review_complete"

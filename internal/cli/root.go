@@ -8,8 +8,10 @@ import (
 )
 
 var (
-	projectDir string
-	noColor    bool
+	projectDir       string
+	noColor          bool
+	fallbackEngine   string
+	noEngineFailover bool
 
 	rootCmd = &cobra.Command{
 		Use:   "fry",
@@ -32,6 +34,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&projectDir, "project-dir", ".", "Project directory")
 	rootCmd.PersistentFlags().BoolVarP(&frlog.Verbose, "verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
+	rootCmd.PersistentFlags().StringVar(&fallbackEngine, "fallback-engine", "", "Fallback engine for sticky cross-engine failover (default: Claude<->Codex)")
+	rootCmd.PersistentFlags().BoolVar(&noEngineFailover, "no-engine-failover", false, "Disable cross-engine failover and stay on the selected engine")
 
 	// These flags are intentionally registered on both rootCmd and runCmd.
 	// rootCmd delegates to runCmd when invoked without a subcommand (e.g.,

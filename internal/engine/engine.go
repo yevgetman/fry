@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/yevgetman/fry/internal/config"
 )
@@ -15,12 +16,14 @@ type Engine interface {
 }
 
 type RunOpts struct {
-	Model      string
-	ExtraFlags []string
-	WorkDir    string
-	Stdout     io.Writer
-	Stderr     io.Writer
-	LogFiles   []string
+	Model       string
+	SessionType SessionType
+	EffortLevel string
+	ExtraFlags  []string
+	WorkDir     string
+	Stdout      io.Writer
+	Stderr      io.Writer
+	LogFiles    []string
 }
 
 func ResolveEngine(cliFlag, epicDirective, envVar, defaultEngine string) (string, error) {
@@ -43,6 +46,11 @@ func ResolveEngine(cliFlag, epicDirective, envVar, defaultEngine string) (string
 		}
 	}
 
+	return NormalizeEngineName(name)
+}
+
+func NormalizeEngineName(name string) (string, error) {
+	name = strings.ToLower(strings.TrimSpace(name))
 	switch name {
 	case "codex", "claude", "ollama":
 		return name, nil

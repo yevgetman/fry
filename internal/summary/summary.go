@@ -29,6 +29,7 @@ type SummaryOpts struct {
 	EpicName         string
 	Engine           engine.Engine
 	Results          []sprint.SprintResult
+	EffortLevel      string
 	Verbose          bool
 	Model            string
 	BuildAuditResult *audit.AuditResult // nil if build audit was skipped or failed
@@ -73,8 +74,10 @@ func GenerateBuildSummary(ctx context.Context, opts SummaryOpts) error {
 	invocationPrompt := "Read and execute ALL instructions in " + config.SummaryPromptFile + ". Generate a comprehensive build summary and write it to " + config.SummaryFile + " in the project root. Overwrite the file if it already exists."
 
 	runOpts := engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionBuildSummary,
+		EffortLevel: opts.EffortLevel,
+		WorkDir:     opts.ProjectDir,
 	}
 
 	if opts.Verbose {

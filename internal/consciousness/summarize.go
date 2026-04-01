@@ -27,6 +27,7 @@ type SummarizeOpts struct {
 	ProjectDir    string
 	Engine        engine.Engine
 	Model         string
+	EffortLevel   string
 	Record        BuildRecord
 	SprintResults []SprintOutcome
 	BuildOutcome  string
@@ -71,11 +72,15 @@ func SummarizeExperience(ctx context.Context, opts SummarizeOpts) (string, error
 	if err != nil {
 		return "", fmt.Errorf("summarize experience: create log: %w", err)
 	}
-	defer logFile.Close()
+	defer func() {
+		_ = logFile.Close()
+	}()
 
 	runOpts := engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionExperienceSummary,
+		EffortLevel: opts.EffortLevel,
+		WorkDir:     opts.ProjectDir,
 	}
 
 	if opts.Verbose {

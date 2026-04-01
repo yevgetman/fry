@@ -568,22 +568,36 @@ func TestResolveAuditEngine(t *testing.T) {
 
 	t.Run("non-empty auditEngineName uses it", func(t *testing.T) {
 		t.Parallel()
-		eng, err := resolveAuditEngine("claude", "codex")
+		planner := newEnginePlanner("claude")
+		eng, err := resolveAuditEngine(planner, "claude", "codex")
 		require.NoError(t, err)
 		assert.Equal(t, "codex", eng.Name())
 	})
 
 	t.Run("empty auditEngineName uses buildEngineName", func(t *testing.T) {
 		t.Parallel()
-		eng, err := resolveAuditEngine("claude", "")
+		planner := newEnginePlanner("claude")
+		eng, err := resolveAuditEngine(planner, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, "claude", eng.Name())
 	})
 
 	t.Run("invalid engine returns error", func(t *testing.T) {
 		t.Parallel()
-		_, err := resolveAuditEngine("nonexistent", "")
+		planner := newEnginePlanner("nonexistent")
+		_, err := resolveAuditEngine(planner, "nonexistent", "")
 		require.Error(t, err)
+	})
+
+	t.Run("pinned planner ignores requested audit engine", func(t *testing.T) {
+		t.Parallel()
+		planner := newEnginePlanner("claude")
+		planner.activeName = "codex"
+		planner.pinned = true
+
+		eng, err := resolveAuditEngine(planner, "claude", "claude")
+		require.NoError(t, err)
+		assert.Equal(t, "codex", eng.Name())
 	})
 }
 
@@ -596,22 +610,36 @@ func TestResolveReviewEngine(t *testing.T) {
 
 	t.Run("non-empty reviewEngineName uses it", func(t *testing.T) {
 		t.Parallel()
-		eng, err := resolveReviewEngine("claude", "codex")
+		planner := newEnginePlanner("claude")
+		eng, err := resolveReviewEngine(planner, "claude", "codex")
 		require.NoError(t, err)
 		assert.Equal(t, "codex", eng.Name())
 	})
 
 	t.Run("empty reviewEngineName uses buildEngineName", func(t *testing.T) {
 		t.Parallel()
-		eng, err := resolveReviewEngine("claude", "")
+		planner := newEnginePlanner("claude")
+		eng, err := resolveReviewEngine(planner, "claude", "")
 		require.NoError(t, err)
 		assert.Equal(t, "claude", eng.Name())
 	})
 
 	t.Run("invalid engine returns error", func(t *testing.T) {
 		t.Parallel()
-		_, err := resolveReviewEngine("nonexistent", "")
+		planner := newEnginePlanner("nonexistent")
+		_, err := resolveReviewEngine(planner, "nonexistent", "")
 		require.Error(t, err)
+	})
+
+	t.Run("pinned planner ignores requested review engine", func(t *testing.T) {
+		t.Parallel()
+		planner := newEnginePlanner("claude")
+		planner.activeName = "codex"
+		planner.pinned = true
+
+		eng, err := resolveReviewEngine(planner, "claude", "claude")
+		require.NoError(t, err)
+		assert.Equal(t, "codex", eng.Name())
 	})
 }
 

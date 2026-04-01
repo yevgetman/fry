@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
+	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/verify"
 )
 
@@ -215,14 +215,14 @@ func TestRunSprintPassesWithPromiseAndChecks(t *testing.T) {
 	result, err := RunSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
-			TotalSprints:     3,
-			VerificationFile: config.DefaultVerificationFile,
-			MaxHealAttempts:  1,
+			TotalSprints:       3,
+			VerificationFile:   config.DefaultVerificationFile,
+			MaxHealAttempts:    1,
 			MaxHealAttemptsSet: true,
-			AgentModel:       "",
-			AgentFlags:       "",
-			PreIterationCmd:  "",
-			PreSprintCmd:     "",
+			AgentModel:         "",
+			AgentFlags:         "",
+			PreIterationCmd:    "",
+			PreSprintCmd:       "",
 		},
 		Sprint: &epic.Sprint{
 			Number:        1,
@@ -330,9 +330,9 @@ func TestRunSprintNoPromiseChecksPass(t *testing.T) {
 	result, err := RunSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
-			TotalSprints:     1,
-			VerificationFile: config.DefaultVerificationFile,
-			MaxHealAttempts:  1,
+			TotalSprints:       1,
+			VerificationFile:   config.DefaultVerificationFile,
+			MaxHealAttempts:    1,
 			MaxHealAttemptsSet: true,
 		},
 		Sprint: &epic.Sprint{
@@ -546,11 +546,11 @@ func TestRunSprintDeferredFailuresInResult(t *testing.T) {
 	result, err := RunSprint(context.Background(), RunConfig{
 		ProjectDir: projectDir,
 		Epic: &epic.Epic{
-			TotalSprints:     1,
-			VerificationFile: config.DefaultVerificationFile,
-			MaxHealAttempts:  1,
+			TotalSprints:       1,
+			VerificationFile:   config.DefaultVerificationFile,
+			MaxHealAttempts:    1,
 			MaxHealAttemptsSet: true,
-			MaxFailPercent:   20,
+			MaxFailPercent:     20,
 		},
 		Sprint: &epic.Sprint{
 			Number:        1,
@@ -916,7 +916,7 @@ func TestCompactSprintProgressMechanical(t *testing.T) {
 	progressContent := "# Sprint 1 — Progress\n\n## Iteration 1\nFirst\n\n## Iteration 2\nSecond\n"
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), progressContent)
 
-	result, err := CompactSprintProgress(context.Background(), projectDir, 1, "Setup", "PASS", nil, false, "")
+	result, err := CompactSprintProgress(context.Background(), projectDir, 1, "Setup", "PASS", nil, false, "", "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "## Sprint 1: Setup — PASS")
 	assert.Contains(t, result, "## Iteration 2")
@@ -930,7 +930,7 @@ func TestCompactSprintProgressAgentNilEngineRunner(t *testing.T) {
 	projectDir := t.TempDir()
 	writeFile(t, filepath.Join(projectDir, config.SprintProgressFile), "progress\n")
 
-	_, err := CompactSprintProgress(context.Background(), projectDir, 1, "X", "PASS", nil, true, "")
+	_, err := CompactSprintProgress(context.Background(), projectDir, 1, "X", "PASS", nil, true, "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "engine is required")
 }
@@ -946,7 +946,7 @@ func TestCompactSprintProgressAgent(t *testing.T) {
 		outputs: []string{"Summary: completed auth module."},
 	}
 
-	result, err := CompactSprintProgress(context.Background(), projectDir, 2, "Auth", "PASS", eng, true, "sonnet")
+	result, err := CompactSprintProgress(context.Background(), projectDir, 2, "Auth", "PASS", eng, true, "sonnet", "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "## Sprint 2: Auth — PASS")
 	assert.Contains(t, result, "Summary: completed auth module.")

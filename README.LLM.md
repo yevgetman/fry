@@ -22,6 +22,7 @@ fry/
 ├── internal/
 │   ├── cli/                     # Cobra commands: root, run, config, init, prepare, replan, clean, version, status, identity
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose/-v, --engine, etc.)
+│   │   ├── engine_factory.go    # Sticky engine planner + resilient/failover engine construction
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
 │   │   ├── config.go            # Repo-local Fry settings CLI (`fry config get|set`)
 │   │   ├── init.go              # Scaffold project structure; auto-detect and scan existing codebases
@@ -45,6 +46,8 @@ fry/
 │   │   ├── claude.go            # Claude Code CLI wrapper
 │   │   ├── ollama.go            # Ollama engine — shells out to `ollama run <model>`, reads prompt via stdin
 │   │   ├── resilient.go         # ResilientEngine decorator — retry with exponential backoff on rate limits
+│   │   ├── failover.go          # FailoverEngine decorator — sticky cross-engine promotion after transient failures
+│   │   ├── failure.go           # Failover-worthy transient failure detection
 │   │   └── ratelimit.go         # Rate-limit detection (regex patterns for 429, overloaded, etc.)
 │   ├── epic/
 │   │   ├── types.go             # Epic, Sprint, EffortLevel types
@@ -250,7 +253,7 @@ type Engine interface {
 
 Resolution precedence: CLI flag → epic `@engine` → `FRY_ENGINE` env → default (claude for all modes and stages).
 
-All engines are wrapped in a `ResilientEngine` decorator (`internal/engine/resilient.go`) that auto-retries on rate-limit errors with exponential backoff (max 5 retries, 10s base delay, 120s cap, 25% jitter). Detection patterns are in `internal/engine/ratelimit.go`. Ollama is excluded from rate-limit detection.
+All engines are wrapped in a `ResilientEngine` decorator (`internal/engine/resilient.go`) that auto-retries on rate-limit errors with exponential backoff (max 5 retries, 10s base delay, 120s cap, 25% jitter). Claude and Codex sessions can then be wrapped in a sticky `FailoverEngine` (`internal/engine/failover.go`) that promotes the fallback engine for the rest of the build after a transient failure succeeds on fallback. Detection patterns are in `internal/engine/ratelimit.go` and `internal/engine/failure.go`. Ollama is excluded from rate-limit detection and has no implicit fallback target.
 
 `ClaudeEngine` accepts an optional MCP config path via `WithMCPConfig()` engine option, appending `--mcp-config <path>` to every invocation. Set via `--mcp-config` CLI flag or `@mcp_config` epic directive.
 
@@ -353,7 +356,9 @@ fry status                           # Show current build state (no LLM call)
 
 Key flags:
   --engine codex|claude|ollama       # AI engine for build
-  --prepare-engine codex|claude      # AI engine for prepare phase
+  --prepare-engine codex|claude|ollama  # AI engine for prepare phase
+  --fallback-engine codex|claude|ollama  # Sticky fallback engine on transient failure
+  --no-engine-failover               # Disable cross-engine failover
   --effort fast|standard|high|max       # Effort level (auto-detect if omitted)
   --model model-id                   # Override agent model (e.g. opus[1m], sonnet, haiku)
   --mode software|planning|writing   # Execution mode (default: software)

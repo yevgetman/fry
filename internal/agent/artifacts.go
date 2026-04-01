@@ -9,7 +9,7 @@ func ArtifactSchema() []ArtifactInfo {
 		{
 			Path:        config.ObserverEventsFile,
 			Format:      "jsonl",
-			Description: "Structured build lifecycle events. One JSON object per line. Event types: build_start, sprint_start, sprint_complete, alignment_complete, audit_complete, review_complete, build_audit_done, build_end. Each event has ts (ISO 8601), type, optional sprint number, and optional data map.",
+			Description: "Structured build lifecycle events. One JSON object per line. Event types: build_start, sprint_start, sprint_complete, engine_failover, alignment_complete, audit_complete, review_complete, build_audit_done, build_end. Each event has ts (ISO 8601), type, optional sprint number, and optional data map.",
 			Lifecycle:   "per-build",
 		},
 		{

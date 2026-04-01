@@ -150,7 +150,7 @@ func TestBootstrapExecutive_UserApproves(t *testing.T) {
 	var stdout strings.Builder
 
 	eng := &fakeEngine{output: "# My Project\n\nGenerated executive content."}
-	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+	err := bootstrapExecutive(context.Background(), eng, PrepareOpts{
 		ProjectDir: dir,
 		UserPrompt: "build a todo app",
 		Stdin:      stdin,
@@ -295,7 +295,7 @@ func TestBootstrapExecutive_AutoAccept(t *testing.T) {
 	var stdout strings.Builder
 
 	eng := &fakeEngine{output: "# My Project\n\nGenerated executive content."}
-	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+	err := bootstrapExecutive(context.Background(), eng, PrepareOpts{
 		ProjectDir: dir,
 		UserPrompt: "build a todo app",
 		AutoAccept: true,
@@ -320,7 +320,7 @@ func TestBootstrapExecutive_UserDeclines(t *testing.T) {
 	var stdout strings.Builder
 
 	eng := &fakeEngine{output: "# My Project\n\nGenerated content."}
-	err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+	err := bootstrapExecutive(context.Background(), eng, PrepareOpts{
 		ProjectDir: dir,
 		UserPrompt: "build a todo app",
 		Stdin:      stdin,
@@ -352,7 +352,7 @@ func TestBootstrapExecutive_Logging(t *testing.T) {
 		var logBuf strings.Builder
 
 		eng := &fakeEngine{output: "# My Project\n\n" + strings.Repeat("word ", 100)}
-		err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+		err := bootstrapExecutive(context.Background(), eng, PrepareOpts{
 			ProjectDir: dir,
 			UserPrompt: "build a todo app",
 			Stdin:      stdin,
@@ -378,7 +378,7 @@ func TestBootstrapExecutive_Logging(t *testing.T) {
 		var logBuf strings.Builder
 
 		eng := &fakeEngine{output: "# My Project\n\n" + strings.Repeat("word ", 100)}
-		err := bootstrapExecutive(context.Background(), eng, "fake", PrepareOpts{
+		err := bootstrapExecutive(context.Background(), eng, PrepareOpts{
 			ProjectDir: dir,
 			UserPrompt: "build a todo app",
 			Stdin:      stdin,
@@ -418,7 +418,7 @@ EFFORT: standard (3-4 sprints)`,
 			},
 		},
 		{
-			name: "wrapped in markdown fences",
+			name:  "wrapped in markdown fences",
 			input: "```\nPROJECT_TYPE: Writing (guide)\nGOAL: Write a Go concurrency guide\nEXPECTED_OUTPUT: 6 chapters in output/\nKEY_TOPICS: goroutines, channels\nEFFORT: standard (3 sprints)\n```",
 			expected: OverviewSummary{
 				ProjectType:    "Writing (guide)",
@@ -627,11 +627,11 @@ func TestRunPrepare_Logging(t *testing.T) {
 		var logBuf strings.Builder
 
 		err := RunPrepare(context.Background(), PrepareOpts{
-			ProjectDir:      dir,
-			Engine:          "claude",
+			ProjectDir:          dir,
+			Engine:              "claude",
 			SkipProjectOverview: true,
-			EngineFactory:   fakeFactory,
-			LogFunc:         testLogFunc(&logBuf),
+			EngineFactory:       fakeFactory,
+			LogFunc:             testLogFunc(&logBuf),
 		})
 
 		require.NoError(t, err)
@@ -651,11 +651,11 @@ func TestRunPrepare_Logging(t *testing.T) {
 		var logBuf strings.Builder
 
 		err := RunPrepare(context.Background(), PrepareOpts{
-			ProjectDir:      dir,
-			Engine:          "claude",
+			ProjectDir:          dir,
+			Engine:              "claude",
 			SkipProjectOverview: true,
-			EngineFactory:   fakeFactory,
-			LogFunc:         testLogFunc(&logBuf),
+			EngineFactory:       fakeFactory,
+			LogFunc:             testLogFunc(&logBuf),
 		})
 
 		require.NoError(t, err)
@@ -664,7 +664,7 @@ func TestRunPrepare_Logging(t *testing.T) {
 		assert.NotContains(t, logOutput, "Using existing plans/executive.md")
 		assert.Contains(t, logOutput, "Using existing plans/plan.md")
 		// Step 1 should list only plan.md (no executive).
-		assert.Contains(t, logOutput, "Step 1: Generating .fry/AGENTS.md from plans/plan.md (engine: claude, model:")
+		assert.Contains(t, logOutput, "Step 1: Generating .fry/AGENTS.md from plans/plan.md (engine: fake, model:")
 	})
 
 	t.Run("logs existing files", func(t *testing.T) {
@@ -680,11 +680,11 @@ func TestRunPrepare_Logging(t *testing.T) {
 		var logBuf strings.Builder
 
 		err := RunPrepare(context.Background(), PrepareOpts{
-			ProjectDir:      dir,
-			Engine:          "claude",
+			ProjectDir:          dir,
+			Engine:              "claude",
 			SkipProjectOverview: true,
-			EngineFactory:   fakeFactory,
-			LogFunc:         testLogFunc(&logBuf),
+			EngineFactory:       fakeFactory,
+			LogFunc:             testLogFunc(&logBuf),
 		})
 
 		require.NoError(t, err)
@@ -710,12 +710,12 @@ func TestRunPrepare_Logging(t *testing.T) {
 		var logBuf strings.Builder
 
 		err := RunPrepare(context.Background(), PrepareOpts{
-			ProjectDir:      dir,
-			Engine:          "claude",
-			UserPrompt:      "focus on backend",
+			ProjectDir:          dir,
+			Engine:              "claude",
+			UserPrompt:          "focus on backend",
 			SkipProjectOverview: true,
-			EngineFactory:   fakeFactory,
-			LogFunc:         testLogFunc(&logBuf),
+			EngineFactory:       fakeFactory,
+			LogFunc:             testLogFunc(&logBuf),
 		})
 
 		require.NoError(t, err)
@@ -737,13 +737,13 @@ func TestRunPrepare_Logging(t *testing.T) {
 		var logBuf strings.Builder
 
 		err := RunPrepare(context.Background(), PrepareOpts{
-			ProjectDir:       dir,
-			Engine:           "claude",
-			UserPrompt:       "focus on backend",
-			UserPromptSource: "--user-prompt-file prompts/backend.txt",
-			SkipProjectOverview:  true,
-			EngineFactory:    fakeFactory,
-			LogFunc:          testLogFunc(&logBuf),
+			ProjectDir:          dir,
+			Engine:              "claude",
+			UserPrompt:          "focus on backend",
+			UserPromptSource:    "--user-prompt-file prompts/backend.txt",
+			SkipProjectOverview: true,
+			EngineFactory:       fakeFactory,
+			LogFunc:             testLogFunc(&logBuf),
 		})
 
 		require.NoError(t, err)

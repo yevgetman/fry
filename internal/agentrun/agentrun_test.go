@@ -29,7 +29,7 @@ func (m *mockEngine) Run(ctx context.Context, prompt string, opts engine.RunOpts
 	default:
 	}
 	if opts.Stdout != nil {
-		fmt.Fprint(opts.Stdout, m.output)
+		_, _ = fmt.Fprint(opts.Stdout, m.output)
 	}
 	return m.output, m.exitCode, m.err
 }

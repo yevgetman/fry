@@ -54,7 +54,7 @@ func New(cfg Config) *Monitor {
 
 	m := &Monitor{
 		cfg:        cfg,
-		events:     NewEventSource(cfg.ProjectDir),
+		events:     NewEventSource(buildDir),
 		phase:      NewPhaseSource(cfg.ProjectDir, buildDir),
 		status:     NewStatusSource(buildDir),
 		lock:       NewLockSource(cfg.ProjectDir),

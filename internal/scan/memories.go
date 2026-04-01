@@ -28,11 +28,12 @@ type Memory struct {
 
 // MemoryExtractionOpts configures the post-build memory extraction.
 type MemoryExtractionOpts struct {
-	ProjectDir   string
-	Engine       engine.Engine
-	Model        string
-	BuildID      string // timestamp-based build identifier
-	SprintCount  int
+	ProjectDir  string
+	Engine      engine.Engine
+	Model       string
+	EffortLevel string
+	BuildID     string // timestamp-based build identifier
+	SprintCount int
 	// Collected build context (all optional).
 	Scratchpad    string
 	Events        string
@@ -42,7 +43,7 @@ type MemoryExtractionOpts struct {
 }
 
 const (
-	memoryPromptFile = ".fry/memory-extraction-prompt.md"
+	memoryPromptFile    = ".fry/memory-extraction-prompt.md"
 	maxMemoryInputBytes = 30_000
 )
 
@@ -70,8 +71,10 @@ func ExtractCodebaseMemories(ctx context.Context, opts MemoryExtractionOpts) err
 	_ = os.WriteFile(promptPath, []byte(prompt), 0o644)
 
 	output, _, err := opts.Engine.Run(ctx, prompt, engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionCodebaseMemory,
+		EffortLevel: opts.EffortLevel,
+		WorkDir:     opts.ProjectDir,
 	})
 	if err != nil && strings.TrimSpace(output) == "" {
 		return fmt.Errorf("memory extraction: engine run: %w", err)
@@ -301,7 +304,7 @@ func parseMemoryOutput(output string, buildID string, sprintCount int) []Memory 
 				Confidence: confidence,
 				Body:       body,
 				Sprint:     sprintCount,
-				Source:      buildID,
+				Source:     buildID,
 			})
 		}
 	}

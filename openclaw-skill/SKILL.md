@@ -359,6 +359,8 @@ sessions_spawn({
 | `-y` / `--yes` | (flag) | off | Auto-accept all interactive prompts. Always use this. |
 | `--effort` | fast, standard, high, max, auto | auto | Sprint count and rigor |
 | `--engine` | claude, codex, ollama | claude | Which LLM engine to use |
+| `--fallback-engine` | claude, codex, ollama | auto | Sticky fallback engine after transient primary-engine failures |
+| `--no-engine-failover` | (flag) | off | Disable cross-engine failover and stay on the selected engine |
 | `--mode` | software, planning, writing | software | Build mode |
 | `--model` | opus[1m], sonnet, haiku | (engine default) | Override agent model |
 | `--git-strategy` | auto, current, branch, worktree | auto | Git branching |
@@ -389,14 +391,16 @@ sessions_spawn({
 
 | Engine | CLI | Model tiers | Notes |
 |--------|-----|-------------|-------|
-| claude | Claude Code | opus[1m] / sonnet / haiku | Default. Supports MCP via `--mcp-config`. |
-| codex | Codex CLI | gpt-5.4 / gpt-5.3-codex / gpt-5.4-mini | Alternative. |
+| claude | Claude Code | opus[1m] / sonnet / haiku | Default. Supports MCP via `--mcp-config`. Implicit sticky failover target: Codex. |
+| codex | Codex CLI | gpt-5.4 / gpt-5.3-codex / gpt-5.4-mini | Alternative. Implicit sticky failover target: Claude. |
 | ollama | Ollama | llama3 variants | Local, no API key, no rate-limit detection. |
 
 Override with `--engine <name>`, `@engine` in the epic, or `FRY_ENGINE` env var.
 
 For the Fry repository's self-improvement loop, use `fry config set engine <name>`
 to set the repo-local engine that `.self-improve/orchestrate.sh` should use by default.
+
+Fry retries the selected engine first. If Claude or Codex still fails with a transient error (rate limit, timeout, 5xx, connection failure), Fry can fail over once to the other engine and then stay there for the rest of the build. Use `--fallback-engine` to override the target or `--no-engine-failover` to disable this behavior.
 
 ### Git strategies
 
@@ -679,6 +683,8 @@ fry audit --mode writing --project-dir /path/to/project
 |------|---------|---------|
 | `--effort` | `high` | Audit rigor: fast (quick), standard, high, max (thorough) |
 | `--engine` | `claude` | AI engine |
+| `--fallback-engine` | auto | Sticky fallback engine after transient engine failures |
+| `--no-engine-failover` | off | Disable cross-engine failover |
 | `--model` | (auto) | Override agent model |
 | `--mode` | `software` | Audit criteria: software (code quality) or writing (content quality) |
 | `--sarif` | off | Write `build-audit.sarif` in SARIF 2.1.0 format |

@@ -354,7 +354,7 @@ func inferStatus(events []observer.Event) string {
 		return "preparing"
 	case observer.EventBuildStart, observer.EventSprintStart:
 		return "running"
-	case observer.EventSprintComplete, observer.EventAlignmentComplete,
+	case observer.EventSprintComplete, observer.EventEngineFailover, observer.EventAlignmentComplete,
 		observer.EventAuditComplete, observer.EventReviewComplete,
 		observer.EventBuildAuditDone:
 		return "running"

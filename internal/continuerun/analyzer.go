@@ -17,12 +17,13 @@ import (
 
 // AnalyzeOpts configures the LLM analysis agent.
 type AnalyzeOpts struct {
-	ProjectDir string
-	State      *BuildState
-	Engine     engine.Engine
-	Model      string
-	Verbose    bool
-	Stdout     io.Writer // optional; defaults to os.Stdout when Verbose is true
+	ProjectDir  string
+	State       *BuildState
+	Engine      engine.Engine
+	Model       string
+	EffortLevel string
+	Verbose     bool
+	Stdout      io.Writer // optional; defaults to os.Stdout when Verbose is true
 }
 
 // continueJSON is the expected JSON structure from the continue analysis agent.
@@ -71,8 +72,10 @@ func Analyze(ctx context.Context, opts AnalyzeOpts) (*ContinueDecision, error) {
 	defer logFile.Close()
 
 	runOpts := engine.RunOpts{
-		Model:   opts.Model,
-		WorkDir: opts.ProjectDir,
+		Model:       opts.Model,
+		SessionType: engine.SessionContinue,
+		EffortLevel: opts.EffortLevel,
+		WorkDir:     opts.ProjectDir,
 	}
 	if opts.Verbose {
 		stdout := opts.Stdout
