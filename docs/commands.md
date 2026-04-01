@@ -168,6 +168,160 @@ FRY_ENGINE=claude fry                             # Set engine via environment v
 
 ---
 
+## `fry team`
+
+Operate Fry's standalone tmux-backed team runtime. This runtime is intentionally independent from `fry run`: it gives you a durable parallel worker subsystem first, with explicit operator control and on-disk state under `.fry/team/<team-id>/...`.
+
+### `fry team start`
+
+```
+fry team start [flags]
+```
+
+| Flag | Description |
+|---|---|
+| `--project-dir <path>` | Project directory to operate on (default: current directory) |
+| `--team <id>` | Explicit team identifier (default: auto-generated timestamped ID) |
+| `--workers <N>` | Number of worker hosts to create (default: `1`) |
+| `--role <role>` | Worker role list. Repeat or comma-separate to cycle roles across workers (default: `executor`) |
+| `--task-file <path>` | Optional JSON task file loaded immediately after startup |
+| `--git-isolation <shared\|per-worker-worktree>` | Team workdir mode. `shared` executes in the project directory. `per-worker-worktree` allocates one git worktree per worker when possible. |
+| `--executable-path <path>` | Override the fry executable path used inside tmux worker hosts |
+
+Behavior:
+
+- Creates `.fry/team/<team-id>/...` with config, task, worker, lock, and artifact directories
+- Starts a tmux session with one leader window plus one worker window per worker
+- Persists worker identities, statuses, and heartbeats
+- Emits team lifecycle events into both `.fry/team/<team-id>/events.jsonl` and the shared observer stream consumed by `fry events`
+- Marks the team as the active runtime so `fry status` and `fry monitor` can surface it
+
+Examples:
+
+```bash
+fry team start --workers 3 --role executor --task-file ./tasks.json
+fry team start --team auth-refactor --workers 2 --role executor --role tester
+fry team start --workers 4 --git-isolation per-worker-worktree
+```
+
+### `fry team assign`
+
+```
+fry team assign --task-file ./tasks.json [--team <id>]
+```
+
+Loads tasks from a JSON file into the team runtime. The file may be either a JSON array or an object with a top-level `tasks` array.
+
+Supported task fields:
+
+- `id`
+- `title`
+- `description`
+- `role`
+- `priority`
+- `command`
+- `blocked_by`
+- `acceptance_hints`
+
+Tasks are claimed durably by workers. Workers only claim tasks whose `role` matches their own role, and they will wait until `blocked_by` dependencies are complete before claiming a task.
+
+Example:
+
+```json
+{
+  "tasks": [
+    {
+      "id": "001",
+      "title": "Generate fixtures",
+      "role": "executor",
+      "command": "make fixtures"
+    },
+    {
+      "id": "002",
+      "title": "Run regression suite",
+      "role": "tester",
+      "blocked_by": ["001"],
+      "command": "go test ./..."
+    }
+  ]
+}
+```
+
+### `fry team status`
+
+```
+fry team status [--team <id>] [--json]
+```
+
+Shows the active team by default, or a specific team when `--team` is passed. The human-readable view summarizes:
+
+- team ID and lifecycle status
+- tmux session name
+- task counts by state
+- worker counts by state
+- integrated output directory, when available
+- per-worker role/status lines
+
+### `fry team pause`
+
+```
+fry team pause [--team <id>]
+```
+
+Pauses new task claiming. Running tasks are allowed to finish; idle workers remain alive and heartbeat while waiting for a resume.
+
+### `fry team resume`
+
+```
+fry team resume [--team <id>] [--executable-path <path>]
+```
+
+Resumes task claiming and runs liveness reconciliation first:
+
+- stale or dead workers are marked dead
+- owned tasks are requeued
+- missing worker hosts are restarted in tmux
+
+### `fry team scale`
+
+```
+fry team scale --add <N> [--team <id>]
+fry team scale --remove <worker-id> [--team <id>]
+```
+
+Scale-up creates new worker hosts. Scale-down removes idle workers immediately or marks active workers as draining so they stop taking new work after their current task completes.
+
+### `fry team attach`
+
+```
+fry team attach [--team <id>]
+```
+
+Attaches your terminal to the underlying tmux session for live inspection.
+
+### `fry team shutdown`
+
+```
+fry team shutdown [--team <id>] [--force]
+```
+
+Gracefully shuts down the runtime. Without `--force`, Fry refuses to shut down while tasks are still running. With `--force`, the tmux session is terminated immediately and the team is marked shutdown.
+
+### Team output and integration
+
+- Worker logs are written under `.fry/team/<team-id>/artifacts/`
+- In `shared` mode, the canonical output is the project directory itself
+- In `per-worker-worktree` mode, successful worker tasks are auto-committed in their worktrees and Fry produces an integrated output worktree under `.fry/team/<team-id>/artifacts/integrated-output/` once all tasks reach a terminal state
+- Merge results are summarized in `.fry/team/<team-id>/artifacts/merge-report.md`
+
+### Related commands
+
+- `fry status` includes the active team summary when present
+- `fry monitor` shows the team summary in dashboard mode
+- `fry events` streams team lifecycle events alongside normal build events
+
+---
+
 ## `fry exit`
 
 Request a graceful stop for a running build. Fry settles the current safe seam,

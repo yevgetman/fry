@@ -156,6 +156,7 @@ See [Self-Improvement Pipeline](docs/self-improvement.md) for the full architect
 
 - **Go 1.22+** — to build fry from source
 - **git** — for automatic sprint checkpointing
+- **tmux** (optional but required for `fry team`) — used for standalone team worker hosts
 - **bash** — used by AI engine CLIs and sanity check commands
 - **gh** (optional) — required only when using `--gh-issue`
 - At least one AI engine CLI:
@@ -197,6 +198,33 @@ fry --dry-run
 
 See [Getting Started](docs/getting-started.md) for full setup instructions.
 
+## Team Runtime
+
+Fry now ships a standalone `fry team` runtime for tmux-backed parallel workers. This is intentionally separate from `fry run`: the team runtime is a durable execution subsystem you can start, inspect, pause, resume, scale, and shut down on its own before it is ever wired into the main sprint runner.
+
+Key properties:
+
+- Team state lives under `.fry/team/<team-id>/...`
+- Workers are long-lived tmux windows that run a hidden `fry team worker` loop
+- Tasks are loaded from JSON and claimed durably by role-aware workers
+- Worker heartbeats, task ownership, and event emission are persisted on disk
+- `shared` mode runs tasks directly in the project directory
+- `per-worker-worktree` mode gives each worker an isolated git worktree and automatically builds an integrated output worktree when all tasks complete
+- Team lifecycle events flow through the normal `fry events` stream, and `fry status` / `fry monitor` surface the active team summary
+
+Basic flow:
+
+```bash
+fry team start --workers 3 --role executor --task-file ./tasks.json
+fry team status
+fry team pause
+fry team resume
+fry team scale --add 1
+fry team shutdown --force
+```
+
+Task files are JSON arrays or `{ "tasks": [...] }` objects. Each task can specify `id`, `title`, `role`, `priority`, and a shell `command`. Workers execute commands inside their assigned work directory and persist logs under `.fry/team/<team-id>/artifacts/`.
+
 ## Commands
 
 | Command | Description |
@@ -209,6 +237,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry identity` | Print Fry's compiled-in identity (core + disposition) |
 | `fry reflect` | Trigger identity reflection from accumulated memories |
 | `fry audit` | Run a standalone AI-powered build-level audit on any codebase |
+| `fry team` | Start and operate the standalone tmux-backed team runtime |
 | `fry status` | Show current build state, or archived/worktree build history if no active build |
 | `fry monitor` | Real-time build monitoring — enriched event stream, verbose granular mode, dashboard, or log tail |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
@@ -250,6 +279,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 |---|---|
 | [Getting Started](docs/getting-started.md) | Prerequisites, installation, first build walkthrough |
 | [Commands](docs/commands.md) | Full CLI reference: `run`, `config`, `exit`, `prepare`, `replan`, `version` |
+| [Architecture](docs/architecture.md) | Internal package map and runtime layering, including the standalone team runtime |
 | [Effort Levels](docs/effort-levels.md) | Effort triage: `fast`, `standard`, `high`, `max` -- controls sprint count, density, and review rigor |
 | [Epic Format](docs/epic-format.md) | Epic file syntax: global directives, sprint blocks, validation rules, sizing guidelines |
 | [AI Engines](docs/engines.md) | Codex, Claude, and Ollama engine configuration, mixing engines, model overrides |

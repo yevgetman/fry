@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/yevgetman/fry/internal/agent"
+	"github.com/yevgetman/fry/internal/team"
 )
 
 // Snapshot is the composed build state from all monitored sources at a point
@@ -25,6 +26,7 @@ type Snapshot struct {
 	ActiveLogTail  string             `json:"active_log_tail,omitempty"`
 	BuildEnded     bool               `json:"build_ended"`
 	ExitReason     string             `json:"exit_reason,omitempty"`
+	Team           *team.Snapshot     `json:"team,omitempty"`
 }
 
 // EnrichedEvent extends agent.BuildEvent with computed context.

@@ -179,13 +179,23 @@ func RenderDashboard(w io.Writer, snap Snapshot, useColor bool, clearScreen bool
 		fmt.Fprintln(w, sep)
 	} else {
 		// No build status yet.
-		phase := snap.Phase
-		if phase == "" {
-			phase = "unknown"
-		}
-		fmt.Fprintf(w, "Phase: %s\n", phase)
-		if snap.BuildActive {
-			fmt.Fprintf(w, "Build active (PID %d)\n", snap.PID)
+		if snap.Team != nil {
+			fmt.Fprintf(w, "Team: %-28s Session: %s\n", snap.Team.Config.TeamID, snap.Team.Config.TMuxSession)
+			fmt.Fprintf(w, "Status: %-26s Workers: %d\n", snap.Team.Config.Status, len(snap.Team.Workers))
+			fmt.Fprintf(w, "Tasks: pending=%d running=%d completed=%d failed=%d\n",
+				snap.Team.Pending, snap.Team.InProgress, snap.Team.Completed, snap.Team.Failed)
+			if snap.Team.IntegratedDir != "" {
+				fmt.Fprintf(w, "Integrated: %s\n", snap.Team.IntegratedDir)
+			}
+		} else {
+			phase := snap.Phase
+			if phase == "" {
+				phase = "unknown"
+			}
+			fmt.Fprintf(w, "Phase: %s\n", phase)
+			if snap.BuildActive {
+				fmt.Fprintf(w, "Build active (PID %d)\n", snap.PID)
+			}
 		}
 		fmt.Fprintln(w, sep)
 	}

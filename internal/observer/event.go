@@ -34,6 +34,22 @@ const (
 	EventDecisionNeeded    EventType = "decision_needed"
 	EventDecisionReceived  EventType = "decision_received"
 	EventBuildPaused       EventType = "build_paused"
+
+	EventTeamStart        EventType = "team_start"
+	EventTeamWorkerReady  EventType = "team_worker_ready"
+	EventTeamTaskCreated  EventType = "team_task_created"
+	EventTeamTaskAssigned EventType = "team_task_assigned"
+	EventTeamTaskStarted  EventType = "team_task_started"
+	EventTeamTaskDone     EventType = "team_task_completed"
+	EventTeamTaskFailed   EventType = "team_task_failed"
+	EventTeamScaleUp      EventType = "team_scale_up"
+	EventTeamScaleDown    EventType = "team_scale_down"
+	EventTeamWorkerStall  EventType = "team_worker_stalled"
+	EventTeamPause        EventType = "team_pause"
+	EventTeamResume       EventType = "team_resume"
+	EventTeamShutdown     EventType = "team_shutdown"
+	EventTeamMergeReady   EventType = "team_merge_ready"
+	EventTeamComplete     EventType = "team_complete"
 )
 
 // Event represents a single timestamped build event in the observer stream.

@@ -20,6 +20,7 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/lock"
+	"github.com/yevgetman/fry/internal/team"
 )
 
 var statusCmd = &cobra.Command{
@@ -135,6 +136,25 @@ func runStatusJSON(cmd *cobra.Command, projectDir string) error {
 		}
 	}
 
+	if snap, teamErr := team.ActiveSnapshot(cmd.Context(), projectDir); teamErr == nil {
+		state.Team = &agent.TeamSummary{
+			ID:             snap.Config.TeamID,
+			Status:         string(snap.Config.Status),
+			WorkerCount:    len(snap.Workers),
+			IdleWorkers:    snap.IdleWorkers,
+			RunningWorkers: snap.RunningWorkers,
+			StalledWorkers: snap.StalledWorkers,
+			PendingTasks:   snap.Pending,
+			ActiveTasks:    snap.InProgress,
+			CompletedTasks: snap.Completed,
+			FailedTasks:    snap.Failed,
+			IntegratedDir:  snap.IntegratedDir,
+		}
+		if !state.Active && snap.Active {
+			state.Active = true
+		}
+	}
+
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
 	return enc.Encode(state)
@@ -142,6 +162,7 @@ func runStatusJSON(cmd *cobra.Command, projectDir string) error {
 
 func runStatusHumanReadable(cmd *cobra.Command, projectDir string) error {
 	buildDir, _ := resolveBuildDir(projectDir)
+	teamSnap, _ := team.ActiveSnapshot(cmd.Context(), projectDir)
 
 	// Check for early-phase build (triage/prepare) before requiring epic
 	phase := readPhase(projectDir, buildDir)
@@ -171,9 +192,11 @@ func runStatusHumanReadable(cmd *cobra.Command, projectDir string) error {
 		hasArchives := fileExists(filepath.Join(projectDir, config.ArchiveDir))
 		hasWorktrees := fileExists(filepath.Join(projectDir, config.GitWorktreeDir))
 		if !hasArchives && !hasWorktrees {
-			fmt.Fprintf(cmd.OutOrStdout(), "No fry project found in %s\n", projectDir)
-			fmt.Fprintln(cmd.OutOrStdout(), "Run 'fry init' to get started.")
-			return nil
+			if teamSnap == nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "No fry project found in %s\n", projectDir)
+				fmt.Fprintln(cmd.OutOrStdout(), "Run 'fry init' to get started.")
+				return nil
+			}
 		}
 	}
 
@@ -191,6 +214,10 @@ func runStatusHumanReadable(cmd *cobra.Command, projectDir string) error {
 			worktrees, _ := git.ScanWorktreeBuilds(projectDir)
 			summary := continuerun.FormatInactiveSummary(projectDir, archives, worktrees)
 			fmt.Fprint(cmd.OutOrStdout(), summary)
+			if teamSnap != nil {
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprint(cmd.OutOrStdout(), formatTeamSummary(teamSnap))
+			}
 			return nil
 		}
 		return err
@@ -202,5 +229,25 @@ func runStatusHumanReadable(cmd *cobra.Command, projectDir string) error {
 	}
 	report := continuerun.FormatReport(state)
 	fmt.Fprint(cmd.OutOrStdout(), report)
+	if teamSnap != nil {
+		fmt.Fprintln(cmd.OutOrStdout())
+		fmt.Fprint(cmd.OutOrStdout(), formatTeamSummary(teamSnap))
+	}
 	return nil
+}
+
+func formatTeamSummary(snap *team.Snapshot) string {
+	if snap == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Active Team Runtime: %s (%s)\n", snap.Config.TeamID, snap.Config.Status)
+	fmt.Fprintf(&b, "  Workers: idle=%d running=%d stalled=%d total=%d\n",
+		snap.IdleWorkers, snap.RunningWorkers, snap.StalledWorkers, len(snap.Workers))
+	fmt.Fprintf(&b, "  Tasks: pending=%d in-progress=%d completed=%d failed=%d blocked=%d\n",
+		snap.Pending, snap.InProgress, snap.Completed, snap.Failed, snap.Blocked)
+	if snap.IntegratedDir != "" {
+		fmt.Fprintf(&b, "  Integrated output: %s\n", snap.IntegratedDir)
+	}
+	return b.String()
 }

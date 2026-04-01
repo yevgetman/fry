@@ -33,6 +33,7 @@ type Monitor struct {
 	logSrc     *LogSource
 	logEvents  *LogEventSource
 	exitReason *ExitReasonSource
+	team       *TeamSource
 
 	// Ordered list of all sources for sequential polling.
 	sources []Source
@@ -62,6 +63,7 @@ func New(cfg Config) *Monitor {
 		epicProg:   NewProgressSource(filepath.Join(buildDir, config.EpicProgressFile)),
 		logSrc:     NewLogSource(buildDir, cfg.LogTailLines),
 		exitReason: NewExitReasonSource(buildDir),
+		team:       NewTeamSource(cfg.ProjectDir),
 	}
 	if cfg.Verbose {
 		m.logEvents = NewLogEventSource(buildDir)
@@ -77,6 +79,7 @@ func New(cfg Config) *Monitor {
 		m.sprintProg,
 		m.epicProg,
 		m.logSrc,
+		m.team,
 	}
 	if m.logEvents != nil {
 		m.sources = append(m.sources, m.logEvents)
@@ -257,7 +260,7 @@ func (m *Monitor) compose() Snapshot {
 		Timestamp:      time.Now(),
 		ProjectDir:     m.cfg.ProjectDir,
 		WorktreeDir:    m.cfg.WorktreeDir,
-		BuildActive:    m.lock.Active(),
+		BuildActive:    m.lock.Active() || (m.team.Snapshot() != nil && m.team.Snapshot().Active),
 		PID:            m.lock.PID(),
 		Phase:          m.phase.Phase(),
 		Events:         enrichedAll,
@@ -270,6 +273,7 @@ func (m *Monitor) compose() Snapshot {
 		ActiveLogTail:  m.logSrc.Tail(),
 		BuildEnded:     buildEnded,
 		ExitReason:     m.exitReason.Reason(),
+		Team:           m.team.Snapshot(),
 	}
 }
 
