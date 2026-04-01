@@ -50,6 +50,24 @@ func TestDetectRateLimit(t *testing.T) {
 			wantDetect: true,
 		},
 		{
+			name:       "request was throttled",
+			engine:     "claude",
+			output:     "Request was throttled by the upstream provider",
+			wantDetect: true,
+		},
+		{
+			name:       "resource exhausted",
+			engine:     "codex",
+			output:     "RESOURCE_EXHAUSTED: the model is saturated",
+			wantDetect: true,
+		},
+		{
+			name:       "usage limit reached",
+			engine:     "claude",
+			output:     "Usage limit reached for this workspace, try again later",
+			wantDetect: true,
+		},
+		{
 			name:       "retry-after header parsed",
 			engine:     "claude",
 			output:     "rate_limit retry-after: 30",
@@ -62,6 +80,13 @@ func TestDetectRateLimit(t *testing.T) {
 			output:     "rate limit hit, retry_after: 15",
 			wantDetect: true,
 			wantRA:     15 * time.Second,
+		},
+		{
+			name:       "try again in minutes parsed",
+			engine:     "claude",
+			output:     "Usage limit reached, try again in 2 minutes",
+			wantDetect: true,
+			wantRA:     2 * time.Minute,
 		},
 		{
 			name:       "no match on normal output",
@@ -100,6 +125,13 @@ func TestDetectRateLimit(t *testing.T) {
 			engine:     "claude",
 			output:     "",
 			err:        fmt.Errorf("connection refused"),
+			wantDetect: false,
+		},
+		{
+			name:       "auth failure is not rate limit",
+			engine:     "claude",
+			output:     "Not logged in · Please run /login",
+			err:        fmt.Errorf("exit status 1"),
 			wantDetect: false,
 		},
 		{

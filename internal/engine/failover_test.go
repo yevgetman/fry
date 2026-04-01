@@ -140,4 +140,8 @@ func TestDetectFailoverCondition(t *testing.T) {
 
 	auth := DetectFailoverCondition("claude", "authentication expired", errors.New("exit status 1"))
 	assert.False(t, auth.Detected)
+
+	quota := DetectFailoverCondition("claude", "credit balance too low", errors.New("exit status 1"))
+	assert.True(t, quota.Detected)
+	assert.Equal(t, "provider quota", quota.Reason)
 }

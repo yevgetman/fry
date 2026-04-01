@@ -237,7 +237,9 @@ When an engine call fails, Fry inspects the output and error for rate-limit indi
 - HTTP `429` status code
 - `overloaded` errors
 - `too many requests`
+- `throttled`, `request limit`, `usage limit`, and `resource exhausted`
 - `retry-after: N` (parsed; used as the backoff delay)
+- `try again in N <unit>` (parsed for `ms`, `seconds`, `minutes`, and `hours`)
 
 If a rate limit is detected, Fry waits and retries. If the output contains a `retry-after` value, that delay is used. Otherwise, exponential backoff kicks in.
 

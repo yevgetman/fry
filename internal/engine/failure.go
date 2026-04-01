@@ -19,6 +19,7 @@ var (
 	connectionRefusedRe  = regexp.MustCompile(`(?i)connection refused|econnrefused`)
 	timeoutRe            = regexp.MustCompile(`(?i)i/o timeout|timed out|timeout|deadline exceeded`)
 	networkErrorRe       = regexp.MustCompile(`(?i)network error|transport error|upstream connect error|no healthy upstream`)
+	quotaExceededRe      = regexp.MustCompile(`(?i)quota exceeded|exceeded your current quota|credit balance too low|insufficient credits|billing hard limit|usage limit reached`)
 )
 
 // DetectFailoverCondition inspects an engine failure and determines whether
@@ -40,6 +41,8 @@ func DetectFailoverCondition(engineName, output string, err error) FailoverResul
 
 	combined := output + " " + err.Error()
 	switch {
+	case quotaExceededRe.MatchString(combined):
+		return FailoverResult{Detected: true, Reason: "provider quota"}
 	case http5xxRe.MatchString(combined):
 		return FailoverResult{Detected: true, Reason: "server error"}
 	case serviceUnavailableRe.MatchString(combined):
