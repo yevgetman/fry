@@ -123,6 +123,43 @@ FRY_ENGINE=claude fry                             # Set engine via environment v
 
 ---
 
+## `fry exit`
+
+Request a graceful stop for a running build. Fry settles the current safe seam,
+writes `.fry/resume-point.json`, and leaves the build in a paused state for
+`fry run --continue`, `fry run --simple-continue`, or `fry run --resume --sprint N`.
+
+```
+fry exit [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--project-dir <path>` | Project directory to operate on (default: current directory) |
+| `--no-color` | Disable colored terminal output |
+| `--verbose` | Enable verbose logging |
+
+### Behavior
+
+- Writes a structured exit request to `.fry/exit-request.json`
+- The running build honors that request at the next safe checkpoint:
+  current sprint iteration, alignment attempt boundary, sprint-audit seam, sprint boundary after compaction (including holds and reviews), or the final build-audit/build-summary seam before finalization
+- When the request is settled, Fry writes `.fry/resume-point.json` with the exact phase, sprint, verdict, reason, and recommended resume command
+- `fry run --continue` and `fry run --simple-continue` read the structured resume point before falling back to artifact heuristics
+- On worktree builds, `fry exit` writes the request into the canonical worktree state directory automatically
+- If the build is already paused, Fry prints the stored resume command instead of writing a second request
+
+### Examples
+
+```bash
+fry exit                                    # Gracefully stop the active build
+fry exit --project-dir /path/to/project     # Stop a build in another directory
+```
+
+---
+
 ## `fry audit`
 
 Run a standalone AI-powered build-level audit on the current project. Works on any codebase -- a completed Fry build, a partially built project, or code that was never built with Fry. Finds issues, attempts fixes, and re-audits until clean or the cycle limit is reached.

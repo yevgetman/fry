@@ -1,6 +1,6 @@
 ---
 name: fry
-description: "Fry build orchestration via CLI: start, monitor, steer, and resume multi-sprint AI builds. Use when: (1) starting or setting up a build, (2) checking build status or progress, (3) reading build logs or audit findings, (4) steering a running build with directives, holds, or pauses, (5) resuming a stopped build, (6) preparing epics or plans, (7) running planning-mode or writing-mode builds. NOT for: editing code directly (Fry's agents do that), running tests manually, or git operations."
+description: "Fry build orchestration via CLI: start, monitor, steer, stop gracefully, and resume multi-sprint AI builds. Use when: (1) starting or setting up a build, (2) checking build status or progress, (3) reading build logs or audit findings, (4) steering a running build with directives, holds, pauses, or graceful exits, (5) resuming a stopped build, (6) preparing epics or plans, (7) running planning-mode or writing-mode builds. NOT for: editing code directly (Fry's agents do that), running tests manually, or git operations."
 metadata:
   {
     "openclaw":
@@ -31,6 +31,7 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Start a build | `fry run -y --project-dir <dir> --json-report --telemetry` |
 | Start from GitHub issue | `fry run -y --gh-issue <url> --project-dir <dir> --json-report --telemetry` |
 | Check status | `fry status --json --project-dir <dir>` |
+| Graceful exit | `fry exit --project-dir <dir>` |
 | Resume (LLM-driven) | `fry run -y --continue --project-dir <dir> --json-report --telemetry` |
 | Resume (lightweight) | `fry run -y --simple-continue --project-dir <dir> --json-report --telemetry` |
 | Resume (skip to healing) | `fry run -y --resume --project-dir <dir> --json-report --telemetry` |
@@ -815,10 +816,20 @@ doesn't, the build is not holding — use Tier A directive instead.
 ### Tier C: Pause (graceful stop)
 
 ```bash
+fry exit --project-dir /path/to/project
+```
+
+Legacy fallback when the CLI command is unavailable:
+
+```bash
 touch "/path/to/project/.fry/agent-pause"
 ```
 
-Work is checkpointed via git. Resume with `fry run --continue`.
+Fry writes `.fry/exit-request.json`, settles the next safe checkpoint, then
+persists `.fry/resume-point.json` with the sprint, phase, verdict, and
+recommended resume command. Resume with `fry run --continue` by default, or
+use the explicit command recorded in `resume-point.json`. Prefer the command
+because it resolves the canonical worktree build directory automatically.
 
 ## Resuming Builds
 
@@ -903,6 +914,8 @@ Key event types: `sprint_start`, `sprint_complete`, `alignment_complete`,
 | `.fry/agent-directive.md` | Active directive (Layer 1 steering) |
 | `.fry/agent-hold-after-sprint` | Hold flag (Layer 1 steering) |
 | `.fry/agent-pause` | Pause flag (Layer 1 steering) |
+| `.fry/exit-request.json` | Structured graceful-exit request written by `fry exit` |
+| `.fry/resume-point.json` | Settled resume checkpoint used by `--continue` / `--simple-continue` |
 | `.fry/decision-needed.md` | Decision request from held build |
 
 ## Cleaning Up

@@ -154,6 +154,8 @@ const (
 	AgentHoldFile      = ".fry/agent-hold-after-sprint"
 	AgentPauseFile     = ".fry/agent-pause"
 	DecisionNeededFile = ".fry/decision-needed.md"
+	ExitRequestFile    = ".fry/exit-request.json"
+	ResumePointFile    = ".fry/resume-point.json"
 
 	// Codebase awareness constants
 	CodebaseFile         = ".fry/codebase.md"

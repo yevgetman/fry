@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/steering"
 )
 
 func TestParseCompletedSprints(t *testing.T) {
@@ -258,6 +259,41 @@ func TestCollectBuildState_NoPreviousBuild(t *testing.T) {
 	ep := &epic.Epic{TotalSprints: 3}
 	_, err := CollectBuildState(context.Background(), dir, ep, false)
 	assert.ErrorIs(t, err, ErrNoPreviousBuild)
+}
+
+func TestCollectBuildStateIncludesResumePoint(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, steering.WriteResumePoint(dir, steering.ResumePoint{
+		Phase:              "sprint_audit",
+		Verdict:            steering.ResumeVerdictResume,
+		Reason:             "after audit cycle 2",
+		Sprint:             6,
+		SprintName:         "Polish auth",
+		RecommendedCommand: "fry run --resume --sprint 6",
+	}))
+
+	ep := &epic.Epic{
+		Name:         "Resume Test",
+		TotalSprints: 6,
+		Sprints: []epic.Sprint{
+			{Number: 1, Name: "One"},
+			{Number: 2, Name: "Two"},
+			{Number: 3, Name: "Three"},
+			{Number: 4, Name: "Four"},
+			{Number: 5, Name: "Five"},
+			{Number: 6, Name: "Six"},
+		},
+	}
+
+	state, err := CollectBuildState(context.Background(), dir, ep, false)
+	require.NoError(t, err)
+	require.NotNil(t, state.ResumePoint)
+	assert.Equal(t, "sprint_audit", state.ResumePoint.Phase)
+	assert.Equal(t, steering.ResumeVerdictResume, state.ResumePoint.Verdict)
+	assert.Equal(t, 6, state.ResumePoint.Sprint)
 }
 
 func TestCollectBuildState_FreshBuild(t *testing.T) {

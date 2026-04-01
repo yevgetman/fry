@@ -24,15 +24,16 @@ import (
 const (
 	StatusPass = "PASS"
 	// PASS aligned: keep this unparenthesized form in the file for regex-based sanity check compatibility.
-	StatusPassAligned                              = "PASS (aligned)"
-	StatusPassSanityPassedNoPromise                = "PASS (sanity checks passed, no promise)"
-	StatusPassAlignedNoPromise                     = "PASS (aligned, no promise)"
-	StatusPassWithDeferredFailures                 = "PASS (deferred failures)"
-	StatusPassAlignedWithDeferredFailures          = "PASS (aligned, deferred failures)"
-	StatusFailSanityFailedAlignmentExhausted       = "FAIL (sanity checks failed, alignment exhausted)"
+	StatusPassAligned                                 = "PASS (aligned)"
+	StatusPassSanityPassedNoPromise                   = "PASS (sanity checks passed, no promise)"
+	StatusPassAlignedNoPromise                        = "PASS (aligned, no promise)"
+	StatusPassWithDeferredFailures                    = "PASS (deferred failures)"
+	StatusPassAlignedWithDeferredFailures             = "PASS (aligned, deferred failures)"
+	StatusFailSanityFailedAlignmentExhausted          = "FAIL (sanity checks failed, alignment exhausted)"
 	StatusFailNoPromiseSanityFailedAlignmentExhausted = "FAIL (no promise, sanity checks failed, alignment exhausted)"
-	StatusFailNoPrompt                             = "FAIL (no prompt)"
-	StatusSkipped                                  = "SKIPPED"
+	StatusFailNoPrompt                                = "FAIL (no prompt)"
+	StatusPaused                                      = "PAUSED"
+	StatusSkipped                                     = "SKIPPED"
 )
 
 type SprintResult struct {
@@ -42,11 +43,14 @@ type SprintResult struct {
 	Duration               time.Duration
 	HealAttempts           int                  // number of alignment agent invocations
 	AuditWarning           string               // non-empty when MODERATE audit issues remain (advisory)
-	DeferredFailures       []verify.CheckResult  // sanity check failures below threshold
-	VerificationResults    []verify.CheckResult  // all check results from the final sanity check run
+	DeferredFailures       []verify.CheckResult // sanity check failures below threshold
+	VerificationResults    []verify.CheckResult // all check results from the final sanity check run
 	VerificationPassCount  int                  // pass count from final sanity check run
 	VerificationTotalCount int                  // total checks from final sanity check run
 	SprintLogPath          string               // path to combined sprint log file
+	PausePhase             string
+	PauseDetail            string
+	PauseCheckpointed      bool
 }
 
 type RunConfig struct {
@@ -223,23 +227,20 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 			}
 		}
 
-		// Layer 1 — Tier C: Check for pause signal
-		if steering.IsPaused(cfg.ProjectDir) {
-			_ = steering.ClearPause(cfg.ProjectDir)
+		// Layer 1 — Tier C: Check for graceful stop requests.
+		if steering.HasStopRequest(cfg.ProjectDir) {
 			frylog.Log("  STEERING: pause requested — checkpointing and exiting")
-			_ = observer.EmitEvent(cfg.ProjectDir, observer.Event{
-				Type:   observer.EventBuildPaused,
-				Sprint: cfg.Sprint.Number,
-				Data: map[string]string{
-					"iteration": fmt.Sprintf("%d", iter),
-				},
-			})
-			_ = git.GitCheckpoint(ctx, cfg.ProjectDir, cfg.Epic.Name, cfg.Sprint.Number, cfg.Sprint.Name, "paused")
+			if err := git.GitCheckpoint(ctx, cfg.ProjectDir, cfg.Epic.Name, cfg.Sprint.Number, cfg.Sprint.Name, "paused"); err != nil {
+				return nil, fmt.Errorf("run sprint: pause checkpoint: %w", err)
+			}
 			return &SprintResult{
-				Number:   cfg.Sprint.Number,
-				Name:     cfg.Sprint.Name,
-				Status:   "PAUSED",
-				Duration: time.Since(started),
+				Number:            cfg.Sprint.Number,
+				Name:              cfg.Sprint.Name,
+				Status:            StatusPaused,
+				Duration:          time.Since(started),
+				PausePhase:        "sprint_iteration",
+				PauseDetail:       fmt.Sprintf("after iteration %d", iter),
+				PauseCheckpointed: true,
 			}, nil
 		}
 	}

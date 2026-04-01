@@ -42,22 +42,23 @@ Pause after the current sprint completes. Review what was done and decide how to
 
 **Risk**: Low. The sprint boundary is a clean seam. All work is checkpointed via git. Replan uses Fry's existing `internal/review/` system, which accounts for completed work.
 
-### Tier C: Abort (anytime)
+### Tier C: Graceful Exit (anytime)
 
-Stop the build gracefully. The current iteration finishes, work is committed, and the build exits cleanly.
+Stop the build gracefully. The current unit of work finishes, Fry settles a safe checkpoint, and the build exits cleanly.
 
 **When to use**: "Stop", "This is going in the wrong direction", "Pause the build"
 
 **How it works**:
-1. You send a pause request via any OpenClaw channel
-2. The extension writes an empty sentinel file `.fry/agent-pause`
-3. At the end of the current iteration, the sprint loop detects the pause
-4. Work is git-checkpointed
-5. A `build_paused` event is emitted
-6. The build process exits cleanly with a "paused" exit reason
-7. Resume with `fry_build_restart` (which calls `fry --continue`), optionally providing new direction via `user_prompt`
+1. You run `fry exit` (preferred), or send a legacy pause request via an OpenClaw channel
+2. `fry exit` writes `.fry/exit-request.json`; the legacy path writes `.fry/agent-pause`
+3. Fry honors the request at the next safe checkpoint:
+   end of the current iteration, alignment seam, sprint-audit seam, sprint boundary after compaction (including hold/review seams), or the final build-audit/build-summary seam before finalization
+4. Work is checkpointed when needed
+5. Fry writes `.fry/resume-point.json` with the exact sprint, phase, verdict, and recommended resume command
+6. A `build_paused` event is emitted
+7. Resume with `fry_build_restart` (which calls `fry --continue`), or manually run `fry run --continue`
 
-**Risk**: Low. This is the designed recovery path. The `--continue` mechanism was built to handle partial builds. It collects build state, analyzes it via LLM, and determines where to resume.
+**Risk**: Low. This is the designed recovery path. The `--continue` mechanism was built to handle partial builds. It collects build state, reads the structured resume point first, then analyzes the remaining artifacts to determine where to resume.
 
 ## File-Based IPC
 
@@ -67,10 +68,12 @@ Steering uses files in the `.fry/` directory for communication between the exten
 |------|---------|-----------|---------|
 | `.fry/agent-directive.md` | User directive for the next iteration | OpenClaw agent | Sprint loop (consumed atomically) |
 | `.fry/agent-hold-after-sprint` | Hold sentinel (empty file) | OpenClaw agent | Inter-sprint loop |
-| `.fry/agent-pause` | Pause sentinel (empty file) | OpenClaw agent | Sprint loop |
+| `.fry/agent-pause` | Legacy pause sentinel (empty file) | OpenClaw agent | Sprint/alignment/audit control flow |
+| `.fry/exit-request.json` | Structured graceful-exit request | `fry exit` | Sprint/alignment/audit control flow |
+| `.fry/resume-point.json` | Settled resume checkpoint (phase, sprint, verdict, command) | Fry runtime | `--continue`, `--simple-continue`, humans, agents |
 | `.fry/decision-needed.md` | Build waiting for human input (contains prompt) | Sprint loop | OpenClaw agent |
 
-All steering files are cleaned up automatically when the build completes (success or failure) to prevent stale files from affecting the next run.
+All steering files are cleaned up automatically when the build completes (success or failure) to prevent stale files from affecting the next run. Prefer `fry exit` over writing `.fry/agent-pause` directly because the command resolves the canonical worktree state directory automatically.
 
 ## Prompt Injection
 
@@ -94,7 +97,7 @@ Steering emits structured events to `.fry/observer/events.jsonl`:
 | `directive_received` | Sprint loop consumed a directive | `preview` (first 200 chars) |
 | `decision_needed` | Build holding for user decision | `reason`, `completed_sprint`, `remaining_sprints` |
 | `decision_received` | User responded to a hold | `preview` (first 200 chars) |
-| `build_paused` | Build stopped after iteration | `sprint`, `iteration` |
+| `build_paused` | Build stopped at a settled checkpoint | `sprint`, `phase`, `detail` |
 
 The OpenClaw agent can monitor these events via `fry events --follow --json` or by polling `fry status --json` and relay them as natural-language notifications to whatever messaging channel you're using.
 
@@ -102,8 +105,8 @@ The OpenClaw agent can monitor these events via `fry events --follow --json` or 
 
 Directive consumption uses an atomic rename-read-delete pattern (`ConsumeDirective`) to prevent TOCTOU races. If a new directive is written between the rename and the read, it creates a new file at the original path -- neither the old nor the new directive is lost.
 
-The hold and pause sentinels are empty files where atomicity is less critical (the check is existence-based, not content-based).
+The hold and pause sentinels are empty files where atomicity is less critical (the check is existence-based, not content-based). The `fry exit` request and resume-point files use atomic JSON writes so `--continue` never reads a partially written checkpoint.
 
 ## Cleanup
 
-All four steering files are removed by `steering.CleanupAll()` when the build completes. This is called before the `build_end` event is emitted, ensuring a clean state for the next run.
+All transient steering files are removed by `steering.CleanupAll()` when the build completes. This is called before the `build_end` event is emitted, ensuring a clean state for the next run. `resume-point.json` is intentionally preserved only when the build exits in a paused state.

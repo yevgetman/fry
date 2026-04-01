@@ -15,6 +15,7 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
 	"github.com/yevgetman/fry/internal/severity"
+	"github.com/yevgetman/fry/internal/steering"
 )
 
 var completedSprintRe = regexp.MustCompile(`(?m)^## Sprint (\d+):\s*(.+?)\s*—\s*(PASS.*)$`)
@@ -88,6 +89,12 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic, al
 
 	// Build exit reason
 	state.ExitReason = readExitReason(projectDir)
+
+	// Structured resume point
+	resumePoint, resumeErr := steering.ReadResumePoint(projectDir)
+	if resumeErr == nil {
+		state.ResumePoint = resumePoint
+	}
 
 	// Build audit sentinel
 	sentinelPath := filepath.Join(projectDir, config.BuildAuditCompleteFile)

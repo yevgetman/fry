@@ -13,9 +13,11 @@ import (
 
 	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/githubissue"
 	"github.com/yevgetman/fry/internal/sprint"
+	"github.com/yevgetman/fry/internal/steering"
 	"github.com/yevgetman/fry/internal/verify"
 )
 
@@ -163,6 +165,143 @@ func TestMarkBuildFailed(t *testing.T) {
 	originalPhaseData, err := os.ReadFile(filepath.Join(originalDir, config.BuildPhaseFile))
 	require.NoError(t, err)
 	assert.Equal(t, "failed\n", string(originalPhaseData))
+}
+
+func TestSettleGracefulExitWritesResumePoint(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	created, err := steering.RequestExit(dir)
+	require.NoError(t, err)
+	require.True(t, created)
+
+	originalDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(originalDir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(originalDir, config.AgentPauseFile), nil, 0o644))
+
+	status := &agent.BuildStatus{
+		Version: 1,
+		Build: agent.BuildInfo{
+			Epic:   "Test Epic",
+			Status: "running",
+			Phase:  "audit",
+		},
+	}
+	ep := &epic.Epic{Name: "Test Epic"}
+	spr := &epic.Sprint{Number: 6, Name: "Polish auth"}
+
+	var out strings.Builder
+	err = settleGracefulExit(
+		context.Background(),
+		&out,
+		dir,
+		originalDir,
+		status,
+		ep,
+		spr,
+		"sprint_audit",
+		"after audit cycle 2",
+		steering.ResumeVerdictResume,
+		false,
+		false,
+	)
+	require.NoError(t, err)
+
+	read, err := steering.ReadResumePoint(dir)
+	require.NoError(t, err)
+	require.NotNil(t, read)
+	assert.Equal(t, "sprint_audit", read.Phase)
+	assert.Equal(t, steering.ResumeVerdictResume, read.Verdict)
+	assert.Equal(t, 6, read.Sprint)
+	assert.Equal(t, "fry run --resume --sprint 6", read.RecommendedCommand)
+	assert.Equal(t, "paused", status.Build.Status)
+
+	req, err := steering.ReadExitRequest(dir)
+	require.NoError(t, err)
+	assert.Nil(t, req)
+	assert.False(t, steering.IsPaused(originalDir))
+	assert.Contains(t, out.String(), "Resume:")
+}
+
+func TestSettledSprintResumeVerdict(t *testing.T) {
+	t.Parallel()
+
+	t.Run("continues next sprint for non-final sprint", func(t *testing.T) {
+		t.Parallel()
+
+		ep := &epic.Epic{
+			TotalSprints:     3,
+			AuditAfterSprint: true,
+			EffortLevel:      epic.EffortHigh,
+		}
+		spr := &epic.Sprint{Number: 2}
+
+		assert.Equal(t, steering.ResumeVerdictContinueNext, settledSprintResumeVerdict(ep, spr))
+	})
+
+	t.Run("resumes build audit after final sprint when audit is pending", func(t *testing.T) {
+		t.Parallel()
+
+		ep := &epic.Epic{
+			TotalSprints:     3,
+			AuditAfterSprint: true,
+			EffortLevel:      epic.EffortHigh,
+		}
+		spr := &epic.Sprint{Number: 3}
+
+		assert.Equal(t, steering.ResumeVerdictAuditIncomplete, settledSprintResumeVerdict(ep, spr))
+	})
+
+	t.Run("continues next when final build audit is disabled", func(t *testing.T) {
+		t.Parallel()
+
+		ep := &epic.Epic{
+			TotalSprints:     3,
+			AuditAfterSprint: true,
+			EffortLevel:      epic.EffortFast,
+		}
+		spr := &epic.Sprint{Number: 3}
+
+		assert.Equal(t, steering.ResumeVerdictAuditIncomplete, settledSprintResumeVerdict(ep, spr))
+	})
+}
+
+func TestResumeNeedsFinalizationOnly(t *testing.T) {
+	t.Parallel()
+
+	t.Run("false without resume point", func(t *testing.T) {
+		t.Parallel()
+		assert.False(t, resumeNeedsFinalizationOnly(&continuerun.BuildState{}))
+	})
+
+	t.Run("true when audit is not configured", func(t *testing.T) {
+		t.Parallel()
+		state := &continuerun.BuildState{
+			AuditConfigured: false,
+			ResumePoint:     &steering.ResumePoint{Reason: "after the final sprint settled and before final build finalization"},
+		}
+		assert.True(t, resumeNeedsFinalizationOnly(state))
+	})
+
+	t.Run("true when build audit already completed", func(t *testing.T) {
+		t.Parallel()
+		state := &continuerun.BuildState{
+			AuditConfigured:    true,
+			BuildAuditComplete: true,
+			ResumePoint:        &steering.ResumePoint{Reason: "after build summary and before final build finalization"},
+		}
+		assert.True(t, resumeNeedsFinalizationOnly(state))
+	})
+
+	t.Run("false when build audit is still pending", func(t *testing.T) {
+		t.Parallel()
+		state := &continuerun.BuildState{
+			AuditConfigured:    true,
+			BuildAuditComplete: false,
+			ResumePoint:        &steering.ResumePoint{Reason: "before build audit"},
+		}
+		assert.False(t, resumeNeedsFinalizationOnly(state))
+	})
 }
 
 func TestInitialSprintStatuses(t *testing.T) {

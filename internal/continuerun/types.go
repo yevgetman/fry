@@ -1,6 +1,10 @@
 package continuerun
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/yevgetman/fry/internal/steering"
+)
 
 // ContinueVerdict represents the LLM's decision about how to resume a build.
 type ContinueVerdict string
@@ -62,6 +66,9 @@ type BuildState struct {
 
 	// Build exit reason (from .fry/build-exit-reason.txt)
 	ExitReason string
+
+	// Structured pause/resume checkpoint written by `fry exit` or pause handling.
+	ResumePoint *steering.ResumePoint
 
 	// History
 	DeviationCount   int

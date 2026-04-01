@@ -11,6 +11,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
+	"github.com/yevgetman/fry/internal/steering"
 )
 
 type stubEngine struct {
@@ -251,6 +252,66 @@ func TestHeuristicAnalyze(t *testing.T) {
 			decision := HeuristicAnalyze(tt.state)
 			assert.Equal(t, tt.wantVerdict, decision.Verdict)
 			assert.Equal(t, tt.wantSprint, decision.StartSprint)
+		})
+	}
+}
+
+func TestHeuristicAnalyzeResumePoint(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		point        *steering.ResumePoint
+		totalSprints int
+		wantVerdict  ContinueVerdict
+		wantSprint   int
+	}{
+		{
+			name: "resume sprint",
+			point: &steering.ResumePoint{
+				Verdict: steering.ResumeVerdictResume,
+				Sprint:  6,
+				Reason:  "after sprint audit",
+			},
+			totalSprints: 8,
+			wantVerdict:  VerdictResume,
+			wantSprint:   6,
+		},
+		{
+			name: "continue next",
+			point: &steering.ResumePoint{
+				Verdict: steering.ResumeVerdictContinueNext,
+				Sprint:  3,
+				Reason:  "after sprint compaction",
+			},
+			totalSprints: 8,
+			wantVerdict:  VerdictContinueNext,
+			wantSprint:   4,
+		},
+		{
+			name: "build audit incomplete",
+			point: &steering.ResumePoint{
+				Verdict: steering.ResumeVerdictAuditIncomplete,
+				Sprint:  8,
+				Reason:  "before build audit",
+			},
+			totalSprints: 8,
+			wantVerdict:  VerdictAuditIncomplete,
+			wantSprint:   8,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			decision := HeuristicAnalyze(&BuildState{
+				TotalSprints: tt.totalSprints,
+				ResumePoint:  tt.point,
+			})
+			assert.Equal(t, tt.wantVerdict, decision.Verdict)
+			assert.Equal(t, tt.wantSprint, decision.StartSprint)
+			assert.Equal(t, tt.point.Reason, decision.Reason)
 		})
 	}
 }

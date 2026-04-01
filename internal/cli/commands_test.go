@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/steering"
 )
 
 // ---------------------------------------------------------------------------
@@ -83,6 +84,66 @@ func TestCleanCmd(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Contains(t, errBuf.String(), "warning", "lock warning should be printed to stderr")
+	})
+}
+
+func TestExitCmd(t *testing.T) {
+	t.Parallel()
+
+	t.Run("requests graceful exit for running build", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, config.LockFile), []byte(fmt.Sprintf("%d", os.Getpid())), 0o644))
+
+		cmd := newTestCmd(t, dir)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+
+		err := exitCmd.RunE(cmd, nil)
+		require.NoError(t, err)
+
+		data, readErr := os.ReadFile(filepath.Join(dir, config.ExitRequestFile))
+		require.NoError(t, readErr)
+		assert.Contains(t, string(data), "requested_at")
+		assert.Contains(t, out.String(), "Graceful exit requested")
+		assert.Contains(t, out.String(), config.ResumePointFile)
+	})
+
+	t.Run("no running build returns error", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		cmd := newTestCmd(t, dir)
+
+		err := exitCmd.RunE(cmd, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no running build found")
+	})
+
+	t.Run("paused build prints resume command", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+		require.NoError(t, steering.WriteResumePoint(dir, steering.ResumePoint{
+			Phase:              "sprint_audit",
+			Verdict:            steering.ResumeVerdictResume,
+			Reason:             "after audit cycle 2",
+			Sprint:             6,
+			SprintName:         "Polish auth",
+			RecommendedCommand: "fry run --resume --sprint 6",
+		}))
+
+		cmd := newTestCmd(t, dir)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+
+		err := exitCmd.RunE(cmd, nil)
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "already paused")
+		assert.Contains(t, out.String(), "fry run --resume --sprint 6")
 	})
 }
 

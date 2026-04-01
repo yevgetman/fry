@@ -18,6 +18,7 @@ import (
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/scan"
 	"github.com/yevgetman/fry/internal/severity"
+	"github.com/yevgetman/fry/internal/steering"
 	"github.com/yevgetman/fry/internal/textutil"
 )
 
@@ -125,6 +126,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			return nil, ctx.Err()
 		default:
 		}
+		if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("before audit cycle %d", cycle)); err != nil {
+			return nil, err
+		}
 
 		refreshDiff(&opts)
 
@@ -163,6 +167,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			return nil, err
 		}
 		_ = os.Remove(auditFilePath)
+		if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("after audit cycle %d", cycle)); err != nil {
+			return nil, err
+		}
 
 		// Quick severity check
 		maxSev := parseAuditSeverity(string(content))
@@ -271,6 +278,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				return nil, ctx.Err()
 			default:
 			}
+			if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("before audit fix %d in cycle %d", fixIter, cycle)); err != nil {
+				return nil, err
+			}
 
 			unresolved := filterFixable(activeFindings, includeLow)
 			if len(unresolved) == 0 {
@@ -292,6 +302,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				fmt.Sprintf("sprint%d_auditfix_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
 			)
 			if _, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel); err != nil {
+				return nil, err
+			}
+			if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("after audit fix %d in cycle %d", fixIter, cycle)); err != nil {
 				return nil, err
 			}
 
@@ -319,6 +332,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				return nil, verifyErr
 			}
 			_ = os.Remove(auditFilePath)
+			if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("after audit verify %d in cycle %d", fixIter, cycle)); err != nil {
+				return nil, err
+			}
 
 			resolved := parseVerificationStatuses(string(verifyContent), unresolved)
 			applyResolutionsByKey(activeFindings, unresolved, resolved)
@@ -360,6 +376,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 	// Final audit pass to determine current state
 	refreshDiff(&opts)
+	if err := checkStopRequest(opts.ProjectDir, "sprint_audit", "before final audit pass"); err != nil {
+		return nil, err
+	}
 	finalPrompt := buildAuditPrompt(opts, knownFindings)
 	if err := writePromptFile(promptPath, finalPrompt); err != nil {
 		return nil, fmt.Errorf("run audit loop: write final audit prompt: %w", err)
@@ -381,6 +400,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 	content, err := readAuditOutput(auditFilePath, "final audit session")
 	if err != nil {
+		return nil, err
+	}
+	if err := checkStopRequest(opts.ProjectDir, "sprint_audit", "after final audit pass"); err != nil {
 		return nil, err
 	}
 
@@ -1196,6 +1218,13 @@ func refreshDiff(opts *AuditOpts) {
 			opts.GitDiff = freshDiff
 		}
 	}
+}
+
+func checkStopRequest(projectDir, phase, detail string) error {
+	if !steering.HasStopRequest(projectDir) {
+		return nil
+	}
+	return steering.NewExitRequestError(phase, detail)
 }
 
 func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model string) (string, error) {

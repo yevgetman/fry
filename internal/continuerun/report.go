@@ -27,6 +27,24 @@ func FormatReport(state *BuildState) string {
 		b.WriteString("\n\n")
 	}
 
+	if state.ResumePoint != nil {
+		b.WriteString("## Resume Point\n")
+		b.WriteString(fmt.Sprintf("- Verdict: %s\n", state.ResumePoint.Verdict))
+		if state.ResumePoint.Sprint > 0 {
+			b.WriteString(fmt.Sprintf("- Sprint: %d (%s)\n", state.ResumePoint.Sprint, state.ResumePoint.SprintName))
+		}
+		if state.ResumePoint.Phase != "" {
+			b.WriteString(fmt.Sprintf("- Phase: %s\n", state.ResumePoint.Phase))
+		}
+		if state.ResumePoint.Reason != "" {
+			b.WriteString(fmt.Sprintf("- Reason: %s\n", state.ResumePoint.Reason))
+		}
+		if state.ResumePoint.RecommendedCommand != "" {
+			b.WriteString(fmt.Sprintf("- Recommended command: `%s`\n", state.ResumePoint.RecommendedCommand))
+		}
+		b.WriteByte('\n')
+	}
+
 	// Completed sprints
 	b.WriteString("## Completed Sprints\n")
 	if len(state.CompletedSprints) == 0 {

@@ -115,7 +115,7 @@ is a JSON line with fields: ts (ISO 8601), type, sprint (optional), data (option
 | directive_received | Sprint loop picked up a user directive | preview |
 | decision_needed | Build holding for user decision at sprint boundary | reason, completed_sprint, remaining_sprints |
 | decision_received | User responded to a hold | preview |
-| build_paused | Build stopped gracefully after iteration | sprint, iteration |
+| build_paused | Build stopped gracefully at a settled checkpoint | sprint, phase, detail |
 
 When reporting events to the user, translate them to natural language:
 - sprint_complete with status=PASS -> "Sprint N complete, all checks passed"
@@ -196,10 +196,11 @@ Pause after the current sprint completes. Review and decide.
 - You'll get a summary and three options: continue / directive / replan
 - To replan: respond with "replan: <instructions>"
 
-## Tier C: Abort (fry_build_pause + fry_build_restart)
+## Tier C: Abort (prefer fry exit, then fry_build_restart)
 Stop the build gracefully. Work is checkpointed.
 - Use for: "stop", "this is wrong", "going in the wrong direction"
-- The build exits after the current iteration finishes
+- Prefer fry exit so Fry resolves the canonical build directory and persists a structured resume point
+- Fry exits at the next safe checkpoint (iteration seam, alignment seam, audit seam, or sprint boundary)
 - Resume with fry_build_restart, passing new direction in its user_prompt parameter
 
 ## Matching user intent to tiers

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/yevgetman/fry/internal/archive"
+	"github.com/yevgetman/fry/internal/steering"
 )
 
 func TestFormatReport_FreshBuild(t *testing.T) {
@@ -135,6 +136,31 @@ func TestFormatReport_ExitReason(t *testing.T) {
 	assert.Contains(t, report, "## Last Run Stopped")
 	assert.Contains(t, report, "outside deviation scope")
 	assert.Contains(t, report, "Next Sprint: 3")
+}
+
+func TestFormatReport_ResumePoint(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		EpicName:     "Checkout",
+		TotalSprints: 6,
+		Engine:       "codex",
+		EffortLevel:  "high",
+		ResumePoint: &steering.ResumePoint{
+			Phase:              "sprint_audit",
+			Verdict:            steering.ResumeVerdictResume,
+			Reason:             "after audit verify 1 in cycle 2",
+			Sprint:             6,
+			SprintName:         "Polish auth",
+			RecommendedCommand: "fry run --resume --sprint 6",
+		},
+	}
+
+	report := FormatReport(state)
+	assert.Contains(t, report, "## Resume Point")
+	assert.Contains(t, report, "Verdict: RESUME")
+	assert.Contains(t, report, "Sprint: 6 (Polish auth)")
+	assert.Contains(t, report, "Recommended command: `fry run --resume --sprint 6`")
 }
 
 func TestFormatReport_AllComplete(t *testing.T) {

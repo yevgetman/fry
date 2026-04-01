@@ -63,6 +63,14 @@ func WaitForDecision(ctx context.Context, projectDir string) (string, error) {
 		default:
 		}
 
+		req, err := ReadStopRequest(projectDir)
+		if err != nil {
+			return "", fmt.Errorf("wait for decision: %w", err)
+		}
+		if req != nil {
+			return "", NewExitRequestError("sprint_boundary", "while waiting for a steering decision")
+		}
+
 		directive, err := ConsumeDirective(projectDir)
 		if err != nil {
 			return "", fmt.Errorf("wait for decision: %w", err)

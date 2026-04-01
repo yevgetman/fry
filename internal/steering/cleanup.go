@@ -15,6 +15,8 @@ func CleanupAll(projectDir string) {
 		config.AgentHoldFile,
 		config.AgentPauseFile,
 		config.DecisionNeededFile,
+		config.ExitRequestFile,
+		config.ResumePointFile,
 	}
 	for _, f := range files {
 		_ = os.Remove(filepath.Join(projectDir, f))

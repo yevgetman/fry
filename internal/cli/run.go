@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -413,13 +414,19 @@ var runCmd = &cobra.Command{
 				fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints already complete. Nothing to do.\n", ep.TotalSprints)
 				return nil
 			case continuerun.VerdictAuditIncomplete:
-				if runNoAudit {
+				resumeFinalizationOnly := resumeNeedsFinalizationOnly(state)
+				if runNoAudit && !resumeFinalizationOnly {
 					frlog.Log("All sprints complete. --no-audit prevents build audit; treating as complete.")
 					fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints complete. Build audit skipped (--no-audit).\n", ep.TotalSprints)
 					return nil
 				}
-				frlog.Log("All sprints complete but build audit did not finish. Resuming from build audit...")
-				fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints complete. Resuming from build audit...\n", ep.TotalSprints)
+				if resumeFinalizationOnly {
+					frlog.Log("All sprints complete but final build finalization did not finish. Resuming finalization...")
+					fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints complete. Resuming final build finalization...\n", ep.TotalSprints)
+				} else {
+					frlog.Log("All sprints complete but build audit did not finish. Resuming from build audit...")
+					fmt.Fprintf(cmd.OutOrStdout(), "All %d sprints complete. Resuming from build audit...\n", ep.TotalSprints)
+				}
 				startSprint = ep.TotalSprints + 1 // > endSprint skips sprint loop, falls through to build audit
 				endSprint = ep.TotalSprints
 				auditOnlyResume = true
@@ -547,6 +554,7 @@ var runCmd = &cobra.Command{
 		// Clear any stale exit reason from a prior failed run before this build
 		// starts so monitors and status readers see a clean active state.
 		writeExitReason(projectPath, nil, 0)
+		clearGracefulStopArtifacts(projectPath, originalProjectPath)
 
 		// Persist exit reason so `fry status` can show why the build stopped.
 		defer func() {
@@ -762,6 +770,26 @@ var runCmd = &cobra.Command{
 				})
 			}
 			if err != nil {
+				var exitReq *steering.ExitRequestError
+				if errors.As(err, &exitReq) {
+					if settleErr := settleGracefulExit(
+						ctx,
+						cmd.OutOrStdout(),
+						projectPath,
+						originalProjectPath,
+						buildStatus,
+						ep,
+						spr,
+						exitReq.Phase,
+						exitReq.Detail,
+						steering.ResumeVerdictResume,
+						true,
+						observerEnabled,
+					); settleErr != nil {
+						return settleErr
+					}
+					return nil
+				}
 				if wasInterrupted() {
 					mu.Lock()
 					activeSprint := currentSprint
@@ -785,11 +813,23 @@ var runCmd = &cobra.Command{
 			mu.Unlock()
 
 			// Layer 1 — Tier C: handle PAUSED result
-			if result.Status == "PAUSED" {
-				frlog.Log("  BUILD PAUSED at sprint %d. Use --continue to resume.", spr.Number)
-				buildStatus.Build.Status = "paused"
-				writeBuildStatus(projectPath, buildStatus)
-				_ = os.WriteFile(filepath.Join(projectPath, config.BuildExitReasonFile), []byte("paused"), 0o644)
+			if result.Status == sprint.StatusPaused {
+				if settleErr := settleGracefulExit(
+					ctx,
+					cmd.OutOrStdout(),
+					projectPath,
+					originalProjectPath,
+					buildStatus,
+					ep,
+					spr,
+					result.PausePhase,
+					result.PauseDetail,
+					steering.ResumeVerdictResume,
+					!result.PauseCheckpointed,
+					observerEnabled,
+				); settleErr != nil {
+					return settleErr
+				}
 				return nil
 			}
 
@@ -877,8 +917,34 @@ var runCmd = &cobra.Command{
 			writeBuildStatus(projectPath, buildStatus)
 
 			if isPassStatus(result.Status) {
+				if steering.HasStopRequest(projectPath) {
+					if settleErr := settleGracefulExit(
+						ctx,
+						cmd.OutOrStdout(),
+						projectPath,
+						originalProjectPath,
+						buildStatus,
+						ep,
+						spr,
+						"sprint_post_run",
+						"after sprint verification and before sprint audit",
+						steering.ResumeVerdictResume,
+						true,
+						observerEnabled,
+					); settleErr != nil {
+						return settleErr
+					}
+					return nil
+				}
+
 				// Sprint audit
 				if ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortFast || runAlwaysVerify) {
+					buildStatus.Build.Phase = "audit"
+					writeBuildStatus(projectPath, buildStatus)
+					writeBuildPhase(projectPath, "audit")
+					if originalProjectPath != projectPath {
+						writeBuildPhase(originalProjectPath, "audit:worktree")
+					}
 					auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
 					if err != nil {
 						return err
@@ -899,6 +965,26 @@ var runCmd = &cobra.Command{
 						Mode:       modeStr,
 					})
 					if err != nil {
+						var exitReq *steering.ExitRequestError
+						if errors.As(err, &exitReq) {
+							if settleErr := settleGracefulExit(
+								ctx,
+								cmd.OutOrStdout(),
+								projectPath,
+								originalProjectPath,
+								buildStatus,
+								ep,
+								spr,
+								exitReq.Phase,
+								exitReq.Detail,
+								steering.ResumeVerdictResume,
+								true,
+								observerEnabled,
+							); settleErr != nil {
+								return settleErr
+							}
+							return nil
+						}
 						return err
 					}
 					if !auditResult.Passed {
@@ -966,6 +1052,32 @@ var runCmd = &cobra.Command{
 					// Update build status with audit result
 					updateBuildStatusAudit(buildStatus, spr.Number, auditResult)
 					writeBuildStatus(projectPath, buildStatus)
+					buildStatus.Build.Phase = "sprint"
+					writeBuildStatus(projectPath, buildStatus)
+					writeBuildPhase(projectPath, "sprint")
+					if originalProjectPath != projectPath {
+						writeBuildPhase(originalProjectPath, "sprint:worktree")
+					}
+				}
+
+				if steering.HasStopRequest(projectPath) {
+					if settleErr := settleGracefulExit(
+						ctx,
+						cmd.OutOrStdout(),
+						projectPath,
+						originalProjectPath,
+						buildStatus,
+						ep,
+						spr,
+						"sprint_audit",
+						"after sprint audit and before checkpoint",
+						steering.ResumeVerdictResume,
+						true,
+						observerEnabled,
+					); settleErr != nil {
+						return settleErr
+					}
+					return nil
 				}
 
 				frlog.Log("  GIT: checkpoint — sprint %d complete", spr.Number)
@@ -988,6 +1100,33 @@ var runCmd = &cobra.Command{
 				frlog.Log("  GIT: checkpoint — sprint %d compacted", spr.Number)
 				if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, spr.Name, "compacted"); err != nil {
 					return err
+				}
+
+				if steering.HasStopRequest(projectPath) {
+					verdict := settledSprintResumeVerdict(ep, spr)
+					detail := "after sprint checkpoint and compaction"
+					if verdict == steering.ResumeVerdictAuditIncomplete {
+						detail = "after the final sprint settled and before final build finalization"
+					}
+					if spr.Number < ep.TotalSprints || verdict == steering.ResumeVerdictAuditIncomplete {
+						if settleErr := settleGracefulExit(
+							ctx,
+							cmd.OutOrStdout(),
+							projectPath,
+							originalProjectPath,
+							buildStatus,
+							ep,
+							spr,
+							"sprint_boundary",
+							detail,
+							verdict,
+							false,
+							observerEnabled,
+						); settleErr != nil {
+							return settleErr
+						}
+						return nil
+					}
 				}
 
 				// Layer 1 — Tier B: Hold at sprint boundary
@@ -1017,6 +1156,28 @@ var runCmd = &cobra.Command{
 
 					decision, waitErr := steering.WaitForDecision(ctx, projectPath)
 					if waitErr != nil {
+						_ = steering.ClearDecisionNeeded(projectPath)
+						var exitReq *steering.ExitRequestError
+						if errors.As(waitErr, &exitReq) {
+							verdict := settledSprintResumeVerdict(ep, spr)
+							if settleErr := settleGracefulExit(
+								ctx,
+								cmd.OutOrStdout(),
+								projectPath,
+								originalProjectPath,
+								buildStatus,
+								ep,
+								spr,
+								exitReq.Phase,
+								"while holding after the sprint settled and before final build finalization",
+								verdict,
+								false,
+								observerEnabled,
+							); settleErr != nil {
+								return settleErr
+							}
+							return nil
+						}
 						return fmt.Errorf("steering: wait for decision: %w", waitErr)
 					}
 					_ = steering.ClearDecisionNeeded(projectPath)
@@ -1220,6 +1381,31 @@ var runCmd = &cobra.Command{
 					}
 				}
 
+				if steering.HasStopRequest(projectPath) {
+					verdict := settledSprintResumeVerdict(ep, spr)
+					detail := "after sprint steering and review and before the next sprint"
+					if verdict == steering.ResumeVerdictAuditIncomplete {
+						detail = "after the final sprint settled and before final build finalization"
+					}
+					if settleErr := settleGracefulExit(
+						ctx,
+						cmd.OutOrStdout(),
+						projectPath,
+						originalProjectPath,
+						buildStatus,
+						ep,
+						spr,
+						"sprint_boundary",
+						detail,
+						verdict,
+						false,
+						observerEnabled,
+					); settleErr != nil {
+						return settleErr
+					}
+					return nil
+				}
+
 				// Observer wake-up: after sprint
 				if observerEnabled && observer.ShouldWakeUp(ep.EffortLevel, observer.WakeAfterSprint) {
 					observerModel := engine.ResolveModel("", engineName, string(ep.EffortLevel), engine.SessionObserver)
@@ -1302,11 +1488,38 @@ var runCmd = &cobra.Command{
 		var buildAuditResult *audit.AuditResult
 		fullBuildComplete := auditOnlyResume || startSprint == 1 || allSprintsCompleted(projectPath, ep.TotalSprints, startSprint, summaryCopy)
 		if exitErr == nil && fullBuildComplete && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortFast || runAlwaysVerify) {
+			if steering.HasStopRequest(projectPath) {
+				lastSprint := &ep.Sprints[ep.TotalSprints-1]
+				if settleErr := settleGracefulExit(
+					ctx,
+					cmd.OutOrStdout(),
+					projectPath,
+					originalProjectPath,
+					buildStatus,
+					ep,
+					lastSprint,
+					"build_audit",
+					"before build audit",
+					steering.ResumeVerdictAuditIncomplete,
+					false,
+					observerEnabled,
+				); settleErr != nil {
+					return settleErr
+				}
+				return nil
+			}
+
 			deferredContent := readDeferredFailuresArtifact(projectPath)
 			auditEngine, err := resolveAuditEngine(engineName, ep.AuditEngine, mcpOpts...)
 			if err != nil {
 				frlog.Log("WARNING: could not create engine for build audit: %v", err)
 			} else {
+				buildStatus.Build.Phase = "build-audit"
+				writeBuildStatus(projectPath, buildStatus)
+				writeBuildPhase(projectPath, "build-audit")
+				if originalProjectPath != projectPath {
+					writeBuildPhase(originalProjectPath, "build-audit:worktree")
+				}
 				buildAuditModel := engine.ResolveModel(ep.AuditModel, auditEngine.Name(), string(ep.EffortLevel), engine.SessionBuildAudit)
 				frlog.Log("▶ BUILD AUDIT  running holistic audit across all %d sprints...  engine=%s  model=%s", ep.TotalSprints, auditEngine.Name(), buildAuditModel)
 				result, auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
@@ -1322,6 +1535,26 @@ var runCmd = &cobra.Command{
 				if auditErr != nil {
 					frlog.Log("WARNING: build audit failed: %v", auditErr)
 				} else {
+					if steering.HasStopRequest(projectPath) {
+						lastSprint := &ep.Sprints[ep.TotalSprints-1]
+						if settleErr := settleGracefulExit(
+							ctx,
+							cmd.OutOrStdout(),
+							projectPath,
+							originalProjectPath,
+							buildStatus,
+							ep,
+							lastSprint,
+							"build_audit",
+							"after build audit and before finalization",
+							steering.ResumeVerdictAuditIncomplete,
+							false,
+							observerEnabled,
+						); settleErr != nil {
+							return settleErr
+						}
+						return nil
+					}
 					buildAuditResult = result
 					if result.Passed {
 						frlog.Log("  BUILD AUDIT: PASS (%s)", audit.FormatCounts(result.SeverityCounts))
@@ -1339,6 +1572,12 @@ var runCmd = &cobra.Command{
 					if gitErr := git.GitCheckpoint(ctx, projectPath, ep.Name, ep.TotalSprints, "", "build-audit"); gitErr != nil {
 						frlog.Log("WARNING: git checkpoint after build audit failed: %v", gitErr)
 					}
+				}
+				buildStatus.Build.Phase = "sprint"
+				writeBuildStatus(projectPath, buildStatus)
+				writeBuildPhase(projectPath, "sprint")
+				if originalProjectPath != projectPath {
+					writeBuildPhase(originalProjectPath, "sprint:worktree")
 				}
 			}
 
@@ -1465,6 +1704,27 @@ var runCmd = &cobra.Command{
 			} else {
 				frlog.Log("  BUILD SUMMARY: complete")
 			}
+		}
+
+		if steering.HasStopRequest(projectPath) && ep.TotalSprints > 0 {
+			lastSprint := &ep.Sprints[ep.TotalSprints-1]
+			if settleErr := settleGracefulExit(
+				ctx,
+				cmd.OutOrStdout(),
+				projectPath,
+				originalProjectPath,
+				buildStatus,
+				ep,
+				lastSprint,
+				"build_audit",
+				"after build summary and before final build finalization",
+				steering.ResumeVerdictAuditIncomplete,
+				false,
+				observerEnabled,
+			); settleErr != nil {
+				return settleErr
+			}
+			return nil
 		}
 
 		// Determine build outcome for observer and collector
@@ -1774,6 +2034,8 @@ var runCmd = &cobra.Command{
 		if uploadDone != nil {
 			<-uploadDone
 		}
+
+		steering.CleanupAll(projectPath)
 
 		return exitErr
 	},
@@ -2276,6 +2538,160 @@ func writeBuildPhase(projectDir, phase string) {
 		return
 	}
 	_ = os.WriteFile(path, []byte(phase+"\n"), 0o644)
+}
+
+func clearGracefulStopArtifacts(projectPath, originalProjectPath string) {
+	for _, dir := range []string{projectPath, originalProjectPath} {
+		if dir == "" {
+			continue
+		}
+		if err := steering.ClearStopRequest(dir); err != nil {
+			frlog.Log("WARNING: could not clear stop request artifacts in %s: %v", dir, err)
+		}
+		if err := steering.ClearResumePoint(dir); err != nil {
+			frlog.Log("WARNING: could not clear resume point in %s: %v", dir, err)
+		}
+	}
+}
+
+func resumeNeedsFinalizationOnly(state *continuerun.BuildState) bool {
+	if state == nil || state.ResumePoint == nil {
+		return false
+	}
+	reason := strings.ToLower(strings.TrimSpace(state.ResumePoint.Reason))
+	return !state.AuditConfigured || state.BuildAuditComplete || strings.Contains(reason, "finalization")
+}
+
+func settledSprintResumeVerdict(ep *epic.Epic, spr *epic.Sprint) string {
+	if ep == nil || spr == nil {
+		return steering.ResumeVerdictContinueNext
+	}
+	if spr.Number == ep.TotalSprints {
+		return steering.ResumeVerdictAuditIncomplete
+	}
+	return steering.ResumeVerdictContinueNext
+}
+
+func settleGracefulExit(
+	ctx context.Context,
+	w io.Writer,
+	projectPath string,
+	originalProjectPath string,
+	buildStatus *agent.BuildStatus,
+	ep *epic.Epic,
+	spr *epic.Sprint,
+	phase string,
+	detail string,
+	verdict string,
+	checkpoint bool,
+	observerEnabled bool,
+) error {
+	stopReq, err := steering.ReadStopRequest(projectPath)
+	if err != nil {
+		return fmt.Errorf("settle graceful exit: read stop request: %w", err)
+	}
+
+	if checkpoint {
+		frlog.Log("  GIT: checkpoint — paused")
+		if err := git.GitCheckpoint(ctx, projectPath, ep.Name, spr.Number, spr.Name, "paused"); err != nil {
+			return err
+		}
+	}
+
+	for _, dir := range []string{projectPath, originalProjectPath} {
+		if strings.TrimSpace(dir) == "" {
+			continue
+		}
+		if err := steering.ClearStopRequest(dir); err != nil {
+			return fmt.Errorf("settle graceful exit: clear stop request in %s: %w", dir, err)
+		}
+	}
+
+	recommended := recommendedResumeCommand(verdict, spr.Number)
+	point := steering.ResumePoint{
+		Phase:              phase,
+		Verdict:            verdict,
+		Reason:             detail,
+		Sprint:             spr.Number,
+		SprintName:         spr.Name,
+		RecommendedCommand: recommended,
+	}
+	if stopReq != nil {
+		point.Source = stopReq.Source
+		point.RequestedAt = stopReq.RequestedAt
+	}
+	if err := steering.WriteResumePoint(projectPath, point); err != nil {
+		return fmt.Errorf("settle graceful exit: write resume point: %w", err)
+	}
+
+	if buildStatus != nil {
+		buildStatus.Build.Status = "paused"
+		if strings.TrimSpace(phase) != "" {
+			buildStatus.Build.Phase = phase
+		}
+		writeBuildStatus(projectPath, buildStatus)
+	}
+
+	phaseLabel := phase
+	if phaseLabel == "" {
+		phaseLabel = "sprint"
+	}
+	writeBuildPhase(projectPath, phaseLabel)
+	if originalProjectPath != "" && originalProjectPath != projectPath {
+		writeBuildPhase(originalProjectPath, phaseLabel+":worktree")
+	}
+
+	if observerEnabled {
+		evt := observer.Event{
+			Type: observer.EventBuildPaused,
+			Data: map[string]string{
+				"phase": phaseLabel,
+			},
+		}
+		if spr != nil {
+			evt.Sprint = spr.Number
+		}
+		if detail != "" {
+			evt.Data["detail"] = detail
+		}
+		_ = observer.EmitEvent(projectPath, evt)
+	}
+
+	if spr != nil {
+		frlog.Log("  BUILD EXITED at sprint %d (%s). Use --continue to resume.", spr.Number, phaseLabel)
+	} else {
+		frlog.Log("  BUILD EXITED at phase %s. Use --continue to resume.", phaseLabel)
+	}
+
+	printGracefulExitHints(w, verdict, spr)
+	return nil
+}
+
+func recommendedResumeCommand(verdict string, sprintNum int) string {
+	switch verdict {
+	case steering.ResumeVerdictResume:
+		return fmt.Sprintf("fry run --resume --sprint %d", sprintNum)
+	case steering.ResumeVerdictAuditIncomplete:
+		return "fry run --continue"
+	case steering.ResumeVerdictContinueNext:
+		return "fry run --continue"
+	default:
+		return "fry run --continue"
+	}
+}
+
+func printGracefulExitHints(w io.Writer, verdict string, spr *epic.Sprint) {
+	switch verdict {
+	case steering.ResumeVerdictResume:
+		if spr != nil {
+			fmt.Fprintf(w, "Resume:   fry run --resume --sprint %d\n", spr.Number)
+		}
+		fmt.Fprintln(w, "Continue: fry run --continue")
+	case steering.ResumeVerdictAuditIncomplete:
+		fmt.Fprintln(w, "Continue: fry run --continue")
+	default:
+		fmt.Fprintln(w, "Continue: fry run --continue")
+	}
 }
 
 // gitBranchFromHead reads the current branch name from .git/HEAD without a subprocess.

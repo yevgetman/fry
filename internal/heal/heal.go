@@ -18,6 +18,7 @@ import (
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/shellhook"
+	"github.com/yevgetman/fry/internal/steering"
 	"github.com/yevgetman/fry/internal/verify"
 )
 
@@ -26,8 +27,8 @@ type HealOpts struct {
 	Sprint              *epic.Sprint
 	Epic                *epic.Epic
 	Engine              engine.Engine
-	Checks              []verify.Check     // Initial checks (used if VerificationFile is empty)
-	VerificationFile    string             // When set, re-parsed each alignment attempt so on-disk edits take effect
+	Checks              []verify.Check // Initial checks (used if VerificationFile is empty)
+	VerificationFile    string         // When set, re-parsed each alignment attempt so on-disk edits take effect
 	UserPrompt          string
 	Verbose             bool
 	SprintLogFile       string
@@ -220,6 +221,10 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		default:
 		}
 
+		if steering.HasStopRequest(opts.ProjectDir) {
+			return nil, steering.NewExitRequestError("alignment", fmt.Sprintf("before alignment attempt %d", attempt))
+		}
+
 		checks, reloadErr := reloadChecks(opts)
 		if reloadErr != nil {
 			return nil, fmt.Errorf("run heal loop: reload checks: %w", reloadErr)
@@ -322,6 +327,10 @@ func RunHealLoop(ctx context.Context, opts HealOpts) (*HealResult, error) {
 		lastResults = results
 		lastPass = passCount
 		lastTotal = totalCount
+
+		if steering.HasStopRequest(opts.ProjectDir) {
+			return nil, steering.NewExitRequestError("alignment", fmt.Sprintf("after alignment attempt %d", attempt))
+		}
 
 		if totalCount == passCount {
 			frylog.Log("  Alignment attempt %d SUCCEEDED — all checks now pass.", attempt)

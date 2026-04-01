@@ -178,13 +178,15 @@ fry/
 | `continue-prompt.md` | Assembled prompt for --continue analysis agent |
 | `continue-decision.txt` | LLM agent's resume decision (verdict, sprint, reason) |
 | `continue-report.md` | Programmatic build state report (input to analysis) |
+| `exit-request.json` | Structured graceful-exit request written by `fry exit` |
+| `resume-point.json` | Settled resume checkpoint (phase, sprint, verdict, recommended command) |
 | `triage-prompt.md` | Classifier prompt for triage gate |
 | `triage-decision.txt` | Triage classifier output (complexity, effort, sprints, reason) |
 | `git-strategy.txt` | Persisted git strategy for `--continue`/`--resume` reattachment |
 | `observer/events.jsonl` | Observer event stream (JSONL, reset per build) |
 | `observer/scratchpad.md` | Observer working memory (reset per build) |
 | `observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) |
-| `build-phase.txt` | Current build phase (triage, prepare, sprint, complete, failed) for `fry status` |
+| `build-phase.txt` | Current build phase (triage, prepare, sprint, audit, build-audit, complete, failed) for `fry status` |
 | `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change, including early failures, for agent polling |
 | `build-report.json` | Machine-readable BuildReport JSON (written at build end with `--json-report`) |
 | `confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, `--confirm-file`) |
@@ -283,7 +285,7 @@ Before sprint loop:
   1. Preflight checks (required tools + custom commands)
   2. Git init (if needed)
   3. Git strategy setup (new repos stay on current branch for the first build; otherwise branch/worktree creation and artifact copy; persisted to .fry/git-strategy.txt)
-  4. --continue: collect build state + LLM analysis (auto-detect resume point, reattach to persisted strategy)
+  4. --continue: collect build state + structured resume point + LLM analysis (auto-detect resume point, reattach to persisted strategy)
 
 For each sprint (startSprint → endSprint):
   4. Docker up (if @docker_from_sprint <= current sprint)
@@ -337,6 +339,7 @@ Final: build audit (if full epic completed) → deferred check re-run → build 
 fry [run] [epic.md] [start] [end]   # Execute sprints (run is default)
 fry prepare [epic_filename]          # Generate .fry/ artifacts from plans
 fry replan                           # Replan after deviation
+fry exit                             # Gracefully stop at the next safe checkpoint
 fry audit                            # Standalone AI-powered build audit
 fry clean                            # Archive .fry/ + build outputs to .fry-archive/
 fry destroy                          # Remove all fry artifacts completely
@@ -412,6 +415,8 @@ Key flags:
 | `ResumeHealMultiplier` | `2` | Heal iteration multiplier on resume |
 | `ResumeMinHealAttempts` | `6` | Minimum alignment attempts on resume |
 | `BuildModeFile` | `.fry/build-mode.txt` | Persisted build mode for `--continue` |
+| `ExitRequestFile` | `.fry/exit-request.json` | Structured graceful-exit request written by `fry exit` |
+| `ResumePointFile` | `.fry/resume-point.json` | Settled resume checkpoint consumed by continue heuristics |
 | `ArchiveDir` | `.fry-archive` | Directory for archived builds |
 | `ArchivePrefix` | `.fry--build--` | Prefix for archive folder names |
 | `TriagePromptFile` | `.fry/triage-prompt.md` | Classifier prompt for triage gate |

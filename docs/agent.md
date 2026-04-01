@@ -66,7 +66,7 @@ The skill teaches the OpenClaw agent how to:
 | **Prepare builds** | `fry prepare` to generate epics, agent instructions, and sanity checks |
 | **Start builds** | `fry run` as a detached background process with appropriate flags |
 | **Monitor builds** | `fry status --json`, read logs, read progress files, stream events |
-| **Steer builds** | Write directives, hold after sprints, pause gracefully (file-based IPC) |
+| **Steer builds** | Write directives, hold after sprints, or stop gracefully with `fry exit` and structured resume points |
 | **Resume builds** | `fry run --continue`, `--simple-continue`, `--resume`, or `--sprint N` |
 | **Interpret results** | Read audit findings, review verdicts, build summaries |
 | **Use all modes** | Software, planning, and writing mode workflows |
@@ -78,7 +78,7 @@ The skill teaches the OpenClaw agent how to:
 
 The skill covers the full Fry CLI surface:
 
-- **All commands**: `run`, `prepare`, `replan`, `clean`, `init`, `status`, `events`, `identity`, `reflect`
+- **All commands**: `run`, `prepare`, `replan`, `clean`, `init`, `status`, `events`, `exit`, `identity`, `reflect`
 - **All flags**: `--effort`, `--engine`, `--mode`, `--model`, `--git-strategy`, `--review`, `--no-audit`, `--continue`, `--resume`, `--simple-continue`, `--sprint`, `--user-prompt`, `--user-prompt-file`, `--mcp-config`, `--dry-run`, `--sarif`, `--json-report`, `--telemetry`, `--triage-only`, `--full-prepare`, `--always-verify`, `--verbose`, `--show-tokens`
 - **All build stages**: Triage, prepare, preflight, sprint execution, sanity checks, alignment, audit, review, build summary
 - **All steering tiers**: Whisper (directive), Hold (sprint boundary), Pause (graceful stop)
@@ -189,7 +189,7 @@ Functions:
 
 ### `internal/steering/` — Build Steering (Layer 1)
 
-File-based IPC for mid-build human intervention. The skill teaches the OpenClaw agent to write steering files; the sprint loop reads them. All operations are atomic (rename-based) to avoid TOCTOU races.
+File-based IPC for mid-build human intervention. The skill teaches the OpenClaw agent to write steering files; `fry exit` writes a structured graceful-exit request; the runtime reads those signals and settles deterministic resume points. Atomic writes prevent partial directives or checkpoints.
 
 Functions:
 - **`ConsumeDirective(projectDir)`** — Atomically read and delete the directive file (rename + read + remove)
@@ -202,6 +202,11 @@ Functions:
 - **`WaitForDecision(ctx, projectDir)`** — Block until a directive appears (polls every 2s via ticker)
 - **`IsPaused(projectDir)`** — Check if the pause sentinel exists
 - **`ClearPause(projectDir)`** — Remove the pause sentinel
+- **`RequestExit(projectDir)`** — Create `.fry/exit-request.json` for `fry exit`
+- **`ReadStopRequest(projectDir)`** — Resolve the effective graceful-stop signal (`fry exit` request or legacy pause sentinel)
+- **`WriteResumePoint(projectDir, point)`** — Persist `.fry/resume-point.json` for deterministic pickup
+- **`ReadResumePoint(projectDir)`** — Read the settled resume checkpoint
+- **`ClearStopRequest(projectDir)`** — Remove the graceful-stop request artifacts
 - **`CleanupAll(projectDir)`** — Remove all steering files (called at build completion)
 
 ---
@@ -214,7 +219,9 @@ These files are created by the steering system:
 |------|---------|-----------|---------|
 | `.fry/agent-directive.md` | User directive for next iteration | OpenClaw agent (via skill) | Sprint loop |
 | `.fry/agent-hold-after-sprint` | Hold flag (sentinel) | OpenClaw agent (via skill) | Inter-sprint loop |
-| `.fry/agent-pause` | Pause flag (sentinel) | OpenClaw agent (via skill) | Sprint loop |
+| `.fry/agent-pause` | Legacy pause flag (sentinel) | OpenClaw agent (via skill) | Sprint/alignment/audit control flow |
+| `.fry/exit-request.json` | Structured graceful-exit request | `fry exit` | Runtime graceful-exit checkpoints |
+| `.fry/resume-point.json` | Settled resume checkpoint | Fry runtime | `--continue`, `--simple-continue`, humans, agents |
 | `.fry/decision-needed.md` | Build waiting for human input | Sprint loop | OpenClaw agent (via skill) |
 
 ## Build Steering Events
@@ -224,7 +231,7 @@ These files are created by the steering system:
 | `directive_received` | Sprint loop read a directive | `preview` |
 | `decision_needed` | Build holding for user decision | `reason`, `completed_sprint`, `remaining_sprints` |
 | `decision_received` | User responded to hold | `preview` |
-| `build_paused` | Build stopped after iteration | `sprint`, `iteration` |
+| `build_paused` | Build stopped at a settled checkpoint | `sprint`, `phase`, `detail` |
 
 ---
 
@@ -233,5 +240,5 @@ These files are created by the steering system:
 The `internal/agent/` and `internal/steering/` packages are designed as the foundation for a native `fry agent` command that does not require OpenClaw. The path:
 
 1. **Done (Layer 0)**: Domain types, state readers, event streaming, artifact schema, prompt generation
-2. **Done (Layer 1)**: Build steering — file-based IPC for directives, holds, pauses, and replans
+2. **Done (Layer 1)**: Build steering — file-based IPC for directives, holds, graceful exits, and structured resume points
 3. **Future**: LLM client (`internal/agent/llm/`), channel adapters (`internal/agent/channels/`), `fry agent` command

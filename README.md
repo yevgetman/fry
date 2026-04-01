@@ -196,6 +196,7 @@ See [Getting Started](docs/getting-started.md) for full setup instructions.
 | `fry init` | Scaffold project structure; auto-detect and scan existing codebases |
 | `fry prepare` | Generate `.fry/AGENTS.md`, `.fry/epic.md`, and `.fry/verification.md` from your plan |
 | `fry replan` | Replan an epic after a deviation |
+| `fry exit` | Request a graceful stop at the next safe checkpoint and persist a resumable pickup point |
 | `fry identity` | Print Fry's compiled-in identity (core + disposition) |
 | `fry reflect` | Trigger identity reflection from accumulated memories |
 | `fry audit` | Run a standalone AI-powered build-level audit on any codebase |
@@ -215,6 +216,7 @@ fry --effort max                       # Maximum rigor: extended prompts, thorou
 fry run epic.md 3 5                    # Run sprints 3-5
 fry run --resume --sprint 4             # Resume failed sprint 4 (skip iterations, align only)
 fry run --continue                     # Auto-detect and resume from where you left off
+fry exit                               # Gracefully stop a running build and persist a resumable checkpoint
 fry clean                              # Archive .fry/ and build outputs (interactive)
 fry clean --force                      # Archive without confirmation prompt
 fry destroy -y                         # Remove all fry artifacts completely
@@ -237,7 +239,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | Document | Description |
 |---|---|
 | [Getting Started](docs/getting-started.md) | Prerequisites, installation, first build walkthrough |
-| [Commands](docs/commands.md) | Full CLI reference: `run`, `prepare`, `replan`, `version` |
+| [Commands](docs/commands.md) | Full CLI reference: `run`, `exit`, `prepare`, `replan`, `version` |
 | [Effort Levels](docs/effort-levels.md) | Effort triage: `fast`, `standard`, `high`, `max` -- controls sprint count, density, and review rigor |
 | [Epic Format](docs/epic-format.md) | Epic file syntax: global directives, sprint blocks, validation rules, sizing guidelines |
 | [AI Engines](docs/engines.md) | Codex, Claude, and Ollama engine configuration, mixing engines, model overrides |

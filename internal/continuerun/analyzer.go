@@ -122,6 +122,29 @@ func HeuristicAnalyze(state *BuildState) *ContinueDecision {
 		}
 	}
 
+	if state.ResumePoint != nil {
+		switch ContinueVerdict(strings.ToUpper(strings.TrimSpace(state.ResumePoint.Verdict))) {
+		case VerdictResume:
+			return &ContinueDecision{
+				Verdict:     VerdictResume,
+				StartSprint: state.ResumePoint.Sprint,
+				Reason:      state.ResumePoint.Reason,
+			}
+		case VerdictContinueNext:
+			return &ContinueDecision{
+				Verdict:     VerdictContinueNext,
+				StartSprint: state.ResumePoint.Sprint + 1,
+				Reason:      state.ResumePoint.Reason,
+			}
+		case VerdictAuditIncomplete:
+			return &ContinueDecision{
+				Verdict:     VerdictAuditIncomplete,
+				StartSprint: state.TotalSprints,
+				Reason:      state.ResumePoint.Reason,
+			}
+		}
+	}
+
 	completed := make(map[int]bool, len(state.CompletedSprints))
 	for _, s := range state.CompletedSprints {
 		completed[s.Number] = true

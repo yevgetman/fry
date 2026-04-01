@@ -193,3 +193,36 @@ Progress is preserved in `.fry/sprint-progress.txt`, `.fry/epic-progress.txt`, a
 ## Signal Handling
 
 Fry catches `SIGINT` and `SIGTERM` signals. On interrupt, it commits partial work to git before exiting, ensuring no progress is lost.
+
+## Graceful Exit
+
+Use `fry exit` to stop a running build without leaving the pickup point to log
+heuristics alone:
+
+```bash
+fry exit
+```
+
+Fry writes `.fry/exit-request.json`, waits for the running build to reach the
+next safe checkpoint, then persists `.fry/resume-point.json` with:
+
+- The sprint number and sprint name
+- The phase where the build stopped (`sprint_iteration`, `alignment`, `sprint_audit`, `sprint_boundary`, or `build_audit`)
+- The continue verdict (`RESUME`, `CONTINUE_NEXT`, or `AUDIT_INCOMPLETE`)
+- The recommended command to resume
+
+Safe checkpoints are:
+
+- End of the current sprint iteration
+- Alignment attempt boundaries
+- Sprint-audit seams between audit, fix, and verify passes
+- Sprint boundaries after checkpoint + compaction, including hold/review seams before the next sprint
+- The build-audit/build-summary seam before final build finalization
+
+Resume from that settled state with:
+
+```bash
+fry run --continue
+fry run --simple-continue
+fry run --resume --sprint N
+```

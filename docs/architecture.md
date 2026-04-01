@@ -11,7 +11,7 @@ internal/agentrun/          Shared dual-log execution harness for sprint and hea
 internal/archive/           Timestamped snapshots of .fry/ and build outputs into .fry-archive/
 internal/assets/            Supplementary assets scanner and content builder (prepare-only)
 internal/audit/             Post-sprint and post-build semantic audit (sprint audit loop + build audit)
-internal/cli/               Cobra command definitions (run, prepare, replan, init, clean, status, identity, version, agent, events)
+internal/cli/               Cobra command definitions (run, prepare, replan, init, exit, clean, status, identity, version, agent, events)
 internal/color/             ANSI color output with TTY detection and NO_COLOR support
 internal/config/            Constants: file paths, defaults, version string
 internal/consciousness/     End-of-build experience synthesis and BuildRecord collection
@@ -32,7 +32,7 @@ internal/report/            BuildReport JSON serialization
 internal/review/            Dynamic sprint review, replanning, deviation tracking
 internal/shellhook/         Shell command execution for hooks
 internal/sprint/            Sprint execution loop, prompt assembly, progress tracking
-internal/steering/          File-based IPC for mid-build human intervention (directives, holds, pauses)
+internal/steering/          File-based IPC for mid-build human intervention (directives, holds, pauses, graceful exits, resume points)
 internal/summary/           Build summary generation (post-epic agent session)
 internal/textutil/          Text utilities (markdown stripping, file timestamps, artifact resolution)
 internal/triage/            Task complexity classification and programmatic epic generation
@@ -47,6 +47,7 @@ templates/                  Embedded templates (AGENTS.md, epic-example, verific
 | `fry run` | Execute the build: parse epic, run sprints, sanity checks, align, audit |
 | `fry prepare` | Generate `.fry/AGENTS.md`, `epic.md`, and `verification.md` from `plans/` |
 | `fry init` | Scaffold `plans/`, `assets/`, `media/` directories and initialize git |
+| `fry exit` | Request a graceful stop and persist a deterministic resume point |
 | `fry clean` | Archive `.fry/` and root-level build outputs to `.fry-archive/` |
 | `fry status` | Show current build state (sprints, progress) without an LLM call |
 | `fry identity` | Print Fry's current identity (core or full with `--full`) |
@@ -104,7 +105,7 @@ User Input (plans/, media/, assets/, or --user-prompt)
    fry run
        │
        ├─ Parse & validate epic (epic/)
-       ├─ --continue: collect build state + LLM analysis (continuerun/)
+       ├─ --continue: collect build state + structured resume point + LLM analysis (continuerun/)
        ├─ Acquire lock (lock/)
        ├─ Preflight checks (preflight/)
        ├─ Init git (git/)
