@@ -611,6 +611,7 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **MODERATE** findings get one fix attempt.
 - **LOW** findings are advisory (non-blocking except at high/max effort).
 - When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
+- If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.
 
 Read audit findings:
 
@@ -628,6 +629,7 @@ cat "/path/to/project/build-audit.md"
 ```
 
 Use `--sarif` to also generate `build-audit.sarif` in SARIF 2.1.0 format.
+If the agent forgets to write `build-audit.md`, Fry attempts the same structured-output recovery before treating the build audit as failed.
 
 ### Sprint review
 

@@ -151,6 +151,8 @@ No additional directives are needed -- the build audit runs automatically when t
 
 The build audit agent writes its report to `build-audit.md` in the project root. This file persists after the build and is committed in the git checkpoint.
 
+If the agent forgets to write `build-audit.md` but its final stdout/log output still contains a structured report or review-style findings, Fry reconstructs `build-audit.md` from that output and continues. If no structured recovery is possible, the build audit fails.
+
 The report includes:
 - Location, description, severity, and recommended fix for each finding
 - A verdict indicating whether the codebase passed or issues remain
@@ -195,7 +197,7 @@ SARIF severity mapping:
 [2026-03-10 13:15:00]   BUILD AUDIT: FAILED — 1 HIGH, 2 MODERATE remain
 ```
 
-### Agent fails to produce the report:
+### Agent fails to produce the report and recovery is impossible:
 ```
 [2026-03-10 13:15:00]   BUILD AUDIT: WARNING -- agent did not produce build-audit.md
 ```

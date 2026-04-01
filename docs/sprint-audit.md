@@ -196,6 +196,8 @@ Brief overview of the audit results.
 FAIL (HIGH issues found)
 ```
 
+If the agent forgets to write `.fry/sprint-audit.txt` but its final stdout/log output still contains a structured report or review-style findings, Fry reconstructs the file from that output and continues. If no structured recovery is possible, the audit fails.
+
 On cycle 2+, the audit output also includes a "Verified Previous Issues" section:
 
 ```
@@ -253,7 +255,7 @@ After each fix iteration, a lightweight verify agent checks resolution:
 | Issues to verify | Numbered list of unresolved issues with location and severity |
 | Instructions | Check each issue, report RESOLVED or STILL PRESENT |
 
-The verify agent does not look for new issues and does not modify source code. Each verify session must write explicit statuses to `.fry/sprint-audit.txt`; missing output is treated as an audit failure rather than an implicit pass.
+The verify agent does not look for new issues and does not modify source code. Each verify session must write explicit statuses to `.fry/sprint-audit.txt`. Fry first tries to recover those statuses from the agent's final stdout/log output; if recovery fails, the audit fails rather than treating missing output as an implicit pass.
 
 ## Effort Level Interaction
 

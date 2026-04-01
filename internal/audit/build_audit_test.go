@@ -145,6 +145,30 @@ func TestRunBuildAuditHandlesNoFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "did not write")
 }
 
+func TestRunBuildAuditRecoversMissingReportFromAgentResponse(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name:    "claude",
+		outputs: []string{reviewStyleHighFinding},
+	}
+	opts := makeBuildOpts(t, eng)
+
+	result, err := RunBuildAudit(context.Background(), opts)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Passed)
+	assert.True(t, result.Blocking)
+	assert.Equal(t, "HIGH", result.MaxSeverity)
+	require.Len(t, result.UnresolvedFindings, 1)
+	assert.Contains(t, result.UnresolvedFindings[0].Description, "Missing error handling")
+
+	content, readErr := os.ReadFile(filepath.Join(opts.ProjectDir, config.BuildAuditFile))
+	require.NoError(t, readErr)
+	assert.Contains(t, string(content), "Recovered audit findings from agent output")
+	assert.Contains(t, string(content), "## Verdict")
+}
+
 func TestRunBuildAuditPopulatesSeverityCounts(t *testing.T) {
 	t.Parallel()
 

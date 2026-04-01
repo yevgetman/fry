@@ -101,7 +101,7 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 		runOpts.Stderr = logFile
 	}
 
-	_, _, runErr := opts.Engine.Run(ctx, config.BuildAuditInvocationPrompt, runOpts)
+	output, _, runErr := opts.Engine.Run(ctx, config.BuildAuditInvocationPrompt, runOpts)
 	if runErr != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -114,15 +114,18 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 
 	// Parse audit results from the report file
 	auditPath := filepath.Join(opts.ProjectDir, config.BuildAuditFile)
-	content, readErr := os.ReadFile(auditPath)
+	content, readErr := readAuditOutput(
+		auditPath,
+		config.BuildAuditFile,
+		"build audit session",
+		"BUILD AUDIT",
+		"run build audit",
+		opts.ProjectDir,
+		output,
+		logPath,
+	)
 	if readErr != nil {
-		if os.IsNotExist(readErr) {
-			return nil, fmt.Errorf("run build audit: build audit session did not write %s", config.BuildAuditFile)
-		}
-		return nil, fmt.Errorf("run build audit: read report: %w", readErr)
-	}
-	if strings.TrimSpace(string(content)) == "" {
-		return nil, fmt.Errorf("run build audit: build audit session wrote an empty %s", config.BuildAuditFile)
+		return nil, readErr
 	}
 
 	frylog.Log("  BUILD AUDIT: report written to %s", config.BuildAuditFile)

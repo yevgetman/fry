@@ -88,6 +88,9 @@ const criticalFindings = "## Summary\nBad stuff.\n\n## Findings\n- **Location:**
 const highFindings = "## Summary\nBugs found.\n\n## Findings\n- **Location:** src/api.go:20\n- **Description:** Missing error handling\n- **Severity:** HIGH\n- **Recommended Fix:** Handle error\n\n## Verdict\nFAIL\n"
 const moderateFindings = "## Summary\nMinor issues.\n\n## Findings\n- **Location:** src/util.go:5\n- **Description:** Edge case not handled\n- **Severity:** MODERATE\n- **Recommended Fix:** Add boundary check\n\n## Verdict\nFAIL\n"
 const cleanAudit = "## Summary\nAll good.\n\n## Findings\nNone.\n\n## Verdict\nPASS\n"
+const reviewStyleHighFinding = "**Findings**\n\n1. High: Missing error handling in booking cancellation path.\n"
+const resolvedVerifySummary = "All listed issues are marked `RESOLVED`."
+const cleanAuditSummary = "No findings discovered. Verdict is PASS."
 
 // --- Finding type tests ---
 
@@ -1045,6 +1048,29 @@ func TestRunAuditLoopNoFindingsFile(t *testing.T) {
 	_, err := RunAuditLoop(context.Background(), opts)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "audit session did not write")
+}
+
+func TestRunAuditLoopRecoversMissingAuditOutputsFromAgentResponse(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name: "codex",
+		outputs: []string{
+			reviewStyleHighFinding,
+			"Applied a targeted fix.\n",
+			resolvedVerifySummary,
+			cleanAuditSummary,
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.MaxAuditIterations = 1
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Passed)
+	assert.Equal(t, 1, result.Iterations)
+	assert.Len(t, eng.prompts, 4)
 }
 
 func TestRunAuditLoopContextCancellation(t *testing.T) {

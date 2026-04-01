@@ -170,7 +170,7 @@ fry/
 | `build-mode.txt` | Persisted build mode (software/planning/writing) for `--continue` auto-detection |
 | `deviation-log.md` | Deviations detected during sprint reviews |
 | `deferred-failures.md` | Sanity check failures below threshold, deferred to build audit |
-| `sprint-audit.txt` | Current sprint's audit findings |
+| `sprint-audit.txt` | Current sprint's audit findings (agent-written or recovered from structured stdout) |
 | `audit-prompt.md` | Assembled audit, fix, or verify prompt |
 | `review-prompt.md` | Assembled review prompt |
 | `summary-prompt.md` | Assembled summary prompt |
@@ -305,7 +305,8 @@ For each sprint (startSprint → endSprint):
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
      │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
      │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
-     │  ├─ Verify agent must emit explicit RESOLVED/STILL PRESENT statuses; missing output fails the audit
+     │  ├─ If the agent forgets to write the audit file, Fry tries to recover a structured report from final stdout/log output before failing
+     │  ├─ Verify agent must emit explicit RESOLVED/STILL PRESENT statuses; unrecoverable missing output fails the audit
      │  ├─ standard: bounded (3 outer cycles, 3 inner fix iterations)
      │  └─ high: progress-based (cap 12 outer, 7 inner), max: progress-based (cap 100 outer, 10 inner)
  11. Git checkpoint commit

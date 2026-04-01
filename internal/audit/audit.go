@@ -157,12 +157,22 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		auditLogPath := filepath.Join(buildLogsDir,
 			fmt.Sprintf("sprint%d_audit%d_%s.log", opts.Sprint.Number, cycle, time.Now().Format("20060102_150405")),
 		)
-		if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, auditLogPath, auditModel); err != nil {
+		auditOutput, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, auditLogPath, auditModel)
+		if err != nil {
 			return nil, err
 		}
 
 		// Read audit findings
-		content, err := readAuditOutput(auditFilePath, "audit session")
+		content, err := readAuditOutput(
+			auditFilePath,
+			config.SprintAuditFile,
+			"audit session",
+			"AUDIT",
+			"run audit loop",
+			opts.ProjectDir,
+			auditOutput,
+			auditLogPath,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -322,12 +332,22 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			verifyLogPath := filepath.Join(buildLogsDir,
 				fmt.Sprintf("sprint%d_auditverify_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
 			)
-			if _, err := runAgentWithLog(ctx, opts, config.AuditVerifyInvocationPrompt, verifyLogPath, verifyModel); err != nil {
+			verifyOutput, err := runAgentWithLog(ctx, opts, config.AuditVerifyInvocationPrompt, verifyLogPath, verifyModel)
+			if err != nil {
 				return nil, err
 			}
 
 			// Parse verification results
-			verifyContent, verifyErr := readAuditOutput(auditFilePath, "verify session")
+			verifyContent, verifyErr := readVerificationOutput(
+				auditFilePath,
+				config.SprintAuditFile,
+				"verify session",
+				"AUDIT",
+				"run audit loop",
+				verifyOutput,
+				verifyLogPath,
+				len(unresolved),
+			)
 			if verifyErr != nil {
 				return nil, verifyErr
 			}
@@ -394,11 +414,21 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	finalLogPath := filepath.Join(buildLogsDir,
 		fmt.Sprintf("sprint%d_audit_final_%s.log", opts.Sprint.Number, time.Now().Format("20060102_150405")),
 	)
-	if _, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, finalLogPath, finalAuditModel); err != nil {
+	finalOutput, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, finalLogPath, finalAuditModel)
+	if err != nil {
 		return nil, err
 	}
 
-	content, err := readAuditOutput(auditFilePath, "final audit session")
+	content, err := readAuditOutput(
+		auditFilePath,
+		config.SprintAuditFile,
+		"final audit session",
+		"AUDIT",
+		"run audit loop",
+		opts.ProjectDir,
+		finalOutput,
+		finalLogPath,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1192,17 +1222,6 @@ func appendCodebaseContext(b *strings.Builder, projectDir string) {
 		b.WriteString(memories)
 		b.WriteString("\n")
 	}
-}
-
-func readAuditOutput(path, session string) ([]byte, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("run audit loop: %s did not write %s", session, config.SprintAuditFile)
-		}
-		return nil, fmt.Errorf("run audit loop: read %s output: %w", session, err)
-	}
-	return content, nil
 }
 
 func writePromptFile(path string, content string) error {
