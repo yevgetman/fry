@@ -89,7 +89,9 @@ const highFindings = "## Summary\nBugs found.\n\n## Findings\n- **Location:** sr
 const moderateFindings = "## Summary\nMinor issues.\n\n## Findings\n- **Location:** src/util.go:5\n- **Description:** Edge case not handled\n- **Severity:** MODERATE\n- **Recommended Fix:** Add boundary check\n\n## Verdict\nFAIL\n"
 const cleanAudit = "## Summary\nAll good.\n\n## Findings\nNone.\n\n## Verdict\nPASS\n"
 const reviewStyleHighFinding = "**Findings**\n\n1. High: Missing error handling in booking cancellation path.\n"
+const diffStyleHighFinding = "codex\nI wrote the audit to `.fry/sprint-audit.txt`.\ndiff --git a/.fry/sprint-audit.txt b/.fry/sprint-audit.txt\nnew file mode 100644\nindex 0000000..1111111\n--- /dev/null\n+++ b/.fry/sprint-audit.txt\n@@ -0,0 +1,8 @@\n+## Summary\n+Recovered from diff.\n+\n+## Findings\n+- **Location:** src/api.go:20\n+- **Description:** Missing error handling\n+- **Severity:** HIGH\n+\n+## Verdict\n+FAIL\n"
 const resolvedVerifySummary = "All listed issues are marked `RESOLVED`."
+const diffStyleResolvedVerifyOutput = "codex\nVerified the listed issues and wrote the results.\ndiff --git a/.fry/sprint-audit.txt b/.fry/sprint-audit.txt\nnew file mode 100644\nindex 0000000..2222222\n--- /dev/null\n+++ b/.fry/sprint-audit.txt\n@@ -0,0 +1,5 @@\n+- **Issue:** 1\n+- **Status:** RESOLVED\n+\n+- **Issue:** 2\n+- **Status:** RESOLVED\n"
 const cleanAuditSummary = "No findings discovered. Verdict is PASS."
 
 // --- Finding type tests ---
@@ -1073,6 +1075,28 @@ func TestRunAuditLoopRecoversMissingAuditOutputsFromAgentResponse(t *testing.T) 
 	assert.Len(t, eng.prompts, 4)
 }
 
+func TestRunAuditLoopRecoversMissingAuditOutputsFromDiffTranscript(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name: "codex",
+		outputs: []string{
+			diffStyleHighFinding,
+			"Applied a targeted fix.\n",
+			resolvedVerifySummary,
+			cleanAuditSummary,
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.MaxAuditIterations = 1
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Passed)
+	assert.Equal(t, 1, result.Iterations)
+}
+
 func TestRunAuditLoopContextCancellation(t *testing.T) {
 	t.Parallel()
 
@@ -1209,6 +1233,50 @@ func TestRunAuditLoopVerifyRequiresOutputFile(t *testing.T) {
 	_, err := RunAuditLoop(context.Background(), opts)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "verify session did not write")
+}
+
+func TestRunAuditLoopVerifyRecoversMissingOutputFromDiffTranscript(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name: "codex",
+		outputs: []string{
+			highFindings,
+			"Applied a targeted fix.\n",
+			diffStyleResolvedVerifyOutput,
+			cleanAuditSummary,
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.MaxAuditIterations = 1
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Passed)
+	assert.Equal(t, 1, result.Iterations)
+}
+
+func TestRecoverAuditReportFromDiffTranscript(t *testing.T) {
+	t.Parallel()
+
+	content, source := recoverAuditReport(config.SprintAuditFile, "", diffStyleHighFinding, "")
+	require.NotEmpty(t, content)
+	assert.Equal(t, "assistant diff", source)
+	assert.Contains(t, content, "Recovered from diff.")
+	assert.Contains(t, content, "- **Severity:** HIGH")
+	assert.Contains(t, content, "## Verdict")
+}
+
+func TestRecoverVerificationOutputFromDiffTranscript(t *testing.T) {
+	t.Parallel()
+
+	content, source := recoverVerificationOutput(config.SprintAuditFile, diffStyleResolvedVerifyOutput, "", 2)
+	require.NotEmpty(t, content)
+	assert.Equal(t, "assistant diff", source)
+	assert.Contains(t, content, "- **Issue:** 1")
+	assert.Contains(t, content, "- **Status:** RESOLVED")
+	assert.Contains(t, content, "- **Issue:** 2")
 }
 
 func TestRunAuditLoopPropagatesAgentErrors(t *testing.T) {
