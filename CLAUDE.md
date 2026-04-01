@@ -58,10 +58,10 @@ After the code and documentation are done and all required checks pass:
 
 1. `git add` the relevant files
 2. Create a commit with a focused message
-3. If you used a worktree, merge that branch back into `master`; `cd` out of the worktree directory before removing it so you do not get stuck in a deleted path
+3. If you used a worktree for the task, merge that branch back into `master`; do not merge, modify, or remove unrelated branches or worktrees. `cd` out of the worktree directory before removing it so you do not get stuck in a deleted path
 4. Run `make install`
 5. Push the resulting branch or `master` to the remote
-6. Clean up any worktree you created for the task
+6. Clean up only the worktree you created for the task
 
 ---
 
@@ -323,7 +323,7 @@ A worktree is **not** needed for:
 
 When using a worktree, create a descriptive branch name (e.g., `feature/add-ollama-engine`) and ensure all mandatory checks (`make test && make build`) pass inside the worktree before presenting the work.
 
-When finishing work in a worktree, merge the branch back into `master`, push the updated branch state to the remote, and then remove the worktree. `cd` out of the worktree directory before cleaning it up.
+When finishing work in a worktree, merge only the task's branch back into `master`, push the updated branch state to the remote, and then remove only that task worktree. Do not disturb unrelated branches or worktrees. `cd` out of the worktree directory before cleaning it up.
 
 ---
 
