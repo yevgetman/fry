@@ -395,6 +395,9 @@ sessions_spawn({
 
 Override with `--engine <name>`, `@engine` in the epic, or `FRY_ENGINE` env var.
 
+For the Fry repository's self-improvement loop, use `fry config set engine <name>`
+to set the repo-local engine that `.self-improve/orchestrate.sh` should use by default.
+
 ### Git strategies
 
 | Strategy | Behavior | When to use |

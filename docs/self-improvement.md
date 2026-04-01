@@ -11,6 +11,10 @@ The self-improvement loop has two phases:
 
 An orchestrator script (`.self-improve/orchestrate.sh`) drives the loop. It can run manually, on a cron schedule via macOS launchd, or in CI via GitHub Actions.
 
+Set the repo-local self-improve engine with `fry config set engine <name>`. The
+orchestrator reads that setting from `.fry/config.json` unless `.self-improve/config`
+explicitly overrides `PLANNING_ENGINE` or `BUILD_ENGINE`.
+
 ## Architecture
 
 ```
@@ -207,7 +211,7 @@ effort for selection.
 6. Each item is implemented as a separate commit referencing the issue number
 7. Documentation updates are required for every change
 8. After Fry completes, `make test && make build` runs as a post-build check
-9. If tests fail, an alignment agent (claude with sonnet) attempts to fix the failures (up to 3 attempts)
+9. If tests fail, an alignment agent using the configured build engine attempts to fix the failures (up to 3 attempts)
 10. On success with `--auto-merge`: pull latest from remote, merge locally, push. On success without: create a PR
 11. Fry writes `output/worked-items.txt` listing the issue numbers it implemented
 
@@ -216,7 +220,7 @@ effort for selection.
 If `make test && make build` fails after Fry completes:
 
 1. The orchestrator captures the failure output and the git diff
-2. A claude agent runs in the worktree with the failure context and instructions to fix
+2. An agent using the configured build engine runs in the worktree with the failure context and instructions to fix
 3. Tests are re-run
 4. Repeats up to 3 times
 5. If aligned: the fix is committed and the build proceeds to merge/PR
@@ -251,7 +255,7 @@ Each entry contains:
 
 ### AI summarization
 
-After mechanical extraction, the orchestrator runs an AI model (configurable via `JOURNAL_MODEL`, default: `sonnet`) to analyze the build log and produce a brief observations field. The AI looks for recurring patterns, fragility, effort mismatches, and anything surprising. If summarization fails, a fallback message is used — journal generation never blocks the build.
+After mechanical extraction, the orchestrator runs the configured build engine with an optional `JOURNAL_MODEL` override to analyze the build log and produce a brief observations field. The AI looks for recurring patterns, fragility, effort mismatches, and anything surprising. If summarization fails, a fallback message is used — journal generation never blocks the build.
 
 ### Experience category
 
@@ -359,7 +363,11 @@ Constants at the top of `orchestrate.sh`, overridable via `.self-improve/config`
 | `MAX_ATTEMPTS` | 3 | Skip items that have failed this many times |
 | `MAX_POST_BUILD_HEALS` | 3 | Alignment attempts for post-build test/build failures |
 | `PLANNING_THRESHOLD` | 15 | Skip planning if this many open issues exist |
-| `JOURNAL_MODEL` | sonnet | AI model for build journal summarization |
+| `PLANNING_ENGINE` | repo config, else claude | Engine for the planning phase |
+| `PLANNING_MODEL` | empty | Optional planning-model override |
+| `BUILD_ENGINE` | repo config, else claude | Engine for the build phase, post-build heals, and journal summarization |
+| `HEAL_MODEL` | empty | Optional model override for post-build heals |
+| `JOURNAL_MODEL` | empty | Optional model override for build journal summarization |
 | `MAX_JOURNAL_ENTRIES` | 30 | Maximum entries retained in build journal |
 
 ## Safety

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/settings"
 	"github.com/yevgetman/fry/internal/steering"
 )
 
@@ -144,6 +145,51 @@ func TestExitCmd(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, out.String(), "already paused")
 		assert.Contains(t, out.String(), "fry run --resume --sprint 6")
+	})
+}
+
+func TestConfigCmd(t *testing.T) {
+	t.Parallel()
+
+	t.Run("set engine writes repo config", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		cmd := newTestCmd(t, dir)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+
+		err := configSetCmd.RunE(cmd, []string{"engine", "codex"})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), config.ProjectConfigFile)
+
+		engineName, err := settings.GetEngine(dir)
+		require.NoError(t, err)
+		assert.Equal(t, "codex", engineName)
+	})
+
+	t.Run("get engine prints configured value", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		require.NoError(t, settings.SetEngine(dir, "claude"))
+
+		cmd := newTestCmd(t, dir)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+
+		err := configGetCmd.RunE(cmd, []string{"engine"})
+		require.NoError(t, err)
+		assert.Equal(t, "claude\n", out.String())
+	})
+
+	t.Run("unknown key returns error", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := newTestCmd(t, t.TempDir())
+		err := configGetCmd.RunE(cmd, []string{"bogus"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown config key")
 	})
 }
 

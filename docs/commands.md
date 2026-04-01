@@ -6,6 +6,48 @@ fry [command] [flags]
 
 When invoked without a subcommand, `fry` is equivalent to `fry run`.
 
+## `fry config`
+
+Read or write repo-local Fry settings stored in `.fry/config.json`.
+
+```
+fry config <get|set> ...
+```
+
+Only one setting exists today:
+
+| Key | Values | Purpose |
+|---|---|---|
+| `engine` | `codex`, `claude`, `ollama` | Default self-improve engine for this repository |
+
+This setting is currently used by the self-improvement orchestrator. It does
+not change the default engine resolution for normal `fry run` or `fry prepare`
+invocations; those still use `--engine`, `@engine`, `FRY_ENGINE`, and the built-in defaults.
+
+### `fry config get`
+
+```
+fry config get engine [--project-dir <path>]
+```
+
+Prints the configured value, or a blank line if unset.
+
+### `fry config set`
+
+```
+fry config set engine <codex|claude|ollama> [--project-dir <path>]
+```
+
+Writes `.fry/config.json`, creating `.fry/` if needed.
+
+### Examples
+
+```bash
+fry config get engine
+fry config set engine codex
+fry config set engine claude --project-dir /path/to/project
+```
+
 ## `fry run`
 
 Execute sprints from an epic file.

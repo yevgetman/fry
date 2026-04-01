@@ -8,6 +8,7 @@ package config
 
 const (
 	FryDir                    = ".fry"
+	ProjectConfigFile         = ".fry/config.json"
 	PlansDir                  = "plans"
 	BuildLogsDir              = ".fry/build-logs"
 	DefaultEngine             = "claude"
