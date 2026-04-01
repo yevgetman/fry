@@ -1,17 +1,30 @@
 # Self-Improvement Build Prompt
 
-Read `assets/approved-items.json` for the list of approved items. Choose 2-3 items to implement in this build, then implement them.
+Read `assets/approved-items.json` for the list of approved items. Each item has
+already been triaged against the current codebase. Choose 2-3 items to
+implement in this build, then implement them.
 
 ## Item Selection
 
-Select items from the approved list based on effort balance. Pick one of these combinations:
+Select items from the approved list based on triaged effort balance. Use the
+`effort` field as the triage-sized effort estimate for the current codebase.
+Pick one of these combinations:
 
 - 1 high-effort item, or
 - 1 medium + 1 low, or
 - 2 medium, or
 - 3 low
 
-Use your judgment — prioritize items that are higher priority, have fewer prior attempts, and where you are confident in the fix plan. Avoid items where the fix description is vague or where you'd need to make architectural decisions not covered in the plan. Skip items marked with `max_attempts: true`.
+Use your judgment — prioritize items that are higher priority, have fewer prior
+attempts, and where you are confident in the fix plan. Avoid items where the
+fix description is vague or where you'd need to make architectural decisions
+not covered in the plan. Skip items marked with `max_attempts: true`.
+
+Manual issues may have sparse metadata. If `raw_body` clearly describes a
+bounded task, do not skip the item solely because `fix`, `files`, or labels
+were normalized instead of coming from the generated issue template. Prefer
+`triage_reason` over any issue-declared effort label when deciding whether an
+item fits the current batch.
 
 Do not select more than 3 items. It is better to do 2 items well than 3 items poorly.
 
