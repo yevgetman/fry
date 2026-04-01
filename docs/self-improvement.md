@@ -7,7 +7,7 @@ Fry is a self-improving codebase. An automated pipeline periodically scans the F
 The self-improvement loop has two phases:
 
 1. **Planning phase** — Fry scans its own codebase across 10 categories and produces a JSON list of new findings. The orchestrator creates GitHub Issues for each finding, with auto-approve or proposed status based on category.
-2. **Build phase** — Fry reads the approved issues, selects 2-3 items based on effort balance, implements them in a git worktree, runs the full test suite, and either merges directly or opens a pull request.
+2. **Build phase** — Fry reads the approved issues, triages each issue against the current codebase to size the work, selects 2-3 items based on that triaged effort balance, implements them in a git worktree, runs the full test suite, and either merges directly or opens a pull request.
 
 An orchestrator script (`.self-improve/orchestrate.sh`) drives the loop. It can run manually, on a cron schedule via macOS launchd, or in CI via GitHub Actions.
 
@@ -29,6 +29,10 @@ An orchestrator script (`.self-improve/orchestrate.sh`) drives the loop. It can 
 ## GitHub Issues as Roadmap
 
 GitHub Issues is the single source of truth for all open items. Each issue is managed via labels.
+For pickup by the self-improvement loop, an issue only needs to be open and carry
+`self-improve` plus either `status/proposed` or `status/approved`. Category,
+priority labels are preferred metadata, not hard requirements. Effort is derived
+at build time by Fry's triage step.
 
 ### Label Scheme
 
@@ -50,10 +54,25 @@ GitHub Issues is the single source of truth for all open items. Each issue is ma
 | `priority/high` | High priority |
 | `priority/medium` | Medium priority |
 | `priority/low` | Low priority |
-| `effort/low` | 1-2 files, no API changes |
-| `effort/medium` | Several files, signature changes |
-| `effort/high` | Cross-cutting refactor |
 | `max-attempts` | 3+ failed builds — skipped until manually reset |
+
+### Required For Pickup
+
+- Add `self-improve`
+- Add one status label: `status/proposed` or `status/approved`
+- Leave the issue open
+
+If `category/*` or `priority/*` labels are missing, Fry normalizes them from
+the issue body and title before export. It checks, in order:
+
+1. Labels
+2. Body fields such as `**Category:**` and `**Priority:**`
+3. Title prefixes such as `[Bug]` or `[Documentation]`
+4. Lightweight title/body heuristics
+
+Missing priority falls back to `medium`. Missing category falls back to
+`unknown`. Effort falls back temporarily to `medium` in exported issue metadata,
+then Fry replaces it with a triage-sized effort before item selection.
 
 ### Category Tiers
 
@@ -62,11 +81,11 @@ GitHub Issues is the single source of truth for all open items. Each issue is ma
 | **Auto-approve** | bug, security, testing, documentation | Created with `status/approved` — built immediately |
 | **Needs approval** | feature, improvement, refactor, sunset, ui_ux, experience | Created with `status/proposed` — requires human to add `status/approved` |
 
-### Issue Format
+### Preferred Issue Format
 
 ```markdown
+**Category:** improvement
 **Priority:** high
-**Effort:** medium
 **Files:** `internal/cli/run.go:296`, `internal/config/config.go`
 
 ## Problem
@@ -79,6 +98,12 @@ GitHub Issues is the single source of truth for all open items. Each issue is ma
 _Managed by [Fry Self-Improvement Pipeline](docs/self-improvement.md)_
 ```
 
+The generated issues follow this template, but manually written issues do not
+need to match it exactly. If `## Problem` or `## Fix Plan` is missing, Fry falls
+back to the remaining body text and preserves the normalized body in
+`assets/approved-items.json` so the build prompt can still use the raw issue
+description.
+
 ### Approval Workflow
 
 1. Planning phase creates issues with `status/proposed` label
@@ -86,6 +111,21 @@ _Managed by [Fry Self-Improvement Pipeline](docs/self-improvement.md)_
 3. To approve: remove `status/proposed`, add `status/approved`
 4. To reject: close the issue
 5. Next orchestrator run picks up approved items for building
+
+### Manual Issues
+
+You can add your own GitHub issue to the roadmap without waiting for the
+planning phase:
+
+1. Open a normal GitHub issue with a clear title and body
+2. Add `self-improve`
+3. Add `status/proposed` if you want the usual approval flow, or
+   `status/approved` if it is ready for the next build
+4. Optionally add `category/*` and `priority/*`
+5. Prefer the generated template above, but plain prose still works
+
+Owner comments containing `approve`, `approved`, or a thumbs-up also promote a
+`status/proposed` issue to `status/approved`.
 
 ### Issue Lifecycle
 
@@ -144,27 +184,32 @@ The build phase implements items from approved GitHub Issues.
 
 ### Item selection
 
-Fry reads the exported approved items and chooses 2-3 based on effort balance:
+Fry triages the exported approved items and chooses 2-3 based on the resulting
+effort balance:
 
 - 1 high-effort item, or
 - 1 medium + 1 low, or
 - 2 medium, or
 - 3 low
 
-Fry prioritizes higher-priority items with fewer prior attempts and avoids items with vague fix plans.
+Fry prioritizes higher-priority items with fewer prior attempts and avoids items
+with vague fix plans. Sparse manual issues remain eligible when their normalized
+`raw_body` still describes a clear, bounded task, and triage decides the actual
+effort for selection.
 
 ### How it works
 
 1. The orchestrator queries GitHub for approved issues (excluding `max-attempts`)
-2. Exports them to `assets/approved-items.json` in the worktree
-3. Fry runs with `--full-prepare --always-verify --no-project-overview`
-4. Complex tasks are auto-elevated to `effort=high` for thorough audit cycles
-5. Each item is implemented as a separate commit referencing the issue number
-6. Documentation updates are required for every change
-7. After Fry completes, `make test && make build` runs as a post-build check
-8. If tests fail, an alignment agent (claude with sonnet) attempts to fix the failures (up to 3 attempts)
-9. On success with `--auto-merge`: pull latest from remote, merge locally, push. On success without: create a PR
-10. Fry writes `output/worked-items.txt` listing the issue numbers it implemented
+2. Exports them to `assets/approved-items.json` in the worktree, normalizing sparse metadata from labels, body fields, and title prefixes while preserving the raw body text
+3. Runs a triage pass on each approved issue to derive `triage_complexity`, `triaged_effort`, and `triage_reason`; the exported `effort` field is replaced with the triaged effort for item selection
+4. Fry runs with `--full-prepare --always-verify --no-project-overview`
+5. Complex tasks are auto-elevated to `effort=high` for thorough audit cycles
+6. Each item is implemented as a separate commit referencing the issue number
+7. Documentation updates are required for every change
+8. After Fry completes, `make test && make build` runs as a post-build check
+9. If tests fail, an alignment agent (claude with sonnet) attempts to fix the failures (up to 3 attempts)
+10. On success with `--auto-merge`: pull latest from remote, merge locally, push. On success without: create a PR
+11. Fry writes `output/worked-items.txt` listing the issue numbers it implemented
 
 ### Post-build alignment
 
@@ -221,8 +266,8 @@ During planning, if the journal exists, it is exported to `assets/build-journal.
 - **Planning trigger logic** — evaluates issue distribution to decide if planning is needed
 - **Last-build-status tracking** — skips planning after a failed build to focus on building
 - **Issue creation** — creates GitHub Issues with category-based auto-approve/proposed labels
-- **Issue export** — exports approved issues to JSON for Fry to read
-- **Duplicate detection** — skips findings that match existing open issues by title
+- **Issue export** — exports approved issues to JSON for Fry to read, filling missing metadata from issue body/title fallbacks
+- **Duplicate detection** — skips findings that match existing open `self-improve` issues by title
 - **Worktree lifecycle** — create, scaffold, run, cleanup
 - **Item tracking** — reads `output/worked-items.txt` manifest (issue numbers)
 - **PR creation** — with `Closes #N` for auto-closing issues on merge

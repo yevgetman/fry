@@ -50,7 +50,7 @@ assert_eq() {
 
 assert_contains() {
     local haystack="$1" needle="$2" msg="${3:-}"
-    if echo "$haystack" | grep -qF "$needle"; then
+    if echo "$haystack" | grep -qF -- "$needle"; then
         return 0
     fi
     fail "expected to contain '$needle'${msg:+ ($msg)}"
@@ -59,7 +59,7 @@ assert_contains() {
 
 assert_not_contains() {
     local haystack="$1" needle="$2" msg="${3:-}"
-    if ! echo "$haystack" | grep -qF "$needle"; then
+    if ! echo "$haystack" | grep -qF -- "$needle"; then
         return 0
     fi
     fail "expected NOT to contain '$needle'${msg:+ ($msg)}"
@@ -435,6 +435,208 @@ begin_test "auto-merge: config can set to true"
     AUTO_MERGE=true
     result="${AUTO_MERGE:-false}"
     assert_eq "true" "$result" && pass
+) || true
+
+# ===========================================================================
+# Issue Normalization
+# ===========================================================================
+echo ""
+echo "--- Issue Normalization ---"
+
+begin_test "normalize: sparse manual issue uses body metadata"
+(
+    tmp_json="$(mktemp)"
+    cat <<'JSON' | normalize_issues_json > "$tmp_json"
+[
+  {
+    "number": 42,
+    "title": "Support manual issue pickup",
+    "labels": [
+      {"name": "self-improve"},
+      {"name": "status/approved"}
+    ],
+    "body": "**Category:** improvement\n**Priority:** high\n**Effort:** low\n**Files:** `.self-improve/orchestrate.sh`, `docs/self-improvement.md`\n\nNeed hand-written issues to enter the build queue without the generated template.\n"
+  }
+]
+JSON
+
+    assert_eq "improvement" "$(jq -r '.[0].category' "$tmp_json")" "category from body" &&
+    assert_eq "high" "$(jq -r '.[0].priority' "$tmp_json")" "priority from body" &&
+    assert_eq "low" "$(jq -r '.[0].effort' "$tmp_json")" "effort from body" &&
+    assert_eq "2" "$(jq '.[0].files | length' "$tmp_json")" "files parsed" &&
+    assert_contains "$(jq -r '.[0].description' "$tmp_json")" "Need hand-written issues" "description fallback" &&
+    assert_contains "$(jq -r '.[0].fix' "$tmp_json")" "Inspect the issue body" "generic fix fallback" &&
+    pass
+    rm -f "$tmp_json"
+) || true
+
+begin_test "normalize: labels win over body metadata"
+(
+    tmp_json="$(mktemp)"
+    cat <<'JSON' | normalize_issues_json > "$tmp_json"
+[
+  {
+    "number": 43,
+    "title": "[Bug] Misclassified issue",
+    "labels": [
+      {"name": "self-improve"},
+      {"name": "status/approved"},
+      {"name": "category/bug"},
+      {"name": "priority/low"},
+      {"name": "effort/high"}
+    ],
+    "body": "**Category:** feature\n**Priority:** high\n**Effort:** low\n\n## Problem\nLabels should take precedence.\n\n## Fix Plan\nHonor the labels first.\n"
+  }
+]
+JSON
+
+    assert_eq "bug" "$(jq -r '.[0].category' "$tmp_json")" "category from label" &&
+    assert_eq "low" "$(jq -r '.[0].priority' "$tmp_json")" "priority from label" &&
+    assert_eq "high" "$(jq -r '.[0].effort' "$tmp_json")" "effort from label" &&
+    assert_eq "Labels should take precedence." "$(jq -r '.[0].description' "$tmp_json")" "problem section" &&
+    assert_eq "Honor the labels first." "$(jq -r '.[0].fix' "$tmp_json")" "fix plan section" &&
+    pass
+    rm -f "$tmp_json"
+) || true
+
+begin_test "normalize: title prefix infers category"
+(
+    tmp_json="$(mktemp)"
+    cat <<'JSON' | normalize_issues_json > "$tmp_json"
+[
+  {
+    "number": 44,
+    "title": "[Documentation] Refresh self-improve docs",
+    "labels": [
+      {"name": "self-improve"},
+      {"name": "status/proposed"}
+    ],
+    "body": "The self-improvement docs should explain how manual issues are picked up.\n"
+  }
+]
+JSON
+
+    assert_eq "documentation" "$(jq -r '.[0].category' "$tmp_json")" "category from title prefix" &&
+    assert_eq "proposed" "$(jq -r '.[0].status' "$tmp_json")" "status from label" &&
+    pass
+    rm -f "$tmp_json"
+) || true
+
+begin_test "duplicate detection: search is not category-scoped"
+(
+    trace_file="$(mktemp)"
+    gh() {
+        if [ "$1" = "issue" ] && [ "$2" = "list" ]; then
+            printf '%s' "$*" > "$trace_file"
+            echo "0"
+            return 0
+        fi
+        echo "unexpected gh invocation: $*" >&2
+        return 1
+    }
+
+    DRY_RUN=true
+    finding='{"title":"Manual issue normalization","category":"feature","priority":"medium","effort":"low","description":"desc","fix":"fix","files":[]}'
+    create_issue_from_finding "$finding"
+
+    captured="$(cat "$trace_file")"
+    assert_contains "$captured" "--label self-improve" "self-improve label retained" &&
+    assert_not_contains "$captured" "category/feature" "category label removed from duplicate search" &&
+    rm -f "$trace_file" &&
+    pass
+) || true
+
+begin_test "triage effort: simple defaults to fast"
+(
+    assert_eq "fast" "$(resolve_triage_effort SIMPLE "")" "simple default" &&
+    assert_eq "high" "$(resolve_triage_effort SIMPLE max)" "simple caps max to high" &&
+    pass
+) || true
+
+begin_test "triage effort: moderate defaults to standard"
+(
+    assert_eq "standard" "$(resolve_triage_effort MODERATE "")" "moderate default" &&
+    assert_eq "high" "$(resolve_triage_effort MODERATE max)" "moderate caps max to high" &&
+    pass
+) || true
+
+begin_test "triage effort: complex elevates to high"
+(
+    assert_eq "high" "$(resolve_triage_effort COMPLEX "")" "complex default" &&
+    assert_eq "high" "$(resolve_triage_effort COMPLEX standard)" "complex ignores low suggestions" &&
+    pass
+) || true
+
+begin_test "triage approved items: enriches exported items with triaged effort"
+(
+    tmp_dir="$(mktemp -d)"
+    mkdir -p "$tmp_dir/.fry"
+    input_file="$tmp_dir/input.json"
+    output_file="$tmp_dir/output.json"
+    trace_file="$tmp_dir/fry.trace"
+    fry_calls=0
+
+    cat > "$input_file" <<'JSON'
+[
+  {
+    "number": 101,
+    "title": "First issue",
+    "category": "bug",
+    "priority": "high",
+    "effort": "medium",
+    "description": "First description",
+    "fix": "First fix",
+    "files": ["a.go"],
+    "raw_body": "First raw body"
+  },
+  {
+    "number": 102,
+    "title": "Second issue",
+    "category": "feature",
+    "priority": "medium",
+    "effort": "low",
+    "description": "Second description",
+    "fix": "",
+    "files": [],
+    "raw_body": "Second raw body"
+  }
+]
+JSON
+
+    fry() {
+        printf '%s\n' "$*" >> "$trace_file"
+        fry_calls=$((fry_calls + 1))
+        case "$fry_calls" in
+            1)
+                cat > "$tmp_dir/.fry/triage-decision.txt" <<'JSON'
+{"complexity":"SIMPLE","effort":"fast","reason":"Single bounded fix."}
+JSON
+                ;;
+            2)
+                cat > "$tmp_dir/.fry/triage-decision.txt" <<'JSON'
+{"complexity":"COMPLEX","effort":"standard","reason":"Touches multiple subsystems."}
+JSON
+                ;;
+            *)
+                echo "unexpected fry call count" >&2
+                return 1
+                ;;
+        esac
+        return 0
+    }
+
+    triage_approved_items_json "$tmp_dir" "$input_file" "$output_file"
+
+    assert_eq "2" "$(jq 'length' "$output_file")" "two items retained" &&
+    assert_eq "medium" "$(jq -r '.[0].declared_effort' "$output_file")" "declared effort preserved" &&
+    assert_eq "fast" "$(jq -r '.[0].effort' "$output_file")" "first item triaged effort" &&
+    assert_eq "SIMPLE" "$(jq -r '.[0].triage_complexity' "$output_file")" "first complexity" &&
+    assert_eq "high" "$(jq -r '.[1].effort' "$output_file")" "complex item elevated to high" &&
+    assert_eq "COMPLEX" "$(jq -r '.[1].triage_complexity' "$output_file")" "second complexity" &&
+    assert_contains "$(cat "$trace_file")" "--triage-only" "triage-only invocation" &&
+    assert_contains "$(cat "$trace_file")" "--user-prompt-file" "prompt file passed" &&
+    rm -rf "$tmp_dir" &&
+    pass
 ) || true
 
 # ===========================================================================

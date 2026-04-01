@@ -136,6 +136,12 @@ The loop uses Fry's own features — planning mode for discovery, `--always-veri
 
 GitHub Issues is the source of truth for the project roadmap. To run the loop manually:
 
+Manual issues can enter the loop too: add `self-improve` plus either
+`status/proposed` or `status/approved`. Category and priority labels are
+preferred, but Fry can normalize sparse issue metadata from the title and body
+when those labels are missing. Effort is sized later by the triage step against
+the current codebase.
+
 ```bash
 fry-improve                  # full loop (planning if needed + build + PR)
 fry-improve --auto-merge     # merge directly to master

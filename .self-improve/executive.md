@@ -15,9 +15,12 @@ Fry should continuously improve itself — finding bugs, expanding test coverage
 This build is one step in a recurring cycle:
 
 1. **Planning phase** — Fry scans the codebase for issues. New findings become GitHub Issues with appropriate labels. Maintenance items (bugs, security, testing, docs) are auto-approved. Product items (features, improvements, refactors) require human approval.
-2. **Build phase** — Fry reads `assets/approved-items.json` containing approved GitHub Issues, selects items based on effort balance, and implements them. That is this phase.
+2. **Build phase** — Fry reads `assets/approved-items.json` containing approved GitHub Issues, triages each issue against the current codebase to size the effort, selects items based on that triaged effort balance, and implements them. That is this phase.
 
-GitHub Issues is the source of truth for what needs to be done. Each issue has labels for category, priority, effort, and approval status.
+GitHub Issues is the source of truth for what needs to be done. Each issue has
+approval status and usually carries category, priority, and effort labels.
+Manual issues tagged with `self-improve` plus a status label also enter the
+loop; missing metadata may be normalized from the issue body and title.
 
 ## Rules for This Build
 

@@ -525,9 +525,9 @@ Fry improves itself via an automated loop driven by `.self-improve/orchestrate.s
 | `config` | KEY=VALUE configuration (overrides script defaults) |
 | `logs/` | Per-run timestamped log files |
 
-The roadmap lives in GitHub Issues (labels: category/*, priority/*, effort/*, status/*). See docs/self-improvement.md for the full architecture.
+The roadmap lives in GitHub Issues (labels: category/*, priority/*, effort/*, status/*). Pickup requires `self-improve` plus status; sparse manual issues are normalized from labels, body fields, title prefixes, and lightweight heuristics before export. Build-time effort is derived from a triage pass over approved issues rather than trusting issue-declared effort. See docs/self-improvement.md for the full architecture.
 
-**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (select items → worktree → implement → test → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). After each build, a structured journal entry is written to `build-journal.json` with outcome, items, alignment rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
+**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (export approved issues → normalize sparse metadata → triage each issue for current-codebase effort sizing → select items → worktree → implement → test → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). Approved issues are exported through a normalization step so manual issues with sparse metadata still produce usable `approved-items.json` entries, then triaged so selection uses current-codebase effort rather than issue-declared effort. After each build, a structured journal entry is written to `build-journal.json` with outcome, items, alignment rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
 
 **Key flags:** `--auto-merge` (direct merge to master), `--skip-planning`, `--skip-build`, `--dry-run`.
 

@@ -230,6 +230,140 @@ count_category_items() {
         -q 'length'
 }
 
+# Normalize GitHub Issues JSON into the shape Fry expects for planning/build.
+# This tolerates sparse manual issues by deriving metadata from labels first,
+# then issue body fields, then lightweight title/body heuristics.
+normalize_issues_json() {
+    jq '
+        def trim:
+            gsub("^\\s+|\\s+$"; "");
+
+        def body_text:
+            (.body // "");
+
+        def label_names:
+            [.labels[].name?];
+
+        def label_value($prefix):
+            ([.labels[].name? | select(startswith($prefix))] |
+                if length > 0 then .[0] | ltrimstr($prefix) else "" end);
+
+        def normalize_category_text:
+            ascii_downcase
+            | trim
+            | gsub("[[:space:]]+"; "_")
+            | gsub("/"; "_")
+            | if . == "docs" then "documentation" else . end;
+
+        def valid_category($value):
+            ["bug", "testing", "feature", "improvement", "sunset", "refactor", "security", "ui_ux", "documentation", "experience"] | index($value);
+
+        def valid_priority($value):
+            ["high", "medium", "low"] | index($value);
+
+        def valid_effort($value):
+            ["low", "medium", "high"] | index($value);
+
+        def body_field($name):
+            (body_text |
+                (capture("(?m)^\\*\\*" + $name + ":\\*\\*\\s*(?<value>[^\\n]+)") | .value | trim) // "");
+
+        def body_section($name):
+            (body_text |
+                (capture("## " + $name + "\\n(?<value>[\\s\\S]*?)(\\n## |\\n---|\\n_Managed|$)") | .value | trim) // "");
+
+        def cleaned_body:
+            (body_text
+                | gsub("(?m)^\\*\\*(Category|Priority|Effort|Files):\\*\\*\\s*[^\\n]*\\n?"; "")
+                | trim);
+
+        def title_category:
+            ((.title // "")
+                | (capture("^\\[(?<value>[^\\]]+)\\]") | .value | normalize_category_text) // "");
+
+        def inferred_category:
+            (((.title // "") + "\n" + cleaned_body) | ascii_downcase) as $text |
+            if ($text | test("\\b(security|vulnerability|xss|csrf|injection|secret|credential|token leak|unsafe|authentication|authorization|permission)\\b")) then "security"
+            elif ($text | test("\\b(test|tests|testing|coverage|flaky|race detector|integration test|unit test|regression test|missing test)\\b")) then "testing"
+            elif ($text | test("\\b(readme|docs|documentation|changelog|guide|manual|reference docs?)\\b")) then "documentation"
+            elif ($text | test("\\b(ui|ux|user experience|terminal output|error message|help text|prompt wording|workflow|usability)\\b")) then "ui_ux"
+            elif ($text | test("\\b(remove|delete|deprecate|deprecated|sunset|retire|dead code|unused|vestigial|obsolete)\\b")) then "sunset"
+            elif ($text | test("\\b(refactor|cleanup|clean up|simplify internals|restructure|internal reorg)\\b")) then "refactor"
+            elif ($text | test("\\b(bug|broken|breakage|failure|fails|failing|panic|crash|incorrect|wrong|regression|unhandled|race condition)\\b")) then "bug"
+            elif ($text | test("\\b(add|support|allow|introduce|new flag|new command|new option|new feature|enable)\\b")) then "feature"
+            elif ($text | test("\\b(improve|improvement|enhance|hardening|robustness|reliability|resilience|performance|polish|ergonomic)\\b")) then "improvement"
+            else "" end;
+
+        def normalized_category:
+            (label_value("category/") | normalize_category_text) as $label_category |
+            if valid_category($label_category) then $label_category
+            else (body_field("Category") | normalize_category_text) as $body_category |
+                if valid_category($body_category) then $body_category
+                else (title_category) as $title_category |
+                    if valid_category($title_category) then $title_category
+                    else (inferred_category) as $inferred |
+                        if valid_category($inferred) then $inferred else "unknown" end
+                    end
+                end
+            end;
+
+        def normalized_priority:
+            (label_value("priority/") | ascii_downcase | trim) as $label_priority |
+            if valid_priority($label_priority) then $label_priority
+            else (body_field("Priority") | ascii_downcase | trim) as $body_priority |
+                if valid_priority($body_priority) then $body_priority else "medium" end
+            end;
+
+        def normalized_effort:
+            (label_value("effort/") | ascii_downcase | trim) as $label_effort |
+            if valid_effort($label_effort) then $label_effort
+            else (body_field("Effort") | ascii_downcase | trim) as $body_effort |
+                if valid_effort($body_effort) then $body_effort else "medium" end
+            end;
+
+        [.[] | {
+            number: .number,
+            title: .title,
+            category: normalized_category,
+            priority: normalized_priority,
+            effort: normalized_effort,
+            status: (
+                if (label_names | index("status/approved")) then "approved"
+                elif (label_names | index("status/proposed")) then "proposed"
+                else "open" end
+            ),
+            max_attempts: (
+                label_names | index("max-attempts") | if . then true else false end
+            ),
+            description: (
+                (body_section("Problem")) as $problem |
+                if $problem != "" then $problem else cleaned_body end
+            ),
+            fix: (
+                (body_section("Fix Plan")) as $fix_plan |
+                if $fix_plan != "" then $fix_plan
+                else (body_section("Proposed Solution")) as $proposed_solution |
+                    if $proposed_solution != "" then $proposed_solution
+                    else (body_section("Requested Change")) as $requested_change |
+                        if $requested_change != "" then $requested_change
+                        else (body_section("Acceptance Criteria")) as $acceptance_criteria |
+                            if $acceptance_criteria != "" then $acceptance_criteria
+                            elif cleaned_body != "" then "Inspect the issue body, infer the intended change, update tests, and update docs if behavior changes."
+                            else ""
+                            end
+                        end
+                    end
+                end
+            ),
+            files: (
+                (body_field("Files")) as $files |
+                if $files != "" then ($files | split(", ") | map(gsub("`"; ""))) else [] end
+            ),
+            raw_body: cleaned_body
+        }]
+    '
+}
+
 # Export all open issues to a JSON file for Fry to read.
 # Format matches what the build prompt expects.
 export_issues_json() {
@@ -250,53 +384,7 @@ export_issues_json() {
     raw_issues="$(gh issue list "${args[@]}")"
 
     # Transform GitHub Issues JSON into the format Fry expects
-    echo "$raw_issues" | jq '
-        [.[] | {
-            number: .number,
-            title: .title,
-            category: (
-                [.labels[].name | select(startswith("category/"))] |
-                if length > 0 then .[0] | ltrimstr("category/") else "unknown" end
-            ),
-            priority: (
-                [.labels[].name | select(startswith("priority/"))] |
-                if length > 0 then .[0] | ltrimstr("priority/") else "medium" end
-            ),
-            effort: (
-                [.labels[].name | select(startswith("effort/"))] |
-                if length > 0 then .[0] | ltrimstr("effort/") else "medium" end
-            ),
-            status: (
-                if ([.labels[].name] | index("status/approved")) then "approved"
-                elif ([.labels[].name] | index("status/proposed")) then "proposed"
-                else "open" end
-            ),
-            max_attempts: (
-                [.labels[].name] | index("max-attempts") | if . then true else false end
-            ),
-            description: (
-                .body |
-                if . then
-                    # Extract Problem section
-                    (capture("## Problem\n(?<desc>[\\s\\S]*?)(\n## |$)") | .desc | gsub("^\\s+|\\s+$"; "")) // .
-                else "" end
-            ),
-            fix: (
-                .body |
-                if . then
-                    # Extract Fix Plan section
-                    (capture("## Fix Plan\n(?<fix>[\\s\\S]*?)(\n## |\n---|\n_Managed|$)") | .fix | gsub("^\\s+|\\s+$"; "")) // ""
-                else "" end
-            ),
-            files: (
-                .body |
-                if . then
-                    # Extract Files line
-                    (capture("\\*\\*Files:\\*\\* (?<files>[^\n]+)") | .files | split(", ") | map(gsub("`"; ""))) // []
-                else [] end
-            )
-        }]
-    ' > "$output_file"
+    echo "$raw_issues" | normalize_issues_json > "$output_file"
 }
 
 # Count how many "Build attempt failed" comments exist on an issue
@@ -306,6 +394,164 @@ count_failed_attempts() {
         --json comments \
         -q '[.comments[] | select(.body | startswith("Build attempt failed"))] | length' \
         2>/dev/null || echo "0"
+}
+
+resolve_triage_effort() {
+    local complexity="${1:-COMPLEX}"
+    local suggested="${2:-}"
+
+    case "$complexity" in
+        SIMPLE)
+            if [ "$suggested" = "high" ] || [ "$suggested" = "standard" ] || [ "$suggested" = "fast" ]; then
+                echo "$suggested"
+            elif [ "$suggested" = "max" ]; then
+                echo "high"
+            else
+                echo "fast"
+            fi
+            ;;
+        MODERATE)
+            if [ "$suggested" = "high" ] || [ "$suggested" = "standard" ] || [ "$suggested" = "fast" ]; then
+                echo "$suggested"
+            elif [ "$suggested" = "max" ]; then
+                echo "high"
+            else
+                echo "standard"
+            fi
+            ;;
+        *)
+            if [ "$suggested" = "high" ] || [ "$suggested" = "max" ]; then
+                echo "high"
+            else
+                echo "high"
+            fi
+            ;;
+    esac
+}
+
+render_issue_triage_prompt() {
+    local issue_json="$1"
+
+    echo "$issue_json" | jq -r '
+        [
+            "Treat this GitHub issue as the primary task definition for triage.",
+            "Classify the implementation effort for the current Fry codebase based on the issue details below.",
+            "",
+            "GitHub issue metadata:",
+            "- Issue: #\(.number)",
+            "- Title: \(.title)",
+            "- Category: \(.category)",
+            "- Priority: \(.priority)",
+            "",
+            "Issue description:",
+            (if (.description // "") != "" then .description else (.raw_body // "(No issue description provided.)") end),
+            "",
+            (if (.fix // "") != "" then "Proposed fix:\n" + .fix + "\n" else "" end),
+            (if ((.files // []) | length) > 0 then
+                "Mentioned files:\n" + ((.files // []) | map("- " + .) | join("\n")) + "\n"
+             else "" end),
+            "Use the current codebase state to size the work. Ignore any issue-declared effort estimate if one exists."
+        ] | join("\n")
+    '
+}
+
+triage_issue_item() {
+    local project_dir="$1"
+    local issue_json="$2"
+
+    local issue_number title declared_effort prompt_file decision_file decision_json complexity suggested_effort triaged_effort triage_reason
+    issue_number="$(echo "$issue_json" | jq -r '.number')"
+    title="$(echo "$issue_json" | jq -r '.title')"
+    declared_effort="$(echo "$issue_json" | jq -r '.effort // "medium"')"
+    prompt_file="$(mktemp)"
+    decision_file="$project_dir/.fry/triage-decision.txt"
+
+    render_issue_triage_prompt "$issue_json" > "$prompt_file"
+    rm -f "$decision_file"
+
+    log "  TRIAGE: sizing #$issue_number — $title"
+    if ! fry run \
+        --triage-only \
+        --user-prompt-file "$prompt_file" \
+        --engine "$BUILD_ENGINE" \
+        --yes \
+        --no-project-overview \
+        --project-dir "$project_dir" >> "$LOG_FILE" 2>&1; then
+        log "  WARNING: triage failed for #$issue_number — defaulting to complex/high"
+        rm -f "$prompt_file"
+        echo "$issue_json" | jq \
+            --arg declared_effort "$declared_effort" \
+            --arg triage_complexity "COMPLEX" \
+            --arg triaged_effort "high" \
+            --arg triage_reason "triage failed; defaulted to complex/high" \
+            '. + {
+                declared_effort: $declared_effort,
+                effort: $triaged_effort,
+                triage_complexity: $triage_complexity,
+                triaged_effort: $triaged_effort,
+                triage_reason: $triage_reason
+            }'
+        return 0
+    fi
+    rm -f "$prompt_file"
+
+    if [ -f "$decision_file" ]; then
+        decision_json="$(cat "$decision_file")"
+        complexity="$(echo "$decision_json" | jq -r '.complexity // "COMPLEX"' 2>/dev/null || echo "COMPLEX")"
+        suggested_effort="$(echo "$decision_json" | jq -r '.effort // ""' 2>/dev/null || echo "")"
+        triage_reason="$(echo "$decision_json" | jq -r '.reason // ""' 2>/dev/null || echo "")"
+    else
+        complexity="COMPLEX"
+        suggested_effort=""
+        triage_reason="triage decision file missing; defaulted to complex/high"
+        log "  WARNING: triage decision missing for #$issue_number — defaulting to complex/high"
+    fi
+
+    triaged_effort="$(resolve_triage_effort "$complexity" "$suggested_effort")"
+    [ -n "$triage_reason" ] || triage_reason="triage completed without a reason"
+
+    echo "$issue_json" | jq \
+        --arg declared_effort "$declared_effort" \
+        --arg triage_complexity "$complexity" \
+        --arg triaged_effort "$triaged_effort" \
+        --arg triage_reason "$triage_reason" \
+        '. + {
+            declared_effort: $declared_effort,
+            effort: $triaged_effort,
+            triage_complexity: $triage_complexity,
+            triaged_effort: $triaged_effort,
+            triage_reason: $triage_reason
+        }'
+}
+
+triage_approved_items_json() {
+    local project_dir="$1"
+    local input_file="$2"
+    local output_file="$3"
+
+    if ! jq -e 'type == "array"' "$input_file" >/dev/null 2>&1; then
+        echo "[]" > "$output_file"
+        return 0
+    fi
+
+    local count
+    count="$(jq 'length' "$input_file")"
+    if [ "$count" -eq 0 ]; then
+        echo "[]" > "$output_file"
+        return 0
+    fi
+
+    local tmp_items tmp_out
+    tmp_items="$(mktemp)"
+    tmp_out="$(mktemp)"
+    jq -c '.[]' "$input_file" > "$tmp_items"
+
+    while IFS= read -r item; do
+        triage_issue_item "$project_dir" "$item" >> "$tmp_out"
+    done < "$tmp_items"
+
+    jq -s '.' "$tmp_out" > "$output_file"
+    rm -f "$tmp_items" "$tmp_out"
 }
 
 # Create a GitHub issue from a finding JSON object
@@ -342,7 +588,6 @@ create_issue_from_finding() {
     local existing_count
     existing_count="$(gh issue list \
         --label "$LABEL_SELF_IMPROVE" \
-        --label "category/${category}" \
         --state open \
         --search "$title" \
         --json number \
@@ -365,6 +610,7 @@ create_issue_from_finding() {
     # Build issue body
     local body
     body="$(cat <<EOF
+**Category:** ${category}
 **Priority:** ${priority}
 **Effort:** ${effort}
 **Files:** ${files_str}
@@ -711,6 +957,13 @@ run_build_phase() {
     local exported_count
     exported_count="$(jq 'length' "$WORKTREE_DIR/assets/approved-items.json")"
     log "  Exported $exported_count approved items"
+
+    log "Running triage on approved items..."
+    local triaged_items
+    triaged_items="$(mktemp)"
+    triage_approved_items_json "$WORKTREE_DIR" "$WORKTREE_DIR/assets/approved-items.json" "$triaged_items"
+    mv "$triaged_items" "$WORKTREE_DIR/assets/approved-items.json"
+    log "  Triaged $exported_count approved item(s) for effort sizing"
 
     # Run Fry build — full prepare so the LLM reads assets/approved-items.json
     # and chooses items before building the epic
