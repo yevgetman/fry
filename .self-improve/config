@@ -29,24 +29,27 @@ AUTO_APPROVE="bug security testing documentation"
 
 # --- Engines & Models ---
 
-# Engine for the planning phase (default: claude). Options: claude, codex
-PLANNING_ENGINE=claude
+# Engine for the planning phase (default: repo `fry config` engine, else claude).
+# Uncomment to force a self-improve-specific override.
+# PLANNING_ENGINE=codex
 
 # Model override for planning sprints (default: empty = use effort-based selection).
-# Set to a frontier model like opus[1m] for higher quality codebase analysis.
-PLANNING_MODEL=opus[1m]
+# Uncomment to pin a planning model explicitly.
+# PLANNING_MODEL=gpt-5.4
 
-# Engine for the build phase (default: claude). Options: claude, codex
-BUILD_ENGINE=claude
+# Engine for the build phase (default: repo `fry config` engine, else claude).
+# Uncomment to force a self-improve-specific override.
+# BUILD_ENGINE=codex
 
-# Model for the post-build heal agent (default: sonnet)
-HEAL_MODEL=sonnet
+# Model for the post-build heal agent (default: empty = engine default).
+# Uncomment to pin a heal model explicitly.
+# HEAL_MODEL=gpt-5.3-codex
 
 # --- Build Journal ---
 
-# Model for the AI journal summarization pass (default: sonnet)
-# Use a capable model (sonnet or better) for accurate build summaries.
-JOURNAL_MODEL=sonnet
+# Model for the AI journal summarization pass (default: empty = engine default).
+# Uncomment to pin a journal model explicitly.
+# JOURNAL_MODEL=gpt-5.4-mini
 
 # Maximum journal entries to retain (default: 30)
 MAX_JOURNAL_ENTRIES=30

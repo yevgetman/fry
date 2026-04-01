@@ -69,6 +69,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&runYes, "yes", "y", false, "Auto-accept all interactive confirmation prompts")
 
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(prepareCmd)
 	rootCmd.AddCommand(replanCmd)
 	rootCmd.AddCommand(cleanCmd)

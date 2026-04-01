@@ -102,10 +102,10 @@ begin_test "config: defaults applied when no config file"
     MAX_BUILD_ITEMS=3
     MAX_ATTEMPTS=3
     PLANNING_THRESHOLD=15
-    HEAL_MODEL=sonnet
+    HEAL_MODEL=
     AUTO_APPROVE="bug security testing documentation"
-    PLANNING_ENGINE=claude
-    BUILD_ENGINE=claude
+    PLANNING_ENGINE=
+    BUILD_ENGINE=
 
     CONFIG_FILE="/nonexistent/config"
 
@@ -119,9 +119,9 @@ begin_test "config: defaults applied when no config file"
     fi
 
     assert_eq "3" "$MAX_BUILD_ITEMS" "MAX_BUILD_ITEMS" &&
-    assert_eq "sonnet" "$HEAL_MODEL" "HEAL_MODEL" &&
-    assert_eq "claude" "$PLANNING_ENGINE" "PLANNING_ENGINE" &&
-    assert_eq "claude" "$BUILD_ENGINE" "BUILD_ENGINE" &&
+    assert_eq "" "$HEAL_MODEL" "HEAL_MODEL" &&
+    assert_eq "" "$PLANNING_ENGINE" "PLANNING_ENGINE" &&
+    assert_eq "" "$BUILD_ENGINE" "BUILD_ENGINE" &&
     pass
 ) || true
 
@@ -144,9 +144,9 @@ CONF
     MAX_BUILD_ITEMS=3
     MAX_ATTEMPTS=3
     PLANNING_THRESHOLD=15
-    HEAL_MODEL=sonnet
-    PLANNING_ENGINE=claude
-    BUILD_ENGINE=claude
+    HEAL_MODEL=
+    PLANNING_ENGINE=
+    BUILD_ENGINE=
     AUTO_APPROVE="bug security testing documentation"
 
     CONFIG_FILE="$tmp_config"
@@ -181,7 +181,7 @@ HEAL_MODEL=haiku
 CONF
 
     MAX_BUILD_ITEMS=3
-    HEAL_MODEL=sonnet
+    HEAL_MODEL=
 
     CONFIG_FILE="$tmp_config"
     while IFS='=' read -r key value; do
@@ -207,7 +207,7 @@ HEAL_MODEL=opus    # use opus for healing
 CONF
 
     MAX_BUILD_ITEMS=3
-    HEAL_MODEL=sonnet
+    HEAL_MODEL=
 
     CONFIG_FILE="$tmp_config"
     while IFS='=' read -r key value; do
@@ -231,7 +231,7 @@ begin_test "config: partial config keeps other defaults"
 
     MAX_BUILD_ITEMS=3
     PLANNING_THRESHOLD=15
-    HEAL_MODEL=sonnet
+    HEAL_MODEL=
 
     CONFIG_FILE="$tmp_config"
     while IFS='=' read -r key value; do
@@ -249,9 +249,9 @@ begin_test "config: partial config keeps other defaults"
 
 begin_test "config: JOURNAL_MODEL default"
 (
-    JOURNAL_MODEL=sonnet
+    JOURNAL_MODEL=
     CONFIG_FILE="/nonexistent/config"
-    assert_eq "sonnet" "$JOURNAL_MODEL" "JOURNAL_MODEL default" && pass
+    assert_eq "" "$JOURNAL_MODEL" "JOURNAL_MODEL default" && pass
 ) || true
 
 begin_test "config: JOURNAL_MODEL override"
@@ -259,7 +259,7 @@ begin_test "config: JOURNAL_MODEL override"
     tmp_config="$(mktemp)"
     trap "rm -f $tmp_config" EXIT
     echo "JOURNAL_MODEL=opus" > "$tmp_config"
-    JOURNAL_MODEL=sonnet
+    JOURNAL_MODEL=
     CONFIG_FILE="$tmp_config"
     while IFS='=' read -r key value; do
         key="$(echo "$key" | xargs)"

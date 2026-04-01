@@ -34,11 +34,11 @@ MAX_ATTEMPTS=3
 MAX_POST_BUILD_HEALS=3
 PLANNING_THRESHOLD=15
 AUTO_APPROVE="bug security testing documentation"
-PLANNING_ENGINE=claude
+PLANNING_ENGINE=""
 PLANNING_MODEL=""
-BUILD_ENGINE=claude
-HEAL_MODEL=sonnet
-JOURNAL_MODEL=sonnet
+BUILD_ENGINE=""
+HEAL_MODEL=""
+JOURNAL_MODEL=""
 MAX_JOURNAL_ENTRIES=30
 DATE="$(date +%Y-%m-%d)"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
@@ -101,6 +101,37 @@ log() {
     if [ -n "$RUN_LOG" ]; then
         echo "$msg" >> "$RUN_LOG"
     fi
+}
+
+run_llm_prompt() {
+    local engine="$1"
+    local model="$2"
+    local workdir="${3:-$REPO_DIR}"
+
+    case "$engine" in
+        codex)
+            if [ -n "$model" ]; then
+                (cd "$workdir" && codex exec --dangerously-bypass-approvals-and-sandbox --model "$model")
+            else
+                (cd "$workdir" && codex exec --dangerously-bypass-approvals-and-sandbox)
+            fi
+            ;;
+        claude)
+            if [ -n "$model" ]; then
+                (cd "$workdir" && claude -p --dangerously-skip-permissions --model "$model")
+            else
+                (cd "$workdir" && claude -p --dangerously-skip-permissions)
+            fi
+            ;;
+        *)
+            log "WARNING: Unsupported LLM engine for direct prompt run: $engine"
+            return 1
+            ;;
+    esac
+}
+
+resolve_repo_engine() {
+    fry config get engine --project-dir "$REPO_DIR" 2>/dev/null | tail -n 1 | xargs
 }
 
 die() {
@@ -1028,7 +1059,7 @@ Instructions:
 5. Keep changes minimal — only fix what is broken.
 HEALPROMPT
 
-                if ! (cd "$WORKTREE_DIR" && claude -p --dangerously-skip-permissions --model "$HEAL_MODEL" < "$heal_prompt_file") 2>&1 | tee -a "$LOG_FILE"; then
+                if ! run_llm_prompt "$BUILD_ENGINE" "$HEAL_MODEL" "$WORKTREE_DIR" < "$heal_prompt_file" 2>&1 | tee -a "$LOG_FILE"; then
                     log "  Heal agent failed to run"
                     rm -f "$heal_prompt_file"
                     continue
@@ -1367,7 +1398,7 @@ $(tail -200 "$RUN_LOG" 2>/dev/null || echo "Log unavailable")
 AIPROMPT
 )"
 
-        observations="$(echo "$journal_ai_prompt" | claude -p --model "${JOURNAL_MODEL}" 2>/dev/null)" || true
+        observations="$(echo "$journal_ai_prompt" | run_llm_prompt "$BUILD_ENGINE" "$JOURNAL_MODEL" "$REPO_DIR" 2>/dev/null)" || true
         # Sanitize: limit length, collapse whitespace
         if [ -n "$observations" ]; then
             observations="$(echo "$observations" | head -10 | tr '\n' ' ' | sed 's/  */ /g')"
@@ -1469,6 +1500,16 @@ main() {
     if ! make -C "$REPO_DIR" install 2>&1 | tee -a "$LOG_FILE"; then
         die "make install failed"
     fi
+
+    local repo_engine=""
+    repo_engine="$(resolve_repo_engine)" || repo_engine=""
+    if [ -z "$PLANNING_ENGINE" ]; then
+        PLANNING_ENGINE="${repo_engine:-claude}"
+    fi
+    if [ -z "$BUILD_ENGINE" ]; then
+        BUILD_ENGINE="${repo_engine:-claude}"
+    fi
+    log "Resolved self-improve engines: planning=$PLANNING_ENGINE build=$BUILD_ENGINE"
 
     # Planning phase — skip if last build failed (focus on building, not discovering)
     local last_status=""

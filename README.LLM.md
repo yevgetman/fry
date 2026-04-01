@@ -20,9 +20,10 @@ Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex, Claude Code, or 
 fry/
 ├── cmd/fry/main.go              # Entry point — calls cli.Execute()
 ├── internal/
-│   ├── cli/                     # Cobra commands: root, run, init, prepare, replan, clean, version, status, identity
+│   ├── cli/                     # Cobra commands: root, run, config, init, prepare, replan, clean, version, status, identity
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose/-v, --engine, etc.)
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
+│   │   ├── config.go            # Repo-local Fry settings CLI (`fry config get|set`)
 │   │   ├── init.go              # Scaffold project structure; auto-detect and scan existing codebases
 │   │   ├── prepare.go           # Generate .fry/ artifacts from plans
 │   │   ├── replan.go            # Mid-build replanning
@@ -34,6 +35,9 @@ fry/
 │   │   ├── color.go             # ANSI color utilities, TTY detection, NO_COLOR support
 │   │   └── logcolor.go          # Pattern-matched log line colorizer
 │   ├── config/config.go         # All constants: paths, defaults, invocation prompts
+│   ├── settings/
+│   │   ├── settings.go          # Repo-local Fry settings (.fry/config.json): Load, Save, GetEngine, SetEngine
+│   │   └── settings_test.go     # Tests for repo-local settings persistence and validation
 │   ├── engine/
 │   │   ├── engine.go            # Engine interface + ResolveEngine + NewEngine
 │   │   ├── models.go            # Tier-based model selection, validation, session types
@@ -437,7 +441,8 @@ Key flags:
 | `IdentityJSONFile` | `identity/identity.json` | JSON identity (go:embed, produced by Reflection) |
 | `ExperiencesDir` | `.fry/experiences` | Build experience records |
 | `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient, deleted after use) |
-| `SettingsFile` | `.fry/settings.json` | User settings (telemetry enabled by default; created by `fry init`) |
+| `ProjectConfigFile` | `.fry/config.json` | Repo-local Fry settings (currently self-improve engine) |
+| `SettingsFile` | `.fry/settings.json` | User settings under `~/.fry/` (telemetry enabled by default; created by `fry init`) |
 | `PendingUploadsDir` | `.fry/experiences/pending` | Cached uploads for retry |
 | `ConsciousnessAPIURL` | `https://fry-consciousness-api.yevgetman.workers.dev` | Consciousness API endpoint |
 | `UploadTimeoutSeconds` | `10` | Background upload timeout |
@@ -527,7 +532,7 @@ Fry improves itself via an automated loop driven by `.self-improve/orchestrate.s
 
 The roadmap lives in GitHub Issues (labels: category/*, priority/*, effort/*, status/*). Pickup requires `self-improve` plus status; sparse manual issues are normalized from labels, body fields, title prefixes, and lightweight heuristics before export. Build-time effort is derived from a triage pass over approved issues rather than trusting issue-declared effort. See docs/self-improvement.md for the full architecture.
 
-**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (export approved issues → normalize sparse metadata → triage each issue for current-codebase effort sizing → select items → worktree → implement → test → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). Approved issues are exported through a normalization step so manual issues with sparse metadata still produce usable `approved-items.json` entries, then triaged so selection uses current-codebase effort rather than issue-declared effort. After each build, a structured journal entry is written to `build-journal.json` with outcome, items, alignment rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
+**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (export approved issues → normalize sparse metadata → triage each issue for current-codebase effort sizing → select items → worktree → implement → test → optional post-build heal loop → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). Approved issues are exported through a normalization step so manual issues with sparse metadata still produce usable `approved-items.json` entries, then triaged so selection uses current-codebase effort rather than issue-declared effort. The self-improve orchestrator resolves its engine from `fry config get engine` (repo-local `.fry/config.json`) unless `.self-improve/config` explicitly overrides `PLANNING_ENGINE` or `BUILD_ENGINE`; the same build engine is also used for post-build heals and journal summarization, with optional model overrides via `HEAL_MODEL` and `JOURNAL_MODEL`. After each build, a structured journal entry is written to `build-journal.json` with outcome, items, alignment rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
 
 **Key flags:** `--auto-merge` (direct merge to master), `--skip-planning`, `--skip-build`, `--dry-run`.
 

@@ -22,6 +22,7 @@ your-project/
     api-spec.yaml                        #   Specs, schemas, requirements docs, etc.
     requirements.md                      #   Read in full during plan/epic generation
   .fry/                                  # Generated artifacts (gitignored)
+    config.json                          #   Repo-local Fry settings (written by `fry config`)
     AGENTS.md                            #   Operational rules for the AI agent
     epic.md                              #   Sprint definitions
     verification.md                      #   Independent sanity checks
@@ -83,6 +84,7 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | File | Purpose | Created by |
 |---|---|---|
 | `.fry/AGENTS.md` | Operational rules for the AI agent | `fry prepare` (Step 1) |
+| `.fry/config.json` | Repo-local Fry settings (currently self-improve engine only) | `fry config set` |
 | `.fry/epic.md` | Sprint definitions | `fry prepare` (Step 2) |
 | `.fry/verification.md` | Independent sanity checks | `fry prepare` (Step 3) |
 | `.fry/prompt.md` | Assembled per-sprint prompt | `fry run` at runtime |

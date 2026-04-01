@@ -132,7 +132,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 
 Fry improves itself. An automated pipeline runs daily, scanning the Fry source code for bugs, testing gaps, feature opportunities, and other improvements. It selects 2-3 items from a roadmap, implements them, runs the full test suite, and either merges directly to master or opens a pull request for human review.
 
-The loop uses Fry's own features — planning mode for discovery, `--always-verify` for quality gates, worktrees for isolation, and the triage gate for complexity-appropriate effort levels. A bash orchestrator (`.self-improve/orchestrate.sh`) drives the cycle, and a macOS launchd agent triggers it daily.
+The loop uses Fry's own features — planning mode for discovery, `--always-verify` for quality gates, worktrees for isolation, and the triage gate for complexity-appropriate effort levels. A bash orchestrator (`.self-improve/orchestrate.sh`) drives the cycle, and a macOS launchd agent triggers it daily. Set the repo-local self-improve engine with `fry config set engine codex`.
 
 GitHub Issues is the source of truth for the project roadmap. To run the loop manually:
 
@@ -146,6 +146,7 @@ the current codebase.
 fry-improve                  # full loop (planning if needed + build + PR)
 fry-improve --auto-merge     # merge directly to master
 fry-improve --skip-planning  # build only
+fry config set engine codex  # use Codex for self-improve in this repo
 ```
 
 See [Self-Improvement Pipeline](docs/self-improvement.md) for the full architecture, configuration, and operational guide.
@@ -245,7 +246,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | Document | Description |
 |---|---|
 | [Getting Started](docs/getting-started.md) | Prerequisites, installation, first build walkthrough |
-| [Commands](docs/commands.md) | Full CLI reference: `run`, `exit`, `prepare`, `replan`, `version` |
+| [Commands](docs/commands.md) | Full CLI reference: `run`, `config`, `exit`, `prepare`, `replan`, `version` |
 | [Effort Levels](docs/effort-levels.md) | Effort triage: `fast`, `standard`, `high`, `max` -- controls sprint count, density, and review rigor |
 | [Epic Format](docs/epic-format.md) | Epic file syntax: global directives, sprint blocks, validation rules, sizing guidelines |
 | [AI Engines](docs/engines.md) | Codex, Claude, and Ollama engine configuration, mixing engines, model overrides |

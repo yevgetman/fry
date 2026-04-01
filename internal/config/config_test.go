@@ -13,6 +13,7 @@ func TestFryDirPathConsistency(t *testing.T) {
 
 	// All .fry/ paths should be rooted under FryDir
 	fryPaths := map[string]string{
+		"ProjectConfigFile":       config.ProjectConfigFile,
 		"BuildLogsDir":           config.BuildLogsDir,
 		"DefaultVerificationFile": config.DefaultVerificationFile,
 		"PromptFile":             config.PromptFile,
