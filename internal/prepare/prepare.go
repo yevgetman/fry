@@ -19,6 +19,7 @@ import (
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/media"
 	"github.com/yevgetman/fry/internal/textutil"
+	"github.com/yevgetman/fry/internal/verify"
 	"github.com/yevgetman/fry/templates"
 )
 
@@ -491,7 +492,54 @@ func validateStep3(verificationPath string) error {
 	if countDirective(string(data), "@check_") == 0 {
 		return fmt.Errorf("validate step 3: sanity checks file contains no @check_* directives")
 	}
+	if err := validateFrameworkSpecificChecks(verificationPath); err != nil {
+		return fmt.Errorf("validate step 3: %w", err)
+	}
 	return nil
+}
+
+func validateFrameworkSpecificChecks(verificationPath string) error {
+	projectDir := filepath.Dir(filepath.Dir(verificationPath))
+	if !isNextProject(projectDir) {
+		return nil
+	}
+
+	checks, err := verify.ParseVerification(verificationPath)
+	if err != nil {
+		return fmt.Errorf("parse sanity checks: %w", err)
+	}
+
+	for _, check := range checks {
+		if check.Type != verify.CheckFile && check.Type != verify.CheckFileContains {
+			continue
+		}
+		if isInvalidNextAppRouterPath(check.Path) {
+			return fmt.Errorf("invalid Next.js App Router path %q: folders beginning with @ are parallel-route slots, not literal URL segments; verify a real route file plus rewrite/proxy config instead", check.Path)
+		}
+	}
+
+	return nil
+}
+
+func isNextProject(projectDir string) bool {
+	for _, name := range []string{"next.config.ts", "next.config.js", "next.config.mjs"} {
+		if _, err := os.Stat(filepath.Join(projectDir, name)); err == nil {
+			return true
+		}
+	}
+
+	data, err := os.ReadFile(filepath.Join(projectDir, "package.json"))
+	if err != nil {
+		return false
+	}
+
+	return strings.Contains(string(data), `"next"`)
+}
+
+var nextParallelRouteSegmentPattern = regexp.MustCompile(`(^|/)(src/)?app/.*\/@[^/]+\/(page|route)\.`)
+
+func isInvalidNextAppRouterPath(path string) bool {
+	return nextParallelRouteSegmentPattern.MatchString(strings.Trim(path, `"`))
 }
 
 func runPrepareStep(ctx context.Context, eng engine.Engine, projectDir, prompt, model string, effort epic.EffortLevel) (string, error) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -63,6 +64,39 @@ func TestPrepareValidation(t *testing.T) {
 
 	verificationPath := dir + "/.fry/verification.md"
 	require.NoError(t, os.WriteFile(verificationPath, []byte("@check_file foo\n"), 0o644))
+	require.NoError(t, validateStep3(verificationPath))
+}
+
+func TestValidateStep3RejectsInvalidNextParallelRouteChecks(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"dependencies":{"next":"15.0.0"}}`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry"), 0o755))
+
+	verificationPath := filepath.Join(dir, ".fry", "verification.md")
+	require.NoError(t, os.WriteFile(verificationPath, []byte("@sprint 1\n@check_file \"apps/web/src/app/(booking)/@[username]/page.tsx\"\n"), 0o644))
+
+	err := validateStep3(verificationPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parallel-route slots")
+}
+
+func TestValidateStep3AllowsNextRewriteBackedProfileRouteChecks(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"dependencies":{"next":"15.0.0"}}`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry"), 0o755))
+
+	verificationPath := filepath.Join(dir, ".fry", "verification.md")
+	content := strings.Join([]string{
+		"@sprint 1",
+		"@check_file \"apps/web/src/app/(booking)/u/[username]/page.tsx\"",
+		"@check_file_contains apps/web/next.config.ts \"/@:username\"",
+	}, "\n")
+	require.NoError(t, os.WriteFile(verificationPath, []byte(content), 0o644))
+
 	require.NoError(t, validateStep3(verificationPath))
 }
 

@@ -279,6 +279,7 @@ CRITICAL RULES:
 - Derive checks from SPECIFIC deliverables in the plan and epic: exact filenames, build commands, required config values, API endpoints.
 - Do NOT write checks for things that earlier sprints already verified — only check the current sprint's new deliverables. Cumulative checks are fine.
 - If media assets are referenced in the plan, add @check_file checks to verify they were copied to their target locations.
+- Respect framework routing conventions. For Next.js App Router, folders prefixed with @ are parallel-route slots, not literal URL segments. Do not generate @check_file paths like app/.../@[username]/page.tsx for public URLs such as /@username. Instead verify a real route file plus any rewrite or proxy config that serves the public URL.
 - Do NOT include any output other than writing the file. No explanations, no summaries.%s
 
 Plan:
