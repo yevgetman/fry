@@ -93,6 +93,7 @@ type AuditResult struct {
 
 const (
 	maxStaleIterations      = 3 // outer loop stale threshold
+	maxTurnoverIterations   = 3 // outer loop finding-churn threshold after warmup
 	maxInnerStaleIterations = 2 // inner loop stale threshold
 	maxAuditExecutiveBytes  = 2_000
 	maxAuditCodebaseBytes   = 8_000
@@ -129,6 +130,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 	var knownFindings []Finding // tracked across outer cycles
 	outerStaleCount := 0
+	outerTurnoverCount := 0
 	var lastCycle int
 
 	for cycle := 1; cycle <= maxOuter; cycle++ {
@@ -236,8 +238,12 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 		// Classify findings against known set
 		var activeFindings []Finding
+		var persisting []Finding
+		var newFindings []Finding
 		if cycle > 1 && len(knownFindings) > 0 {
-			resolved, persisting, newFindings := classifyFindings(knownFindings, currentFindings)
+			resolved, nextPersisting, nextNew := classifyFindings(knownFindings, currentFindings)
+			persisting = nextPersisting
+			newFindings = nextNew
 			for i := range newFindings {
 				newFindings[i].OriginCycle = cycle
 			}
@@ -289,6 +295,21 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				}
 			} else {
 				outerStaleCount = 0
+			}
+
+			if shouldDetectTurnoverChurn(opts.Epic, cycle) {
+				persistingActionable := countActionableFindings(persisting)
+				newActionable := countActionableFindings(newFindings)
+				if persistingActionable == 0 && newActionable > 0 {
+					outerTurnoverCount++
+					frylog.Log("  AUDIT: full actionable turnover detected (%d/%d churn cycles)", outerTurnoverCount, maxTurnoverIterations)
+					if outerTurnoverCount >= maxTurnoverIterations {
+						frylog.Log("  AUDIT: stopping — audit findings are churning without convergence after %d cycles", cycle)
+						break
+					}
+				} else {
+					outerTurnoverCount = 0
+				}
 			}
 		}
 
@@ -1063,6 +1084,19 @@ func findingKeySet(findings []Finding) map[string]struct{} {
 		}
 	}
 	return keys
+}
+
+func shouldDetectTurnoverChurn(ep *epic.Epic, cycle int) bool {
+	if ep == nil {
+		return false
+	}
+	if ep.MaxAuditIterationsSet {
+		return false
+	}
+	if ep.EffortLevel != epic.EffortMax {
+		return false
+	}
+	return cycle > config.MaxOuterCyclesHighCap
 }
 
 // --- Sorting and grouping ---

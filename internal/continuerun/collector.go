@@ -10,7 +10,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/git"
@@ -35,6 +37,9 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic, al
 		TotalSprints: ep.TotalSprints,
 		Engine:       ep.Engine,
 		EffortLevel:  ep.EffortLevel.String(),
+	}
+	if buildStatus, err := agent.ReadBuildStatus(projectDir); err == nil && buildStatus != nil {
+		state.LiveBuildStatus = buildStatus
 	}
 
 	// Sprint names list
@@ -114,6 +119,12 @@ func CollectBuildState(ctx context.Context, projectDir string, ep *epic.Epic, al
 	// VerdictAuditIncomplete for builds that intentionally omit the audit.
 	if !auditConfigured {
 		state.BuildAuditComplete = true
+	}
+
+	state.LatestActivityPath, state.LatestActivityAt = findLatestBuildActivity(projectDir)
+	if state.LiveBuildStatus != nil && !state.LiveBuildStatus.UpdatedAt.IsZero() && !state.LatestActivityAt.IsZero() {
+		const staleThreshold = 30 * time.Second
+		state.LiveStatusStale = state.LatestActivityAt.After(state.LiveBuildStatus.UpdatedAt.Add(staleThreshold))
 	}
 
 	return state, nil
@@ -323,6 +334,33 @@ func readTail(path string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func findLatestBuildActivity(projectDir string) (string, time.Time) {
+	logsDir := filepath.Join(projectDir, config.BuildLogsDir)
+	entries, err := os.ReadDir(logsDir)
+	if err != nil {
+		return "", time.Time{}
+	}
+
+	var latestPath string
+	var latestTime time.Time
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			continue
+		}
+		modTime := info.ModTime()
+		if modTime.After(latestTime) {
+			latestTime = modTime
+			latestPath = filepath.Join(logsDir, entry.Name())
+		}
+	}
+
+	return latestPath, latestTime
 }
 
 // readSprintProgressExcerpt reads sprint-progress.txt and returns only content

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/archive"
 	"github.com/yevgetman/fry/internal/steering"
 )
@@ -266,6 +267,81 @@ func TestFormatReport_Environment(t *testing.T) {
 	assert.Contains(t, report, "docker (MISSING)")
 	assert.Contains(t, report, "clean")
 	assert.Contains(t, report, "master")
+}
+
+func TestFormatReport_LiveAuditActivity(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 2, 6, 0, 0, 0, time.UTC)
+	state := &BuildState{
+		EpicName:     "TestEpic",
+		TotalSprints: 10,
+		Engine:       "codex",
+		EffortLevel:  "max",
+		SprintNames:  []string{"S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10"},
+		LiveBuildStatus: &agent.BuildStatus{
+			Build: agent.BuildInfo{
+				Status:        "running",
+				Phase:         "audit",
+				CurrentSprint: 9,
+			},
+			UpdatedAt: now,
+			Sprints: []agent.SprintStatus{
+				{
+					Number: 9,
+					Name:   "S9",
+					Audit: &agent.AuditStatus{
+						Active:         true,
+						Stage:          "verifying",
+						CurrentCycle:   61,
+						MaxCycles:      100,
+						CurrentFix:     2,
+						MaxFixes:       10,
+						TargetIssues:   2,
+						Findings:       map[string]int{"HIGH": 1, "MODERATE": 1},
+						IssueHeadlines: []string{"redirect fallback still missing"},
+					},
+				},
+			},
+		},
+	}
+
+	report := FormatReport(state)
+	assert.Contains(t, report, "## Live Activity")
+	assert.Contains(t, report, "Status: running")
+	assert.Contains(t, report, "Phase: audit")
+	assert.Contains(t, report, "Current sprint: 9 (S9)")
+	assert.Contains(t, report, "Sprint audit: verifying (cycle 61/100, fix 2/10)")
+	assert.Contains(t, report, "Target issues: 2 (HIGH:1, MODERATE:1)")
+	assert.Contains(t, report, "Working: redirect fallback still missing")
+}
+
+func TestFormatReport_LiveStatusStaleWarning(t *testing.T) {
+	t.Parallel()
+
+	state := &BuildState{
+		EpicName:           "TestEpic",
+		TotalSprints:       3,
+		Engine:             "codex",
+		EffortLevel:        "max",
+		SprintNames:        []string{"Setup", "Auth", "API"},
+		LatestActivityPath: "/tmp/.fry/build-logs/sprint3_audit61.log",
+		LatestActivityAt:   time.Date(2026, 4, 2, 6, 1, 33, 0, time.UTC),
+		LiveStatusStale:    true,
+		LiveBuildStatus: &agent.BuildStatus{
+			Build: agent.BuildInfo{
+				Status:        "running",
+				Phase:         "audit",
+				CurrentSprint: 3,
+			},
+			UpdatedAt: time.Date(2026, 4, 1, 19, 31, 42, 0, time.UTC),
+		},
+	}
+
+	report := FormatReport(state)
+	assert.Contains(t, report, "Warning: live status snapshot appears stale")
+	assert.Contains(t, report, "newer build-log activity")
+	assert.Contains(t, report, "sprint3_audit61.log")
 }
 
 func TestFormatInactiveSummary_NoHistory(t *testing.T) {

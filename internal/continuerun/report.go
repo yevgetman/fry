@@ -2,7 +2,9 @@ package continuerun
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/yevgetman/fry/internal/archive"
 )
@@ -44,6 +46,8 @@ func FormatReport(state *BuildState) string {
 		}
 		b.WriteByte('\n')
 	}
+
+	appendLiveActivity(&b, state)
 
 	// Completed sprints
 	b.WriteString("## Completed Sprints\n")
@@ -175,6 +179,131 @@ func FormatReport(state *BuildState) string {
 	}
 
 	return b.String()
+}
+
+func appendLiveActivity(b *strings.Builder, state *BuildState) {
+	if state.LiveBuildStatus == nil {
+		return
+	}
+
+	status := strings.TrimSpace(state.LiveBuildStatus.Build.Status)
+	if status == "" {
+		status = "unknown"
+	}
+	phase := strings.TrimSpace(state.LiveBuildStatus.Build.Phase)
+	if phase == "" {
+		phase = "unknown"
+	}
+
+	b.WriteString("## Live Activity\n")
+	b.WriteString(fmt.Sprintf("- Status: %s\n", status))
+	b.WriteString(fmt.Sprintf("- Phase: %s\n", phase))
+	if !state.LiveBuildStatus.UpdatedAt.IsZero() {
+		b.WriteString(fmt.Sprintf("- Status snapshot updated: %s\n", state.LiveBuildStatus.UpdatedAt.Format(time.RFC3339)))
+	}
+
+	currentSprint := state.LiveBuildStatus.Build.CurrentSprint
+	if currentSprint > 0 {
+		sprintName := ""
+		if currentSprint >= 1 && currentSprint <= len(state.SprintNames) {
+			sprintName = state.SprintNames[currentSprint-1]
+		}
+		if sprintName != "" {
+			b.WriteString(fmt.Sprintf("- Current sprint: %d (%s)\n", currentSprint, sprintName))
+		} else {
+			b.WriteString(fmt.Sprintf("- Current sprint: %d\n", currentSprint))
+		}
+	}
+
+	if audit := activeAuditStatus(state); audit != nil {
+		stage := audit.Stage
+		if stage == "" {
+			stage = "running"
+		}
+		progress := fmt.Sprintf("cycle %d/%d", audit.CurrentCycle, audit.MaxCycles)
+		if audit.CurrentFix > 0 {
+			progress += fmt.Sprintf(", fix %d/%d", audit.CurrentFix, audit.MaxFixes)
+		}
+		b.WriteString(fmt.Sprintf("- Sprint audit: %s (%s)\n", stage, progress))
+		if audit.TargetIssues > 0 {
+			issues := fmt.Sprintf("%d", audit.TargetIssues)
+			if counts := formatSeverityCountsMap(audit.Findings); counts != "" {
+				issues += " (" + counts + ")"
+			}
+			b.WriteString(fmt.Sprintf("- Target issues: %s\n", issues))
+		} else if counts := formatSeverityCountsMap(audit.Findings); counts != "" {
+			b.WriteString(fmt.Sprintf("- Findings: %s\n", counts))
+		}
+		for _, headline := range audit.IssueHeadlines {
+			b.WriteString(fmt.Sprintf("- Working: %s\n", headline))
+		}
+	}
+
+	if state.LiveStatusStale {
+		b.WriteString("- Warning: live status snapshot appears stale")
+		if !state.LatestActivityAt.IsZero() {
+			b.WriteString(fmt.Sprintf("; newer build-log activity at %s", state.LatestActivityAt.Format(time.RFC3339)))
+			if state.LatestActivityPath != "" {
+				b.WriteString(fmt.Sprintf(" in %s", filepath.Base(state.LatestActivityPath)))
+			}
+		}
+		b.WriteByte('\n')
+	}
+	b.WriteByte('\n')
+}
+
+func activeAuditStatus(state *BuildState) *struct {
+	CurrentCycle   int
+	MaxCycles      int
+	CurrentFix     int
+	MaxFixes       int
+	TargetIssues   int
+	Findings       map[string]int
+	IssueHeadlines []string
+	Stage          string
+} {
+	if state.LiveBuildStatus == nil {
+		return nil
+	}
+	for i := range state.LiveBuildStatus.Sprints {
+		sp := &state.LiveBuildStatus.Sprints[i]
+		if sp.Audit != nil && sp.Audit.Active {
+			return &struct {
+				CurrentCycle   int
+				MaxCycles      int
+				CurrentFix     int
+				MaxFixes       int
+				TargetIssues   int
+				Findings       map[string]int
+				IssueHeadlines []string
+				Stage          string
+			}{
+				CurrentCycle:   sp.Audit.CurrentCycle,
+				MaxCycles:      sp.Audit.MaxCycles,
+				CurrentFix:     sp.Audit.CurrentFix,
+				MaxFixes:       sp.Audit.MaxFixes,
+				TargetIssues:   sp.Audit.TargetIssues,
+				Findings:       sp.Audit.Findings,
+				IssueHeadlines: sp.Audit.IssueHeadlines,
+				Stage:          sp.Audit.Stage,
+			}
+		}
+	}
+	return nil
+}
+
+func formatSeverityCountsMap(counts map[string]int) string {
+	if len(counts) == 0 {
+		return ""
+	}
+	order := []string{"CRITICAL", "HIGH", "MODERATE", "LOW"}
+	var parts []string
+	for _, sev := range order {
+		if counts[sev] > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", sev, counts[sev]))
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 const maxDisplayedArchives = 10

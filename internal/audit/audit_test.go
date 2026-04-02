@@ -1396,6 +1396,36 @@ func TestRunAuditLoopProgressContinues(t *testing.T) {
 	assert.Len(t, eng.prompts, 101)
 }
 
+func TestRunAuditLoopProgressStopsOnTurnoverChurnAfterWarmup(t *testing.T) {
+	t.Parallel()
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			desc := fmt.Sprintf("Unique issue %d", callIndex)
+			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
+				fmt.Sprintf("## Findings\n- **Location:** apps/web/src/components/booking/flow-%d.tsx:1\n- **Description:** %s\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n", callIndex, desc))
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortMax
+	opts.Epic.MaxAuditIterationsSet = false
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.False(t, result.Passed)
+	assert.True(t, result.Blocking)
+
+	// Max effort progress-based loop gets a long runway first. After the
+	// high-effort cap (12 cycles), three consecutive cycles with zero
+	// persisting actionable findings are treated as churn:
+	// cycles 13, 14, 15 => churn 1, 2, 3, then break before inner loop on 15.
+	// Cycles 1-14: audit + (fix+verify)*2 = 5 calls each => 70
+	// Cycle 15: audit only => 1
+	// Final audit => 1
+	assert.Len(t, eng.prompts, 72)
+}
+
 func TestRunAuditLoopExplicitCapAtHighEffort(t *testing.T) {
 	t.Parallel()
 

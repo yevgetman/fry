@@ -2,7 +2,9 @@ package continuerun
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/steering"
 )
 
@@ -76,6 +78,16 @@ type BuildState struct {
 
 	// Sprint names for the LLM prompt (number → name)
 	SprintNames []string
+
+	// Live build-status.json snapshot when available.
+	LiveBuildStatus *agent.BuildStatus
+
+	// Newest build-log activity observed on disk.
+	LatestActivityPath string
+	LatestActivityAt   time.Time
+
+	// True when the live status snapshot appears older than recent build activity.
+	LiveStatusStale bool
 }
 
 // CompletedSprint records one sprint that has passed.
