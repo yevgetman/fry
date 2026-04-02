@@ -1426,6 +1426,54 @@ func TestRunAuditLoopProgressStopsOnTurnoverChurnAfterWarmup(t *testing.T) {
 	assert.Len(t, eng.prompts, 72)
 }
 
+func TestIsTurnoverChurn(t *testing.T) {
+	t.Parallel()
+
+	prevHigh := []Finding{{
+		Location:    "apps/web/src/components/booking/a.tsx:10",
+		Description: "Old high issue",
+		Severity:    "HIGH",
+	}}
+	prevThreeModerate := []Finding{
+		{Location: "apps/web/src/components/booking/a.tsx:10", Description: "A", Severity: "MODERATE"},
+		{Location: "apps/web/src/components/booking/b.tsx:10", Description: "B", Severity: "MODERATE"},
+		{Location: "apps/web/src/components/booking/c.tsx:10", Description: "C", Severity: "MODERATE"},
+	}
+
+	t.Run("same severity and count with full turnover is churn", func(t *testing.T) {
+		current := []Finding{{
+			Location:    "apps/web/src/components/booking/d.tsx:10",
+			Description: "New high issue",
+			Severity:    "HIGH",
+		}}
+		assert.True(t, isTurnoverChurn(prevHigh, nil, current, current))
+	})
+
+	t.Run("improved severity is not churn", func(t *testing.T) {
+		current := []Finding{{
+			Location:    "apps/web/src/components/booking/d.tsx:10",
+			Description: "New moderate issue",
+			Severity:    "MODERATE",
+		}}
+		assert.False(t, isTurnoverChurn(prevHigh, nil, current, current))
+	})
+
+	t.Run("fewer actionable findings is not churn", func(t *testing.T) {
+		current := []Finding{{
+			Location:    "apps/web/src/components/booking/d.tsx:10",
+			Description: "Only one issue left",
+			Severity:    "MODERATE",
+		}}
+		assert.False(t, isTurnoverChurn(prevThreeModerate, nil, current, current))
+	})
+
+	t.Run("persisting actionable findings is not churn", func(t *testing.T) {
+		persisting := []Finding{prevHigh[0]}
+		current := append([]Finding(nil), persisting...)
+		assert.False(t, isTurnoverChurn(prevHigh, persisting, current, nil))
+	})
+}
+
 func TestRunAuditLoopExplicitCapAtHighEffort(t *testing.T) {
 	t.Parallel()
 

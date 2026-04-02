@@ -298,9 +298,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			}
 
 			if shouldDetectTurnoverChurn(opts.Epic, cycle) {
-				persistingActionable := countActionableFindings(persisting)
-				newActionable := countActionableFindings(newFindings)
-				if persistingActionable == 0 && newActionable > 0 {
+				if isTurnoverChurn(knownFindings, persisting, activeFindings, newFindings) {
 					outerTurnoverCount++
 					frylog.Log("  AUDIT: full actionable turnover detected (%d/%d churn cycles)", outerTurnoverCount, maxTurnoverIterations)
 					if outerTurnoverCount >= maxTurnoverIterations {
@@ -1099,6 +1097,31 @@ func shouldDetectTurnoverChurn(ep *epic.Epic, cycle int) bool {
 	return cycle > config.MaxOuterCyclesHighCap
 }
 
+func isTurnoverChurn(previous, persisting, current, newFindings []Finding) bool {
+	if countActionableFindings(persisting) > 0 {
+		return false
+	}
+
+	previousActionable := countActionableFindings(previous)
+	currentActionable := countActionableFindings(current)
+	newActionable := countActionableFindings(newFindings)
+	if previousActionable == 0 || currentActionable == 0 || newActionable == 0 {
+		return false
+	}
+
+	// A fully replaced actionable set can still represent genuine convergence
+	// when severity drops or the issue count shrinks. Only treat it as churn
+	// when the new set is not better on either axis.
+	if currentActionable < previousActionable {
+		return false
+	}
+	if severity.Rank(maxActionableSeverity(current)) < severity.Rank(maxActionableSeverity(previous)) {
+		return false
+	}
+
+	return true
+}
+
 // --- Sorting and grouping ---
 
 // sortFindingsFIFO sorts findings by OriginCycle ascending (oldest first),
@@ -1208,6 +1231,19 @@ func countActionableFindings(findings []Finding) int {
 		}
 	}
 	return n
+}
+
+func maxActionableSeverity(findings []Finding) string {
+	maxSev := ""
+	for _, f := range findings {
+		if !f.isActionable() {
+			continue
+		}
+		if severity.Rank(f.Severity) > severity.Rank(maxSev) {
+			maxSev = f.Severity
+		}
+	}
+	return maxSev
 }
 
 func collectUnresolved(findings []Finding) []Finding {
