@@ -137,7 +137,7 @@ fry/
 │   │   ├── logevents.go         # Verbose synthetic events derived from build-log filenames
 │   │   ├── enrichment.go        # Pure event enrichment: elapsed times, sprint fractions, phase transitions
 │   │   ├── stream.go            # Monitor orchestrator: New, Run (continuous), Snapshot (one-shot)
-│   │   └── render.go            # Rendering: stream, dashboard, log tail, waiting/ended messages
+│   │   └── render.go            # Rendering: stream, dashboard (including live sprint-audit progress), log tail, waiting/ended messages
 │   ├── metrics/tokens.go        # Token usage parsing for Claude and Codex engines
 │   ├── report/report.go         # BuildReport types and JSON serialisation (--json-report)
 │   ├── shellhook/shellhook.go   # Pre-sprint/iteration shell commands
@@ -202,7 +202,7 @@ fry/
 | `consciousness/distilled/` | Distilled checkpoint summaries |
 | `consciousness/upload-queue/` | Pending checkpoint/lifecycle uploads |
 | `build-phase.txt` | Current build phase (triage, prepare, sprint, audit, build-audit, complete, failed) for `fry status` |
-| `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change, including early failures, for agent polling |
+| `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change, including early failures and live sprint-audit stage/cycle/issue tracking, for agent polling |
 | `build-report.json` | Machine-readable BuildReport JSON (written at build end with `--json-report`) |
 | `confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, `--confirm-file`) |
 | `confirm-response.json` | Agent response to interactive prompt (transient, `--confirm-file`) |

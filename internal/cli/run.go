@@ -1083,8 +1083,12 @@ var runCmd = &cobra.Command{
 						Engine:     auditEngine,
 						GitDiff:    gitDiff,
 						DiffFn:     func() (string, error) { return git.GitDiffForAudit(ctx, projectPath) },
-						Verbose:    frlog.Verbose,
-						Mode:       modeStr,
+						ProgressFn: func(progress audit.AuditProgress) {
+							updateBuildStatusAuditProgress(buildStatus, spr.Number, progress)
+							writeCurrentBuildStatus()
+						},
+						Verbose: frlog.Verbose,
+						Mode:    modeStr,
 					})
 					if err != nil {
 						var exitReq *steering.ExitRequestError
@@ -3004,6 +3008,35 @@ func updateBuildStatusAudit(status *agent.BuildStatus, sprintNum int, auditResul
 	// Update sprint status if audit failed
 	if auditResult.Blocking {
 		status.Sprints[idx].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
+	}
+}
+
+// updateBuildStatusAuditProgress updates a sprint's in-flight audit state in the build status.
+func updateBuildStatusAuditProgress(status *agent.BuildStatus, sprintNum int, progress audit.AuditProgress) {
+	if status == nil {
+		return
+	}
+	idx := findSprintStatusIndex(status, sprintNum)
+	if idx < 0 {
+		return
+	}
+	current := status.Sprints[idx].Audit
+	findings := progress.Findings
+	if findings == nil && current != nil {
+		findings = current.Findings
+	}
+	status.Sprints[idx].Audit = &agent.AuditStatus{
+		Cycles:         progress.Cycle,
+		Findings:       findings,
+		Outcome:        "running",
+		Active:         true,
+		Stage:          progress.Stage,
+		CurrentCycle:   progress.Cycle,
+		MaxCycles:      progress.MaxCycles,
+		CurrentFix:     progress.Fix,
+		MaxFixes:       progress.MaxFixes,
+		TargetIssues:   progress.TargetIssues,
+		IssueHeadlines: append([]string(nil), progress.Headlines...),
 	}
 }
 

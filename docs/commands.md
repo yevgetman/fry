@@ -549,7 +549,7 @@ Run 'fry run' to start a new build.
 
 ## `fry monitor`
 
-Real-time build monitoring with enriched event stream. Composes data from events, build status, sprint progress, build logs, and process liveness into a unified view. See [Monitor](monitor.md) for full details.
+Real-time build monitoring with enriched event stream. Composes data from events, build status, sprint progress, build logs, and process liveness into a unified view. The dashboard view also shows live sprint-audit progress for the active sprint, including audit stage, cycle/fix counters, targeted issue counts, and compact issue headlines. See [Monitor](monitor.md) for full details.
 
 ```
 fry monitor [project-dir] [flags]
@@ -601,6 +601,26 @@ Example output (`--verbose`):
 [10:25:02]  +25m2s   *audit_cycle_start   2/3  cycle=1 log=sprint2_audit1_20260331_102502.log  [sprint -> audit]
 [10:25:18]  +25m18s  *audit_fix_start     2/3  cycle=1 fix=1 log=sprint2_auditfix_1_1_20260331_102518.log
 [10:31:44]  +31m44s  *observer_wake            log=observer_after_sprint_20260331_103144.log wake=after_sprint
+```
+
+Example output (`--dashboard` during sprint audit):
+
+```
+Fry Monitor                         PID 12345  10:27:18
+────────────────────────────────────────────────────────────────
+Epic: My Feature            Engine: claude
+Mode: software              Effort: high
+Phase: audit                Branch: fry/my-feature
+────────────────────────────────────────────────────────────────
+Sprint 1/3: Setup .............. PASS
+Sprint 2/3: API ................ running      +22m 30s
+Sprint 3/3: Polish ............. pending
+────────────────────────────────────────────────────────────────
+Audit: Sprint 2/3 API
+State: Fixing  cycle 2/5  fix 1/4
+Issues: targeting 3 issues  (HIGH:1 MODERATE:2)
+Working: internal/api/server.go: missing request timeout
+Working: internal/auth/token.go: nil dereference on refresh
 ```
 
 ---

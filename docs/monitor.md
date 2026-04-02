@@ -77,8 +77,9 @@ Output:
 ```
 Fry Monitor                         PID 12345  10:05:18
 ────────────────────────────────────────────────────────────────
-Epic: My Feature            Engine: claude    Effort: high
-Phase: sprint               Mode: software    Branch: fry/my-feature
+Epic: My Feature            Engine: claude
+Mode: software              Effort: high
+Phase: sprint               Branch: fry/my-feature
 ────────────────────────────────────────────────────────────────
 Sprint 1/3: Setup .............. PASS         5m 10s (aligned)
 Sprint 2/3: API ................ running      +2m 30s
@@ -86,6 +87,34 @@ Sprint 3/3: Polish ............. pending
 ────────────────────────────────────────────────────────────────
 Latest: sprint_start (2/3) name=API
 ```
+
+When the active sprint is in a sprint-audit cycle, the dashboard adds a compact audit panel sourced from `.fry/build-status.json`:
+
+```
+Fry Monitor                         PID 12345  10:27:18
+────────────────────────────────────────────────────────────────
+Epic: My Feature            Engine: claude
+Mode: software              Effort: high
+Phase: audit                Branch: fry/my-feature
+────────────────────────────────────────────────────────────────
+Sprint 1/3: Setup .............. PASS
+Sprint 2/3: API ................ running      +22m 30s
+Sprint 3/3: Polish ............. pending
+────────────────────────────────────────────────────────────────
+Audit: Sprint 2/3 API
+State: Fixing  cycle 2/5  fix 1/4
+Issues: targeting 3 issues  (HIGH:1 MODERATE:2)
+Working: internal/api/server.go: missing request timeout
+Working: internal/auth/token.go: nil dereference on refresh
+────────────────────────────────────────────────────────────────
+Latest: *audit_fix_start (2/3) cycle=2 fix=1
+```
+
+The audit panel answers four questions directly:
+- Whether the sprint is currently in an audit cycle
+- Which audit stage is active (`Audit pass`, `Fixing`, or `Verifying`)
+- How far along the loop is (`cycle N/M`, `fix N/M`)
+- How many issues are currently targeted, with a compact severity breakdown and up to three issue headlines
 
 ### Log Tail
 
@@ -122,7 +151,7 @@ The monitor polls these artifacts with change detection to minimize syscalls:
 |--------|------|-----------|
 | Events | `.fry/observer/events.jsonl` | Byte offset tracking |
 | Build phase | `.fry/build-phase.txt` | File mtime |
-| Build status | `.fry/build-status.json` | File mtime |
+| Build status | `.fry/build-status.json` | File mtime; also carries live audit-cycle stage, cycle/fix counters, targeted issue counts, and issue headlines |
 | Process lock | `.fry/.fry.lock` | PID liveness (signal-0) |
 | Sprint progress | `.fry/sprint-progress.txt` | File size |
 | Epic progress | `.fry/epic-progress.txt` | File size |

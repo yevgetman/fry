@@ -158,9 +158,13 @@ func TestWriteBuildStatus_FullLifecycle(t *testing.T) {
 
 	// Phase 4: Audit
 	status.Sprints[0].Audit = &AuditStatus{
-		Cycles:   2,
-		Findings: map[string]int{"HIGH": 0, "MODERATE": 1, "LOW": 2},
-		Outcome:  "advisory",
+		Cycles:         2,
+		Findings:       map[string]int{"HIGH": 0, "MODERATE": 1, "LOW": 2},
+		Outcome:        "advisory",
+		CurrentCycle:   2,
+		MaxCycles:      5,
+		TargetIssues:   1,
+		IssueHeadlines: []string{"internal/api/server.go: missing timeout"},
 	}
 	require.NoError(t, WriteBuildStatus(dir, status))
 
@@ -214,6 +218,10 @@ func TestWriteBuildStatus_FullLifecycle(t *testing.T) {
 	assert.Equal(t, 2, s.Audit.Cycles)
 	assert.Equal(t, "advisory", s.Audit.Outcome)
 	assert.Equal(t, 1, s.Audit.Findings["MODERATE"])
+	assert.Equal(t, 2, s.Audit.CurrentCycle)
+	assert.Equal(t, 5, s.Audit.MaxCycles)
+	assert.Equal(t, 1, s.Audit.TargetIssues)
+	assert.Equal(t, []string{"internal/api/server.go: missing timeout"}, s.Audit.IssueHeadlines)
 
 	require.NotNil(t, s.Review)
 	assert.Equal(t, "CONTINUE", s.Review.Verdict)

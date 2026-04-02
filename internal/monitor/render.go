@@ -177,6 +177,7 @@ func RenderDashboard(w io.Writer, snap Snapshot, useColor bool, clearScreen bool
 		}
 
 		fmt.Fprintln(w, sep)
+		renderDashboardAudit(w, snap, useColor)
 	} else {
 		// No build status yet.
 		phase := snap.Phase
@@ -222,6 +223,53 @@ func RenderDashboard(w io.Writer, snap Snapshot, useColor bool, clearScreen bool
 		}
 		fmt.Fprintln(w, msg)
 	}
+}
+
+func renderDashboardAudit(w io.Writer, snap Snapshot, useColor bool) {
+	if snap.BuildStatus == nil {
+		return
+	}
+
+	idx := findCurrentSprintAudit(snap.BuildStatus)
+	if idx < 0 {
+		return
+	}
+	sp := snap.BuildStatus.Sprints[idx]
+	if sp.Audit == nil || !sp.Audit.Active {
+		return
+	}
+
+	fmt.Fprintf(w, "Audit: Sprint %d/%d %s\n", sp.Number, snap.BuildStatus.Build.TotalSprints, sp.Name)
+
+	stage := sp.Audit.Stage
+	if stage == "" {
+		stage = "running"
+	}
+	stage = humanizeAuditStage(stage)
+	if useColor {
+		stage = color.CyanText(stage)
+	}
+	progress := fmt.Sprintf("cycle %d/%d", sp.Audit.CurrentCycle, sp.Audit.MaxCycles)
+	if sp.Audit.CurrentFix > 0 {
+		progress += fmt.Sprintf("  fix %d/%d", sp.Audit.CurrentFix, sp.Audit.MaxFixes)
+	}
+	fmt.Fprintf(w, "State: %s  %s\n", stage, progress)
+
+	issues := "scanning for issues"
+	if sp.Audit.TargetIssues > 0 {
+		issues = fmt.Sprintf("targeting %d issues", sp.Audit.TargetIssues)
+		if counts := formatSeverityCounts(sp.Audit.Findings); counts != "" {
+			issues += "  (" + counts + ")"
+		}
+	} else if counts := formatSeverityCounts(sp.Audit.Findings); counts != "" {
+		issues = counts
+	}
+	fmt.Fprintf(w, "Issues: %s\n", issues)
+
+	for _, headline := range sp.Audit.IssueHeadlines {
+		fmt.Fprintf(w, "Working: %s\n", headline)
+	}
+	fmt.Fprintln(w, strings.Repeat("\u2500", 64))
 }
 
 // RenderLogTail writes the active log tail.
@@ -331,4 +379,45 @@ func truncate(s string, max int) string {
 		return s[:max]
 	}
 	return s[:max-3] + "..."
+}
+
+func findCurrentSprintAudit(status *agent.BuildStatus) int {
+	for i := range status.Sprints {
+		if status.Sprints[i].Number == status.Build.CurrentSprint {
+			return i
+		}
+	}
+	for i := range status.Sprints {
+		if status.Sprints[i].Audit != nil && status.Sprints[i].Audit.Active {
+			return i
+		}
+	}
+	return -1
+}
+
+func humanizeAuditStage(stage string) string {
+	switch stage {
+	case "auditing":
+		return "Audit pass"
+	case "fixing":
+		return "Fixing"
+	case "verifying":
+		return "Verifying"
+	default:
+		return stage
+	}
+}
+
+func formatSeverityCounts(counts map[string]int) string {
+	if len(counts) == 0 {
+		return ""
+	}
+	order := []string{"CRITICAL", "HIGH", "MODERATE", "LOW"}
+	parts := make([]string, 0, len(order))
+	for _, severity := range order {
+		if counts[severity] > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", severity, counts[severity]))
+		}
+	}
+	return strings.Join(parts, " ")
 }

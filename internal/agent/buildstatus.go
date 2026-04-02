@@ -60,8 +60,8 @@ type SanityCheckStatus struct {
 
 // CheckResultEntry is a single sanity check outcome.
 type CheckResultEntry struct {
-	Type   string `json:"type"`             // FILE, FILE_CONTAINS, CMD, CMD_OUTPUT, TEST
-	Target string `json:"target"`           // file path or command
+	Type   string `json:"type"`   // FILE, FILE_CONTAINS, CMD, CMD_OUTPUT, TEST
+	Target string `json:"target"` // file path or command
 	Passed bool   `json:"passed"`
 	Output string `json:"output,omitempty"` // truncated check output (failures only)
 }
@@ -74,9 +74,17 @@ type AlignmentStatus struct {
 
 // AuditStatus summarizes the per-sprint audit results.
 type AuditStatus struct {
-	Cycles   int            `json:"cycles"`
-	Findings map[string]int `json:"findings"` // severity -> count
-	Outcome  string         `json:"outcome"`  // pass, failed, advisory
+	Cycles         int            `json:"cycles"`
+	Findings       map[string]int `json:"findings"` // severity -> count
+	Outcome        string         `json:"outcome"`  // pass, failed, advisory, running
+	Active         bool           `json:"active,omitempty"`
+	Stage          string         `json:"stage,omitempty"`           // auditing, fixing, verifying
+	CurrentCycle   int            `json:"current_cycle,omitempty"`   // current outer audit cycle
+	MaxCycles      int            `json:"max_cycles,omitempty"`      // configured outer audit cycle cap
+	CurrentFix     int            `json:"current_fix,omitempty"`     // current inner fix/verify iteration
+	MaxFixes       int            `json:"max_fixes,omitempty"`       // configured inner fix cap
+	TargetIssues   int            `json:"target_issues,omitempty"`   // issues currently being fixed/verified
+	IssueHeadlines []string       `json:"issue_headlines,omitempty"` // compact descriptions of targeted issues
 }
 
 // ReviewStatus captures the sprint review verdict.

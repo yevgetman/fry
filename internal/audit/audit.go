@@ -64,9 +64,22 @@ type AuditOpts struct {
 	Engine     engine.Engine
 	GitDiff    string                 // initial diff; used if DiffFn is nil
 	DiffFn     func() (string, error) // if set, called before each audit pass to refresh the diff
+	ProgressFn func(AuditProgress)
 	Verbose    bool
 	Mode       string
 	Stdout     io.Writer // optional; defaults to os.Stdout when Verbose is true
+}
+
+// AuditProgress describes the live state of a sprint audit cycle.
+type AuditProgress struct {
+	Stage        string
+	Cycle        int
+	MaxCycles    int
+	Fix          int
+	MaxFixes     int
+	TargetIssues int
+	Findings     map[string]int
+	Headlines    []string
 }
 
 type AuditResult struct {
@@ -129,6 +142,13 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("before audit cycle %d", cycle)); err != nil {
 			return nil, err
 		}
+
+		emitAuditProgress(opts.ProgressFn, AuditProgress{
+			Stage:     "auditing",
+			Cycle:     cycle,
+			MaxCycles: maxOuter,
+			MaxFixes:  maxInner,
+		})
 
 		refreshDiff(&opts)
 
@@ -297,6 +317,17 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				break
 			}
 
+			emitAuditProgress(opts.ProgressFn, AuditProgress{
+				Stage:        "fixing",
+				Cycle:        cycle,
+				MaxCycles:    maxOuter,
+				Fix:          fixIter,
+				MaxFixes:     maxInner,
+				TargetIssues: len(unresolved),
+				Findings:     severityCountsForFindings(unresolved),
+				Headlines:    findingHeadlines(unresolved, 3),
+			})
+
 			fixModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditFix)
 			frylog.Log("  AUDIT FIX  cycle %d  fix %d/%d — targeting %d issues (oldest first)  engine=%s  model=%s",
 				cycle, fixIter, maxInner, len(unresolved), opts.Engine.Name(), fixModel)
@@ -326,6 +357,17 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			if err := writePromptFile(promptPath, verifyPrompt); err != nil {
 				return nil, fmt.Errorf("run audit loop: write verify prompt: %w", err)
 			}
+
+			emitAuditProgress(opts.ProgressFn, AuditProgress{
+				Stage:        "verifying",
+				Cycle:        cycle,
+				MaxCycles:    maxOuter,
+				Fix:          fixIter,
+				MaxFixes:     maxInner,
+				TargetIssues: len(unresolved),
+				Findings:     severityCountsForFindings(unresolved),
+				Headlines:    findingHeadlines(unresolved, 3),
+			})
 
 			// Run verify agent
 			verifyModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditVerify)
@@ -494,6 +536,52 @@ func filterLowUnresolved(findings []Finding) []Finding {
 		}
 	}
 	return result
+}
+
+func emitAuditProgress(progressFn func(AuditProgress), progress AuditProgress) {
+	if progressFn == nil {
+		return
+	}
+	progressFn(progress)
+}
+
+func severityCountsForFindings(findings []Finding) map[string]int {
+	if len(findings) == 0 {
+		return nil
+	}
+	counts := make(map[string]int)
+	for _, f := range findings {
+		if f.Severity == "" {
+			continue
+		}
+		counts[f.Severity]++
+	}
+	if len(counts) == 0 {
+		return nil
+	}
+	return counts
+}
+
+func findingHeadlines(findings []Finding, limit int) []string {
+	if limit <= 0 || len(findings) == 0 {
+		return nil
+	}
+	headlines := make([]string, 0, limit)
+	for _, finding := range findings {
+		headline := strings.TrimSpace(finding.Description)
+		if location := strings.TrimSpace(finding.Location); location != "" {
+			headline = location + ": " + headline
+		}
+		headline = strings.Join(strings.Fields(headline), " ")
+		if headline == "" {
+			continue
+		}
+		headlines = append(headlines, textutil.TruncateUTF8(headline, 96))
+		if len(headlines) >= limit {
+			break
+		}
+	}
+	return headlines
 }
 
 // --- Prompt builders ---

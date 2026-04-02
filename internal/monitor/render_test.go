@@ -271,6 +271,61 @@ func TestRenderDashboard_BuildEndedWithError(t *testing.T) {
 	assert.Contains(t, output, "Build ended: audit failed")
 }
 
+func TestRenderDashboard_ShowsActiveAuditProgress(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+
+	snap := Snapshot{
+		Timestamp:   now,
+		ProjectDir:  "/tmp/test",
+		BuildActive: true,
+		PID:         12345,
+		Phase:       "audit",
+		BuildStatus: &agent.BuildStatus{
+			Version: 1,
+			Build: agent.BuildInfo{
+				Epic:          "MyFeature",
+				Engine:        "claude",
+				Mode:          "software",
+				Effort:        "high",
+				TotalSprints:  3,
+				CurrentSprint: 2,
+			},
+			Sprints: []agent.SprintStatus{
+				{Number: 1, Name: "Setup", Status: "PASS"},
+				{
+					Number: 2,
+					Name:   "API",
+					Status: "running",
+					Audit: &agent.AuditStatus{
+						Outcome:        "running",
+						Active:         true,
+						Stage:          "fixing",
+						CurrentCycle:   2,
+						MaxCycles:      5,
+						CurrentFix:     1,
+						MaxFixes:       4,
+						TargetIssues:   3,
+						Findings:       map[string]int{"HIGH": 1, "MODERATE": 2},
+						IssueHeadlines: []string{"internal/api/server.go: missing request timeout", "internal/auth/token.go: nil dereference on refresh"},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	RenderDashboard(&buf, snap, false, false)
+	output := buf.String()
+
+	assert.Contains(t, output, "Audit: Sprint 2/3 API")
+	assert.Contains(t, output, "State: Fixing  cycle 2/5  fix 1/4")
+	assert.Contains(t, output, "Issues: targeting 3 issues  (HIGH:1 MODERATE:2)")
+	assert.Contains(t, output, "Working: internal/api/server.go: missing request timeout")
+	assert.Contains(t, output, "Working: internal/auth/token.go: nil dereference on refresh")
+}
+
 func TestRenderLogTail_NoLog(t *testing.T) {
 	t.Parallel()
 

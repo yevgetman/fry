@@ -516,9 +516,20 @@ The file contains:
       },
       "alignment": { "attempts": 2, "outcome": "healed" },
       "audit": {
-        "cycles": 1,
-        "findings": { "LOW": 1 },
-        "outcome": "pass"
+        "cycles": 2,
+        "findings": { "HIGH": 1, "MODERATE": 2 },
+        "outcome": "running",
+        "active": true,
+        "stage": "fixing",
+        "current_cycle": 2,
+        "max_cycles": 5,
+        "current_fix": 1,
+        "max_fixes": 4,
+        "target_issues": 3,
+        "issue_headlines": [
+          "internal/api/server.go: missing request timeout",
+          "internal/auth/token.go: nil dereference on refresh"
+        ]
       },
       "review": { "verdict": "CONTINUE" }
     },
@@ -539,7 +550,11 @@ The file contains:
 - `sprints[].status`: per-sprint outcome (`running`, `PASS`, `PASS (aligned)`, `FAIL`, etc.)
 - `sprints[].sanity_checks`: pass/fail per check with type and target
 - `sprints[].alignment.attempts`: how many alignment iterations were needed
-- `sprints[].audit.outcome`: `pass`, `failed`, or `advisory`
+- `sprints[].audit.outcome`: `running`, `pass`, `failed`, or `advisory`
+- `sprints[].audit.stage`: current sprint-audit sub-phase (`auditing`, `fixing`, `verifying`) when `active=true`
+- `sprints[].audit.current_cycle` / `max_cycles`: outer audit-loop progress
+- `sprints[].audit.current_fix` / `max_fixes`: inner fix/verify-loop progress
+- `sprints[].audit.target_issues` and `issue_headlines`: what the audit loop is currently targeting
 - `build_audit`: final holistic audit result (present after build audit runs)
 
 Prefer this file over `fry status --json` when monitoring a running build —
@@ -556,7 +571,7 @@ fry monitor --logs --project-dir /path/to/project    # Tail active build log
 fry monitor --verbose --project-dir /path/to/project # Include granular synthetic events
 ```
 
-The monitor composes data from events, build status, sprint progress, build logs, and process liveness. It enriches events with elapsed times, sprint fractions (`2/5`), and phase transitions. With `--verbose`, it also emits synthetic granular events derived from build-log file creation, including agent deploys, audit/fix/verify session starts, review starts, observer wake-ups, and build-audit launches. The `--json` output emits one snapshot per state change, including `new_events` with enrichment fields.
+The monitor composes data from events, build status, sprint progress, build logs, and process liveness. It enriches events with elapsed times, sprint fractions (`2/5`), and phase transitions. With `--verbose`, it also emits synthetic granular events derived from build-log file creation, including agent deploys, audit/fix/verify session starts, review starts, observer wake-ups, and build-audit launches. The dashboard reads live sprint-audit progress from `.fry/build-status.json` and shows whether the active sprint is in audit, which stage is active, the current `cycle N/M` and `fix N/M`, how many issues are targeted, and up to three compact issue headlines. The `--json` output emits one snapshot per state change, including `new_events` with enrichment fields.
 
 By default, the monitor waits for a build to start. Use `--no-wait` to exit immediately if no build is active.
 
@@ -916,7 +931,7 @@ Key event types: `sprint_start`, `sprint_complete`, `alignment_complete`,
 | `.fry/epic-progress.txt` | Compacted summaries of completed sprints |
 | `.fry/build-logs/` | Sprint, heal, and audit log files |
 | `.fry/build-report.json` | Structured build report (when `--json-report`) |
-| `.fry/build-status.json` | Machine-readable build status snapshot (updated every state change) |
+| `.fry/build-status.json` | Machine-readable build status snapshot (updated every state change, including live sprint-audit progress) |
 | `.fry/sprint-audit.txt` | Current sprint audit findings (transient) |
 | `.fry/observer/events.jsonl` | Full event stream |
 | `.fry/deviation-log.md` | Sprint review deviation history |
