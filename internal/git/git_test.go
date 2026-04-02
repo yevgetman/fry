@@ -138,6 +138,50 @@ func TestGitDiffForAuditExcludesFryDir(t *testing.T) {
 	assert.NotContains(t, diff, "sprint-progress.txt")
 }
 
+func TestDiffStatForNoopDetection_ExcludesProgressFiles(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitGit(context.Background(), projectDir))
+
+	require.NoError(t, os.MkdirAll(projectDir+"/.fry", 0o755))
+	require.NoError(t, os.WriteFile(projectDir+"/tracked.txt", []byte("original\n"), 0o644))
+	cmd := exec.Command("bash", "-c", "git add tracked.txt && git commit -m 'add tracked'")
+	cmd.Dir = projectDir
+	require.NoError(t, cmd.Run())
+
+	require.NoError(t, os.WriteFile(projectDir+"/tracked.txt", []byte("updated\n"), 0o644))
+	require.NoError(t, os.WriteFile(projectDir+"/.fry/sprint-progress.txt", []byte("progress\n"), 0o644))
+	require.NoError(t, os.WriteFile(projectDir+"/.fry/epic-progress.txt", []byte("epic progress\n"), 0o644))
+
+	diff := DiffStatForNoopDetection(context.Background(), projectDir)
+	assert.Contains(t, diff, "tracked.txt")
+	assert.NotContains(t, diff, "sprint-progress.txt")
+	assert.NotContains(t, diff, "epic-progress.txt")
+}
+
+func TestWorktreeFingerprintForNoopDetection_IncludesUntrackedAndExcludesProgressFiles(t *testing.T) {
+	t.Parallel()
+
+	projectDir := t.TempDir()
+	require.NoError(t, InitGit(context.Background(), projectDir))
+
+	require.NoError(t, os.MkdirAll(projectDir+"/.fry", 0o755))
+	require.NoError(t, os.WriteFile(projectDir+"/tracked.txt", []byte("original\n"), 0o644))
+	cmd := exec.Command("bash", "-c", "git add tracked.txt && git commit -m 'add tracked'")
+	cmd.Dir = projectDir
+	require.NoError(t, cmd.Run())
+
+	require.NoError(t, os.WriteFile(projectDir+"/new-file.txt", []byte("new content\n"), 0o644))
+	require.NoError(t, os.WriteFile(projectDir+"/.fry/sprint-progress.txt", []byte("progress\n"), 0o644))
+
+	fingerprint := WorktreeFingerprintForNoopDetection(context.Background(), projectDir)
+	assert.Contains(t, fingerprint, "?? new-file.txt")
+	assert.NotContains(t, fingerprint, "sprint-progress.txt")
+	assert.NotContains(t, fingerprint, "__git_error_")
+	assert.NotContains(t, fingerprint, "__git_status_error_")
+}
+
 // P1: CommitPartialWork
 
 func TestCommitPartialWork(t *testing.T) {
@@ -521,6 +565,55 @@ func TestDiffStatForNoopDetectionWith_EmptyDiff(t *testing.T) {
 	}
 	result := DiffStatForNoopDetectionWith(context.Background(), t.TempDir(), ex)
 	assert.Equal(t, "", result)
+}
+
+func TestWorktreeFingerprintForNoopDetectionWith_CombinesDiffAndStatus(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		DiffStatFn: func(_ context.Context, _ string, _ []string) (string, error) {
+			return "file.go | 3 ++-", nil
+		},
+		StatusPorcelainFn: func(_ context.Context, _ string) (string, error) {
+			return "?? new-file.txt\n", nil
+		},
+	}
+
+	result := WorktreeFingerprintForNoopDetectionWith(context.Background(), t.TempDir(), ex)
+	assert.Contains(t, result, "file.go | 3 ++-")
+	assert.Contains(t, result, "?? new-file.txt")
+}
+
+func TestWorktreeFingerprintForNoopDetectionWith_ExcludesProgressFiles(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		DiffStatFn: func(_ context.Context, _ string, _ []string) (string, error) {
+			return "", nil
+		},
+		StatusPorcelainFn: func(_ context.Context, _ string) (string, error) {
+			return " M .fry/sprint-progress.txt\n?? .fry/epic-progress.txt\n?? src/new-file.go\n", nil
+		},
+	}
+
+	result := WorktreeFingerprintForNoopDetectionWith(context.Background(), t.TempDir(), ex)
+	assert.Equal(t, "?? src/new-file.go", result)
+}
+
+func TestWorktreeFingerprintForNoopDetectionWith_StatusError(t *testing.T) {
+	t.Parallel()
+
+	ex := &mockExecutor{
+		DiffStatFn: func(_ context.Context, _ string, _ []string) (string, error) {
+			return "", nil
+		},
+		StatusPorcelainFn: func(_ context.Context, _ string) (string, error) {
+			return "", errors.New("status error")
+		},
+	}
+
+	result := WorktreeFingerprintForNoopDetectionWith(context.Background(), t.TempDir(), ex)
+	assert.True(t, strings.HasPrefix(result, "__git_status_error_"), "expected __git_status_error_ prefix, got %q", result)
 }
 
 // #31: CollectStateWith tests

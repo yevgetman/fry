@@ -554,6 +554,8 @@ The file contains:
 - `sprints[].audit.stage`: current sprint-audit sub-phase (`auditing`, `fixing`, `verifying`) when `active=true`
 - `sprints[].audit.current_cycle` / `max_cycles`: outer audit-loop progress
 - `sprints[].audit.current_fix` / `max_fixes`: inner fix/verify-loop progress
+- `sprints[].audit.complexity`: classified sprint-audit complexity (`low`, `moderate`, `high`, or `unknown`)
+- `sprints[].audit.metrics`: compact live metrics snapshot (calls, duration, no-op rate, verify yield)
 - `sprints[].audit.target_issues` and `issue_headlines`: what the audit loop is currently targeting
 - `build_audit`: final holistic audit result (present after build audit runs)
 
@@ -632,9 +634,15 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **CRITICAL/HIGH** findings block the sprint — Fry attempts auto-fix.
 - **MODERATE** findings get one fix attempt.
 - **LOW** findings are advisory (non-blocking except at high/max effort).
+- **Complexity-aware budgets:** Fry classifies the sprint diff as low, moderate, or high complexity and adjusts audit/fix loop caps and prompt emphasis accordingly.
+- **No-op skip:** If an audit-fix pass makes no real file changes, Fry skips verify and treats the attempt as stale progress.
+- **Fix history:** Later fix iterations receive a concise history of earlier failed attempts against the same findings.
 - When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
+- Relevant intentional divergences from `.fry/deviation-log.md` are injected into audit prompts so the auditor does not flag accepted design differences as defects.
 - If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.
 - **Reopen detection:** If a previously resolved finding is re-raised under different wording (same file family and similar description), Fry suppresses it as a probable reopening rather than treating it as new. Severity escalation bypasses suppression (genuine regressions are still caught). Suppressed reopenings are logged and shown in the monitor dashboard.
+- **Session continuity:** On Claude and Codex, audit-to-audit and fix-to-fix calls reuse same-role session IDs within the sprint audit. Verify remains stateless.
+- Fry writes per-sprint audit metrics to `.fry/build-logs/sprintN_audit_metrics.json`.
 
 Read audit findings:
 
@@ -653,6 +661,7 @@ cat "/path/to/project/build-audit.md"
 
 Use `--sarif` to also generate `build-audit.sarif` in SARIF 2.1.0 format.
 If the agent forgets to write `build-audit.md`, Fry attempts the same structured-output recovery before treating the build audit as failed.
+When deferred sanity check failures exist, Fry injects a grouped deferred-failure analysis plus intentional deviations into the build-audit prompt and writes `.fry/validation-checklist.md` before replaying deferred checks.
 
 ### Sprint review
 
@@ -934,6 +943,8 @@ Key event types: `sprint_start`, `sprint_complete`, `alignment_complete`,
 | `.fry/build-report.json` | Structured build report (when `--json-report`) |
 | `.fry/build-status.json` | Machine-readable build status snapshot (updated every state change, including live sprint-audit progress) |
 | `.fry/sprint-audit.txt` | Current sprint audit findings (transient) |
+| `.fry/validation-checklist.md` | Deferred-failure validation checklist for build audit follow-up |
+| `.fry/sessions/` | Transient same-role audit session IDs (Claude/Codex only) |
 | `.fry/observer/events.jsonl` | Full event stream |
 | `.fry/deviation-log.md` | Sprint review deviation history |
 | `.fry/build-mode.txt` | Active build mode (software/planning/writing) |

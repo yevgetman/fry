@@ -1,6 +1,6 @@
 # Build Audit
 
-The build audit is a final holistic quality gate that runs once the entire epic has completed successfully. A single AI agent session iteratively audits the full codebase, classifies issues by severity, remediates them, and re-audits until the codebase is clean. This complements the per-sprint audit with a cross-cutting review of the finished product.
+The build audit is a final holistic quality gate that runs once the entire epic has completed successfully. A single AI agent session iteratively audits the full codebase, classifies issues by severity, remediates them, and re-audits until the codebase is clean. The prompt is intentionally framed as a fresh, adversarial review so the agent does not anchor on sprint-level progress notes or assume prior reviewers were correct. This complements the per-sprint audit with a cross-cutting review of the finished product.
 
 ## How It Works
 
@@ -43,7 +43,9 @@ The agent repeats this cycle up to 12 iterations (high effort) or 100 iterations
 
 ## Deferred Failure Resolution
 
-When sprints pass with deferred sanity check failures (checks that failed below the `@max_fail_percent` threshold), those failures are accumulated in `.fry/deferred-failures.md` and included in the build audit prompt. The build audit agent is instructed to fix these deferred failures as part of its remediation pass.
+When sprints pass with deferred sanity check failures (checks that failed below the `@max_fail_percent` threshold), those failures are accumulated in `.fry/deferred-failures.md` and included in the build audit prompt. Fry analyzes the deferrals before the build audit runs, groups interacting failures, and tells the audit agent which failures likely share the same root cause.
+
+Fry also writes a validation checklist to `.fry/validation-checklist.md`. This checklist captures the concrete follow-up checks the build audit should satisfy when it claims to have fixed deferred failures or cross-document inconsistencies.
 
 After the build audit completes, Fry automatically re-runs the deferred sanity checks to determine which ones the audit agent fixed. Results are logged:
 
@@ -122,6 +124,9 @@ The build audit prompt includes selected artifacts as inline context:
 | Epic definition | `.fry/epic.md` | First 50KB |
 | Original user prompt | `.fry/user-prompt.txt` | First 2,000 characters |
 | Sprint results | In-memory results table | Full content |
+| Deferred failure analysis | `.fry/deferred-failures.md` synthesized into interaction groups | When deferred failures exist |
+| Validation checklist | `.fry/validation-checklist.md` | When deferred failures exist |
+| Intentional divergences | `.fry/deviation-log.md` | First 10KB when present |
 
 Artifacts deliberately excluded from the prompt:
 
@@ -130,9 +135,9 @@ Artifacts deliberately excluded from the prompt:
 | Build logs (`.fry/build-logs/`) | Noisy; agent reads the codebase directly |
 | Epic progress (`.fry/epic-progress.txt`) | Redundant with the epic definition and codebase |
 | Build summary (`build-summary.md`) | Not yet generated (build audit runs before summary) |
-| Deviation log (`.fry/deviation-log.md`) | Agent can read it from disk if needed |
+| Raw deferred failure log details | Replaced by structured interaction analysis and validation checklist |
 
-The agent reads the actual codebase directly during its audit passes, so it has full access to all source files.
+The agent reads the actual codebase directly during its audit passes, so it has full access to all source files. The prompt also includes a dedicated cross-document integrity section that explicitly asks the auditor to reconcile summary claims, tables, assumptions, and conclusions across the provided artifacts.
 
 ## Configuration
 
@@ -157,6 +162,8 @@ The report includes:
 - Location, description, severity, and recommended fix for each finding
 - A verdict indicating whether the codebase passed or issues remain
 - If the agent exhausted all iterations, an explanation of why issues persist
+
+When deferred failures are present, the build also emits `.fry/validation-checklist.md` so follow-up tooling and humans can see which deferred checks the audit claimed to address.
 
 ### SARIF export (`--sarif`)
 

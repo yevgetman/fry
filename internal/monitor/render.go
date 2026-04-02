@@ -255,6 +255,19 @@ func renderDashboardAudit(w io.Writer, snap Snapshot, useColor bool) {
 	}
 	fmt.Fprintf(w, "State: %s  %s\n", stage, progress)
 
+	var auditDetails []string
+	if sp.Audit.Complexity != "" {
+		auditDetails = append(auditDetails, "complexity "+sp.Audit.Complexity)
+	}
+	if sp.Audit.Metrics != nil && sp.Audit.Metrics.TotalCalls > 0 {
+		auditDetails = append(auditDetails, fmt.Sprintf("%d calls", sp.Audit.Metrics.TotalCalls))
+		auditDetails = append(auditDetails, fmt.Sprintf("%.0f%% no-op", sp.Audit.Metrics.NoOpRate*100))
+		auditDetails = append(auditDetails, fmt.Sprintf("%.1f verify yield", sp.Audit.Metrics.VerifyYield))
+	}
+	if len(auditDetails) > 0 {
+		fmt.Fprintf(w, "Focus: %s\n", strings.Join(auditDetails, "  "))
+	}
+
 	issues := "scanning for issues"
 	if sp.Audit.TargetIssues > 0 {
 		issues = fmt.Sprintf("targeting %d issues", sp.Audit.TargetIssues)

@@ -1,6 +1,6 @@
 # Sprint Audit
 
-The sprint audit is a semantic quality gate that runs by default after each sprint passes sanity checks. It uses a two-level loop: an outer audit cycle discovers issues, and an inner fix loop resolves them before re-auditing. Issues are tracked individually across cycles and prioritized FIFO (oldest first). This complements the syntactic sanity check system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
+The sprint audit is a semantic quality gate that runs by default after each sprint passes sanity checks. It uses a two-level loop: an outer audit cycle discovers issues, and an inner fix loop resolves them before re-auditing. Issues are tracked individually across cycles and prioritized FIFO (oldest first). The prompt adapts to sprint complexity, intentional deviations, and prior failed fix attempts so the loop spends less time rediscovering the same problems. This complements the syntactic sanity check system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
 
 ## How It Works
 
@@ -58,6 +58,20 @@ For each audit report, the **fix agent** runs repeatedly until all issues above 
 2. **Verify agent** -- checks whether the specific issues have been resolved without modifying code. Reports each issue as RESOLVED or STILL PRESENT.
 3. If all actionable issues are resolved, the inner loop breaks and triggers a re-audit.
 4. If no new issues are resolved for 2 consecutive fix iterations, the inner loop breaks (stale detection).
+
+### Inner-loop efficiency
+
+The inner loop carries forward structured history so each fix iteration has more context than the last:
+
+- **No-op detection** -- Fry fingerprints the worktree before and after each fix pass. If the fix agent made no material file changes (excluding progress artifacts), Fry logs a no-op, skips verify, increments the stale counter, and moves directly to the next fix attempt or re-audit.
+- **Fix attempt history** -- The fix prompt includes concise summaries of prior attempts that targeted the same findings, including whether the attempt was a no-op, which issues remained, and any verification notes.
+- **Explicit verify boundary** -- Verify sessions stay stateless and never inherit fix-session context. This keeps the trust boundary between remediation and validation intact.
+
+On Claude and Codex, Fry also reuses same-role session continuity within the sprint audit:
+
+- **Audit continuity** -- outer audit cycle 1, cycle 2, and the final audit pass reuse the same audit session when possible.
+- **Fix continuity** -- fix iteration 1, 2, 3, and so on within one outer cycle reuse the same fix session.
+- **Verify isolation** -- verify never resumes the fix session.
 
 ### Issue tracking across cycles
 
@@ -246,10 +260,12 @@ The audit prompt includes:
 | What was done | `.fry/sprint-progress.txt` | First 50KB |
 | Code changes | `git diff` of sprint work | First 100KB |
 | Previously identified issues | Findings from prior audit cycles | Cycle 2+ only |
+| Intentional divergences | `.fry/deviation-log.md` filtered to the active sprint | When relevant |
 
 The git diff is refreshed before each audit cycle (via a callback) so that fixes made by the fix agent are reflected in subsequent audits.
 The audit agent uses the current repository state and sprint diff as primary evidence. `sprint-progress.txt` is supporting context only.
 When `.fry/codebase.md` exists, the auditor uses it as ground truth for architecture and conventions. Pre-existing issues should only be raised when the sprint introduced, worsened, or clearly exposed them.
+For moderate- and high-complexity sprints, the audit prompt starts with a targeted reconciliation pass that focuses the agent on numerical consistency before broader review criteria.
 
 ## Context Provided to Fix Agent
 
@@ -261,6 +277,7 @@ The fix prompt includes:
 | Codebase memories | `.fry/codebase-memories/*.md` (if present) |
 | Sprint goals | `@prompt` block from the epic |
 | Issues to fix | Structured list, FIFO ordered (oldest first, highest severity within age group) |
+| Previous fix attempts | Relevant subset of prior failed or partial attempts against the same findings |
 | Context pointers | References to `sprint-progress.txt` and `plans/plan.md` |
 
 Issues are grouped by origin audit cycle when multiple cycles have contributed findings. The fix agent is explicitly instructed to focus only on the listed issues, preserve unrelated behavior, follow existing patterns, and not search for new ones.
@@ -274,16 +291,17 @@ After each fix iteration, a lightweight verify agent checks resolution:
 | Issues to verify | Numbered list of unresolved issues with location and severity |
 | Instructions | Check each issue, report RESOLVED or STILL PRESENT |
 
-The verify agent does not look for new issues and does not modify source code. Each verify session must write explicit statuses to `.fry/sprint-audit.txt`. Fry first tries to recover those statuses from the agent's final stdout/log output; if recovery fails, the audit fails rather than treating missing output as an implicit pass.
+The verify agent does not look for new issues and does not modify source code. Each verify session must write explicit statuses and optional notes to `.fry/sprint-audit.txt`. Fry first tries to recover those statuses from the agent's final stdout/log output; if recovery fails, the audit fails rather than treating missing output as an implicit pass.
 
 ## Effort Level Interaction
 
 - **`fast`** -- Sprint audits are skipped entirely, regardless of audit settings. This matches the behavior of sprint reviews at fast effort.
-- **`standard`** -- Bounded audit: runs up to `@max_audit_iterations` outer audit cycles (default: 3), each with up to 3 inner fix iterations. LOW findings are ignored by the fix agent. Stops when cycles are exhausted.
-- **`high`** -- Progress-based audit: outer loop continues as long as progress is detected. Up to 12 outer cycles, 7 inner fix iterations per cycle. **LOW findings are included** in the fix agent's scope alongside higher-severity items (non-blocking). Stops early if 3 consecutive outer cycles show no progress (same findings persisting).
-- **`max`** -- Same progress-based behavior as `high`, but with up to 100 outer cycles and 10 inner fix iterations per cycle. **LOW findings are included** in fix scope. Allows more thorough remediation for mission-critical builds.
+- **`standard`** -- Bounded audit with complexity-aware caps. Low-complexity sprints run up to 2 outer cycles, moderate stays at the default 3, and high-complexity sprints can use up to 5. Inner fix iterations stay at 3 except high-complexity standard audits, which get 4. LOW findings are ignored by the fix agent.
+- **`high`** -- Progress-based audit with complexity-aware caps. Low-complexity sprints use up to 4 outer cycles and 5 inner fix iterations, moderate uses up to 8 outer cycles and 7 inner iterations, and high complexity uses up to 12 outer cycles and 7 inner iterations. **LOW findings are included** in the fix agent's scope alongside higher-severity items (non-blocking).
+- **`max`** -- Progress-based audit with the largest adaptive budget. Low-complexity sprints use up to 6 outer cycles and 7 inner fix iterations, moderate uses up to 20 outer cycles and 10 inner iterations, and high complexity uses up to 100 outer cycles and 10 inner iterations. **LOW findings are included** in fix scope.
 
 When `@max_audit_iterations` is explicitly set in the epic, it is always respected as the outer cycle cap regardless of effort level, and progress detection is disabled. Progress-based behavior only activates when the iteration count is not explicitly configured.
+If Fry cannot classify complexity, it falls back to the legacy effort defaults.
 
 ### Progress detection (outer loop)
 
@@ -353,6 +371,12 @@ Within each fix cycle, the inner loop tracks how many issues are resolved after 
 [2026-03-10 12:16:00]   AUDIT FIX: no progress after 2 fix iterations — moving to re-audit
 ```
 
+### No-op fix detection:
+```
+[2026-04-02 17:51:18]   AUDIT FIX  cycle 1  fix 1/7 — targeting 1 issues (oldest first)
+[2026-04-02 17:51:18]   AUDIT FIX: no-op (no file changes) — skipping verify
+```
+
 ### Outer loop stale detection:
 ```
 [2026-03-10 12:20:00]   AUDIT: no progress detected (3/3 stale cycles)
@@ -389,11 +413,14 @@ sprint1_auditfix_1_2_20060102_150405.log     # Fix agent: cycle 1, fix 2
 sprint1_auditverify_1_2_20060102_150405.log  # Verify agent: cycle 1, fix 2
 sprint1_audit2_20060102_150405.log           # Audit cycle 2 (re-audit)
 sprint1_audit_final_20060102_150405.log      # Final audit pass
+sprint1_audit_metrics.json                   # Per-call audit metrics for the sprint
 ```
+
+Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, no-op rate, verify yield, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier.
 
 ## Cleanup
 
-After the audit completes (pass or fail), Fry removes `.fry/sprint-audit.txt` and `.fry/audit-prompt.md` before the git checkpoint. These are transient files that should not be committed.
+After the audit completes (pass or fail), Fry removes `.fry/sprint-audit.txt`, `.fry/audit-prompt.md`, and any transient same-role session files under `.fry/sessions/` before the git checkpoint. These are transient files that should not be committed.
 
 ## Examples
 

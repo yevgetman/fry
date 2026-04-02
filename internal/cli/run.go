@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -603,6 +604,7 @@ var runCmd = &cobra.Command{
 			EpicName:  ep.Name,
 			StartTime: buildStart,
 		}
+		var validationChecklist []audit.ValidationItem
 		sprintReportResults := make([]report.SprintResult, 0, endSprint-startSprint+1)
 		sprintTokens := make([]metrics.SprintTokens, 0, endSprint-startSprint+1)
 
@@ -1076,11 +1078,14 @@ var runCmd = &cobra.Command{
 						frlog.Log("WARNING: could not capture git diff for audit: %v", err)
 						gitDiff = "(git diff unavailable)"
 					}
+					complexity := audit.ClassifyComplexity(gitDiff, modeStr)
+					frlog.Log("  AUDIT: classified sprint complexity as %s", complexity)
 					auditResult, err := audit.RunAuditLoop(ctx, audit.AuditOpts{
 						ProjectDir: projectPath,
 						Sprint:     spr,
 						Epic:       ep,
 						Engine:     auditEngine,
+						Complexity: complexity,
 						GitDiff:    gitDiff,
 						DiffFn:     func() (string, error) { return git.GitDiffForAudit(ctx, projectPath) },
 						ProgressFn: func(progress audit.AuditProgress) {
@@ -1112,6 +1117,18 @@ var runCmd = &cobra.Command{
 							return nil
 						}
 						return err
+					}
+					if auditResult.Metrics != nil {
+						auditResult.Metrics.EscapedToBuildAudit = totalFindingCount(auditResult.SeverityCounts)
+						if err := writeAuditMetricsArtifact(projectPath, spr.Number, auditResult.Metrics); err != nil {
+							frlog.Log("WARNING: could not write audit metrics artifact: %v", err)
+						}
+						frlog.Log("  AUDIT METRICS: %d calls, %dms, %.0f%% no-op rate, %.1f verify yield",
+							auditResult.Metrics.TotalCalls(),
+							auditResult.Metrics.TotalDurationMs(),
+							auditResult.Metrics.NoOpRate()*100,
+							auditResult.Metrics.VerifyYield(),
+						)
 					}
 					if !auditResult.Passed {
 						if auditResult.Blocking {
@@ -1659,6 +1676,9 @@ var runCmd = &cobra.Command{
 			}
 
 			deferredContent := readDeferredFailuresArtifact(projectPath)
+			if analysis := audit.AnalyzeDeferredFailures(deferredContent); analysis != nil {
+				validationChecklist = analysis.Checklist
+			}
 			auditEngine, err := resolveAuditEngine(runPlanner, currentEngineName(), ep.AuditEngine, mcpOpts...)
 			if err != nil {
 				frlog.Log("WARNING: could not create engine for build audit: %v", err)
@@ -1751,6 +1771,10 @@ var runCmd = &cobra.Command{
 		// Run a single-pass build audit for triaged tasks that skipped the main
 		// build audit gate (e.g. simple+low, moderate+low where AuditAfterSprint=false).
 		if exitErr == nil && buildAuditResult == nil && !runNoAudit && triageDecision != nil {
+			deferredContent := readDeferredFailuresArtifact(projectPath)
+			if analysis := audit.AnalyzeDeferredFailures(deferredContent); analysis != nil {
+				validationChecklist = analysis.Checklist
+			}
 			auditEngine, auditEngErr := runPlanner.Build(currentEngineName(), mcpOpts...)
 			if auditEngErr != nil {
 				frlog.Log("WARNING: could not create engine for triage build audit: %v", auditEngErr)
@@ -1758,13 +1782,14 @@ var runCmd = &cobra.Command{
 				buildAuditModel := engine.ResolveModelForSession(currentEngineName(), string(ep.EffortLevel), engine.SessionBuildAudit)
 				frlog.Log("▶ BUILD AUDIT  single-pass audit for triaged task...  engine=%s  model=%s", currentEngineName(), buildAuditModel)
 				result, auditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
-					ProjectDir: projectPath,
-					Epic:       ep,
-					Engine:     auditEngine,
-					Results:    summaryCopy,
-					Verbose:    frlog.Verbose,
-					Model:      buildAuditModel,
-					Mode:       string(mode),
+					ProjectDir:       projectPath,
+					Epic:             ep,
+					Engine:           auditEngine,
+					Results:          summaryCopy,
+					Verbose:          frlog.Verbose,
+					Model:            buildAuditModel,
+					DeferredFailures: deferredContent,
+					Mode:             string(mode),
 				})
 				if auditErr != nil {
 					frlog.Log("WARNING: triage build audit failed: %v", auditErr)
@@ -2122,6 +2147,11 @@ var runCmd = &cobra.Command{
 					Passed:    strings.HasPrefix(r.Status, "PASS"),
 				})
 			}
+		}
+
+		buildReport.ValidationChecklist = validationChecklist
+		if err := writeValidationChecklistArtifact(projectPath, validationChecklist); err != nil {
+			frlog.Log("WARNING: could not write validation checklist artifact: %v", err)
 		}
 
 		// Write JSON build report if --json-report flag is set.
@@ -2607,6 +2637,48 @@ func readDeferredFailuresArtifact(projectDir string) string {
 	return string(data)
 }
 
+func writeAuditMetricsArtifact(projectDir string, sprintNum int, metrics *audit.AuditMetrics) error {
+	if metrics == nil {
+		return nil
+	}
+	path := filepath.Join(projectDir, config.BuildLogsDir, fmt.Sprintf("sprint%d_audit_metrics.json", sprintNum))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(metrics, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return os.WriteFile(path, data, 0o644)
+}
+
+func writeValidationChecklistArtifact(projectDir string, checklist []audit.ValidationItem) error {
+	path := filepath.Join(projectDir, config.ValidationChecklistFile)
+	if len(checklist) == 0 {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	content := audit.RenderValidationChecklist(checklist)
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func totalFindingCount(counts map[string]int) int {
+	total := 0
+	for _, count := range counts {
+		total += count
+	}
+	return total
+}
+
 func writeBuildAuditSentinel(projectDir string) error {
 	finalPath := filepath.Join(projectDir, config.BuildAuditCompleteFile)
 	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
@@ -3001,9 +3073,11 @@ func updateBuildStatusAudit(status *agent.BuildStatus, sprintNum int, auditResul
 		outcome = "advisory"
 	}
 	status.Sprints[idx].Audit = &agent.AuditStatus{
-		Cycles:   auditResult.Iterations,
-		Findings: auditResult.SeverityCounts,
-		Outcome:  outcome,
+		Cycles:     auditResult.Iterations,
+		Findings:   auditResult.SeverityCounts,
+		Outcome:    outcome,
+		Complexity: string(auditResult.Complexity),
+		Metrics:    buildStatusAuditMetricsSnapshot(auditResult.Metrics),
 	}
 	// Update sprint status if audit failed
 	if auditResult.Blocking {
@@ -3038,6 +3112,16 @@ func updateBuildStatusAuditProgress(status *agent.BuildStatus, sprintNum int, pr
 		TargetIssues:   progress.TargetIssues,
 		IssueHeadlines: append([]string(nil), progress.Headlines...),
 		Reopenings:     progress.Reopenings,
+		Complexity:     string(progress.Complexity),
+		Metrics: &agent.AuditMetricsSnapshot{
+			TotalCalls:        progress.Metrics.TotalCalls,
+			DurationMs:        progress.Metrics.DurationMs,
+			NoOpFixCalls:      progress.Metrics.NoOpFixCalls,
+			NoOpRate:          progress.Metrics.NoOpRate,
+			VerifyCalls:       progress.Metrics.VerifyCalls,
+			VerifyResolutions: progress.Metrics.VerifyResolutions,
+			VerifyYield:       progress.Metrics.VerifyYield,
+		},
 	}
 }
 
@@ -3058,6 +3142,22 @@ func findSprintStatusIndex(status *agent.BuildStatus, sprintNum int) int {
 		}
 	}
 	return -1
+}
+
+func buildStatusAuditMetricsSnapshot(metrics *audit.AuditMetrics) *agent.AuditMetricsSnapshot {
+	if metrics == nil {
+		return nil
+	}
+	snapshot := metrics.Snapshot()
+	return &agent.AuditMetricsSnapshot{
+		TotalCalls:        snapshot.TotalCalls,
+		DurationMs:        snapshot.DurationMs,
+		NoOpFixCalls:      snapshot.NoOpFixCalls,
+		NoOpRate:          snapshot.NoOpRate,
+		VerifyCalls:       snapshot.VerifyCalls,
+		VerifyResolutions: snapshot.VerifyResolutions,
+		VerifyYield:       snapshot.VerifyYield,
+	}
 }
 
 // resolveMode reconciles the --mode flag with the legacy --planning bool flag.

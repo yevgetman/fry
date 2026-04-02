@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -135,8 +136,8 @@ func recoverVerificationOutput(displayPath, output, logPath string, issueCount i
 }
 
 func agentTranscript(output, logPath string) string {
-	if strings.TrimSpace(output) != "" {
-		return output
+	if transcript := normalizeAgentTranscript(output); transcript != "" {
+		return transcript
 	}
 	if logPath == "" {
 		return ""
@@ -145,7 +146,61 @@ func agentTranscript(output, logPath string) string {
 	if err != nil {
 		return ""
 	}
-	return string(data)
+	return normalizeAgentTranscript(string(data))
+}
+
+func normalizeAgentTranscript(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	if transcript := normalizeClaudeTranscript(raw); transcript != "" {
+		return transcript
+	}
+	if transcript := normalizeCodexTranscript(raw); transcript != "" {
+		return transcript
+	}
+	return raw
+}
+
+func normalizeClaudeTranscript(raw string) string {
+	var payload struct {
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil || strings.TrimSpace(payload.Result) == "" {
+		return ""
+	}
+	return "assistant\n" + strings.TrimSpace(payload.Result)
+}
+
+func normalizeCodexTranscript(raw string) string {
+	var messages []string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || !strings.HasPrefix(line, "{") {
+			continue
+		}
+
+		var event struct {
+			Type string `json:"type"`
+			Item struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"item"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		if event.Type != "item.completed" || event.Item.Type != "agent_message" || strings.TrimSpace(event.Item.Text) == "" {
+			continue
+		}
+		messages = append(messages, strings.TrimSpace(event.Item.Text))
+	}
+	if len(messages) == 0 {
+		return ""
+	}
+	return "assistant\n" + strings.Join(messages, "\n\n")
 }
 
 func extractLastAssistantSection(raw string) string {

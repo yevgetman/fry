@@ -81,6 +81,18 @@ func TestParseCodexTokensNoUsageReturnsZero(t *testing.T) {
 	assert.Equal(t, 0, u.Total)
 }
 
+func TestParseCodexTokensJSONLUsageReturnsCorrectCounts(t *testing.T) {
+	t.Parallel()
+
+	output := `{"type":"thread.started","thread_id":"019d5066-f512-7bc1-aba8-e45cf2fb9a84"}
+{"type":"turn.completed","usage":{"input_tokens":16250,"cached_input_tokens":14080,"output_tokens":32}}`
+
+	u := ParseCodexTokens(output)
+	assert.Equal(t, 16250, u.Input)
+	assert.Equal(t, 32, u.Output)
+	assert.Equal(t, 16282, u.Total)
+}
+
 func TestParseClaudeTokensCacheOutputFieldsNotCounted(t *testing.T) {
 	t.Parallel()
 

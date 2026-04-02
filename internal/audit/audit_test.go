@@ -20,6 +20,7 @@ type stubEngine struct {
 	name       string
 	outputs    []string
 	prompts    []string
+	runOpts    []engine.RunOpts
 	errs       []error
 	sideEffect func(projectDir string, callIndex int)
 	callIndex  int
@@ -27,6 +28,7 @@ type stubEngine struct {
 
 func (s *stubEngine) Run(_ context.Context, prompt string, opts engine.RunOpts) (string, int, error) {
 	s.prompts = append(s.prompts, prompt)
+	s.runOpts = append(s.runOpts, opts)
 	var output string
 	if len(s.outputs) > 0 {
 		output = s.outputs[0]
@@ -265,8 +267,12 @@ func TestParseVerificationStatuses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := parseVerificationStatuses(tt.content, findings)
-			assert.Equal(t, tt.expected, result)
+			result := parseVerificationResults(tt.content, findings)
+			resolved := make([]bool, len(result))
+			for i, entry := range result {
+				resolved[i] = normalizeVerificationStatus(entry.Status) == "RESOLVED"
+			}
+			assert.Equal(t, tt.expected, resolved)
 		})
 	}
 }
@@ -543,7 +549,7 @@ func TestEffectiveOuterCycles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			maxCycles, progressBased := effectiveOuterCycles(tt.epic)
+			maxCycles, progressBased := effectiveOuterCycles(tt.epic, "")
 			assert.Equal(t, tt.wantMax, maxCycles)
 			assert.Equal(t, tt.wantProgress, progressBased)
 		})
@@ -568,7 +574,7 @@ func TestEffectiveInnerIter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.want, effectiveInnerIter(tt.epic))
+			assert.Equal(t, tt.want, effectiveInnerIter(tt.epic, ""))
 		})
 	}
 }
@@ -700,7 +706,7 @@ func TestAuditFixPromptFIFO(t *testing.T) {
 		{Description: "Old issue", Severity: "HIGH", OriginCycle: 1},
 		{Description: "New issue", Severity: "CRITICAL", OriginCycle: 2},
 	}
-	prompt := buildAuditFixPrompt(opts, findings)
+	prompt := buildAuditFixPrompt(opts, findings, nil)
 
 	assert.Contains(t, prompt, "## Issues to Fix")
 	assert.Contains(t, prompt, "oldest issues first")
@@ -720,7 +726,7 @@ func TestAuditFixPromptSingleCycleNoCycleHeader(t *testing.T) {
 		{Description: "Issue A", Severity: "HIGH", OriginCycle: 1},
 		{Description: "Issue B", Severity: "MODERATE", OriginCycle: 1},
 	}
-	prompt := buildAuditFixPrompt(opts, findings)
+	prompt := buildAuditFixPrompt(opts, findings, nil)
 
 	assert.NotContains(t, prompt, "### From Audit Cycle")
 }
@@ -730,7 +736,7 @@ func TestAuditFixPromptWritingMode(t *testing.T) {
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	opts.Mode = "writing"
-	prompt := buildAuditFixPrompt(opts, []Finding{{Description: "weak transition", Severity: "MODERATE", OriginCycle: 1}})
+	prompt := buildAuditFixPrompt(opts, []Finding{{Description: "weak transition", Severity: "MODERATE", OriginCycle: 1}}, nil)
 	assert.Contains(t, prompt, "content audit found issues")
 	assert.Contains(t, prompt, "minimal editorial changes")
 }
@@ -741,7 +747,7 @@ func TestAuditFixPromptIncludesCodebaseContext(t *testing.T) {
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	writeFile(t, filepath.Join(opts.ProjectDir, config.CodebaseFile), "# Codebase: Fry\n\nFollow grouped imports and contextual errors.")
 
-	prompt := buildAuditFixPrompt(opts, []Finding{{Description: "weak error context", Severity: "HIGH", OriginCycle: 1}})
+	prompt := buildAuditFixPrompt(opts, []Finding{{Description: "weak error context", Severity: "HIGH", OriginCycle: 1}}, nil)
 
 	assert.Contains(t, prompt, "## Codebase Context")
 	assert.Contains(t, prompt, "Follow grouped imports and contextual errors.")
@@ -1417,14 +1423,13 @@ func TestRunAuditLoopProgressStopsOnTurnoverChurnAfterWarmup(t *testing.T) {
 	assert.False(t, result.Passed)
 	assert.True(t, result.Blocking)
 
-	// Max effort progress-based loop gets a long runway first. After the
-	// high-effort cap (12 cycles), three consecutive cycles with zero
-	// persisting actionable findings are treated as churn:
-	// cycles 13, 14, 15 => churn 1, 2, 3, then break before inner loop on 15.
-	// Cycles 1-14: audit + (fix+verify)*2 = 5 calls each => 70
-	// Cycle 15: audit only => 1
+	// Max effort adaptive churn detection now warms up earlier for large budgets.
+	// With maxOuter=100 the warmup caps at 10, so cycles 11, 12, 13 become churn
+	// 1, 2, 3 and the loop breaks before the inner loop on cycle 13.
+	// Cycles 1-12: audit + (fix+verify)*2 = 5 calls each => 60
+	// Cycle 13: audit only => 1
 	// Final audit => 1
-	assert.Len(t, eng.prompts, 72)
+	assert.Len(t, eng.prompts, 62)
 }
 
 func TestIsTurnoverChurn(t *testing.T) {
@@ -1530,7 +1535,7 @@ func TestApplyResolutionsByKey(t *testing.T) {
 		{Description: "Issue A", Severity: "HIGH"},
 		{Description: "Issue C", Severity: "CRITICAL"},
 	}
-	resolved := []bool{true, false}
+	resolved := []verificationResult{{Status: "RESOLVED"}, {Status: "STILL PRESENT"}}
 
 	applyResolutionsByKey(all, checked, resolved)
 
@@ -1550,7 +1555,7 @@ func TestApplyResolutionsByKeyUsesLocationAwareIdentity(t *testing.T) {
 		{Location: "a.go:10", Description: "Duplicate issue", Severity: "HIGH"},
 	}
 
-	applyResolutionsByKey(all, checked, []bool{true})
+	applyResolutionsByKey(all, checked, []verificationResult{{Status: "RESOLVED"}})
 
 	assert.True(t, all[0].Resolved)
 	assert.False(t, all[1].Resolved)
@@ -1892,8 +1897,8 @@ func TestDescriptionTokens(t *testing.T) {
 			[]string{"canonicalization", "entries", "missing", "slug", "stale"},
 		},
 		{"", nil},
-		{"a", nil},       // single char removed
-		{"is the", nil},  // all stop words
+		{"a", nil},      // single char removed
+		{"is the", nil}, // all stop words
 	}
 	for _, tt := range tests {
 		got := descriptionTokens(tt.desc)
@@ -2185,4 +2190,62 @@ func TestRunAuditLoopAllowsGenuineRegression(t *testing.T) {
 	require.NoError(t, err)
 	// The escalated finding should NOT be suppressed — audit should still have it
 	assert.Equal(t, 0, result.SuppressedReopenings, "escalated severity should not be suppressed")
+}
+
+func TestRunAuditLoopUsesSameRoleSessionContinuity(t *testing.T) {
+	t.Parallel()
+
+	const auditSessionID = "019d5066-9bd1-7cb1-b421-e73a9d1d0f67"
+	const fixSessionID = "019d5066-f512-7bc1-aba8-e45cf2fb9a84"
+
+	eng := &stubEngine{
+		name: "codex",
+		outputs: []string{
+			fmt.Sprintf("{\"type\":\"thread.started\",\"thread_id\":\"%s\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"audit\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"output_tokens\":5}}\n", auditSessionID),
+			fmt.Sprintf("{\"type\":\"thread.started\",\"thread_id\":\"%s\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"fix\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":8,\"output_tokens\":4}}\n", fixSessionID),
+			"verify one",
+			"{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"fix retry\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":7,\"output_tokens\":3}}\n",
+			"verify two",
+			"{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"audit clean\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":6,\"output_tokens\":2}}\n",
+		},
+		sideEffect: func(projectDir string, idx int) {
+			auditFile := filepath.Join(projectDir, config.SprintAuditFile)
+			switch idx {
+			case 0:
+				writeFile(t, auditFile, highFindings)
+			case 2:
+				writeFile(t, auditFile, "- **Issue:** 1\n- **Status:** STILL PRESENT\n")
+			case 4:
+				writeFile(t, auditFile, "- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 5:
+				writeFile(t, auditFile, cleanAudit)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterations = 3
+	opts.Epic.MaxAuditIterationsSet = true
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.True(t, result.Passed)
+	require.Len(t, eng.runOpts, 6)
+
+	assert.True(t, eng.runOpts[0].StructuredOutput)
+	assert.Equal(t, "", eng.runOpts[0].SessionID)
+	assert.True(t, eng.runOpts[1].StructuredOutput)
+	assert.Equal(t, "", eng.runOpts[1].SessionID)
+	assert.False(t, eng.runOpts[2].StructuredOutput)
+	assert.Equal(t, "", eng.runOpts[2].SessionID)
+	assert.True(t, eng.runOpts[3].StructuredOutput)
+	assert.Equal(t, fixSessionID, eng.runOpts[3].SessionID)
+	assert.False(t, eng.runOpts[4].StructuredOutput)
+	assert.Equal(t, "", eng.runOpts[4].SessionID)
+	assert.True(t, eng.runOpts[5].StructuredOutput)
+	assert.Equal(t, auditSessionID, eng.runOpts[5].SessionID)
+
+	assert.NoFileExists(t, auditSessionPath(opts.ProjectDir, opts.Sprint.Number))
+	assert.NoFileExists(t, fixSessionPath(opts.ProjectDir, opts.Sprint.Number, 1))
 }

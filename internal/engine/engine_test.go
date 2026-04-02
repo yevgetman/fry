@@ -87,6 +87,27 @@ func TestCodexCommandConstruction(t *testing.T) {
 	}, args)
 }
 
+func TestCodexCommandConstructionWithSessionResume(t *testing.T) {
+	t.Parallel()
+
+	args := codexArgs(RunOpts{
+		Model:            "gpt-5",
+		SessionID:        "019d5066-f512-7bc1-aba8-e45cf2fb9a84",
+		StructuredOutput: true,
+		ExtraFlags:       []string{"--foo=bar"},
+	})
+
+	assert.Equal(t, []string{
+		"exec",
+		"resume",
+		"--dangerously-bypass-approvals-and-sandbox",
+		"--json",
+		"--model", "gpt-5",
+		"--foo=bar",
+		"019d5066-f512-7bc1-aba8-e45cf2fb9a84",
+	}, args)
+}
+
 func TestClaudeCommandConstruction(t *testing.T) {
 	t.Parallel()
 
@@ -100,6 +121,26 @@ func TestClaudeCommandConstruction(t *testing.T) {
 		"--dangerously-skip-permissions",
 		"--model", "sonnet",
 		"--output-format", "json",
+	}, args)
+}
+
+func TestClaudeCommandConstructionWithSessionResume(t *testing.T) {
+	t.Parallel()
+
+	args := claudeArgs(RunOpts{
+		Model:            "sonnet",
+		SessionID:        "34429d2b-d11c-4b8b-b84a-896dd59bcc80",
+		StructuredOutput: true,
+		ExtraFlags:       []string{"--verbose"},
+	})
+
+	assert.Equal(t, []string{
+		"-p",
+		"--dangerously-skip-permissions",
+		"--resume", "34429d2b-d11c-4b8b-b84a-896dd59bcc80",
+		"--output-format", "json",
+		"--model", "sonnet",
+		"--verbose",
 	}, args)
 }
 

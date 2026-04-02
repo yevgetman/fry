@@ -13,6 +13,7 @@ import (
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
+	"github.com/yevgetman/fry/internal/review"
 	"github.com/yevgetman/fry/internal/sprint"
 	"github.com/yevgetman/fry/internal/textutil"
 )
@@ -22,6 +23,8 @@ const (
 	maxBuildAuditPlanBytes       = 50_000
 	maxBuildAuditEpicBytes       = 50_000
 	maxBuildAuditUserPromptBytes = 2_000
+	maxBuildAuditDeviationBytes  = 10_000
+	maxBuildAuditPromptBytes     = 200_000
 )
 
 type BuildAuditOpts struct {
@@ -148,147 +151,197 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 }
 
 func buildBuildAuditPrompt(opts BuildAuditOpts) string {
-	var b strings.Builder
+	var (
+		introSection         strings.Builder
+		codebaseSection      strings.Builder
+		executiveSection     string
+		planSection          string
+		epicSection          string
+		userPromptSection    string
+		scopeSection         strings.Builder
+		deferredSection      string
+		deviationSection     string
+		crossDocumentSection strings.Builder
+		instructionsSection  strings.Builder
+	)
 
-	b.WriteString("# FINAL BUILD AUDIT\n\n")
-	fmt.Fprintf(&b, "Holistic post-build audit for epic: **%s**\n\n", opts.Epic.Name)
-	b.WriteString("Use the current repository state as primary evidence.\n")
-	b.WriteString("Treat generated progress artifacts as supporting context, not proof.\n\n")
+	introSection.WriteString("# FINAL BUILD AUDIT\n\n")
+	introSection.WriteString("You are reviewing this document corpus for the first time.\n")
+	introSection.WriteString("You have no knowledge of how it was produced, how many iterations it went through, or what prior reviewers found.\n\n")
+	introSection.WriteString("Your primary job: find contradictions, inconsistencies, and gaps — especially across documents that reference each other's figures, assumptions, or conclusions. Use the repository as primary evidence.\n\n")
+	introSection.WriteString("Treat generated progress artifacts as supporting context, not proof.\n\n")
 
-	appendCodebaseContext(&b, opts.ProjectDir)
+	appendCodebaseContext(&codebaseSection, opts.ProjectDir)
 
-	// --- Project context from selected artifacts ---
-
-	// Executive summary
 	executivePath := filepath.Join(opts.ProjectDir, config.ExecutiveFile)
 	if data, err := os.ReadFile(executivePath); err == nil {
 		content := string(data)
 		if len(content) > maxBuildAuditExecutiveBytes {
 			content = textutil.TruncateUTF8(content, maxBuildAuditExecutiveBytes) + "\n...(truncated)"
 		}
-		b.WriteString("## Project Context (executive.md)\n")
-		b.WriteString(content)
-		b.WriteString("\n\n")
+		executiveSection = "## Project Context (executive.md)\n" + content + "\n\n"
 	}
 
-	// Implementation plan
 	planPath := filepath.Join(opts.ProjectDir, config.PlanFile)
 	if data, err := os.ReadFile(planPath); err == nil {
 		content := string(data)
 		if len(content) > maxBuildAuditPlanBytes {
 			content = textutil.TruncateUTF8(content, maxBuildAuditPlanBytes) + "\n...(truncated)"
 		}
-		b.WriteString("## Implementation Plan (plan.md)\n")
-		b.WriteString(content)
-		b.WriteString("\n\n")
+		planSection = "## Implementation Plan (plan.md)\n" + content + "\n\n"
 	}
 
-	// Epic definition
 	epicPath := filepath.Join(opts.ProjectDir, config.FryDir, "epic.md")
 	if data, err := os.ReadFile(epicPath); err == nil {
 		content := string(data)
 		if len(content) > maxBuildAuditEpicBytes {
 			content = textutil.TruncateUTF8(content, maxBuildAuditEpicBytes) + "\n...(truncated)"
 		}
-		b.WriteString("## Epic Definition (epic.md)\n")
-		b.WriteString("```\n")
-		b.WriteString(content)
-		b.WriteString("\n```\n\n")
+		epicSection = "## Epic Definition (epic.md)\n```\n" + content + "\n```\n\n"
 	}
 
-	// Original user prompt
 	userPromptPath := filepath.Join(opts.ProjectDir, config.UserPromptFile)
 	if data, err := os.ReadFile(userPromptPath); err == nil && len(data) > 0 {
 		content := string(data)
 		if len(content) > maxBuildAuditUserPromptBytes {
 			content = textutil.TruncateUTF8(content, maxBuildAuditUserPromptBytes) + "\n...(truncated)"
 		}
-		b.WriteString("## Original User Prompt\n")
-		b.WriteString(content)
-		b.WriteString("\n\n")
+		userPromptSection = "## Original User Prompt\n" + content + "\n\n"
 	}
 
-	// Sprint results table
-	b.WriteString("## Build Results\n\n")
-	b.WriteString("| Sprint | Name | Status | Duration |\n")
-	b.WriteString("|--------|------|--------|----------|\n")
+	scopeSection.WriteString("## Build Scope\n\n")
+	scopeSection.WriteString("| Sprint | Name |\n")
+	scopeSection.WriteString("|--------|------|\n")
 	for _, r := range opts.Results {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
-			r.Number, r.Name, r.Status, r.Duration.Round(time.Second))
+		fmt.Fprintf(&scopeSection, "| %d | %s |\n", r.Number, r.Name)
 	}
-	b.WriteString("\n")
+	scopeSection.WriteString("\n")
 
-	// Deferred sanity check failures
-	if strings.TrimSpace(opts.DeferredFailures) != "" {
-		b.WriteString("## Deferred Sanity Check Failures\n\n")
-		b.WriteString("The following sanity checks failed during sprints but were below the\n")
-		b.WriteString("failure threshold. Attempt to fix these as part of your audit remediation.\n\n")
-		b.WriteString(opts.DeferredFailures)
-		b.WriteString("\n\n")
+	deferredSection = RenderDeferredAnalysis(AnalyzeDeferredFailures(opts.DeferredFailures))
+	if devLog, err := review.ReadDeviationLog(opts.ProjectDir); err == nil && strings.TrimSpace(devLog) != "" {
+		devLog = strings.TrimSpace(devLog)
+		if len(devLog) > maxBuildAuditDeviationBytes {
+			devLog = textutil.TruncateUTF8(devLog, maxBuildAuditDeviationBytes) + "\n...(deviation log truncated)"
+		}
+		deviationSection = "## Intentional Divergences Log\n\n" +
+			"The following cross-document differences were intentionally applied during the build.\n" +
+			"Do not flag these as contradictions unless the underlying assumption has changed.\n\n" +
+			devLog + "\n\n"
 	}
 
-	// --- Iterative audit instructions (adapted from audit-prompt.md) ---
+	crossDocumentSection.WriteString("## Cross-Document Integrity\n\n")
+	crossDocumentSection.WriteString("Pay special attention to:\n")
+	crossDocumentSection.WriteString("- Numerical assumptions that appear in multiple documents (costs, rates, timelines)\n")
+	crossDocumentSection.WriteString("- Conclusions in one document that depend on analysis in another\n")
+	crossDocumentSection.WriteString("- Figures quoted in summaries that may not match their source calculations\n")
+	crossDocumentSection.WriteString("- Terminology or definitions used inconsistently across documents\n\n")
 
-	b.WriteString("---\n\n")
-	b.WriteString("## Instructions\n\n")
+	instructionsSection.WriteString("---\n\n")
+	instructionsSection.WriteString("## Instructions\n\n")
 	iterCap := config.MaxOuterCyclesHighCap
 	if opts.Epic != nil && opts.Epic.EffortLevel == epic.EffortMax {
 		iterCap = config.MaxOuterCyclesMaxCap
 	}
-	fmt.Fprintf(&b, "Repeat the following cycle until the EXIT CONDITION is met (max %d iterations).\n\n", iterCap)
+	fmt.Fprintf(&instructionsSection, "Repeat the following cycle until the EXIT CONDITION is met (max %d iterations).\n\n", iterCap)
 
-	b.WriteString("### Step 1 — Audit\n\n")
+	instructionsSection.WriteString("### Step 1 — Audit\n\n")
 	if opts.Mode == "writing" {
-		b.WriteString("Meticulously audit all written content against these criteria:\n\n")
-		b.WriteString("- **Coherence** — Content flows logically and tells a consistent story throughout.\n")
-		b.WriteString("- **Accuracy** — Factual claims are correct and properly supported.\n")
-		b.WriteString("- **Completeness** — All required topics are covered at sufficient depth.\n")
-		b.WriteString("- **Tone & Voice** — Writing voice is consistent and appropriate for the audience.\n")
-		b.WriteString("- **Structure** — Sections are well-organized with clear headings and transitions.\n")
-		b.WriteString("- **Depth** — Content is substantive rather than superficial or padded.\n\n")
+		instructionsSection.WriteString("Meticulously audit all written content against these criteria:\n\n")
+		instructionsSection.WriteString("- **Coherence** — Content flows logically and tells a consistent story throughout.\n")
+		instructionsSection.WriteString("- **Accuracy** — Factual claims are correct and properly supported.\n")
+		instructionsSection.WriteString("- **Completeness** — All required topics are covered at sufficient depth.\n")
+		instructionsSection.WriteString("- **Tone & Voice** — Writing voice is consistent and appropriate for the audience.\n")
+		instructionsSection.WriteString("- **Structure** — Sections are well-organized with clear headings and transitions.\n")
+		instructionsSection.WriteString("- **Depth** — Content is substantive rather than superficial or padded.\n\n")
 
-		b.WriteString("### Step 2 — Classify\n\n")
-		b.WriteString("Assign every finding a severity:\n\n")
-		b.WriteString("| Severity | Definition |\n")
-		b.WriteString("|----------|------------|\n")
-		b.WriteString("| CRITICAL | Factual errors, contradictions, or missing core content |\n")
-		b.WriteString("| HIGH | Major structural problems or significant gaps in coverage |\n")
-		b.WriteString("| MODERATE | Weak transitions, inconsistent voice, or shallow treatment |\n")
-		b.WriteString("| LOW | Minor style, formatting, or word choice issues |\n\n")
+		instructionsSection.WriteString("### Step 2 — Classify\n\n")
+		instructionsSection.WriteString("Assign every finding a severity:\n\n")
+		instructionsSection.WriteString("| Severity | Definition |\n")
+		instructionsSection.WriteString("|----------|------------|\n")
+		instructionsSection.WriteString("| CRITICAL | Factual errors, contradictions, or missing core content |\n")
+		instructionsSection.WriteString("| HIGH | Major structural problems or significant gaps in coverage |\n")
+		instructionsSection.WriteString("| MODERATE | Weak transitions, inconsistent voice, or shallow treatment |\n")
+		instructionsSection.WriteString("| LOW | Minor style, formatting, or word choice issues |\n\n")
 	} else {
-		b.WriteString("Meticulously audit the entire codebase against these criteria:\n\n")
-		b.WriteString("- **Correctness** — Code is coherent with the aim and function of the application; no bugs.\n")
-		b.WriteString("- **Usability** — No UX friction, confusing flows, or accessibility gaps.\n")
-		b.WriteString("- **Edge cases** — Boundary conditions, empty states, invalid input, and race conditions are handled.\n")
-		b.WriteString("- **Security** — No vulnerabilities (injection, auth flaws, data exposure, etc.).\n")
-		b.WriteString("- **Performance** — No bottlenecks, memory leaks, or unnecessary complexity.\n")
-		b.WriteString("- **Code quality** — Clean style, consistent patterns, clear naming, appropriate abstractions.\n\n")
+		instructionsSection.WriteString("Meticulously audit the entire codebase against these criteria:\n\n")
+		instructionsSection.WriteString("- **Correctness** — Code is coherent with the aim and function of the application; no bugs.\n")
+		instructionsSection.WriteString("- **Usability** — No UX friction, confusing flows, or accessibility gaps.\n")
+		instructionsSection.WriteString("- **Edge cases** — Boundary conditions, empty states, invalid input, and race conditions are handled.\n")
+		instructionsSection.WriteString("- **Security** — No vulnerabilities (injection, auth flaws, data exposure, etc.).\n")
+		instructionsSection.WriteString("- **Performance** — No bottlenecks, memory leaks, or unnecessary complexity.\n")
+		instructionsSection.WriteString("- **Code quality** — Clean style, consistent patterns, clear naming, appropriate abstractions.\n\n")
 
-		b.WriteString("### Step 2 — Classify\n\n")
-		b.WriteString("Assign every finding a severity:\n\n")
-		b.WriteString("| Severity | Definition |\n")
-		b.WriteString("|----------|------------|\n")
-		b.WriteString("| CRITICAL | Data loss, security breach, or crash under normal use |\n")
-		b.WriteString("| HIGH | Significant bug or vulnerability; affects core functionality |\n")
-		b.WriteString("| MODERATE | Noticeable issue; degraded experience or maintainability risk |\n")
-		b.WriteString("| LOW | Minor style, naming, or cosmetic concern |\n\n")
+		instructionsSection.WriteString("### Step 2 — Classify\n\n")
+		instructionsSection.WriteString("Assign every finding a severity:\n\n")
+		instructionsSection.WriteString("| Severity | Definition |\n")
+		instructionsSection.WriteString("|----------|------------|\n")
+		instructionsSection.WriteString("| CRITICAL | Data loss, security breach, or crash under normal use |\n")
+		instructionsSection.WriteString("| HIGH | Significant bug or vulnerability; affects core functionality |\n")
+		instructionsSection.WriteString("| MODERATE | Noticeable issue; degraded experience or maintainability risk |\n")
+		instructionsSection.WriteString("| LOW | Minor style, naming, or cosmetic concern |\n\n")
 	}
 
-	b.WriteString("### Step 3 — Report\n\n")
-	fmt.Fprintf(&b, "Save a comprehensive report to `%s` in the project root. For each finding include: location, description, severity, and recommended fix.\n\n", config.BuildAuditFile)
+	instructionsSection.WriteString("### Step 3 — Report\n\n")
+	fmt.Fprintf(&instructionsSection, "Save a comprehensive report to `%s` in the project root. For each finding include: location, description, severity, and recommended fix.\n\n", config.BuildAuditFile)
 
-	b.WriteString("### Step 4 — Evaluate exit condition\n\n")
-	fmt.Fprintf(&b, "- **If no issues exist, or all remaining issues are LOW severity → save the final report to `%s` and stop.** ← EXIT CONDITION\n", config.BuildAuditFile)
-	b.WriteString("- **Otherwise → continue to Step 5.**\n\n")
+	instructionsSection.WriteString("### Step 4 — Evaluate exit condition\n\n")
+	fmt.Fprintf(&instructionsSection, "- **If no issues exist, or all remaining issues are LOW severity → save the final report to `%s` and stop.** ← EXIT CONDITION\n", config.BuildAuditFile)
+	instructionsSection.WriteString("- **Otherwise → continue to Step 5.**\n\n")
 
-	b.WriteString("### Step 5 — Remediate\n\n")
-	fmt.Fprintf(&b, "Using `%s` as your plan, fix **all** issues (including LOW severity). Also fix any deferred sanity check failures listed above. Then return to **Step 1** and re-audit the modified codebase.\n\n", config.BuildAuditFile)
+	instructionsSection.WriteString("### Step 5 — Remediate\n\n")
+	fmt.Fprintf(&instructionsSection, "Using `%s` as your plan, fix **all** issues (including LOW severity). Also fix any deferred sanity check failures listed above. Then return to **Step 1** and re-audit the modified codebase.\n\n", config.BuildAuditFile)
+	instructionsSection.WriteString("Before returning to Step 1, re-read each document from the beginning as if seeing it for the first time. Do not assume your prior fixes were correct.\n\n")
 
-	b.WriteString("---\n\n")
-	b.WriteString("### Guardrails\n\n")
-	fmt.Fprintf(&b, "- Each iteration must produce a fresh `%s` that reflects the *current* state of the code.\n", config.BuildAuditFile)
-	b.WriteString("- Do not skip issues to force an early exit; report honestly.\n")
-	fmt.Fprintf(&b, "- If you reach %d iterations without meeting the exit condition, stop and report the remaining issues with an explanation of why they persist.\n", iterCap)
+	instructionsSection.WriteString("---\n\n")
+	instructionsSection.WriteString("### Guardrails\n\n")
+	fmt.Fprintf(&instructionsSection, "- Each iteration must produce a fresh `%s` that reflects the *current* state of the code.\n", config.BuildAuditFile)
+	instructionsSection.WriteString("- Do not skip issues to force an early exit; report honestly.\n")
+	fmt.Fprintf(&instructionsSection, "- If you reach %d iterations without meeting the exit condition, stop and report the remaining issues with an explanation of why they persist.\n", iterCap)
 
+	totalLen := introSection.Len() + codebaseSection.Len() + len(executiveSection) + len(planSection) +
+		len(epicSection) + len(userPromptSection) + scopeSection.Len() + len(deferredSection) +
+		len(deviationSection) + crossDocumentSection.Len() + instructionsSection.Len()
+	if overflow := totalLen - maxBuildAuditPromptBytes; overflow > 0 {
+		deviationSection = truncatePromptSection(deviationSection, overflow, 2_000, "deviation log")
+		totalLen = introSection.Len() + codebaseSection.Len() + len(executiveSection) + len(planSection) +
+			len(epicSection) + len(userPromptSection) + scopeSection.Len() + len(deferredSection) +
+			len(deviationSection) + crossDocumentSection.Len() + instructionsSection.Len()
+	}
+	if overflow := totalLen - maxBuildAuditPromptBytes; overflow > 0 {
+		deferredSection = truncatePromptSection(deferredSection, overflow, 4_000, "deferred analysis")
+		totalLen = introSection.Len() + codebaseSection.Len() + len(executiveSection) + len(planSection) +
+			len(epicSection) + len(userPromptSection) + scopeSection.Len() + len(deferredSection) +
+			len(deviationSection) + crossDocumentSection.Len() + instructionsSection.Len()
+	}
+	if overflow := totalLen - maxBuildAuditPromptBytes; overflow > 0 {
+		planSection = truncatePromptSection(planSection, overflow, 8_000, "implementation plan")
+	}
+
+	var b strings.Builder
+	b.WriteString(introSection.String())
+	b.WriteString(codebaseSection.String())
+	b.WriteString(executiveSection)
+	b.WriteString(planSection)
+	b.WriteString(epicSection)
+	b.WriteString(userPromptSection)
+	b.WriteString(scopeSection.String())
+	b.WriteString(deferredSection)
+	b.WriteString(deviationSection)
+	b.WriteString(crossDocumentSection.String())
+	b.WriteString(instructionsSection.String())
 	return b.String()
+}
+
+func truncatePromptSection(section string, overflow int, minBytes int, label string) string {
+	if overflow <= 0 || section == "" || len(section) <= minBytes {
+		return section
+	}
+	newLen := len(section) - overflow
+	if newLen < minBytes {
+		newLen = minBytes
+	}
+	if newLen >= len(section) {
+		return section
+	}
+	return textutil.TruncateUTF8(section, newLen) + "\n...(" + label + " truncated to stay under prompt cap)\n\n"
 }

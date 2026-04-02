@@ -72,20 +72,32 @@ type AlignmentStatus struct {
 	Outcome  string `json:"outcome"` // healed, exhausted, within_threshold, not_needed
 }
 
+type AuditMetricsSnapshot struct {
+	TotalCalls        int     `json:"total_calls"`
+	DurationMs        int64   `json:"duration_ms"`
+	NoOpFixCalls      int     `json:"no_op_fix_calls"`
+	NoOpRate          float64 `json:"no_op_rate"`
+	VerifyCalls       int     `json:"verify_calls"`
+	VerifyResolutions int     `json:"verify_resolutions"`
+	VerifyYield       float64 `json:"verify_yield"`
+}
+
 // AuditStatus summarizes the per-sprint audit results.
 type AuditStatus struct {
-	Cycles         int            `json:"cycles"`
-	Findings       map[string]int `json:"findings"` // severity -> count
-	Outcome        string         `json:"outcome"`  // pass, failed, advisory, running
-	Active         bool           `json:"active,omitempty"`
-	Stage          string         `json:"stage,omitempty"`           // auditing, fixing, verifying
-	CurrentCycle   int            `json:"current_cycle,omitempty"`   // current outer audit cycle
-	MaxCycles      int            `json:"max_cycles,omitempty"`      // configured outer audit cycle cap
-	CurrentFix     int            `json:"current_fix,omitempty"`     // current inner fix/verify iteration
-	MaxFixes       int            `json:"max_fixes,omitempty"`       // configured inner fix cap
-	TargetIssues   int            `json:"target_issues,omitempty"`   // issues currently being fixed/verified
-	IssueHeadlines []string       `json:"issue_headlines,omitempty"` // compact descriptions of targeted issues
-	Reopenings     int            `json:"reopenings,omitempty"`      // findings suppressed as probable reopenings
+	Cycles         int                   `json:"cycles"`
+	Findings       map[string]int        `json:"findings"` // severity -> count
+	Outcome        string                `json:"outcome"`  // pass, failed, advisory, running
+	Active         bool                  `json:"active,omitempty"`
+	Stage          string                `json:"stage,omitempty"`           // auditing, fixing, verifying
+	CurrentCycle   int                   `json:"current_cycle,omitempty"`   // current outer audit cycle
+	MaxCycles      int                   `json:"max_cycles,omitempty"`      // configured outer audit cycle cap
+	CurrentFix     int                   `json:"current_fix,omitempty"`     // current inner fix/verify iteration
+	MaxFixes       int                   `json:"max_fixes,omitempty"`       // configured inner fix cap
+	TargetIssues   int                   `json:"target_issues,omitempty"`   // issues currently being fixed/verified
+	IssueHeadlines []string              `json:"issue_headlines,omitempty"` // compact descriptions of targeted issues
+	Reopenings     int                   `json:"reopenings,omitempty"`      // findings suppressed as probable reopenings
+	Complexity     string                `json:"complexity,omitempty"`
+	Metrics        *AuditMetricsSnapshot `json:"metrics,omitempty"`
 }
 
 // ReviewStatus captures the sprint review verdict.

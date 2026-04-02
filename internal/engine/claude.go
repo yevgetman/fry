@@ -36,6 +36,12 @@ func (e *ClaudeEngine) Name() string {
 
 func claudeArgs(opts RunOpts) []string {
 	args := []string{"-p", "--dangerously-skip-permissions"}
+	if opts.SessionID != "" {
+		args = append(args, "--resume", opts.SessionID)
+	}
+	if opts.StructuredOutput {
+		args = append(args, "--output-format", "json")
+	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
 	}

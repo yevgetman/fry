@@ -30,11 +30,21 @@ func (e *CodexEngine) Name() string {
 }
 
 func codexArgs(opts RunOpts) []string {
-	args := []string{"exec", "--dangerously-bypass-approvals-and-sandbox"}
+	args := []string{"exec"}
+	if opts.SessionID != "" {
+		args = append(args, "resume")
+	}
+	args = append(args, "--dangerously-bypass-approvals-and-sandbox")
+	if opts.StructuredOutput {
+		args = append(args, "--json")
+	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
 	}
 	args = append(args, opts.ExtraFlags...)
+	if opts.SessionID != "" {
+		args = append(args, opts.SessionID)
+	}
 	return args
 }
 

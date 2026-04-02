@@ -83,7 +83,7 @@ func GitDiffForAudit(ctx context.Context, projectDir string) (string, error) {
 
 // GitDiffForAuditWith is like GitDiffForAudit but uses the provided Executor.
 func GitDiffForAuditWith(ctx context.Context, projectDir string, ex Executor) (string, error) {
-	untrackedPaths, err := ex.ListUntracked(ctx, projectDir, []string{":!.fry/"})
+	untrackedPaths, err := ex.ListUntracked(ctx, projectDir, []string{":(exclude).fry/"})
 	if err != nil {
 		untrackedPaths = nil
 	}
@@ -94,7 +94,7 @@ func GitDiffForAuditWith(ctx context.Context, projectDir string, ex Executor) (s
 		}
 	}
 
-	diff, diffErr := ex.DiffHead(ctx, projectDir, []string{":!.fry/"})
+	diff, diffErr := ex.DiffHead(ctx, projectDir, []string{":(exclude).fry/"})
 
 	// Undo only the temporary intent-to-add entries we created for untracked files.
 	if len(untrackedPaths) > 0 {
@@ -119,14 +119,48 @@ func DiffStatForNoopDetection(ctx context.Context, projectDir string) string {
 // DiffStatForNoopDetectionWith is like DiffStatForNoopDetection but uses the provided Executor.
 func DiffStatForNoopDetectionWith(ctx context.Context, projectDir string, ex Executor) string {
 	out, err := ex.DiffStat(ctx, projectDir, []string{
-		":!.fry/sprint-progress.txt",
-		":!.fry/epic-progress.txt",
+		":(exclude).fry/sprint-progress.txt",
+		":(exclude).fry/epic-progress.txt",
 	})
 	if err != nil {
 		frylog.Log("WARNING: git diff --stat failed: %v", err)
 		return fmt.Sprintf("__git_error_%d__", time.Now().UnixNano())
 	}
 	return out
+}
+
+// WorktreeFingerprintForNoopDetection returns a fingerprint of the working tree
+// suitable for no-op detection. It combines diff-stat output with filtered
+// porcelain status so untracked-file changes count as real work while progress
+// file writes remain excluded.
+func WorktreeFingerprintForNoopDetection(ctx context.Context, projectDir string) string {
+	return WorktreeFingerprintForNoopDetectionWith(ctx, projectDir, DefaultExecutor)
+}
+
+// WorktreeFingerprintForNoopDetectionWith is like WorktreeFingerprintForNoopDetection
+// but uses the provided Executor.
+func WorktreeFingerprintForNoopDetectionWith(ctx context.Context, projectDir string, ex Executor) string {
+	diff := DiffStatForNoopDetectionWith(ctx, projectDir, ex)
+	status, err := ex.StatusPorcelain(ctx, projectDir)
+	if err != nil {
+		frylog.Log("WARNING: git status --porcelain failed: %v", err)
+		return fmt.Sprintf("__git_status_error_%d__", time.Now().UnixNano())
+	}
+
+	filteredStatus := filterStatusForNoopDetection(status)
+	diff = strings.TrimSpace(diff)
+	filteredStatus = strings.TrimSpace(filteredStatus)
+
+	switch {
+	case diff == "" && filteredStatus == "":
+		return ""
+	case diff == "":
+		return filteredStatus
+	case filteredStatus == "":
+		return diff
+	default:
+		return diff + "\n--status--\n" + filteredStatus
+	}
 }
 
 // CollectState returns git working tree state for build resumption reporting.
@@ -153,6 +187,21 @@ func CollectStateWith(ctx context.Context, projectDir string, ex Executor) (bool
 	}
 
 	return clean, branch, lastCommit
+}
+
+func filterStatusForNoopDetection(status string) string {
+	var kept []string
+	for _, line := range strings.Split(status, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.Contains(line, ".fry/sprint-progress.txt") || strings.Contains(line, ".fry/epic-progress.txt") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
 }
 
 // gitConfigValue is an unexported convenience that uses DefaultExecutor.

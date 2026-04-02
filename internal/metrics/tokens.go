@@ -20,15 +20,19 @@ type SprintTokens struct {
 }
 
 // claudeInputRe matches Claude CLI usage lines like:
-//   input_tokens: 1234
-//   Input tokens: 1234
+//
+//	input_tokens: 1234
+//	Input tokens: 1234
+//
 // It uses a word boundary to avoid matching cache_read_input_tokens or
 // cache_creation_input_tokens.
 var claudeInputRe = regexp.MustCompile(`(?i)\binput[_\s]tokens?[:\s]+(\d+)`)
 
 // claudeOutputRe matches Claude CLI usage lines like:
-//   output_tokens: 567
-//   Output tokens: 567
+//
+//	output_tokens: 567
+//	Output tokens: 567
+//
 // It uses a word boundary to avoid matching hypothetical cache_*_output_tokens
 // fields, parallel to the fix applied to claudeInputRe.
 var claudeOutputRe = regexp.MustCompile(`(?i)\boutput[_\s]tokens?[:\s]+(\d+)`)
@@ -53,18 +57,24 @@ func ParseClaudeTokens(output string) TokenUsage {
 }
 
 // codexInputRe matches OpenAI/Codex usage lines like:
-//   prompt_tokens: 1234
-//   "prompt_tokens": 1234
+//
+//	prompt_tokens: 1234
+//	"prompt_tokens": 1234
+//
 // It uses a word boundary to avoid matching hypothetical prefixed fields
 // like partial_prompt_tokens.
 var codexInputRe = regexp.MustCompile(`(?i)\b"?prompt[_\s]tokens"?[:\s]+(\d+)`)
+var codexInputAltRe = regexp.MustCompile(`(?i)\b"?input[_\s]tokens"?[:\s]+(\d+)`)
 
 // codexOutputRe matches OpenAI/Codex usage lines like:
-//   completion_tokens: 567
-//   "completion_tokens": 567
+//
+//	completion_tokens: 567
+//	"completion_tokens": 567
+//
 // It uses a word boundary to avoid matching hypothetical prefixed fields
 // like partial_completion_tokens.
 var codexOutputRe = regexp.MustCompile(`(?i)\b"?completion[_\s]tokens"?[:\s]+(\d+)`)
+var codexOutputAltRe = regexp.MustCompile(`(?i)\b"?output[_\s]tokens"?[:\s]+(\d+)`)
 
 // ParseCodexTokens parses token usage from Codex/OpenAI engine output.
 // It sums all occurrences of prompt/completion token counts found in the output.
@@ -76,9 +86,23 @@ func ParseCodexTokens(output string) TokenUsage {
 			u.Input += n
 		}
 	}
+	if u.Input == 0 {
+		for _, m := range codexInputAltRe.FindAllStringSubmatch(output, -1) {
+			if n, err := strconv.Atoi(m[1]); err == nil {
+				u.Input += n
+			}
+		}
+	}
 	for _, m := range codexOutputRe.FindAllStringSubmatch(output, -1) {
 		if n, err := strconv.Atoi(m[1]); err == nil {
 			u.Output += n
+		}
+	}
+	if u.Output == 0 {
+		for _, m := range codexOutputAltRe.FindAllStringSubmatch(output, -1) {
+			if n, err := strconv.Atoi(m[1]); err == nil {
+				u.Output += n
+			}
 		}
 	}
 	u.Total = u.Input + u.Output

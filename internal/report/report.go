@@ -7,16 +7,18 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/metrics"
 )
 
 // BuildReport is the top-level JSON build report written by --json-report.
 type BuildReport struct {
-	EpicName  string        `json:"epic_name"`
-	StartTime time.Time     `json:"start_time"`
-	EndTime   time.Time     `json:"end_time"`
-	Duration  time.Duration `json:"duration_ns"`
-	Sprints   []SprintResult `json:"sprints"`
+	EpicName            string                 `json:"epic_name"`
+	StartTime           time.Time              `json:"start_time"`
+	EndTime             time.Time              `json:"end_time"`
+	Duration            time.Duration          `json:"duration_ns"`
+	Sprints             []SprintResult         `json:"sprints"`
+	ValidationChecklist []audit.ValidationItem `json:"validation_checklist,omitempty"`
 }
 
 // SprintResult captures the outcome of a single sprint within the build.

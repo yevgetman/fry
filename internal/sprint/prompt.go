@@ -9,11 +9,13 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/epic"
 	"github.com/yevgetman/fry/internal/media"
+	"github.com/yevgetman/fry/internal/review"
 	"github.com/yevgetman/fry/internal/scan"
 )
 
 type PromptOpts struct {
 	ProjectDir          string
+	SprintNumber        int
 	ExecutiveContent    string
 	UserPrompt          string
 	PlanPointer         string
@@ -98,6 +100,18 @@ func AssemblePrompt(opts PromptOpts) (string, error) {
 		b.WriteString("# where they conflict.\n\n")
 		b.WriteString(ensureTrailingNewline(strings.TrimSpace(opts.SteeringDirective)))
 		b.WriteString("\n")
+	}
+
+	if opts.SprintNumber > 0 {
+		if guidance := review.LoadActiveDeviationGuidance(opts.ProjectDir, opts.SprintNumber, 4_000); guidance != "" {
+			b.WriteString("# ===== ACTIVE INTENTIONAL DIVERGENCES =====\n")
+			b.WriteString("# The following differences are intentional and still apply to this sprint.\n")
+			b.WriteString("# Preserve them unless this sprint explicitly revises the underlying assumption.\n")
+			b.WriteString("# Where a divergence surfaces in user-facing content, add a brief reconciliation note\n")
+			b.WriteString("# rather than forcing documents into false agreement.\n\n")
+			b.WriteString(ensureTrailingNewline(guidance))
+			b.WriteString("\n")
+		}
 	}
 
 	// Layer 1.75: Effort directive (only for max)

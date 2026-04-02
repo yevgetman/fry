@@ -70,7 +70,13 @@ fry/
 │   ├── agentrun/agentrun.go     # Shared dual-log agent execution helper used by sprint and heal packages
 │   ├── audit/
 │   │   ├── audit.go             # Per-sprint two-level audit: outer audit cycles + inner fix loops
-│   │   └── build_audit.go       # Final holistic codebase audit
+│   │   ├── build_audit.go       # Final holistic codebase audit
+│   │   ├── complexity.go        # Sprint complexity classification for adaptive audit budgets
+│   │   ├── deferred.go          # Deferred failure interaction analysis + validation checklist rendering
+│   │   ├── fixhistory.go        # Per-finding fix-attempt history for audit fix prompts
+│   │   ├── metrics.go           # Per-call audit metrics and summaries
+│   │   ├── recovery.go          # Structured stdout/log recovery for audit outputs
+│   │   └── session.go           # Same-role audit session continuity (Claude/Codex) + session file management
 │   ├── triage/
 │   │   ├── types.go             # Complexity, TriageDecision types
 │   │   ├── triage.go            # Classify (single LLM call), ParseClassification, prompt builder
@@ -80,6 +86,7 @@ fry/
 │   │   ├── reviewer.go          # Sprint review (CONTINUE vs DEVIATE verdict)
 │   │   ├── replanner.go         # Dynamic epic modification
 │   │   ├── deviation.go         # Deviation log entry management and build summary
+│   │   ├── deviation_prompt.go  # Filtered deviation-context loading for prompts
 │   │   └── types.go             # ReviewVerdict, DeviationSpec
 │   ├── prepare/
 │   │   ├── prepare.go           # Steps 0-3 artifact generation
@@ -181,6 +188,8 @@ fry/
 | `deferred-failures.md` | Sanity check failures below threshold, deferred to build audit |
 | `sprint-audit.txt` | Current sprint's audit findings (agent-written or recovered from structured stdout) |
 | `audit-prompt.md` | Assembled audit, fix, or verify prompt |
+| `sessions/` | Transient same-role audit session IDs for Claude/Codex continuity |
+| `validation-checklist.md` | Build-audit checklist synthesized from deferred failure analysis |
 | `review-prompt.md` | Assembled review prompt |
 | `summary-prompt.md` | Assembled summary prompt |
 | `build-logs/` | Timestamped per-iteration/alignment/audit/continue logs |
@@ -319,11 +328,15 @@ For each sprint (startSprint → endSprint):
      │  ├─ Outer loop (audit cycles): audit agent reviews + verifies previous issues
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
      │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
+     │  ├─ Sprint diff is classified as low/moderate/high complexity to adapt prompt emphasis and loop budgets
+     │  ├─ Fix loop skips verify on no-op fix attempts and carries forward per-finding fix history
+     │  ├─ Audit prompts include relevant intentional divergences from `.fry/deviation-log.md`
+     │  ├─ Claude/Codex reuse same-role audit and fix sessions within the sprint audit; verify remains stateless
      │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
      │  ├─ If the agent forgets to write the audit file, Fry tries to recover a structured report from final stdout/log output before failing
      │  ├─ Verify agent must emit explicit RESOLVED/STILL PRESENT statuses; unrecoverable missing output fails the audit
-     │  ├─ standard: bounded (3 outer cycles, 3 inner fix iterations)
-     │  └─ high: progress-based (cap 12 outer, 7 inner), max: progress-based (cap 100 outer, 10 inner)
+     │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`
+     │  └─ standard/high/max use effort+complexity-aware caps (falling back to legacy defaults when complexity is unknown)
  11. Git checkpoint commit
  12. Compact sprint progress → .fry/epic-progress.txt
  13. Optional sprint review:
@@ -430,9 +443,11 @@ Key flags:
 | `DefaultDockerReadyTimeout` | `30` | Seconds for Docker health check |
 | `DefaultMaxDeviationScope` | `3` | Max sprints affected by replan |
 | `MaxAuditDiffBytes` | `100000` | Max diff size for audit context |
+| `AuditSessionsDir` | `.fry/sessions` | Transient same-role audit session ID files |
 | `ResumeHealMultiplier` | `2` | Heal iteration multiplier on resume |
 | `ResumeMinHealAttempts` | `6` | Minimum alignment attempts on resume |
 | `BuildModeFile` | `.fry/build-mode.txt` | Persisted build mode for `--continue` |
+| `ValidationChecklistFile` | `.fry/validation-checklist.md` | Deferred-failure checklist emitted before deferred check replay |
 | `ExitRequestFile` | `.fry/exit-request.json` | Structured graceful-exit request written by `fry exit` |
 | `ResumePointFile` | `.fry/resume-point.json` | Settled resume checkpoint consumed by continue heuristics |
 | `ArchiveDir` | `.fry-archive` | Directory for archived builds |
@@ -597,6 +612,6 @@ Sprint prompts follow a 7-part convention: OPENER, REFERENCES, BUILD LIST, CONST
 - **Two-phase progress tracking:** per-sprint log (`sprint-progress.txt`) + cross-sprint compacted summaries (`epic-progress.txt`) for bounded context
 - **Promise tokens:** agent writes `===PROMISE: TOKEN===` to signal sprint completion → early exit
 - **No-op detection:** if git diff shows no changes for 2-3 consecutive iterations and sanity checks pass → early exit
-- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory, LOW included in fix at high/max effort (non-blocking); resolved-finding ledger with fuzzy theme matching detects and suppresses probable reopenings caused by audit agent reinterpretation (severity escalation bypasses suppression)
+- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory, LOW included in fix at high/max effort (non-blocking); complexity classification adapts budgets and reconciliation guidance; resolved-finding ledger with fuzzy theme matching suppresses probable reopenings; no-op fix detection skips wasted verify calls; same-role continuity is used for Claude/Codex audit and fix sessions only
 - **Graceful signal handling:** Ctrl+C saves partial work via git checkpoint
 - **Engine abstraction:** any CLI-based AI tool can be added by implementing `Engine` interface (2 methods: `Run`, `Name`)

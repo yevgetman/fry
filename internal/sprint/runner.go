@@ -96,6 +96,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 
 	if _, err := AssemblePrompt(PromptOpts{
 		ProjectDir:          cfg.ProjectDir,
+		SprintNumber:        cfg.Sprint.Number,
 		UserPrompt:          userPrompt,
 		SprintPrompt:        cfg.Sprint.Prompt,
 		SprintProgressFile:  config.SprintProgressFile,
@@ -169,6 +170,7 @@ func RunSprint(ctx context.Context, cfg RunConfig) (*SprintResult, error) {
 			// Reassemble prompt with the directive injected
 			if _, pErr := AssemblePrompt(PromptOpts{
 				ProjectDir:          cfg.ProjectDir,
+				SprintNumber:        cfg.Sprint.Number,
 				UserPrompt:          userPrompt,
 				SprintPrompt:        cfg.Sprint.Prompt,
 				SprintProgressFile:  config.SprintProgressFile,

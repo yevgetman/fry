@@ -16,14 +16,16 @@ type Engine interface {
 }
 
 type RunOpts struct {
-	Model       string
-	SessionType SessionType
-	EffortLevel string
-	ExtraFlags  []string
-	WorkDir     string
-	Stdout      io.Writer
-	Stderr      io.Writer
-	LogFiles    []string
+	Model            string
+	SessionType      SessionType
+	SessionID        string
+	StructuredOutput bool
+	EffortLevel      string
+	ExtraFlags       []string
+	WorkDir          string
+	Stdout           io.Writer
+	Stderr           io.Writer
+	LogFiles         []string
 }
 
 func ResolveEngine(cliFlag, epicDirective, envVar, defaultEngine string) (string, error) {

@@ -15,7 +15,10 @@ import (
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
+	"github.com/yevgetman/fry/internal/git"
 	frylog "github.com/yevgetman/fry/internal/log"
+	tokenmetrics "github.com/yevgetman/fry/internal/metrics"
+	"github.com/yevgetman/fry/internal/review"
 	"github.com/yevgetman/fry/internal/scan"
 	"github.com/yevgetman/fry/internal/severity"
 	"github.com/yevgetman/fry/internal/steering"
@@ -63,6 +66,7 @@ type AuditOpts struct {
 	Sprint     *epic.Sprint
 	Epic       *epic.Epic
 	Engine     engine.Engine
+	Complexity ComplexityTier
 	GitDiff    string                 // initial diff; used if DiffFn is nil
 	DiffFn     func() (string, error) // if set, called before each audit pass to refresh the diff
 	ProgressFn func(AuditProgress)
@@ -82,6 +86,8 @@ type AuditProgress struct {
 	Findings     map[string]int
 	Headlines    []string
 	Reopenings   int // count of findings suppressed as probable reopenings
+	Complexity   ComplexityTier
+	Metrics      AuditMetricsSnapshot
 }
 
 type AuditResult struct {
@@ -92,6 +98,8 @@ type AuditResult struct {
 	SeverityCounts       map[string]int // count of findings per severity level
 	UnresolvedFindings   []Finding      // remaining findings after all cycles
 	SuppressedReopenings int            // findings suppressed as probable reopenings across all cycles
+	Complexity           ComplexityTier
+	Metrics              *AuditMetrics
 }
 
 const (
@@ -118,10 +126,16 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	if opts.Engine == nil {
 		return nil, fmt.Errorf("run audit loop: engine is required")
 	}
+	defer func() {
+		_ = cleanupAuditSessions(opts.ProjectDir, opts.Sprint.Number)
+	}()
 
-	maxOuter, progressBased := effectiveOuterCycles(opts.Epic)
-	maxInner := effectiveInnerIter(opts.Epic)
+	maxOuter, progressBased := effectiveOuterCycles(opts.Epic, opts.Complexity)
+	maxInner := effectiveInnerIter(opts.Epic, opts.Complexity)
 	includeLow := fixIncludesLow(opts.Epic)
+	auditMetrics := &AuditMetrics{ContentComplexity: opts.Complexity}
+	fixHistory := &FixHistory{}
+	auditSession := newAuditSessionContinuity(opts.ProjectDir, opts.Sprint.Number, opts.Engine.Name())
 
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
 	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
@@ -151,10 +165,12 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		}
 
 		emitAuditProgress(opts.ProgressFn, AuditProgress{
-			Stage:     "auditing",
-			Cycle:     cycle,
-			MaxCycles: maxOuter,
-			MaxFixes:  maxInner,
+			Stage:      "auditing",
+			Cycle:      cycle,
+			MaxCycles:  maxOuter,
+			MaxFixes:   maxInner,
+			Complexity: opts.Complexity,
+			Metrics:    auditMetrics.Snapshot(),
 		})
 
 		refreshDiff(&opts)
@@ -184,7 +200,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		auditLogPath := filepath.Join(buildLogsDir,
 			fmt.Sprintf("sprint%d_audit%d_%s.log", opts.Sprint.Number, cycle, time.Now().Format("20060102_150405")),
 		)
-		auditOutput, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, auditLogPath, auditModel, engine.SessionAudit)
+		auditPromptBytes := promptFileSize(promptPath)
+		auditStarted := time.Now()
+		auditOutput, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, auditLogPath, auditModel, engine.SessionAudit, auditSession)
+		auditMetrics.Record(CallMetric{
+			SessionType: engine.SessionAudit,
+			Cycle:       cycle,
+			PromptBytes: auditPromptBytes,
+			OutputBytes: len(auditOutput),
+			DurationMs:  time.Since(auditStarted).Milliseconds(),
+			Model:       auditModel,
+			Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), auditOutput),
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -217,16 +244,21 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				lowFindings := parseFindings(string(content))
 				if len(lowFindings) > 0 {
 					frylog.Log("  AUDIT: LOW-only at max effort — running single fix pass before accepting")
-					if err := runSingleLowFixPass(ctx, opts, lowFindings, cycle, buildLogsDir); err != nil {
+					if err := runSingleLowFixPass(ctx, opts, lowFindings, cycle, buildLogsDir, auditMetrics); err != nil {
 						frylog.Log("AUDIT: low-fix pass failed: %v", err)
 					}
 				}
 			}
 			frylog.Log("  AUDIT: pass (%s)", formatSeverityCounts(counts))
+			auditMetrics.OuterCycles = cycle
+			auditMetrics.ConvergedAtCycle = cycle
+			auditMetrics.FinalFindingCount = totalSeverityCount(counts)
 			return &AuditResult{
 				Passed: true, Iterations: cycle,
 				MaxSeverity: maxSev, SeverityCounts: counts,
 				SuppressedReopenings: suppressedReopenings,
+				Complexity:           opts.Complexity,
+				Metrics:              auditMetrics,
 			}, nil
 		}
 
@@ -298,16 +330,21 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				lowRemaining := filterLowUnresolved(activeFindings)
 				if len(lowRemaining) > 0 {
 					frylog.Log("  AUDIT: LOW-only at max effort — running single fix pass before accepting")
-					if err := runSingleLowFixPass(ctx, opts, lowRemaining, cycle, buildLogsDir); err != nil {
+					if err := runSingleLowFixPass(ctx, opts, lowRemaining, cycle, buildLogsDir, auditMetrics); err != nil {
 						frylog.Log("AUDIT: low-fix pass failed: %v", err)
 					}
 				}
 			}
 			frylog.Log("  AUDIT: pass (no actionable issues)")
+			auditMetrics.OuterCycles = cycle
+			auditMetrics.ConvergedAtCycle = cycle
+			auditMetrics.FinalFindingCount = totalSeverityCount(counts)
 			return &AuditResult{
 				Passed: true, Iterations: cycle,
 				MaxSeverity: maxSev, SeverityCounts: counts,
 				SuppressedReopenings: suppressedReopenings,
+				Complexity:           opts.Complexity,
+				Metrics:              auditMetrics,
 			}, nil
 		}
 
@@ -326,7 +363,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				outerStaleCount = 0
 			}
 
-			if shouldDetectTurnoverChurn(opts.Epic, cycle) {
+			if shouldDetectTurnoverChurn(opts.Epic, cycle, maxOuter) {
 				if isTurnoverChurn(knownFindings, persisting, activeFindings, newFindings) {
 					outerTurnoverCount++
 					frylog.Log("  AUDIT: full actionable turnover detected (%d/%d churn cycles)", outerTurnoverCount, maxTurnoverIterations)
@@ -349,6 +386,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		// Inner fix loop
 		innerStaleCount := 0
 		lastResolvedCount := 0
+		fixSession := newFixSessionContinuity(opts.ProjectDir, opts.Sprint.Number, cycle, opts.Engine.Name())
 
 		for fixIter := 1; fixIter <= maxInner; fixIter++ {
 			select {
@@ -374,6 +412,8 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				TargetIssues: len(unresolved),
 				Findings:     severityCountsForFindings(unresolved),
 				Headlines:    findingHeadlines(unresolved, 3),
+				Complexity:   opts.Complexity,
+				Metrics:      auditMetrics.Snapshot(),
 			})
 
 			fixModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditFix)
@@ -381,7 +421,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				cycle, fixIter, maxInner, len(unresolved), opts.Engine.Name(), fixModel)
 
 			// Build and write fix prompt
-			fixPrompt := buildAuditFixPrompt(opts, unresolved)
+			fixPrompt := buildAuditFixPrompt(opts, unresolved, fixHistory)
 			if err := writePromptFile(promptPath, fixPrompt); err != nil {
 				return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
 			}
@@ -390,11 +430,46 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			fixLogPath := filepath.Join(buildLogsDir,
 				fmt.Sprintf("sprint%d_auditfix_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
 			)
-			if _, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel, engine.SessionAuditFix); err != nil {
+			preFixFingerprint := git.WorktreeFingerprintForNoopDetection(ctx, opts.ProjectDir)
+			fixPromptBytes := promptFileSize(promptPath)
+			fixStarted := time.Now()
+			fixOutput, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel, engine.SessionAuditFix, fixSession)
+			postFixFingerprint := git.WorktreeFingerprintForNoopDetection(ctx, opts.ProjectDir)
+			fixWasNoOp := preFixFingerprint == postFixFingerprint
+			auditMetrics.Record(CallMetric{
+				SessionType: engine.SessionAuditFix,
+				Cycle:       cycle,
+				Iteration:   fixIter,
+				PromptBytes: fixPromptBytes,
+				OutputBytes: len(fixOutput),
+				DurationMs:  time.Since(fixStarted).Milliseconds(),
+				Model:       fixModel,
+				WasNoOp:     fixWasNoOp,
+				Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), fixOutput),
+			})
+			if err != nil {
 				return nil, err
 			}
 			if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("after audit fix %d in cycle %d", fixIter, cycle)); err != nil {
 				return nil, err
+			}
+
+			diffSummary := summarizeNoopFingerprint(postFixFingerprint)
+			if fixWasNoOp {
+				frylog.Log("  AUDIT FIX: no-op (no file changes) — skipping verify")
+				fixHistory.Record(FixAttempt{
+					Cycle:       cycle,
+					Iteration:   fixIter,
+					Targeted:    targetedFindingLabels(unresolved),
+					DiffSummary: diffSummary,
+					Outcomes:    buildNoOpOutcomes(unresolved),
+				})
+				innerStaleCount++
+				if innerStaleCount >= maxInnerStaleIterations {
+					frylog.Log("  AUDIT FIX: no progress after %d fix iterations — moving to re-audit", fixIter)
+					break
+				}
+				continue
 			}
 
 			// Remove stale audit file before verify
@@ -415,6 +490,8 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				TargetIssues: len(unresolved),
 				Findings:     severityCountsForFindings(unresolved),
 				Headlines:    findingHeadlines(unresolved, 3),
+				Complexity:   opts.Complexity,
+				Metrics:      auditMetrics.Snapshot(),
 			})
 
 			// Run verify agent
@@ -422,7 +499,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			verifyLogPath := filepath.Join(buildLogsDir,
 				fmt.Sprintf("sprint%d_auditverify_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
 			)
-			verifyOutput, err := runAgentWithLog(ctx, opts, config.AuditVerifyInvocationPrompt, verifyLogPath, verifyModel, engine.SessionAuditVerify)
+			verifyPromptBytes := promptFileSize(promptPath)
+			verifyStarted := time.Now()
+			verifyOutput, err := runAgentWithLog(ctx, opts, config.AuditVerifyInvocationPrompt, verifyLogPath, verifyModel, engine.SessionAuditVerify, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -446,8 +525,27 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				return nil, err
 			}
 
-			resolved := parseVerificationStatuses(string(verifyContent), unresolved)
-			applyResolutionsByKey(activeFindings, unresolved, resolved)
+			verifyResults := parseVerificationResults(string(verifyContent), unresolved)
+			verifyResolutions := countResolvedVerificationResults(verifyResults)
+			auditMetrics.Record(CallMetric{
+				SessionType: engine.SessionAuditVerify,
+				Cycle:       cycle,
+				Iteration:   fixIter,
+				PromptBytes: verifyPromptBytes,
+				OutputBytes: len(verifyOutput),
+				DurationMs:  time.Since(verifyStarted).Milliseconds(),
+				Model:       verifyModel,
+				Resolutions: verifyResolutions,
+				Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), verifyOutput),
+			})
+			applyResolutionsByKey(activeFindings, unresolved, verifyResults)
+			fixHistory.Record(FixAttempt{
+				Cycle:       cycle,
+				Iteration:   fixIter,
+				Targeted:    targetedFindingLabels(unresolved),
+				DiffSummary: diffSummary,
+				Outcomes:    buildOutcomes(unresolved, verifyResults),
+			})
 
 			nowResolved := countResolved(activeFindings)
 			totalFixable := countFixable(activeFindings, includeLow)
@@ -471,6 +569,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			}
 			lastResolvedCount = nowResolved
 		}
+		if fixSession != nil {
+			fixSession.Clear()
+		}
 
 		// Record findings resolved in this cycle's inner fix loop
 		for _, f := range activeFindings {
@@ -480,6 +581,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		}
 		// Update known findings for next outer cycle
 		knownFindings = collectUnresolved(activeFindings)
+		fixHistory.PruneResolved(knownFindings)
 	}
 
 	// Log remaining LOW findings at high/max effort
@@ -510,7 +612,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	finalLogPath := filepath.Join(buildLogsDir,
 		fmt.Sprintf("sprint%d_audit_final_%s.log", opts.Sprint.Number, time.Now().Format("20060102_150405")),
 	)
-	finalOutput, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, finalLogPath, finalAuditModel, engine.SessionAudit)
+	finalPromptBytes := promptFileSize(promptPath)
+	finalStarted := time.Now()
+	finalOutput, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, finalLogPath, finalAuditModel, engine.SessionAudit, auditSession)
+	auditMetrics.Record(CallMetric{
+		SessionType: engine.SessionAudit,
+		Cycle:       lastCycle,
+		PromptBytes: finalPromptBytes,
+		OutputBytes: len(finalOutput),
+		DurationMs:  time.Since(finalStarted).Milliseconds(),
+		Model:       finalAuditModel,
+		Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), finalOutput),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -534,12 +647,17 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 	maxSev := parseAuditSeverity(string(content))
 	finalCounts := countAuditSeverities(string(content))
+	auditMetrics.OuterCycles = lastCycle
+	auditMetrics.FinalFindingCount = totalSeverityCount(finalCounts)
 	if isAuditPass(maxSev) {
 		frylog.Log("  AUDIT: pass after %d cycles (%s)", lastCycle, formatSeverityCounts(finalCounts))
+		auditMetrics.ConvergedAtCycle = lastCycle
 		return &AuditResult{
 			Passed: true, Iterations: lastCycle,
 			MaxSeverity: maxSev, SeverityCounts: finalCounts,
 			SuppressedReopenings: suppressedReopenings,
+			Complexity:           opts.Complexity,
+			Metrics:              auditMetrics,
 		}, nil
 	}
 
@@ -551,13 +669,15 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		SeverityCounts:       finalCounts,
 		UnresolvedFindings:   parseFindings(string(content)),
 		SuppressedReopenings: suppressedReopenings,
+		Complexity:           opts.Complexity,
+		Metrics:              auditMetrics,
 	}, nil
 }
 
 // runSingleLowFixPass runs one fix agent pass targeting LOW findings without
 // re-auditing. Used at max effort when only LOW findings remain — gives the
 // agent one chance to fix them before accepting the audit as passed.
-func runSingleLowFixPass(ctx context.Context, opts AuditOpts, findings []Finding, cycle int, buildLogsDir string) error {
+func runSingleLowFixPass(ctx context.Context, opts AuditOpts, findings []Finding, cycle int, buildLogsDir string, auditMetrics *AuditMetrics) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -571,7 +691,7 @@ func runSingleLowFixPass(ctx context.Context, opts AuditOpts, findings []Finding
 		cycle, len(findings), opts.Engine.Name(), fixModel)
 
 	promptPath := filepath.Join(opts.ProjectDir, config.AuditPromptFile)
-	fixPrompt := buildAuditFixPrompt(opts, findings)
+	fixPrompt := buildAuditFixPrompt(opts, findings, nil)
 	if err := writePromptFile(promptPath, fixPrompt); err != nil {
 		return fmt.Errorf("run single low fix pass: write fix prompt: %w", err)
 	}
@@ -579,7 +699,23 @@ func runSingleLowFixPass(ctx context.Context, opts AuditOpts, findings []Finding
 	fixLogPath := filepath.Join(buildLogsDir,
 		fmt.Sprintf("sprint%d_auditfix_low_%d_%s.log", opts.Sprint.Number, cycle, time.Now().Format("20060102_150405")),
 	)
-	_, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel, engine.SessionAuditFix)
+	preFixFingerprint := git.WorktreeFingerprintForNoopDetection(ctx, opts.ProjectDir)
+	fixPromptBytes := promptFileSize(promptPath)
+	fixStarted := time.Now()
+	fixOutput, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel, engine.SessionAuditFix, nil)
+	postFixFingerprint := git.WorktreeFingerprintForNoopDetection(ctx, opts.ProjectDir)
+	if auditMetrics != nil {
+		auditMetrics.Record(CallMetric{
+			SessionType: engine.SessionAuditFix,
+			Cycle:       cycle,
+			PromptBytes: fixPromptBytes,
+			OutputBytes: len(fixOutput),
+			DurationMs:  time.Since(fixStarted).Milliseconds(),
+			Model:       fixModel,
+			WasNoOp:     preFixFingerprint == postFixFingerprint,
+			Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), fixOutput),
+		})
+	}
 	return err
 }
 
@@ -690,6 +826,22 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 		b.WriteString("\n\n")
 	}
 
+	if opts.Complexity == ComplexityModerate || opts.Complexity == ComplexityHigh {
+		b.WriteString("## Priority Check: Figure Reconciliation\n\n")
+		if opts.Mode == "writing" || opts.Mode == "planning" {
+			b.WriteString("Before evaluating general audit criteria, perform a targeted reconciliation:\n")
+			b.WriteString("1. Identify every numerical claim in executive summaries, section headers, and conclusions.\n")
+			b.WriteString("2. Trace each claim to its source calculation in the document body.\n")
+			b.WriteString("3. Flag any discrepancy as HIGH severity.\n")
+			b.WriteString("This is the most common failure mode in quantitative documents — summary figures often drift from the detailed analysis.\n\n")
+		} else {
+			b.WriteString("Before evaluating general audit criteria, check numerical consistency:\n")
+			b.WriteString("1. Compare benchmark or metric claims in comments and docs against actual outputs.\n")
+			b.WriteString("2. Verify config values match between definition sites and usage sites.\n")
+			b.WriteString("3. Flag any discrepancy as HIGH severity.\n\n")
+		}
+	}
+
 	// Git diff
 	b.WriteString("## Changes Made This Sprint\n")
 	diff := opts.GitDiff
@@ -739,6 +891,14 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 			}
 		}
 		b.WriteString("\n")
+	}
+
+	if deviations := review.LoadRelevantDeviations(opts.ProjectDir, opts.Sprint.Number, 10_000); deviations != "" {
+		b.WriteString("## Known Intentional Divergences\n\n")
+		b.WriteString("The following cross-document differences are intentional design decisions.\n")
+		b.WriteString("Do NOT flag these as findings unless you observe a genuine regression.\n\n")
+		b.WriteString(deviations)
+		b.WriteString("\n\n")
 	}
 
 	b.WriteString("Prefer issues directly connected to the sprint goals, changed files, or regressions caused by this sprint.\n")
@@ -814,7 +974,7 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 	return b.String()
 }
 
-func buildAuditFixPrompt(opts AuditOpts, findings []Finding) string {
+func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "# AUDIT FIX — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name)
@@ -865,6 +1025,16 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding) string {
 		}
 	}
 
+	if history != nil {
+		if rendered := history.ForPrompt(findings, 30_000); rendered != "" {
+			b.WriteString("## Previous Fix Attempts\n\n")
+			b.WriteString("The following approaches have already been tried. Do NOT repeat them.\n")
+			b.WriteString("If a previous approach was close but flawed, fix the flaw instead of starting over.\n\n")
+			b.WriteString(rendered)
+			b.WriteString("\n")
+		}
+	}
+
 	b.WriteString("## Context\n")
 	fmt.Fprintf(&b, "- Read %s for what was built\n", config.SprintProgressFile)
 	fmt.Fprintf(&b, "- Read %s for strategic context\n\n", config.PlanFile)
@@ -889,6 +1059,7 @@ func buildVerifyPrompt(opts AuditOpts, findings []Finding) string {
 	b.WriteString("For each issue:\n")
 	b.WriteString("- **Issue:** <number>\n")
 	b.WriteString("- **Status:** RESOLVED | STILL PRESENT\n\n")
+	b.WriteString("- **Notes:** <brief evidence or reason>\n\n")
 
 	b.WriteString("## Issues to Verify\n\n")
 
@@ -1019,14 +1190,18 @@ func parseFindings(content string) []Finding {
 var (
 	issueNumberRe       = regexp.MustCompile(`(?i)\*?\*?Issue:\*?\*?\s*(\d+)`)
 	statusRe            = regexp.MustCompile(`(?i)\*?\*?Status:\*?\*?\s*(RESOLVED|STILL\s*PRESENT)`)
+	notesRe             = regexp.MustCompile(`(?i)\*?\*?Notes:\*?\*?\s*(.+)`)
 	locationHashLineRe  = regexp.MustCompile(`(?i)#l\d+(?:c\d+)?$`)
 	locationColonLineRe = regexp.MustCompile(`:\d+(?::\d+)?$`)
 )
 
-// parseVerificationStatuses parses the verification agent's output to determine
-// which findings are resolved. Returns a boolean slice aligned with the findings slice.
-func parseVerificationStatuses(content string, findings []Finding) []bool {
-	resolved := make([]bool, len(findings))
+// parseVerificationResults parses the verification agent's output into a slice
+// aligned with the findings slice. Missing or malformed entries default to STILL PRESENT.
+func parseVerificationResults(content string, findings []Finding) []verificationResult {
+	results := make([]verificationResult, len(findings))
+	for i := range results {
+		results[i].Status = "STILL PRESENT"
+	}
 
 	currentIssue := -1
 	for _, line := range strings.Split(content, "\n") {
@@ -1038,17 +1213,19 @@ func parseVerificationStatuses(content string, findings []Finding) []bool {
 			}
 		}
 
-		// Check for status (may be on same line or next line)
+		// Check for status (may be on same line or later lines for the same issue).
 		if m := statusRe.FindStringSubmatch(line); len(m) >= 2 && currentIssue >= 0 {
-			status := strings.ToUpper(strings.TrimSpace(m[1]))
-			if strings.HasPrefix(status, "RESOLVED") {
-				resolved[currentIssue] = true
+			if normalized := normalizeVerificationStatus(m[1]); normalized != "" {
+				results[currentIssue].Status = normalized
 			}
-			currentIssue = -1
+		}
+
+		if m := notesRe.FindStringSubmatch(line); len(m) >= 2 && currentIssue >= 0 {
+			results[currentIssue].Notes = strings.TrimSpace(m[1])
 		}
 	}
 
-	return resolved
+	return results
 }
 
 func normalizeFindingDescription(value string) string {
@@ -1145,7 +1322,7 @@ func findingKeySet(findings []Finding) map[string]struct{} {
 	return keys
 }
 
-func shouldDetectTurnoverChurn(ep *epic.Epic, cycle int) bool {
+func shouldDetectTurnoverChurn(ep *epic.Epic, cycle, maxOuter int) bool {
 	if ep == nil {
 		return false
 	}
@@ -1155,7 +1332,17 @@ func shouldDetectTurnoverChurn(ep *epic.Epic, cycle int) bool {
 	if ep.EffortLevel != epic.EffortMax {
 		return false
 	}
-	return cycle > config.MaxOuterCyclesHighCap
+	if maxOuter <= 8 {
+		return false
+	}
+	warmup := maxOuter / 4
+	if warmup < 6 {
+		warmup = 6
+	}
+	if warmup > 10 {
+		warmup = 10
+	}
+	return cycle > warmup
 }
 
 func isTurnoverChurn(previous, persisting, current, newFindings []Finding) bool {
@@ -1473,11 +1660,11 @@ func countResolved(findings []Finding) int {
 	return n
 }
 
-// applyResolutionsByKey marks findings as resolved based on the verification results.
-// The resolved slice is aligned with the checked slice (a subset of all findings).
-func applyResolutionsByKey(all []Finding, checked []Finding, resolved []bool) {
-	for i, flag := range resolved {
-		if !flag || i >= len(checked) {
+// applyResolutionsByKey marks findings as resolved based on structured verification results.
+// The results slice is aligned with the checked slice (a subset of all findings).
+func applyResolutionsByKey(all []Finding, checked []Finding, results []verificationResult) {
+	for i, result := range results {
+		if i >= len(checked) || normalizeVerificationStatus(result.Status) != "RESOLVED" {
 			continue
 		}
 		key := checked[i].key()
@@ -1488,6 +1675,16 @@ func applyResolutionsByKey(all []Finding, checked []Finding, resolved []bool) {
 			}
 		}
 	}
+}
+
+func countResolvedVerificationResults(results []verificationResult) int {
+	total := 0
+	for _, result := range results {
+		if normalizeVerificationStatus(result.Status) == "RESOLVED" {
+			total++
+		}
+	}
+	return total
 }
 
 // --- Severity helpers ---
@@ -1512,6 +1709,14 @@ func FormatCounts(counts map[string]int) string {
 	return formatSeverityCounts(counts)
 }
 
+func totalSeverityCount(counts map[string]int) int {
+	total := 0
+	for _, count := range counts {
+		total += count
+	}
+	return total
+}
+
 func isAuditPass(maxSeverity string) bool {
 	return maxSeverity == "" || maxSeverity == "LOW"
 }
@@ -1524,10 +1729,81 @@ func isBlockingSeverity(maxSeverity string) bool {
 
 // effectiveOuterCycles determines the maximum outer audit cycles and whether
 // progress-based detection should be used.
-func effectiveOuterCycles(ep *epic.Epic) (maxCycles int, progressBased bool) {
+func effectiveOuterCycles(ep *epic.Epic, complexity ComplexityTier) (maxCycles int, progressBased bool) {
+	if ep == nil {
+		return config.DefaultMaxOuterAuditCycles, false
+	}
 	if ep.MaxAuditIterationsSet {
 		return ep.MaxAuditIterations, false
 	}
+	if complexity == "" || complexity == ComplexityUnknown {
+		return currentDefaultOuterCycles(ep)
+	}
+	switch ep.EffortLevel {
+	case epic.EffortMax:
+		switch complexity {
+		case ComplexityLow:
+			return 6, true
+		case ComplexityModerate:
+			return 20, true
+		default:
+			return config.MaxOuterCyclesMaxCap, true
+		}
+	case epic.EffortHigh:
+		switch complexity {
+		case ComplexityLow:
+			return 4, true
+		case ComplexityModerate:
+			return 8, true
+		default:
+			return config.MaxOuterCyclesHighCap, true
+		}
+	default:
+		switch complexity {
+		case ComplexityLow:
+			return 2, false
+		case ComplexityModerate:
+			return 3, false
+		default:
+			return 5, false
+		}
+	}
+}
+
+// effectiveInnerIter determines the maximum inner fix iterations per audit cycle.
+func effectiveInnerIter(ep *epic.Epic, complexity ComplexityTier) int {
+	if ep == nil {
+		return config.DefaultMaxInnerFixIter
+	}
+	if complexity == "" || complexity == ComplexityUnknown {
+		return currentDefaultInnerIter(ep)
+	}
+	switch ep.EffortLevel {
+	case epic.EffortMax:
+		switch complexity {
+		case ComplexityLow:
+			return 7
+		default:
+			return config.MaxInnerFixIterMax
+		}
+	case epic.EffortHigh:
+		switch complexity {
+		case ComplexityLow:
+			return 5
+		default:
+			return config.MaxInnerFixIterHigh
+		}
+	default:
+		switch complexity {
+		case ComplexityHigh:
+			return 4
+		default:
+			return config.DefaultMaxInnerFixIter
+		}
+	}
+}
+
+func currentDefaultOuterCycles(ep *epic.Epic) (maxCycles int, progressBased bool) {
 	switch ep.EffortLevel {
 	case epic.EffortMax:
 		return config.MaxOuterCyclesMaxCap, true
@@ -1542,8 +1818,7 @@ func effectiveOuterCycles(ep *epic.Epic) (maxCycles int, progressBased bool) {
 	}
 }
 
-// effectiveInnerIter determines the maximum inner fix iterations per audit cycle.
-func effectiveInnerIter(ep *epic.Epic) int {
+func currentDefaultInnerIter(ep *epic.Epic) int {
 	switch ep.EffortLevel {
 	case epic.EffortMax:
 		return config.MaxInnerFixIterMax
@@ -1596,6 +1871,14 @@ func writePromptFile(path string, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
+func promptFileSize(path string) int {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return int(info.Size())
+}
+
 func refreshDiff(opts *AuditOpts) {
 	if opts.DiffFn != nil {
 		if freshDiff, diffErr := opts.DiffFn(); diffErr == nil {
@@ -1611,7 +1894,7 @@ func checkStopRequest(projectDir, phase, detail string) error {
 	return steering.NewExitRequestError(phase, detail)
 }
 
-func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model string, session engine.SessionType) (string, error) {
+func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model string, session engine.SessionType, continuity *sessionContinuity) (string, error) {
 	logFile, err := os.Create(logPath)
 	if err != nil {
 		return "", fmt.Errorf("run audit loop: create log: %w", err)
@@ -1623,6 +1906,9 @@ func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model
 		SessionType: session,
 		EffortLevel: string(opts.Epic.EffortLevel),
 		WorkDir:     opts.ProjectDir,
+	}
+	if continuity != nil {
+		continuity.Configure(&runOpts)
 	}
 
 	if opts.Verbose {
@@ -1639,6 +1925,9 @@ func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model
 	}
 
 	output, _, runErr := opts.Engine.Run(ctx, prompt, runOpts)
+	if continuity != nil {
+		continuity.Capture(output)
+	}
 	if runErr != nil {
 		if ctx.Err() != nil {
 			return output, ctx.Err()
@@ -1646,4 +1935,24 @@ func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model
 		return output, fmt.Errorf("run audit loop: agent run: %w", runErr)
 	}
 	return output, nil
+}
+
+func summarizeNoopFingerprint(fingerprint string) string {
+	fingerprint = strings.TrimSpace(fingerprint)
+	if fingerprint == "" {
+		return "no changes"
+	}
+	return textutil.TruncateUTF8(fingerprint, 512)
+}
+
+func targetedFindingLabels(findings []Finding) []string {
+	labels := make([]string, 0, len(findings))
+	for _, finding := range findings {
+		label := findingLabel(finding)
+		if label == "" {
+			continue
+		}
+		labels = append(labels, label)
+	}
+	return labels
 }

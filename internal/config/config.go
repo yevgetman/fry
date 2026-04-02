@@ -11,6 +11,7 @@ const (
 	ProjectConfigFile         = ".fry/config.json"
 	PlansDir                  = "plans"
 	BuildLogsDir              = ".fry/build-logs"
+	AuditSessionsDir          = ".fry/sessions"
 	DefaultEngine             = "claude"
 	DefaultOllamaModel        = "llama3"
 	DefaultPrepareEngine      = "claude"
@@ -77,8 +78,9 @@ const (
 	SummaryPromptFile = ".fry/summary-prompt.md"
 
 	// Build report constants
-	BuildReportFile = ".fry/build-report.json"
-	BuildStatusFile = ".fry/build-status.json"
+	BuildReportFile         = ".fry/build-report.json"
+	BuildStatusFile         = ".fry/build-status.json"
+	ValidationChecklistFile = ".fry/validation-checklist.md"
 
 	// Build audit constants
 	BuildAuditSARIFFile        = "build-audit.sarif"

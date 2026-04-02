@@ -18,6 +18,11 @@ echo PROMPT | codex exec --dangerously-bypass-approvals-and-sandbox [--model MOD
 ```
 
 The prompt is passed via stdin.
+For resumed non-interactive audit sessions, Fry uses:
+
+```bash
+echo PROMPT | codex exec resume --dangerously-bypass-approvals-and-sandbox --json SESSION_ID
+```
 
 ### Claude (Anthropic)
 
@@ -33,6 +38,11 @@ echo PROMPT | claude -p --dangerously-skip-permissions [--model MODEL] [FLAGS]
 ```
 
 The prompt is passed via stdin.
+For resumed non-interactive audit sessions, Fry uses:
+
+```bash
+echo PROMPT | claude -p --dangerously-skip-permissions --resume SESSION_ID --output-format json
+```
 
 ### Ollama (Local Models)
 
@@ -224,6 +234,23 @@ type Engine interface {
 ```
 
 This means all Fry features (sprints, sanity checks, alignment, review) work identically regardless of which engine is selected.
+
+## Audit Session Continuity
+
+Fry supports explicit same-role session continuity for sprint audits on engines that expose resumable non-interactive sessions.
+
+| Engine | Sprint audit continuity | Mechanism |
+|---|---|---|
+| Claude | Supported | Fry captures `session_id` from JSON output and resumes later audit/fix calls with `--resume <session-id>` |
+| Codex | Supported | Fry captures `thread_id` from JSONL output and resumes later audit/fix calls with `codex exec resume <thread-id>` |
+| Ollama | Not supported | `ollama run` has no compatible persisted conversation/session ID for Fry's non-interactive audit loop |
+
+Rules:
+
+- Fry only resumes **same-role** audit sessions: audit-to-audit and fix-to-fix.
+- Fry never resumes fix into verify. Verify stays stateless by design.
+- Session IDs are explicit and file-backed under `.fry/sessions/`; Fry does not rely on "most recent session" heuristics.
+- If session capture or resume fails, Fry silently falls back to the existing stateless behavior.
 
 ## Rate-Limit Resilience
 
