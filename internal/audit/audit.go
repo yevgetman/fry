@@ -28,8 +28,9 @@ type Finding struct {
 	Description    string
 	Severity       string
 	RecommendedFix string
-	OriginCycle    int  // which outer audit cycle discovered this finding
-	Resolved       bool // whether this finding has been verified resolved
+	OriginCycle    int    // which outer audit cycle discovered this finding
+	Resolved       bool   // whether this finding has been verified resolved
+	ReopenOf       string // if non-empty, exact key of the resolved finding this reopens
 }
 
 // key returns a normalized identity for deduplication and comparison across cycles.
@@ -80,15 +81,17 @@ type AuditProgress struct {
 	TargetIssues int
 	Findings     map[string]int
 	Headlines    []string
+	Reopenings   int // count of findings suppressed as probable reopenings
 }
 
 type AuditResult struct {
-	Passed             bool
-	Blocking           bool           // true when CRITICAL or HIGH issues remain after all cycles
-	Iterations         int            // number of outer audit cycles completed
-	MaxSeverity        string         // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
-	SeverityCounts     map[string]int // count of findings per severity level
-	UnresolvedFindings []Finding      // remaining findings after all cycles
+	Passed               bool
+	Blocking             bool           // true when CRITICAL or HIGH issues remain after all cycles
+	Iterations           int            // number of outer audit cycles completed
+	MaxSeverity          string         // "CRITICAL", "HIGH", "MODERATE", "LOW", or ""
+	SeverityCounts       map[string]int // count of findings per severity level
+	UnresolvedFindings   []Finding      // remaining findings after all cycles
+	SuppressedReopenings int            // findings suppressed as probable reopenings across all cycles
 }
 
 const (
@@ -129,8 +132,10 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	promptPath := filepath.Join(opts.ProjectDir, config.AuditPromptFile)
 
 	var knownFindings []Finding // tracked across outer cycles
+	resolved := newResolvedLedger()
 	outerStaleCount := 0
 	outerTurnoverCount := 0
+	suppressedReopenings := 0
 	var lastCycle int
 
 	for cycle := 1; cycle <= maxOuter; cycle++ {
@@ -155,7 +160,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		refreshDiff(&opts)
 
 		// Build and write audit prompt (with known findings for verification on cycle 2+)
-		auditPrompt := buildAuditPrompt(opts, knownFindings)
+		auditPrompt := buildAuditPrompt(opts, knownFindings, resolved)
 		if err := writePromptFile(promptPath, auditPrompt); err != nil {
 			return nil, fmt.Errorf("run audit loop: write audit prompt: %w", err)
 		}
@@ -221,6 +226,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			return &AuditResult{
 				Passed: true, Iterations: cycle,
 				MaxSeverity: maxSev, SeverityCounts: counts,
+				SuppressedReopenings: suppressedReopenings,
 			}, nil
 		}
 
@@ -241,24 +247,46 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		var persisting []Finding
 		var newFindings []Finding
 		if cycle > 1 && len(knownFindings) > 0 {
-			resolved, nextPersisting, nextNew := classifyFindings(knownFindings, currentFindings)
+			justResolved, nextPersisting, nextNew := classifyFindings(knownFindings, currentFindings)
 			persisting = nextPersisting
-			newFindings = nextNew
+
+			// Record resolved findings in the ledger before classifying reopenings
+			resolved.add(justResolved)
+
+			// Check if any "new" findings are reopenings of previously resolved themes
+			reopenings, genuineNew := classifyReopenings(nextNew, resolved)
+			newFindings = genuineNew
+
 			for i := range newFindings {
 				newFindings[i].OriginCycle = cycle
 			}
 			activeFindings = mergeFindings(persisting, newFindings)
-			if len(resolved) > 0 {
-				frylog.Log("  AUDIT: %d previously known issues resolved", len(resolved))
+			if len(justResolved) > 0 {
+				frylog.Log("  AUDIT: %d previously known issues resolved", len(justResolved))
 			}
-			if len(newFindings) > 0 {
-				frylog.Log("  AUDIT: %d new issues discovered", len(newFindings))
+			if len(reopenings) > 0 {
+				suppressedReopenings += len(reopenings)
+				frylog.Log("  AUDIT: %d findings classified as probable reopenings (suppressed)", len(reopenings))
+			}
+			if len(genuineNew) > 0 {
+				frylog.Log("  AUDIT: %d new issues discovered", len(genuineNew))
 			}
 		} else {
 			for i := range currentFindings {
 				currentFindings[i].OriginCycle = cycle
 			}
-			activeFindings = currentFindings
+			// On cycle 2+ with empty knownFindings (all previously resolved),
+			// still check for reopenings against the resolved ledger.
+			if cycle > 1 && resolved.len() > 0 {
+				reopenings, genuineNew := classifyReopenings(currentFindings, resolved)
+				if len(reopenings) > 0 {
+					suppressedReopenings += len(reopenings)
+					frylog.Log("  AUDIT: %d findings classified as probable reopenings (suppressed)", len(reopenings))
+				}
+				activeFindings = genuineNew
+			} else {
+				activeFindings = currentFindings
+			}
 		}
 
 		// Check actionable count (HIGH/MODERATE/CRITICAL only)
@@ -279,6 +307,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			return &AuditResult{
 				Passed: true, Iterations: cycle,
 				MaxSeverity: maxSev, SeverityCounts: counts,
+				SuppressedReopenings: suppressedReopenings,
 			}, nil
 		}
 
@@ -443,6 +472,12 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			lastResolvedCount = nowResolved
 		}
 
+		// Record findings resolved in this cycle's inner fix loop
+		for _, f := range activeFindings {
+			if f.Resolved {
+				resolved.add([]Finding{f})
+			}
+		}
 		// Update known findings for next outer cycle
 		knownFindings = collectUnresolved(activeFindings)
 	}
@@ -460,7 +495,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	if err := checkStopRequest(opts.ProjectDir, "sprint_audit", "before final audit pass"); err != nil {
 		return nil, err
 	}
-	finalPrompt := buildAuditPrompt(opts, knownFindings)
+	finalPrompt := buildAuditPrompt(opts, knownFindings, resolved)
 	if err := writePromptFile(promptPath, finalPrompt); err != nil {
 		return nil, fmt.Errorf("run audit loop: write final audit prompt: %w", err)
 	}
@@ -504,16 +539,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		return &AuditResult{
 			Passed: true, Iterations: lastCycle,
 			MaxSeverity: maxSev, SeverityCounts: finalCounts,
+			SuppressedReopenings: suppressedReopenings,
 		}, nil
 	}
 
 	return &AuditResult{
-		Passed:             false,
-		Blocking:           isBlockingSeverity(maxSev),
-		Iterations:         lastCycle,
-		MaxSeverity:        maxSev,
-		SeverityCounts:     finalCounts,
-		UnresolvedFindings: parseFindings(string(content)),
+		Passed:               false,
+		Blocking:             isBlockingSeverity(maxSev),
+		Iterations:           lastCycle,
+		MaxSeverity:          maxSev,
+		SeverityCounts:       finalCounts,
+		UnresolvedFindings:   parseFindings(string(content)),
+		SuppressedReopenings: suppressedReopenings,
 	}, nil
 }
 
@@ -605,7 +642,7 @@ func findingHeadlines(findings []Finding, limit int) []string {
 
 // --- Prompt builders ---
 
-func buildAuditPrompt(opts AuditOpts, previousFindings []Finding) string {
+func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes *resolvedLedger) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "# SPRINT AUDIT — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name)
@@ -682,8 +719,32 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding) string {
 		b.WriteString("\n")
 	}
 
+	// Resolved themes (cycle 2+ with resolved findings)
+	if resolvedThemes != nil && resolvedThemes.len() > 0 {
+		b.WriteString("## Resolved Themes (Do Not Reopen)\n\n")
+		b.WriteString("The following issues were identified and resolved in earlier audit cycles.\n")
+		b.WriteString("Do NOT re-raise these unless you observe a genuine regression (the code is\n")
+		b.WriteString("now WORSE than before the fix). Reworded versions of resolved findings will be\n")
+		b.WriteString("automatically suppressed.\n\n")
+		i := 0
+		for _, f := range resolvedThemes.entries {
+			i++
+			if f.Location != "" {
+				fmt.Fprintf(&b, "%d. [%s] %s (%s) — resolved cycle %d\n", i, f.Location, f.Description, f.Severity, f.OriginCycle)
+			} else {
+				fmt.Fprintf(&b, "%d. %s (%s) — resolved cycle %d\n", i, f.Description, f.Severity, f.OriginCycle)
+			}
+			if i >= 20 {
+				break
+			}
+		}
+		b.WriteString("\n")
+	}
+
 	b.WriteString("Prefer issues directly connected to the sprint goals, changed files, or regressions caused by this sprint.\n")
-	b.WriteString("Only raise pre-existing issues when this sprint introduced, worsened, or clearly exposed them.\n\n")
+	b.WriteString("Only raise pre-existing issues when this sprint introduced, worsened, or clearly exposed them.\n")
+	b.WriteString("If a previously resolved issue seems to recur under different wording, verify that it is genuinely\n")
+	b.WriteString("a distinct problem or a regression before reporting it. Repeat findings under varied wording are unhelpful.\n\n")
 
 	// Audit criteria
 	b.WriteString("## Audit Criteria\n")
@@ -1120,6 +1181,152 @@ func isTurnoverChurn(previous, persisting, current, newFindings []Finding) bool 
 	}
 
 	return true
+}
+
+// --- Theme matching and reopen detection ---
+
+// stopWords contains common English function words excluded from theme matching.
+// Domain terms like "error", "handling", "missing" are deliberately NOT stop words.
+var stopWords = map[string]struct{}{
+	"the": {}, "a": {}, "an": {}, "is": {}, "in": {}, "of": {}, "to": {},
+	"for": {}, "and": {}, "or": {}, "not": {}, "with": {}, "that": {},
+	"this": {}, "be": {}, "are": {}, "was": {}, "were": {}, "been": {},
+	"has": {}, "have": {}, "had": {}, "should": {}, "could": {}, "would": {},
+	"does": {}, "do": {}, "did": {}, "can": {}, "may": {}, "might": {},
+	"will": {}, "need": {}, "needs": {}, "it": {}, "its": {}, "but": {},
+	"by": {}, "from": {}, "at": {}, "on": {}, "as": {}, "if": {},
+}
+
+// wordBoundaryRe splits on non-alphanumeric boundaries for token extraction.
+var wordBoundaryRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+const themeMatchThreshold = 0.5
+
+// fileFamily extracts the directory + base filename without extension or line numbers.
+// Example: "src/handler.go:42" -> "src/handler", "" -> "".
+func fileFamily(location string) string {
+	loc := normalizeFindingLocation(location)
+	if loc == "" {
+		return ""
+	}
+	ext := filepath.Ext(loc)
+	if ext != "" {
+		loc = loc[:len(loc)-len(ext)]
+	}
+	return loc
+}
+
+// descriptionTokens extracts significant words from a description, sorted alphabetically.
+// Stop words and single-character tokens are removed.
+func descriptionTokens(desc string) []string {
+	normalized := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(desc))), " ")
+	parts := wordBoundaryRe.Split(normalized, -1)
+	var tokens []string
+	for _, p := range parts {
+		if p == "" || len(p) <= 1 {
+			continue
+		}
+		if _, ok := stopWords[p]; ok {
+			continue
+		}
+		tokens = append(tokens, p)
+	}
+	sort.Strings(tokens)
+	return tokens
+}
+
+// jaccardSimilarity computes the Jaccard index of two string slices treated as sets.
+func jaccardSimilarity(a, b []string) float64 {
+	if len(a) == 0 && len(b) == 0 {
+		return 0
+	}
+	setA := make(map[string]struct{}, len(a))
+	for _, w := range a {
+		setA[w] = struct{}{}
+	}
+	setB := make(map[string]struct{}, len(b))
+	for _, w := range b {
+		setB[w] = struct{}{}
+	}
+	intersection := 0
+	for w := range setA {
+		if _, ok := setB[w]; ok {
+			intersection++
+		}
+	}
+	union := len(setA) + len(setB) - intersection
+	if union == 0 {
+		return 0
+	}
+	return float64(intersection) / float64(union)
+}
+
+// themeMatch returns true if two findings are about the same requirement theme.
+// Matching requires: same file family (when both have locations) AND description
+// token similarity at or above the threshold.
+func themeMatch(a, b Finding) bool {
+	famA, famB := fileFamily(a.Location), fileFamily(b.Location)
+	if famA != "" && famB != "" && famA != famB {
+		return false
+	}
+	tokensA := descriptionTokens(a.Description)
+	tokensB := descriptionTokens(b.Description)
+	return jaccardSimilarity(tokensA, tokensB) >= themeMatchThreshold
+}
+
+// resolvedLedger tracks findings that have been resolved across audit cycles.
+// It enables detection of probable reopenings when a later cycle re-raises
+// a resolved requirement theme under different wording.
+type resolvedLedger struct {
+	entries map[string]Finding // exact key -> resolved finding
+}
+
+func newResolvedLedger() *resolvedLedger {
+	return &resolvedLedger{entries: make(map[string]Finding)}
+}
+
+func (rl *resolvedLedger) add(findings []Finding) {
+	for _, f := range findings {
+		rl.entries[f.key()] = f
+	}
+}
+
+// findThemeMatch checks whether a finding matches any resolved theme.
+func (rl *resolvedLedger) findThemeMatch(f Finding) (Finding, bool) {
+	for _, resolved := range rl.entries {
+		if themeMatch(resolved, f) {
+			return resolved, true
+		}
+	}
+	return Finding{}, false
+}
+
+func (rl *resolvedLedger) len() int {
+	return len(rl.entries)
+}
+
+// classifyReopenings examines new findings against the resolved ledger.
+// A finding that matches a resolved theme at the same or lower severity is
+// classified as a probable reopening. If severity escalated, it is treated
+// as a genuine regression and returned in genuinelyNew.
+func classifyReopenings(newFindings []Finding, ledger *resolvedLedger) (reopenings, genuinelyNew []Finding) {
+	if ledger == nil || ledger.len() == 0 {
+		return nil, newFindings
+	}
+	for _, f := range newFindings {
+		resolved, ok := ledger.findThemeMatch(f)
+		if !ok {
+			genuinelyNew = append(genuinelyNew, f)
+			continue
+		}
+		if severity.Rank(f.Severity) > severity.Rank(resolved.Severity) {
+			genuinelyNew = append(genuinelyNew, f)
+			continue
+		}
+		f.ReopenOf = resolved.key()
+		reopenings = append(reopenings, f)
+	}
+	return
 }
 
 // --- Sorting and grouping ---

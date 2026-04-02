@@ -3037,6 +3037,7 @@ func updateBuildStatusAuditProgress(status *agent.BuildStatus, sprintNum int, pr
 		MaxFixes:       progress.MaxFixes,
 		TargetIssues:   progress.TargetIssues,
 		IssueHeadlines: append([]string(nil), progress.Headlines...),
+		Reopenings:     progress.Reopenings,
 	}
 }
 

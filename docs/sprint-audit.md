@@ -73,6 +73,25 @@ When the re-audit runs (cycle 2+), findings are classified as:
 
 This ensures older issues are always addressed before newer ones, avoids collapsing distinct same-worded issues in different files, and reduces wasted fix effort on re-discovering known issues.
 
+### Reopen detection
+
+When the audit agent re-raises a previously resolved requirement theme under different wording, Fry detects this as a **probable reopening** rather than treating it as a new finding. This prevents the audit loop from churning on the same requirement family when the agent shifts its interpretation between cycles.
+
+Reopen detection uses fuzzy theme matching:
+- **File family** -- the directory and base filename without extension or line numbers. Two findings must share the same file family (or at least one must lack a location) to be considered related.
+- **Description similarity** -- significant words are extracted from the description (stop words removed), and the [Jaccard index](https://en.wikipedia.org/wiki/Jaccard_index) of the two token sets must reach 0.5 or higher.
+
+Probable reopenings are **suppressed** from the active findings list and logged:
+```
+[2026-04-01 12:20:00]   AUDIT: 2 findings classified as probable reopenings (suppressed)
+```
+
+**Exception: genuine regressions.** If the re-raised finding has a **higher severity** than the original resolved finding, it is admitted as genuinely new. This ensures that actual regressions (where a fix made things worse) are not suppressed.
+
+A **resolved-finding ledger** accumulates all findings resolved across audit cycles (both by the inner fix loop and by the re-audit discovering they disappeared). The ledger persists for the lifetime of one `RunAuditLoop` call.
+
+The audit prompt also lists resolved themes on cycle 2+ and instructs the agent not to re-raise them without evidence of regression.
+
 ## Blocking vs Advisory
 
 After the audit loop exhausts its cycles, the outcome depends on the highest remaining severity:

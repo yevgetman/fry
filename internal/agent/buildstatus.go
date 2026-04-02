@@ -85,6 +85,7 @@ type AuditStatus struct {
 	MaxFixes       int            `json:"max_fixes,omitempty"`       // configured inner fix cap
 	TargetIssues   int            `json:"target_issues,omitempty"`   // issues currently being fixed/verified
 	IssueHeadlines []string       `json:"issue_headlines,omitempty"` // compact descriptions of targeted issues
+	Reopenings     int            `json:"reopenings,omitempty"`      // findings suppressed as probable reopenings
 }
 
 // ReviewStatus captures the sprint review verdict.

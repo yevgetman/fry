@@ -634,6 +634,7 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **LOW** findings are advisory (non-blocking except at high/max effort).
 - When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
 - If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.
+- **Reopen detection:** If a previously resolved finding is re-raised under different wording (same file family and similar description), Fry suppresses it as a probable reopening rather than treating it as new. Severity escalation bypasses suppression (genuine regressions are still caught). Suppressed reopenings are logged and shown in the monitor dashboard.
 
 Read audit findings:
 

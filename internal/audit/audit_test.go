@@ -579,7 +579,7 @@ func TestAuditPromptContainsDiff(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
-	prompt := buildAuditPrompt(opts, nil)
+	prompt := buildAuditPrompt(opts, nil, nil)
 	assert.Contains(t, prompt, "+new line")
 	assert.Contains(t, prompt, "-old line")
 }
@@ -589,7 +589,7 @@ func TestAuditPromptWritingMode(t *testing.T) {
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	opts.Mode = "writing"
-	prompt := buildAuditPrompt(opts, nil)
+	prompt := buildAuditPrompt(opts, nil, nil)
 	assert.Contains(t, prompt, "content auditor")
 	assert.Contains(t, prompt, "Coherence")
 	assert.Contains(t, prompt, "Tone & Voice")
@@ -608,7 +608,7 @@ func TestAuditPromptCondensesExecutive(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(opts.ProjectDir, config.ExecutiveFile), string(long))
 
-	prompt := buildAuditPrompt(opts, nil)
+	prompt := buildAuditPrompt(opts, nil, nil)
 	assert.Contains(t, prompt, "...(truncated)")
 	assert.Contains(t, prompt, "## Project Context")
 }
@@ -623,7 +623,7 @@ func TestAuditPromptTruncatesSprintProgress(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(opts.ProjectDir, config.SprintProgressFile), string(large))
 
-	prompt := buildAuditPrompt(opts, nil)
+	prompt := buildAuditPrompt(opts, nil, nil)
 	assert.Contains(t, prompt, "...(sprint progress truncated at 50KB)")
 	assert.Contains(t, prompt, "## What Was Done")
 }
@@ -636,7 +636,7 @@ func TestAuditPromptWithPreviousFindings(t *testing.T) {
 		{Location: "src/main.go:10", Description: "Null pointer", Severity: "CRITICAL", OriginCycle: 1},
 		{Description: "Missing validation", Severity: "HIGH", OriginCycle: 1},
 	}
-	prompt := buildAuditPrompt(opts, prev)
+	prompt := buildAuditPrompt(opts, prev, nil)
 
 	assert.Contains(t, prompt, "## Previously Identified Issues")
 	assert.Contains(t, prompt, "[src/main.go:10] Null pointer (CRITICAL)")
@@ -659,7 +659,7 @@ reinforced: 0
 ---
 Audit changes usually need matching updates in docs/sprint-audit.md.`)
 
-	prompt := buildAuditPrompt(opts, nil)
+	prompt := buildAuditPrompt(opts, nil, nil)
 
 	assert.Contains(t, prompt, "## Codebase Context")
 	assert.Contains(t, prompt, "Existing architecture details.")
@@ -671,7 +671,7 @@ func TestAuditPromptNoPreviousFindings(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
-	prompt := buildAuditPrompt(opts, nil)
+	prompt := buildAuditPrompt(opts, nil, nil)
 
 	assert.NotContains(t, prompt, "## Previously Identified Issues")
 	assert.NotContains(t, prompt, "## Verified Previous Issues")
@@ -685,7 +685,7 @@ func TestAuditPromptSkipsResolvedPreviousFindings(t *testing.T) {
 		{Description: "Resolved issue", Severity: "HIGH", Resolved: true},
 		{Description: "Active issue", Severity: "CRITICAL", Resolved: false},
 	}
-	prompt := buildAuditPrompt(opts, prev)
+	prompt := buildAuditPrompt(opts, prev, nil)
 
 	assert.Contains(t, prompt, "## Previously Identified Issues")
 	assert.NotContains(t, prompt, "Resolved issue")
@@ -1297,9 +1297,9 @@ func TestRunAuditLoopPropagatesAgentErrors(t *testing.T) {
 func TestRunAuditLoopNewIssuesInReAudit(t *testing.T) {
 	t.Parallel()
 
-	// Cycle 1: finds issue A. Fix resolves it.
-	// Cycle 2 (re-audit): issue A resolved, but new issue B found.
-	// Fix resolves issue B.
+	// Cycle 1: finds SQL injection. Fix resolves it.
+	// Cycle 2 (re-audit): SQL injection resolved, but new memory leak found.
+	// Fix resolves memory leak.
 	// Cycle 3 (re-audit): all clean → pass.
 	eng := &stubEngine{
 		name: "codex",
@@ -1308,14 +1308,14 @@ func TestRunAuditLoopNewIssuesInReAudit(t *testing.T) {
 			switch callIndex {
 			case 0: // cycle 1 audit
 				writeFile(t, path,
-					"## Findings\n- **Description:** Issue A\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n")
-			case 2: // verify: issue A resolved
+					"## Findings\n- **Location:** src/auth.go:10\n- **Description:** SQL injection in authentication query\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n")
+			case 2: // verify: SQL injection resolved
 				writeFile(t, path,
 					"- **Issue:** 1\n- **Status:** RESOLVED\n")
-			case 3: // cycle 2 audit: A resolved, B new
+			case 3: // cycle 2 audit: SQL injection resolved, memory leak new
 				writeFile(t, path,
-					"## Findings\n- **Description:** Issue B\n- **Severity:** MODERATE\n\n## Verdict\nFAIL\n")
-			case 5: // verify: issue B resolved
+					"## Findings\n- **Location:** src/cache.go:50\n- **Description:** Memory leak in connection pool cleanup\n- **Severity:** MODERATE\n\n## Verdict\nFAIL\n")
+			case 5: // verify: memory leak resolved
 				writeFile(t, path,
 					"- **Issue:** 1\n- **Status:** RESOLVED\n")
 			case 6: // cycle 3 audit: all clean
@@ -1367,12 +1367,13 @@ func TestRunAuditLoopProgressContinues(t *testing.T) {
 	t.Parallel()
 
 	// Max effort with explicit cap: different findings each cycle → progress always made → runs full cap.
+	// Each finding uses a distinct location so theme matching does not treat them as reopenings.
 	eng := &stubEngine{
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
 			desc := fmt.Sprintf("Unique issue %d", callIndex)
 			writeFile(t, filepath.Join(projectDir, config.SprintAuditFile),
-				fmt.Sprintf("## Findings\n- **Description:** %s\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n", desc))
+				fmt.Sprintf("## Findings\n- **Location:** src/module%d/handler.go:1\n- **Description:** %s\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n", callIndex, desc))
 		},
 	}
 	opts := makeOpts(t, eng)
@@ -1847,4 +1848,341 @@ func TestRunAuditLoopMaxEffortHighFindingsStillLoops(t *testing.T) {
 	result, err := RunAuditLoop(context.Background(), opts)
 	require.NoError(t, err)
 	assert.False(t, result.Passed, "MODERATE findings should not pass")
+}
+
+// --- Theme matching and reopen detection tests ---
+
+func TestFileFamily(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		location string
+		want     string
+	}{
+		{"src/handler.go:42", "src/handler"},
+		{"internal/api/server.go", "internal/api/server"},
+		{"handler.go", "handler"},
+		{"src/handler.go#L99C3", "src/handler"},
+		{"src/handler.go:99:3", "src/handler"},
+		{"", ""},
+		{"  src/handler.go  ", "src/handler"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, fileFamily(tt.location), "fileFamily(%q)", tt.location)
+	}
+}
+
+func TestDescriptionTokens(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc string
+		want []string
+	}{
+		{
+			"Stale slug canonicalization not implemented",
+			[]string{"canonicalization", "implemented", "slug", "stale"},
+		},
+		{
+			"The SQL injection is not handled properly",
+			[]string{"handled", "injection", "properly", "sql"},
+		},
+		{
+			"Missing slug canonicalization for stale entries",
+			[]string{"canonicalization", "entries", "missing", "slug", "stale"},
+		},
+		{"", nil},
+		{"a", nil},       // single char removed
+		{"is the", nil},  // all stop words
+	}
+	for _, tt := range tests {
+		got := descriptionTokens(tt.desc)
+		assert.Equal(t, tt.want, got, "descriptionTokens(%q)", tt.desc)
+	}
+}
+
+func TestJaccardSimilarity(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		a, b []string
+		want float64
+	}{
+		{[]string{"a", "b", "c"}, []string{"a", "b", "c"}, 1.0},
+		{[]string{"a", "b"}, []string{"c", "d"}, 0.0},
+		{nil, nil, 0.0},
+		{[]string{"a", "b", "c", "d"}, []string{"a", "b", "e", "f"}, 0.333},
+		{[]string{"a", "b", "c"}, []string{"a", "b", "d"}, 0.5},
+	}
+	for _, tt := range tests {
+		got := jaccardSimilarity(tt.a, tt.b)
+		assert.InDelta(t, tt.want, got, 0.01, "jaccardSimilarity(%v, %v)", tt.a, tt.b)
+	}
+}
+
+func TestThemeMatch(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		a, b Finding
+		want bool
+	}{
+		{
+			"same file family similar description",
+			Finding{Location: "src/handler.go:10", Description: "SQL injection vulnerability in handler"},
+			Finding{Location: "src/handler.go:50", Description: "SQL injection in request handler"},
+			true,
+		},
+		{
+			"different file families",
+			Finding{Location: "src/auth.go:10", Description: "Missing validation"},
+			Finding{Location: "src/payment.go:20", Description: "Missing validation"},
+			false,
+		},
+		{
+			"no location on both similar desc",
+			Finding{Description: "Stale slug canonicalization not implemented"},
+			Finding{Description: "Missing slug canonicalization for stale entries"},
+			true,
+		},
+		{
+			"same file family completely different desc",
+			Finding{Location: "src/handler.go:10", Description: "SQL injection"},
+			Finding{Location: "src/handler.go:50", Description: "Memory leak in goroutine pool"},
+			false,
+		},
+		{
+			"one has location other does not similar desc",
+			Finding{Location: "src/handler.go:10", Description: "SQL injection vulnerability"},
+			Finding{Description: "SQL injection vulnerability found"},
+			true,
+		},
+		{
+			"both empty",
+			Finding{},
+			Finding{},
+			false, // empty descriptions have no tokens, jaccard returns 0
+		},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, themeMatch(tt.a, tt.b), tt.name)
+	}
+}
+
+func TestResolvedLedger(t *testing.T) {
+	t.Parallel()
+
+	ledger := newResolvedLedger()
+	assert.Equal(t, 0, ledger.len())
+
+	f1 := Finding{Location: "src/handler.go:10", Description: "SQL injection", Severity: "HIGH", OriginCycle: 1}
+	f2 := Finding{Description: "Missing error handling", Severity: "MODERATE", OriginCycle: 1}
+
+	ledger.add([]Finding{f1, f2})
+	assert.Equal(t, 2, ledger.len())
+
+	// Theme match should find f1
+	match, ok := ledger.findThemeMatch(Finding{Location: "src/handler.go:50", Description: "SQL injection vulnerability in handler"})
+	assert.True(t, ok)
+	assert.Equal(t, f1.key(), match.key())
+
+	// No match for unrelated finding
+	_, ok = ledger.findThemeMatch(Finding{Location: "src/payment.go:10", Description: "Payment processing timeout"})
+	assert.False(t, ok)
+}
+
+func TestClassifyReopenings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		resolved       []Finding
+		newFindings    []Finding
+		wantReopen     int
+		wantNew        int
+		wantReopenKeys []string // ReopenOf values on reopenings
+	}{
+		{
+			"exact repeated finding is reopening",
+			[]Finding{{Location: "src/handler.go:10", Description: "SQL injection", Severity: "HIGH", OriginCycle: 1}},
+			[]Finding{{Location: "src/handler.go:50", Description: "SQL injection vulnerability in handler", Severity: "HIGH", OriginCycle: 2}},
+			1, 0,
+			[]string{"src/handler.go::sql injection"},
+		},
+		{
+			"same theme different wording is reopening",
+			[]Finding{{Description: "Stale slug canonicalization not implemented", Severity: "HIGH", OriginCycle: 1}},
+			[]Finding{{Description: "Missing slug canonicalization for stale entries", Severity: "MODERATE", OriginCycle: 3}},
+			1, 0, nil,
+		},
+		{
+			"same theme genuine regression admitted",
+			[]Finding{{Location: "src/api.go:10", Description: "Error handling incomplete", Severity: "MODERATE", OriginCycle: 1}},
+			[]Finding{{Location: "src/api.go:10", Description: "Error handling completely absent", Severity: "HIGH", OriginCycle: 2}},
+			0, 1, nil,
+		},
+		{
+			"same area genuinely new issue",
+			[]Finding{{Location: "src/handler.go:10", Description: "SQL injection", Severity: "HIGH", OriginCycle: 1}},
+			[]Finding{{Location: "src/handler.go:50", Description: "CSRF token missing on form endpoint", Severity: "HIGH", OriginCycle: 2}},
+			0, 1, nil,
+		},
+		{
+			"same theme lower severity after fix is reopening",
+			[]Finding{{Location: "src/handler.go:10", Description: "Null pointer crash in request handler", Severity: "HIGH", OriginCycle: 1}},
+			[]Finding{{Location: "src/handler.go:20", Description: "Possible null pointer crash in handler edge case", Severity: "MODERATE", OriginCycle: 2}},
+			1, 0, nil,
+		},
+		{
+			"different file families are genuinely new",
+			[]Finding{{Location: "src/auth.go:10", Description: "Missing input validation", Severity: "HIGH", OriginCycle: 1}},
+			[]Finding{{Location: "src/payment.go:20", Description: "Missing input validation", Severity: "HIGH", OriginCycle: 2}},
+			0, 1, nil,
+		},
+		{
+			"empty ledger returns all as new",
+			nil,
+			[]Finding{{Description: "Some new finding", Severity: "HIGH", OriginCycle: 1}},
+			0, 1, nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ledger := newResolvedLedger()
+			ledger.add(tt.resolved)
+			reopenings, genuineNew := classifyReopenings(tt.newFindings, ledger)
+			assert.Equal(t, tt.wantReopen, len(reopenings), "reopening count")
+			assert.Equal(t, tt.wantNew, len(genuineNew), "genuinely new count")
+			if tt.wantReopenKeys != nil {
+				for i, k := range tt.wantReopenKeys {
+					assert.Equal(t, k, reopenings[i].ReopenOf, "ReopenOf key")
+				}
+			}
+		})
+	}
+}
+
+func TestClassifyReopeningsNilLedger(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{{Description: "Some finding", Severity: "HIGH"}}
+	reopenings, genuineNew := classifyReopenings(findings, nil)
+	assert.Nil(t, reopenings)
+	assert.Equal(t, findings, genuineNew)
+}
+
+func TestAuditPromptIncludesResolvedThemes(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	ledger := newResolvedLedger()
+	ledger.add([]Finding{
+		{Location: "src/handler.go:10", Description: "SQL injection", Severity: "HIGH", OriginCycle: 1},
+		{Description: "Missing validation", Severity: "MODERATE", OriginCycle: 2},
+	})
+
+	prompt := buildAuditPrompt(opts, nil, ledger)
+
+	assert.Contains(t, prompt, "## Resolved Themes (Do Not Reopen)")
+	assert.Contains(t, prompt, "SQL injection")
+	assert.Contains(t, prompt, "Missing validation")
+	assert.Contains(t, prompt, "automatically suppressed")
+}
+
+func TestAuditPromptNoResolvedThemesOnCycle1(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	prompt := buildAuditPrompt(opts, nil, nil)
+
+	assert.NotContains(t, prompt, "## Resolved Themes")
+}
+
+func TestAuditPromptAntiReopenInstruction(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	prompt := buildAuditPrompt(opts, nil, nil)
+
+	assert.Contains(t, prompt, "previously resolved issue seems to recur under different wording")
+}
+
+func TestRunAuditLoopSuppressesReopenings(t *testing.T) {
+	t.Parallel()
+
+	// Cycle 1: finds HIGH issue "SQL injection in handler"
+	// Inner fix: resolves it
+	// Cycle 2 re-audit: same theme different wording -> should be suppressed, pass
+	findingsReport := "## Summary\nIssues found.\n\n## Findings\n- **Location:** src/handler.go:10\n- **Description:** SQL injection in request handler\n- **Severity:** HIGH\n- **Recommended Fix:** Use parameterized queries\n\n## Verdict\nFAIL\n"
+	reopenedReport := "## Summary\nIssues found.\n\n## Findings\n- **Location:** src/handler.go:50\n- **Description:** SQL injection vulnerability in handler endpoint\n- **Severity:** HIGH\n- **Recommended Fix:** Sanitize inputs\n\n## Verdict\nFAIL\n"
+
+	callCount := 0
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, idx int) {
+			callCount++
+			auditFile := filepath.Join(projectDir, config.SprintAuditFile)
+			switch idx {
+			case 0: // cycle 1 audit
+				writeFile(t, auditFile, findingsReport)
+			case 1: // cycle 1 fix — no file needed
+			case 2: // cycle 1 verify
+				writeFile(t, auditFile, "- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 3: // cycle 2 re-audit — same theme, different wording
+				writeFile(t, auditFile, reopenedReport)
+			default: // cycle 2 should detect reopening and suppress; then final pass
+				writeFile(t, auditFile, cleanAudit)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterations = 5
+	opts.Epic.MaxAuditIterationsSet = true
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.True(t, result.Passed, "should pass after reopening is suppressed")
+	assert.Equal(t, 1, result.SuppressedReopenings, "one reopening should be suppressed")
+}
+
+func TestRunAuditLoopAllowsGenuineRegression(t *testing.T) {
+	t.Parallel()
+
+	// Cycle 1: MODERATE issue
+	// Fix resolves it
+	// Cycle 2: same theme at HIGH severity -> should be admitted as genuine regression
+	moderateReport := "## Summary\nIssues found.\n\n## Findings\n- **Location:** src/api.go:10\n- **Description:** Error handling incomplete in API\n- **Severity:** MODERATE\n- **Recommended Fix:** Add error checks\n\n## Verdict\nFAIL\n"
+	highReport := "## Summary\nIssues found.\n\n## Findings\n- **Location:** src/api.go:10\n- **Description:** Error handling completely absent in API\n- **Severity:** HIGH\n- **Recommended Fix:** Implement full error handling\n\n## Verdict\nFAIL\n"
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, idx int) {
+			auditFile := filepath.Join(projectDir, config.SprintAuditFile)
+			switch idx {
+			case 0: // cycle 1 audit
+				writeFile(t, auditFile, moderateReport)
+			case 1: // cycle 1 fix
+			case 2: // cycle 1 verify
+				writeFile(t, auditFile, "- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 3: // cycle 2 re-audit — same theme but escalated severity
+				writeFile(t, auditFile, highReport)
+			default:
+				writeFile(t, auditFile, cleanAudit)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterations = 3
+	opts.Epic.MaxAuditIterationsSet = true
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	// The escalated finding should NOT be suppressed — audit should still have it
+	assert.Equal(t, 0, result.SuppressedReopenings, "escalated severity should not be suppressed")
 }
