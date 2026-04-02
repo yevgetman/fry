@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/consciousness"
 	"github.com/yevgetman/fry/internal/epic"
 )
 
@@ -177,6 +178,7 @@ func TestParseObserverResponse_AllSections(t *testing.T) {
 	assert.Equal(t, "NOTE", obs.Directives[0].Type)
 	assert.Contains(t, obs.Directives[0].Value, "Sprint 1 used only 3")
 	assert.Equal(t, "SUGGEST", obs.Directives[1].Type)
+	assert.Equal(t, consciousness.ParseStatusOK, obs.ParseStatus)
 }
 
 func TestParseObserverResponse_ThoughtsOnly(t *testing.T) {
@@ -199,10 +201,10 @@ func TestParseObserverResponse_MalformedFallback(t *testing.T) {
 
 	obs, err := parseObserverResponse(response)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no structured JSON")
-	assert.Equal(t, "This is just plain text with no tags at all.", obs.Thoughts)
+	assert.Contains(t, err.Error(), "no valid JSON object found")
+	assert.Equal(t, consciousness.ParseStatusFailed, obs.ParseStatus)
+	assert.Empty(t, obs.Thoughts)
 	assert.Empty(t, obs.ScratchpadDelta)
-
 }
 
 func TestParseObserverResponse_WithDirectives(t *testing.T) {
@@ -223,10 +225,19 @@ func TestParseObserverResponse_EmptyInput(t *testing.T) {
 	t.Parallel()
 
 	obs, err := parseObserverResponse("")
-	require.NoError(t, err)
+	require.Error(t, err)
 	assert.Empty(t, obs.Thoughts)
 	assert.Empty(t, obs.ScratchpadDelta)
+	assert.Equal(t, consciousness.ParseStatusFailed, obs.ParseStatus)
+}
 
+func TestParseObserverResponse_RepairsTranscriptPreamble(t *testing.T) {
+	t.Parallel()
+
+	obs, err := parseObserverResponse("Reading prompt from stdin...\n```json\n{\"thoughts\":\"Recovered thoughts.\",\"scratchpad\":\"Recovered scratchpad.\"}\n```")
+	require.NoError(t, err)
+	assert.Equal(t, consciousness.ParseStatusRepaired, obs.ParseStatus)
+	assert.Equal(t, "Recovered thoughts.", obs.Thoughts)
 }
 
 // extractSection is a test helper that extracts text between two section headers.

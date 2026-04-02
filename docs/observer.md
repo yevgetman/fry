@@ -1,137 +1,150 @@
 # Observer
 
-The observer is a metacognitive layer that gives Fry persistent, evolving self-awareness. It watches builds, notices patterns, and develops insight over time. Observer failures are non-fatal -- they never break a build.
+The observer is Fry's metacognitive layer. It watches the build, writes structured reflections, and feeds those reflections into the consciousness session. Observer failures are non-fatal: they never fail the build.
 
 ## Architecture
 
-The observer has four components:
+The observer has four runtime components:
 
 ### Event stream
 
-Mechanical JSON-line events emitted at build checkpoints. Zero LLM cost -- these are structured data, not agent output. Written to **`.fry/observer/events.jsonl`**.
+Mechanical JSON-line events written to **`.fry/observer/events.jsonl`**. These are structured runtime signals, not model output.
 
 ### Identity
 
-Fry's canonical identity is compiled into the binary via `go:embed` under `templates/identity/`. It consists of layered files:
-
-- **`core.md`** — fundamental self-knowledge: what Fry is, its purpose, its values (~500 tokens, always loaded)
-- **`disposition.md`** — behavioral tendencies derived from build experience (~500 tokens, always loaded)
-- **`domains/`** — domain-specific wisdom activated by context (future)
-
-The identity is **read-only during builds**. The observer reads it for context but cannot modify it. Identity is updated only by the Reflection process between builds (see `build-docs/fry-consciousness.md`). Use `fry identity` to view the current identity.
+Fry's identity is compiled into the binary from `templates/identity/`. The observer reads it for context only. Builds never mutate identity.
 
 ### Scratchpad
 
-Working memory at **`.fry/observer/scratchpad.md`**. Reset at the start of each build. Carries observations, hypotheses, and notes between wake-ups within a single build.
+Working memory at **`.fry/observer/scratchpad.md`**.
+
+Rules:
+
+- new session: reset scratchpad
+- resume session: keep existing scratchpad
+- parse failure: leave scratchpad unchanged
+- parse success with a delta: append the delta and record it in consciousness scratchpad history
 
 ### Wake-ups
 
-Short LLM sessions at natural breakpoints. Each wake-up reads the identity, scratchpad, and recent events (~12-15 KB total), then writes observations back. The observer responds with a structured JSON object containing `thoughts`, `scratchpad`, and optionally `directives` fields.
+Short model sessions at natural boundaries. Each wake-up reads:
 
-### Experience collection
+- identity
+- current scratchpad
+- recent observer events
+- wake-point-specific build metadata
 
-At each wake-up, the observer's thoughts are collected in-memory by the consciousness pipeline. At build end:
+The observer must return one JSON object with:
 
-1. An LLM call synthesizes all observations into a coherent **experience summary** — a 200-500 word narrative capturing what happened, what was surprising, and generalizable lessons
-2. The summary and raw observations are written together to `~/.fry/experiences/build-<id>.json`
-
-The experience summary is the document that will eventually feed the downstream memory pipeline.
-
-## Event Types
-
-Events are cheap structured data appended to the JSONL stream. Each event has a timestamp, type, optional sprint number, and optional key-value data.
-
-| Event | When Emitted |
-|---|---|
-| `build_start` | Build initialization |
-| `sprint_start` | Before each sprint |
-| `sprint_complete` | After sprint finishes |
-| `heal_complete` | After alignment loop |
-| `audit_complete` | After sprint audit |
-| `review_complete` | After sprint review |
-| `build_audit_done` | After build-level audit |
-| `build_end` | End of build |
-
-### Example event format
-
-```jsonl
-{"ts":"2026-03-23T10:00:00Z","type":"build_start","data":{"epic":"auth-rewrite","effort":"high","total_sprints":"4"}}
-{"ts":"2026-03-23T10:02:14Z","type":"sprint_complete","sprint":1,"data":{"status":"PASS","duration":"2m14s","heal_attempts":"0"}}
-```
+- `thoughts`
+- `scratchpad`
+- optional `directives`
 
 ## Wake-Up Schedule
 
-Wake-ups are gated by [effort level](effort-levels.md). Higher effort levels enable more observation points.
+Wake-ups are gated by [effort level](effort-levels.md).
 
 | Effort | After Sprint | After Build Audit | Build End |
 |---|---|---|---|
 | `fast` | disabled | disabled | disabled |
-| `standard` | -- | -- | yes |
+| `standard` | no | no | yes |
 | `high` | yes | yes | yes |
 | `max` | yes | yes | yes |
 
-At `fast` effort, the observer is fully disabled (no events, no wake-ups). At `standard`, only the final build-end wake-up runs. At `high` and `max`, the observer wakes after every sprint, after the build audit, and at build end.
+## Structured Parse Rules
 
-## How Observer Consciousness Works
+Observer output is parsed strictly. Fry never promotes raw engine transcripts into canonical observer thoughts.
 
-- **Identity is compiled into the binary.** Fry's self-knowledge and behavioral disposition are embedded at build time via `go:embed`. The identity is read-only during builds — updated only by the Reflection process between builds.
-- **Scratchpad carries working memory within a build.** Reset at `build_start`, it accumulates observations across wake-ups during a single build.
-- **Events are cheap structured data, not raw logs.** Emitting events costs zero LLM tokens. Only wake-ups invoke the engine.
-- **Each wake-up reads ~12-15 KB total** (identity + scratchpad + recent events). The last 50 events are included by default.
-- **Observations are collected for the consciousness pipeline.** Each wake-up's thoughts are persisted as a build experience record at `~/.fry/experiences/`, feeding the memory pipeline for future identity evolution.
+Extraction order:
+
+1. raw JSON
+2. fenced JSON
+3. last valid JSON object in the response
+
+Checkpoint parse status is recorded as:
+
+| Status | Meaning |
+|---|---|
+| `ok` | Raw output was already valid structured JSON |
+| `repaired` | Fry recovered valid structured JSON from noisy output |
+| `failed` | No valid structured output could be recovered |
+
+On `failed`:
+
+- canonical `thoughts` stay empty
+- scratchpad is not updated
+- the output is quarantined via the observer log path
+
+## Consciousness Integration
+
+Each successful wake-up produces a durable checkpoint in `.fry/consciousness/` immediately after the wake returns.
+
+The observer itself owns:
+
+- reading identity
+- reading and writing scratchpad
+- collecting recent events
+- invoking the model
+- parsing structured output
+
+The consciousness layer owns:
+
+- checkpoint persistence
+- scratchpad history
+- checkpoint distillation
+- final build summary synthesis
+- upload queueing
+
+## Session Semantics
+
+Observer initialization is mode-aware:
+
+| Mode | Behavior |
+|---|---|
+| `InitNewSession` | Reset scratchpad and event log, then emit `build_start` with `mode=new` |
+| `ResumeSession` | Preserve scratchpad and event log, then emit `build_start` with `mode=resume` |
+
+This keeps observer continuity intact across `--resume`, `--continue`, interrupted restarts, and process restarts inside the same logical build.
 
 ## Directives
 
-During wake-ups, the observer can emit structured directives in the `directives` JSON field:
+The observer can emit structured directives in the `directives` field:
 
 | Type | Purpose |
 |---|---|
-| `WARN` | Flag a potential problem (e.g., stuck alignment loop) |
+| `WARN` | Flag a likely problem |
 | `NOTE` | Record a neutral observation |
 | `SUGGEST` | Propose an adjustment |
 
-**V1 limitation:** Directives are logged only. The build system does not act on them at runtime. Future versions may use directives to adjust build parameters dynamically.
+Directives are persisted with the checkpoint. Fry does not automatically execute them.
 
 ## CLI
 
-### Commands
+Commands:
 
 ```bash
-fry identity                         # Print core identity + disposition
-fry identity --full                  # Print all identity layers including domains
+fry identity
+fry identity --full
 ```
 
-### Flags
+Flags:
 
-`--no-observer` disables the observer entirely. No events are emitted, no wake-ups run, no experience records are created.
-
-```bash
-fry --no-observer                    # Run without observer
-fry --effort high                    # Observer active (high effort)
-fry --effort fast                    # Observer disabled (fast effort)
-```
-
-The observer is also automatically disabled during `--dry-run` and at `fast` effort.
+- `--no-observer` disables observer events, wake-ups, checkpoints, and scratchpad updates
+- `--effort fast` also disables the observer
+- `--dry-run` also disables the observer
 
 ## File Locations
 
 | File | Purpose | Persists |
 |---|---|---|
-| `.fry/observer/events.jsonl` | Structured event stream | Per build |
-| `.fry/observer/scratchpad.md` | Working memory | Per build (reset at start) |
-| `.fry/observer/wake-prompt.md` | Wake-up prompt (transient) | Deleted after use |
-| `~/.fry/experiences/build-<id>.json` | Build experience record | Persists across builds |
-| `templates/identity/core.md` | Core identity (compiled in) | Updated by Reflection |
-| `templates/identity/disposition.md` | Behavioral disposition (compiled in) | Updated by Reflection |
-
-Observer runtime files live under **`.fry/observer/`**, which is gitignored. Experience records are stored in the user's home directory at `~/.fry/experiences/`. Identity files are compiled into the binary.
-
-## Model Selection
-
-The observer session uses the `observer` session type for [automatic model selection](engines.md#automatic-model-selection-tier-system). At `high`/`max` effort, it uses Standard-tier models. At `standard` effort, it uses Mini-tier models.
+| `.fry/observer/events.jsonl` | Structured event stream | Per logical build session |
+| `.fry/observer/scratchpad.md` | Current scratchpad snapshot | Preserved on resume |
+| `.fry/observer/wake-prompt.md` | Wake-up prompt | Deleted after use |
+| `.fry/consciousness/scratchpad-history.jsonl` | Scratchpad delta history | Per logical build session |
+| `~/.fry/experiences/build-<session-id>.json` | Long-term build experience record | Across builds |
 
 ## Related Documentation
 
-- [Effort Levels](effort-levels.md) -- controls observer wake-up schedule
-- [Sprint Execution](sprint-execution.md) -- build loop where events are emitted
-- [Sprint Audit](sprint-audit.md) -- audit completion triggers observer events
+- [Consciousness](consciousness.md)
+- [Effort Levels](effort-levels.md)
+- [Sprint Execution](sprint-execution.md)

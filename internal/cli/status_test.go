@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yevgetman/fry/internal/config"
 )
 
 func newTestCmd(t *testing.T, projectDir string) *cobra.Command {
@@ -146,4 +148,43 @@ func TestStatusCommandNoFryProject(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, "No fry project found")
 	assert.Contains(t, output, "Run 'fry init' to get started.")
+}
+
+func TestStatusCommandConsciousnessLocal(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry", "consciousness", "distilled"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry", "consciousness", "upload-queue"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.ConsciousnessSessionFile), []byte(`{
+	  "session_id": "session-1",
+	  "status": "running",
+	  "current_sprint": 2,
+	  "total_sprints": 4,
+	  "checkpoints_persisted": 3,
+	  "parse_failures": 1,
+	  "repair_successes": 2,
+	  "distillations_succeeded": 2,
+	  "distillations_failed": 1,
+	  "upload_attempts": 5,
+	  "upload_successes": 4,
+	  "session_resumed_count": 1
+	}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".fry", "consciousness", "distilled", "0001.json"), []byte(`{"session_id":"session-1","sequence":1,"summary":"checkpoint"}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".fry", "consciousness", "upload-queue", "pending.json"), []byte(`{"id":"pending","event_type":"checkpoint_summary"}`), 0o644))
+
+	var buf bytes.Buffer
+	fakeCmd := newTestCmd(t, dir)
+	fakeCmd.Flags().Bool("consciousness", true, "")
+	require.NoError(t, fakeCmd.Flags().Set("consciousness", "true"))
+	fakeCmd.SetOut(&buf)
+
+	err := statusCmd.RunE(fakeCmd, []string{})
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "Consciousness Session")
+	assert.Contains(t, output, "Checkpoints persisted: 3")
+	assert.Contains(t, output, "Parse failures:        1")
+	assert.Contains(t, output, "1 pending")
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/consciousness"
 	"github.com/yevgetman/fry/internal/textutil"
 )
 
@@ -132,34 +133,50 @@ type observerJSON struct {
 
 // parseObserverResponse extracts structured output from LLM response.
 func parseObserverResponse(output string) (*Observation, error) {
-	if output == "" {
-		return &Observation{}, nil
+	if strings.TrimSpace(output) == "" {
+		return &Observation{
+			ParseStatus: consciousness.ParseStatusFailed,
+			ParseError:  "empty observer output",
+		}, fmt.Errorf("empty observer output")
 	}
 
 	var parsed observerJSON
-	if err := textutil.ExtractJSON(output, &parsed); err != nil {
-		// Fallback: treat entire output as thoughts
-		return &Observation{Thoughts: strings.TrimSpace(output)}, fmt.Errorf("no structured JSON found in response")
+	diag, err := textutil.ExtractJSONWithDiagnostics(output, &parsed)
+	if err != nil {
+		return &Observation{
+			ParseStatus: consciousness.ParseStatusFailed,
+			ParseError:  err.Error(),
+		}, err
 	}
 
 	obs := &Observation{
-		Thoughts:       strings.TrimSpace(parsed.Thoughts),
+		Thoughts:        strings.TrimSpace(parsed.Thoughts),
 		ScratchpadDelta: strings.TrimSpace(parsed.Scratchpad),
+	}
+	if diag.Repaired {
+		obs.ParseStatus = consciousness.ParseStatusRepaired
+	} else {
+		obs.ParseStatus = consciousness.ParseStatusOK
 	}
 
 	if d := strings.TrimSpace(parsed.Directives); d != "" {
 		obs.Directives = parseDirectives(d)
+	}
+	if obs.Thoughts == "" && obs.ScratchpadDelta == "" {
+		obs.ParseStatus = consciousness.ParseStatusFailed
+		obs.ParseError = "observer JSON did not contain thoughts or scratchpad"
+		return obs, fmt.Errorf("observer JSON did not contain thoughts or scratchpad")
 	}
 
 	return obs, nil
 }
 
 // parseDirectives parses directive lines in the format "TYPE: value".
-func parseDirectives(raw string) []Directive {
+func parseDirectives(raw string) []consciousness.Directive {
 	if raw == "" {
 		return nil
 	}
-	var directives []Directive
+	var directives []consciousness.Directive
 	lines := strings.Split(raw, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -173,7 +190,7 @@ func parseDirectives(raw string) []Directive {
 		dirType := strings.TrimSpace(line[:idx])
 		dirValue := strings.TrimSpace(line[idx+1:])
 		if dirType != "" && dirValue != "" {
-			directives = append(directives, Directive{Type: dirType, Value: dirValue})
+			directives = append(directives, consciousness.Directive{Type: dirType, Value: dirValue})
 		}
 	}
 	return directives

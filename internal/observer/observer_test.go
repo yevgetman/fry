@@ -140,6 +140,26 @@ func TestInitBuild_DoesNotWriteIdentity(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "identity.md should not be written to project dir")
 }
 
+func TestResumeSession_PreservesScratchpadAndEvents(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, InitNewSession(dir, "TestEpic", "high", 3))
+	require.NoError(t, WriteScratchpad(dir, "keep this scratchpad"))
+	require.NoError(t, EmitEvent(dir, Event{Type: EventSprintComplete, Sprint: 1}))
+
+	require.NoError(t, ResumeSession(dir, "TestEpic", "high", 3))
+
+	scratchpad, err := ReadScratchpad(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "keep this scratchpad", scratchpad)
+
+	events, err := ReadEvents(dir)
+	require.NoError(t, err)
+	require.Len(t, events, 3)
+	assert.Equal(t, "resume", events[len(events)-1].Data["mode"])
+}
+
 // --- Scratchpad tests ---
 
 func TestWriteAndReadScratchpad(t *testing.T) {
@@ -222,6 +242,7 @@ func TestWakeUp_Success(t *testing.T) {
 	require.NotNil(t, obs)
 	assert.Contains(t, obs.Thoughts, "build started cleanly")
 	assert.Contains(t, obs.ScratchpadDelta, "Sprint 1 completed")
+	assert.Equal(t, "ok", string(obs.ParseStatus))
 }
 
 func TestWakeUp_UpdatesScratchpad(t *testing.T) {
@@ -302,6 +323,8 @@ func TestWakeUp_EngineFailure(t *testing.T) {
 	// Should not return error for non-fatal engine failure
 	require.NoError(t, err)
 	require.NotNil(t, obs)
+	assert.Equal(t, "failed", string(obs.ParseStatus))
+	assert.Empty(t, obs.Thoughts)
 }
 
 func TestWakeUp_ContextCancelled(t *testing.T) {
@@ -349,4 +372,54 @@ func TestWakeUp_NilEngine(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "engine is required")
+}
+
+func TestWakeUp_ParseFailureQuarantinesTranscript(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, InitBuild(dir, "TestEpic", "high", 3))
+	require.NoError(t, WriteScratchpad(dir, "existing scratchpad"))
+
+	obs, err := WakeUp(context.Background(), ObserverOpts{
+		ProjectDir:   dir,
+		Engine:       &stubObserverEngine{output: "Reading prompt from stdin...\nthis is not json"},
+		EpicName:     "TestEpic",
+		WakePoint:    WakeAfterSprint,
+		SprintNum:    1,
+		TotalSprints: 3,
+		EffortLevel:  epic.EffortHigh,
+	})
+	require.NotNil(t, obs)
+	require.NoError(t, err)
+	assert.Equal(t, "failed", string(obs.ParseStatus))
+	assert.Empty(t, obs.Thoughts)
+	assert.NotEmpty(t, obs.RawOutputPath)
+
+	scratchpad, readErr := ReadScratchpad(dir)
+	require.NoError(t, readErr)
+	assert.Equal(t, "existing scratchpad", scratchpad)
+}
+
+func TestWakeUp_RepairsTranscriptPreamble(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, InitBuild(dir, "TestEpic", "high", 3))
+
+	obs, err := WakeUp(context.Background(), ObserverOpts{
+		ProjectDir: dir,
+		Engine: &stubObserverEngine{
+			output: "Reading prompt from stdin...\n```json\n{\"thoughts\":\"Recovered structured output.\",\"scratchpad\":\"Carry this forward.\"}\n```",
+		},
+		EpicName:     "TestEpic",
+		WakePoint:    WakeAfterSprint,
+		SprintNum:    1,
+		TotalSprints: 3,
+		EffortLevel:  epic.EffortHigh,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, obs)
+	assert.Equal(t, "repaired", string(obs.ParseStatus))
+	assert.Equal(t, "Recovered structured output.", obs.Thoughts)
 }

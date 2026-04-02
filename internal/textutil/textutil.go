@@ -8,8 +8,15 @@ import (
 	"unicode/utf8"
 )
 
-// StripMarkdownFences removes leading/trailing markdown code fence markers
-// (```) from LLM output that may wrap its response in a code block.
+// JSONExtractDiagnostics describes how JSON extraction succeeded or failed.
+type JSONExtractDiagnostics struct {
+	Strategy         string
+	FenceCandidates  int
+	ObjectCandidates int
+	Repaired         bool
+}
+
+// StripMarkdownFences removes leading/trailing markdown code fence markers.
 func StripMarkdownFences(output string) string {
 	trimmed := strings.TrimSpace(output)
 	if !strings.HasPrefix(trimmed, "```") {
@@ -26,8 +33,7 @@ func StripMarkdownFences(output string) string {
 	return strings.Join(lines, "\n")
 }
 
-// FileSize returns the size in bytes of a file, or -1 if the file does not
-// exist or cannot be stat'd.
+// FileSize returns the size in bytes of a file, or -1 if the file does not exist.
 func FileSize(path string) int64 {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -36,19 +42,16 @@ func FileSize(path string) int64 {
 	return info.Size()
 }
 
-// ShellQuote returns a single-quoted shell string, escaping any embedded
-// single quotes. Suitable for embedding user strings in bash -c commands.
+// ShellQuote returns a single-quoted shell string, escaping embedded single quotes.
 func ShellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// TruncateUTF8 truncates s to at most maxBytes bytes without splitting
-// multi-byte UTF-8 characters. Returns s unchanged if it fits.
+// TruncateUTF8 truncates s to at most maxBytes bytes without splitting a rune.
 func TruncateUTF8(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
 	}
-	// Walk backward from maxBytes to find a valid UTF-8 boundary.
 	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
 		maxBytes--
 	}
@@ -56,75 +59,137 @@ func TruncateUTF8(s string, maxBytes int) string {
 }
 
 // ExtractJSON extracts and unmarshals a JSON object from LLM output into dest.
-// It tries three strategies in order:
-//  1. Unmarshal the raw (trimmed) output directly.
-//  2. Extract content from a ```json code fence and unmarshal it.
-//  3. Find the first '{' and last '}' in the output and unmarshal that substring.
-//
-// Returns an error if no valid JSON object can be found.
 func ExtractJSON(output string, dest interface{}) error {
+	_, err := ExtractJSONWithDiagnostics(output, dest)
+	return err
+}
+
+// ExtractJSONWithDiagnostics extracts a JSON object and reports how it was found.
+func ExtractJSONWithDiagnostics(output string, dest interface{}) (JSONExtractDiagnostics, error) {
 	trimmed := strings.TrimSpace(output)
 	if trimmed == "" {
-		return fmt.Errorf("empty output")
+		return JSONExtractDiagnostics{}, fmt.Errorf("empty output")
 	}
 
-	// Strategy 1: raw output is valid JSON.
 	if err := json.Unmarshal([]byte(trimmed), dest); err == nil {
-		return nil
+		return JSONExtractDiagnostics{Strategy: "raw"}, nil
 	}
 
-	// Strategy 2: JSON inside a markdown code fence.
-	if idx := strings.Index(trimmed, "```"); idx >= 0 {
-		fenceContent := extractFenceContent(trimmed, idx)
-		if fenceContent != "" {
-			if err := json.Unmarshal([]byte(fenceContent), dest); err == nil {
-				return nil
+	fences := extractFenceBlocks(trimmed)
+	diag := JSONExtractDiagnostics{FenceCandidates: len(fences)}
+	for _, fence := range fences {
+		if err := json.Unmarshal([]byte(fence.content), dest); err == nil {
+			diag.Strategy = fence.strategy
+			diag.Repaired = true
+			return diag, nil
+		}
+	}
+
+	candidates := extractJSONObjectCandidates(trimmed)
+	diag.ObjectCandidates = len(candidates)
+	for i := len(candidates) - 1; i >= 0; i-- {
+		if err := json.Unmarshal([]byte(candidates[i]), dest); err == nil {
+			diag.Strategy = "last_valid_object"
+			diag.Repaired = true
+			return diag, nil
+		}
+	}
+
+	return diag, fmt.Errorf(
+		"no valid JSON object found (raw invalid, fenced=%d, object_candidates=%d)",
+		diag.FenceCandidates,
+		diag.ObjectCandidates,
+	)
+}
+
+type fenceBlock struct {
+	content  string
+	strategy string
+}
+
+func extractFenceBlocks(s string) []fenceBlock {
+	var jsonBlocks []fenceBlock
+	var genericBlocks []fenceBlock
+
+	for idx := 0; idx < len(s); {
+		start := strings.Index(s[idx:], "```")
+		if start < 0 {
+			break
+		}
+		start += idx
+		afterFence := s[start+3:]
+		newline := strings.Index(afterFence, "\n")
+		if newline < 0 {
+			break
+		}
+		lang := strings.TrimSpace(afterFence[:newline])
+		bodyStart := start + 3 + newline + 1
+		endRel := strings.Index(s[bodyStart:], "```")
+		if endRel < 0 {
+			break
+		}
+		bodyEnd := bodyStart + endRel
+		content := strings.TrimSpace(s[bodyStart:bodyEnd])
+		if content != "" {
+			if strings.EqualFold(lang, "json") {
+				jsonBlocks = append(jsonBlocks, fenceBlock{content: content, strategy: "fenced_json"})
+			} else {
+				genericBlocks = append(genericBlocks, fenceBlock{content: content, strategy: "fenced"})
+			}
+		}
+		idx = bodyEnd + 3
+	}
+
+	return append(jsonBlocks, genericBlocks...)
+}
+
+func extractJSONObjectCandidates(s string) []string {
+	var candidates []string
+	depth := 0
+	start := -1
+	inString := false
+	escape := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inString {
+			if escape {
+				escape = false
+				continue
+			}
+			switch ch {
+			case '\\':
+				escape = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		switch ch {
+		case '"':
+			inString = true
+		case '{':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case '}':
+			if depth == 0 {
+				continue
+			}
+			depth--
+			if depth == 0 && start >= 0 {
+				candidates = append(candidates, s[start:i+1])
+				start = -1
 			}
 		}
 	}
 
-	// Strategy 3: first '{' to last '}'.
-	start := strings.Index(trimmed, "{")
-	end := strings.LastIndex(trimmed, "}")
-	if start >= 0 && end > start {
-		candidate := trimmed[start : end+1]
-		if err := json.Unmarshal([]byte(candidate), dest); err == nil {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("no valid JSON object found in output")
+	return candidates
 }
 
-// extractFenceContent returns the text inside the first markdown code fence,
-// or "" if no complete fence is found.
-func extractFenceContent(s string, fenceStart int) string {
-	rest := s[fenceStart:]
-	// Skip the opening ``` and optional language tag
-	firstNewline := strings.Index(rest, "\n")
-	if firstNewline < 0 {
-		return ""
-	}
-	body := rest[firstNewline+1:]
-	// Find the closing ```
-	closeIdx := strings.Index(body, "```")
-	if closeIdx < 0 {
-		return ""
-	}
-	return strings.TrimSpace(body[:closeIdx])
-}
-
-// ResolveArtifact checks whether the engine wrote the target file during its
-// run (by comparing file sizes). If the file size changed, the engine wrote
-// it and its on-disk content is authoritative — we leave it in place.
-// Otherwise we fall back to writing the captured engine output (stripped of
-// markdown fences) ourselves.
-//
-// Known limitation: if the engine rewrites the file to exactly the same byte
-// count, the size comparison returns equal and the fallback overwrites the
-// engine's content. This is unlikely for plan, agents, epic, and sanity checks
-// artifacts but is an inherent trade-off of size-based detection vs. a content
-// hash.
+// ResolveArtifact checks whether the engine wrote the target file during its run.
 func ResolveArtifact(targetPath string, beforeSize int64, engineOutput string) error {
 	if FileSize(targetPath) != beforeSize {
 		return nil

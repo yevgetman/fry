@@ -119,16 +119,18 @@ fry/
 │   │   ├── identity.go          # Identity loading (JSON-first, .md fallback): LoadCoreIdentity, LoadDisposition, LoadFullIdentity
 │   │   ├── identity_json.go     # JSON identity types + loader + renderer: IdentityJSON, LoadIdentityJSON, RenderIdentityForPrompt
 │   │   ├── reflect.go           # Remote reflection trigger: TriggerReflection (POST to /reflect)
-│   │   ├── collector.go         # Build observation collection: Collector, BuildRecord, BuildObservation
-│   │   ├── summarize.go         # End-of-build experience synthesis: SummarizeExperience, SprintOutcome
-│   │   ├── upload.go            # HTTP upload to consciousness API: UploadExperience, CachePendingUpload, RetryPendingUploads
+│   │   ├── collector.go         # Session manager: durable checkpoints, run segments, final BuildRecord persistence
+│   │   ├── session.go           # Session/checkpoint/distillation types and status enums
+│   │   ├── summarize.go         # Checkpoint distillation + final experience synthesis from checkpoint summaries
+│   │   ├── upload.go            # Checkpoint-aware upload queue + legacy final-summary retry
+│   │   ├── local_status.go      # Local consciousness health reader/formatter for `fry status --consciousness`
 │   │   ├── settings.go          # User settings (~/.fry/settings.json): LoadSettings, TelemetryEnabled
 │   │   └── instance.go          # Anonymized machine identifier: InstanceID
 │   ├── observer/
-│   │   ├── observer.go          # Observer lifecycle: InitBuild, WakeUp, ShouldWakeUp, scratchpad I/O
+│   │   ├── observer.go          # Observer lifecycle: InitNewSession, ResumeSession, WakeUp, ShouldWakeUp
 │   │   ├── event.go             # Event types, EmitEvent, ReadEvents, ReadRecentEvents
 │   │   ├── identity.go          # ReadIdentity (delegates to consciousness.LoadCoreIdentity)
-│   │   └── prompt.go            # Wake-up prompt builder, response parser, directive extraction
+│   │   └── prompt.go            # Wake-up prompt builder, strict response parser, directive extraction
 │   ├── monitor/
 │   │   ├── snapshot.go          # Snapshot and EnrichedEvent types
 │   │   ├── source.go            # Source interface + core polling implementations (event, phase, status, lock, progress, log, exit)
@@ -190,9 +192,15 @@ fry/
 | `triage-prompt.md` | Classifier prompt for triage gate |
 | `triage-decision.txt` | Triage classifier output (complexity, effort, sprints, reason) |
 | `git-strategy.txt` | Persisted git strategy for `--continue`/`--resume` reattachment |
-| `observer/events.jsonl` | Observer event stream (JSONL, reset per build) |
-| `observer/scratchpad.md` | Observer working memory (reset per build) |
+| `observer/events.jsonl` | Observer event stream (reset only for a new logical session) |
+| `observer/scratchpad.md` | Observer working memory (preserved on resume) |
 | `observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) |
+| `consciousness/session.json` | Durable consciousness session state |
+| `consciousness/checkpoints.jsonl` | Append-only checkpoint log |
+| `consciousness/checkpoints/` | Per-checkpoint durable records |
+| `consciousness/scratchpad-history.jsonl` | Scratchpad delta history |
+| `consciousness/distilled/` | Distilled checkpoint summaries |
+| `consciousness/upload-queue/` | Pending checkpoint/lifecycle uploads |
 | `build-phase.txt` | Current build phase (triage, prepare, sprint, audit, build-audit, complete, failed) for `fry status` |
 | `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change, including early failures, for agent polling |
 | `build-report.json` | Machine-readable BuildReport JSON (written at build end with `--json-report`) |
@@ -437,7 +445,7 @@ Key flags:
 | `GitBranchPrefix` | `fry/` | Prefix for auto-generated branch names |
 | `ObserverDir` | `.fry/observer` | Observer files directory |
 | `ObserverEventsFile` | `.fry/observer/events.jsonl` | Structured event stream |
-| `ObserverScratchpadFile` | `.fry/observer/scratchpad.md` | Per-build working memory |
+| `ObserverScratchpadFile` | `.fry/observer/scratchpad.md` | Per-session working memory |
 | `ObserverPromptFile` | `.fry/observer/wake-prompt.md` | Transient wake-up prompt |
 | `MaxObserverEvents` | `50` | Max recent events included in wake-up prompt |
 | `IdentityCoreFile` | `identity/core.md` | Core identity (go:embed path) |
@@ -445,7 +453,15 @@ Key flags:
 | `IdentityDomainsDir` | `identity/domains` | Domain files directory (go:embed path) |
 | `IdentityJSONFile` | `identity/identity.json` | JSON identity (go:embed, produced by Reflection) |
 | `ExperiencesDir` | `.fry/experiences` | Build experience records |
+| `ConsciousnessDir` | `.fry/consciousness` | In-progress consciousness runtime state |
+| `ConsciousnessSessionFile` | `.fry/consciousness/session.json` | Durable session state |
+| `ConsciousnessCheckpointsFile` | `.fry/consciousness/checkpoints.jsonl` | Append-only checkpoint log |
+| `ConsciousnessCheckpointsDir` | `.fry/consciousness/checkpoints` | Per-checkpoint records |
+| `ConsciousnessScratchpadHistory` | `.fry/consciousness/scratchpad-history.jsonl` | Scratchpad delta history |
+| `ConsciousnessDistilledDir` | `.fry/consciousness/distilled` | Distilled checkpoint summaries |
+| `ConsciousnessUploadQueueDir` | `.fry/consciousness/upload-queue` | Pending checkpoint/lifecycle uploads |
 | `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient, deleted after use) |
+| `ConsciousnessCheckpointPromptFile` | `.fry/consciousness/checkpoint-prompt.md` | Checkpoint distillation prompt (transient) |
 | `ProjectConfigFile` | `.fry/config.json` | Repo-local Fry settings (currently self-improve engine) |
 | `SettingsFile` | `.fry/settings.json` | User settings under `~/.fry/` (telemetry enabled by default; created by `fry init`) |
 | `PendingUploadsDir` | `.fry/experiences/pending` | Cached uploads for retry |

@@ -4,197 +4,229 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yevgetman/fry/internal/config"
 )
 
-func TestNewCollector(t *testing.T) {
+func TestNewCollector_NewSession(t *testing.T) {
 	t.Parallel()
 
-	c := NewCollector("claude", "high", 5)
-	require.NotNil(t, c)
+	dir := t.TempDir()
+	c, err := NewCollector(CollectorOptions{
+		ProjectDir:   dir,
+		EpicName:     "Test Epic",
+		Engine:       "claude",
+		EffortLevel:  "high",
+		TotalSprints: 3,
+		Mode:         SessionModeNew,
+	})
+	require.NoError(t, err)
+
 	assert.NotEmpty(t, c.BuildID())
-	assert.Equal(t, "claude", c.record.Engine)
-	assert.Equal(t, "high", c.record.EffortLevel)
-	assert.Equal(t, 5, c.record.TotalSprints)
+	assert.Equal(t, c.BuildID(), c.SessionID())
 	assert.Equal(t, 0, c.ObservationCount())
+
+	state := c.GetSessionState()
+	assert.Equal(t, SessionStatusRunning, state.Status)
+	assert.Equal(t, 0, state.CheckpointsPersisted)
+
+	_, err = os.Stat(filepath.Join(dir, config.ConsciousnessSessionFile))
+	require.NoError(t, err)
 }
 
-func TestAddObservation(t *testing.T) {
+func TestNewCollector_ResumeSession(t *testing.T) {
 	t.Parallel()
 
-	c := NewCollector("claude", "standard", 3)
+	dir := t.TempDir()
+	c1, err := NewCollector(CollectorOptions{
+		ProjectDir:   dir,
+		EpicName:     "Test Epic",
+		Engine:       "claude",
+		EffortLevel:  "high",
+		TotalSprints: 3,
+		Mode:         SessionModeNew,
+	})
+	require.NoError(t, err)
 
-	c.AddObservation("Sprint 1 went smoothly.", "after_sprint", 1)
+	checkpoint, err := c1.AddCheckpoint(ObservationCheckpoint{
+		WakePoint:       "after_sprint",
+		SprintNum:       1,
+		ParseStatus:     ParseStatusOK,
+		ScratchpadDelta: "watch audit loops",
+		Observation: &BuildObservation{
+			Timestamp: time.Now().UTC(),
+			WakePoint: "after_sprint",
+			SprintNum: 1,
+			Thoughts:  "Sprint 1 stayed on track.",
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, c1.RecordDistillation(CheckpointSummary{
+		Sequence:       checkpoint.Sequence,
+		CheckpointType: checkpoint.CheckpointType,
+		Summary:        "Sprint 1 stayed on track with low risk.",
+	}))
+
+	c2, err := NewCollector(CollectorOptions{
+		ProjectDir:    dir,
+		EpicName:      "Test Epic",
+		Engine:        "claude",
+		EffortLevel:   "high",
+		TotalSprints:  3,
+		Mode:          SessionModeResume,
+		CurrentSprint: 2,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, c1.BuildID(), c2.BuildID())
+	assert.Equal(t, 1, c2.ObservationCount())
+	assert.Len(t, c2.GetRecord().CheckpointSummaries, 1)
+	assert.Equal(t, 1, c2.GetSessionState().SessionResumedCount)
+	assert.Equal(t, 2, c2.GetSessionState().CurrentSprint)
+}
+
+func TestAddCheckpoint_PersistsCanonicalObservationAndScratchpadHistory(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	c, err := NewCollector(CollectorOptions{
+		ProjectDir:   dir,
+		EpicName:     "Test Epic",
+		Engine:       "claude",
+		EffortLevel:  "high",
+		TotalSprints: 2,
+		Mode:         SessionModeNew,
+	})
+	require.NoError(t, err)
+
+	checkpoint, err := c.AddCheckpoint(ObservationCheckpoint{
+		WakePoint:       "after_sprint",
+		SprintNum:       1,
+		ParseStatus:     ParseStatusRepaired,
+		ScratchpadDelta: "tests still need a retry path",
+		Observation: &BuildObservation{
+			Timestamp: time.Now().UTC(),
+			WakePoint: "after_sprint",
+			SprintNum: 1,
+			Thoughts:  "The sprint completed, but tests still look brittle.",
+		},
+	})
+	require.NoError(t, err)
+
 	assert.Equal(t, 1, c.ObservationCount())
+	assert.Equal(t, 1, checkpoint.Sequence)
+	assert.Equal(t, 1, c.GetSessionState().RepairSuccesses)
 
-	c.AddObservation("Sprint 2 required alignment.", "after_sprint", 2)
-	assert.Equal(t, 2, c.ObservationCount())
+	_, err = os.Stat(filepath.Join(dir, config.ConsciousnessCheckpointsDir, "0001.json"))
+	require.NoError(t, err)
 
-	c.AddObservation("Build completed successfully.", "build_end", 3)
-	assert.Equal(t, 3, c.ObservationCount())
+	history, err := os.ReadFile(filepath.Join(dir, config.ConsciousnessScratchpadHistory))
+	require.NoError(t, err)
+	assert.Contains(t, string(history), "tests still need a retry path")
 }
 
-func TestFinalize(t *testing.T) {
+func TestAddCheckpoint_ParseFailureQuarantinesObservation(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	c := NewCollector("codex", "max", 4)
-	c.outDir = dir
-
-	c.AddObservation("First observation.", "after_sprint", 1)
-	c.AddObservation("Second observation.", "build_end", 4)
-
-	err := c.Finalize("success")
+	c, err := NewCollector(CollectorOptions{
+		ProjectDir:   dir,
+		EpicName:     "Test Epic",
+		Engine:       "claude",
+		EffortLevel:  "high",
+		TotalSprints: 2,
+		Mode:         SessionModeNew,
+	})
 	require.NoError(t, err)
 
-	// Verify file exists
-	filename := "build-" + c.BuildID() + ".json"
-	path := filepath.Join(dir, filename)
-	data, err := os.ReadFile(path)
+	checkpoint, err := c.AddCheckpoint(ObservationCheckpoint{
+		WakePoint:     "after_sprint",
+		SprintNum:     1,
+		ParseStatus:   ParseStatusFailed,
+		ParseError:    "no valid JSON object found",
+		RawOutputPath: ".fry/build-logs/observer_after_sprint.log",
+	})
 	require.NoError(t, err)
 
-	// Verify valid JSON and content
+	assert.Equal(t, 0, c.ObservationCount())
+	assert.Equal(t, ParseStatusFailed, checkpoint.ParseStatus)
+	assert.Equal(t, 1, c.GetRecord().ParseFailures)
+
+	data, err := os.ReadFile(filepath.Join(dir, config.ConsciousnessCheckpointsDir, "0001.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"parse_status": "failed"`)
+	assert.Contains(t, string(data), `"raw_output_path": ".fry/build-logs/observer_after_sprint.log"`)
+}
+
+func TestFinalize_WritesExtendedBuildRecord(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	experiencesDir := filepath.Join(t.TempDir(), "experiences")
+	c, err := NewCollector(CollectorOptions{
+		ProjectDir:   dir,
+		EpicName:     "Test Epic",
+		Engine:       "codex",
+		EffortLevel:  "max",
+		TotalSprints: 4,
+		Mode:         SessionModeNew,
+	})
+	require.NoError(t, err)
+	c.outDir = experiencesDir
+
+	checkpoint, err := c.AddCheckpoint(ObservationCheckpoint{
+		WakePoint:   "build_end",
+		SprintNum:   4,
+		ParseStatus: ParseStatusOK,
+		Observation: &BuildObservation{Timestamp: time.Now().UTC(), WakePoint: "build_end", SprintNum: 4, Thoughts: "The build finished with one lingering review concern."},
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.RecordDistillation(CheckpointSummary{
+		Sequence:       checkpoint.Sequence,
+		CheckpointType: checkpoint.CheckpointType,
+		Summary:        "The build closed cleanly after one review concern was resolved.",
+		Lessons:        []string{"Checkpoint summaries survive finalization."},
+	}))
+	c.SetSummary("The build closed cleanly and produced one durable checkpoint summary.")
+
+	require.NoError(t, c.Finalize("success"))
+
+	data, err := os.ReadFile(filepath.Join(experiencesDir, "build-"+c.BuildID()+".json"))
+	require.NoError(t, err)
+
 	var record BuildRecord
-	err = json.Unmarshal(data, &record)
-	require.NoError(t, err)
-
-	assert.Equal(t, c.BuildID(), record.ID)
-	assert.Equal(t, "codex", record.Engine)
-	assert.Equal(t, "max", record.EffortLevel)
-	assert.Equal(t, 4, record.TotalSprints)
+	require.NoError(t, json.Unmarshal(data, &record))
 	assert.Equal(t, "success", record.Outcome)
-	assert.False(t, record.StartTime.IsZero())
+	assert.Equal(t, 1, record.CheckpointCount)
+	assert.Len(t, record.CheckpointSummaries, 1)
+	assert.Equal(t, 0, record.ParseFailures)
 	assert.False(t, record.EndTime.IsZero())
-	require.Len(t, record.Observations, 2)
-	assert.Equal(t, "First observation.", record.Observations[0].Thoughts)
-	assert.Equal(t, "after_sprint", record.Observations[0].WakePoint)
-	assert.Equal(t, 1, record.Observations[0].SprintNum)
-	assert.Equal(t, "Second observation.", record.Observations[1].Thoughts)
-	assert.Equal(t, "build_end", record.Observations[1].WakePoint)
 }
 
-func TestFinalize_CreatesDirectory(t *testing.T) {
+func TestBuildRecord_OldSchemaCompatibility(t *testing.T) {
 	t.Parallel()
 
-	dir := filepath.Join(t.TempDir(), "nested", "experiences")
-	c := NewCollector("claude", "fast", 1)
-	c.outDir = dir
-
-	err := c.Finalize("success")
-	require.NoError(t, err)
-
-	// Verify directory was created and file exists
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-	assert.Len(t, entries, 1)
-}
-
-func TestFinalize_FailureOutcome(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	c := NewCollector("claude", "high", 3)
-	c.outDir = dir
-
-	c.AddObservation("Build failed at sprint 2.", "build_end", 2)
-	err := c.Finalize("failure")
-	require.NoError(t, err)
-
-	filename := "build-" + c.BuildID() + ".json"
-	data, err := os.ReadFile(filepath.Join(dir, filename))
-	require.NoError(t, err)
+	oldJSON := `{
+	  "id": "legacy-build",
+	  "start_time": "2026-03-30T10:00:00Z",
+	  "end_time": "2026-03-30T10:05:00Z",
+	  "engine": "claude",
+	  "effort_level": "high",
+	  "total_sprints": 2,
+	  "outcome": "success",
+	  "observations": [{"timestamp":"2026-03-30T10:01:00Z","wake_point":"build_end","sprint_num":2,"thoughts":"legacy"}],
+	  "summary": "legacy summary"
+	}`
 
 	var record BuildRecord
-	require.NoError(t, json.Unmarshal(data, &record))
-	assert.Equal(t, "failure", record.Outcome)
-}
-
-func TestBuildID_Unique(t *testing.T) {
-	t.Parallel()
-
-	c1 := NewCollector("claude", "high", 3)
-	c2 := NewCollector("claude", "high", 3)
-	assert.NotEqual(t, c1.BuildID(), c2.BuildID())
-}
-
-func TestCollector_ConcurrentAdd(t *testing.T) {
-	t.Parallel()
-
-	c := NewCollector("claude", "max", 10)
-	const goroutines = 20
-
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
-		go func(n int) {
-			defer wg.Done()
-			c.AddObservation("concurrent observation", "after_sprint", n)
-		}(i)
-	}
-	wg.Wait()
-
-	assert.Equal(t, goroutines, c.ObservationCount())
-}
-
-func TestSetSummary(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	c := NewCollector("claude", "high", 3)
-	c.outDir = dir
-
-	c.AddObservation("Some thoughts.", "after_sprint", 1)
-	c.SetSummary("This build went smoothly with no surprises.")
-
-	err := c.Finalize("success")
-	require.NoError(t, err)
-
-	filename := "build-" + c.BuildID() + ".json"
-	data, err := os.ReadFile(filepath.Join(dir, filename))
-	require.NoError(t, err)
-
-	var record BuildRecord
-	require.NoError(t, json.Unmarshal(data, &record))
-	assert.Equal(t, "This build went smoothly with no surprises.", record.Summary)
-}
-
-func TestGetRecord(t *testing.T) {
-	t.Parallel()
-
-	c := NewCollector("claude", "standard", 2)
-	c.AddObservation("First.", "after_sprint", 1)
-
-	record := c.GetRecord()
-	assert.Equal(t, c.BuildID(), record.ID)
-	assert.Equal(t, "claude", record.Engine)
-	assert.Equal(t, 1, len(record.Observations))
-
-	// GetRecord returns a snapshot — adding more observations doesn't affect it
-	c.AddObservation("Second.", "build_end", 2)
-	assert.Equal(t, 1, len(record.Observations))
-	assert.Equal(t, 2, c.ObservationCount())
-}
-
-func TestFinalize_EmptyObservations(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	c := NewCollector("claude", "standard", 1)
-	c.outDir = dir
-
-	err := c.Finalize("success")
-	require.NoError(t, err)
-
-	filename := "build-" + c.BuildID() + ".json"
-	data, err := os.ReadFile(filepath.Join(dir, filename))
-	require.NoError(t, err)
-
-	var record BuildRecord
-	require.NoError(t, json.Unmarshal(data, &record))
-	assert.Empty(t, record.Observations)
-	assert.Equal(t, "success", record.Outcome)
+	require.NoError(t, json.Unmarshal([]byte(oldJSON), &record))
+	assert.Equal(t, "legacy-build", record.ID)
+	assert.Equal(t, "legacy summary", record.Summary)
+	assert.Len(t, record.Observations, 1)
+	assert.Zero(t, record.CheckpointCount)
 }

@@ -39,7 +39,7 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Stream events | `fry events --follow --json --project-dir <dir>` |
 | Monitor build | `fry monitor --json --project-dir <dir>` |
 | Monitor dashboard | `fry monitor --dashboard --project-dir <dir>` |
-| Consciousness stats | `fry status --consciousness --project-dir <dir>` |
+| Consciousness health | `fry status --consciousness --project-dir <dir>` |
 | Trigger reflection | `fry reflect` |
 | Print identity | `fry identity` (or `fry identity --full`) |
 | Clean/archive build | `fry clean -y --project-dir <dir>` |
@@ -870,8 +870,11 @@ strategy (branch/worktree) from `.fry/build-mode.txt` and `.fry/git-strategy.txt
 Fry has an introspective system that synthesizes build experiences:
 
 ```bash
-# View consciousness status
+# View local consciousness session health
 fry status --consciousness --project-dir /path/to/project
+
+# View remote consciousness pipeline stats
+fry status --consciousness-remote --project-dir /path/to/project
 
 # Print Fry's compiled identity
 fry identity
@@ -881,8 +884,10 @@ fry identity --full
 fry reflect
 ```
 
-Experiences are stored in `~/.fry/experiences/`. The `--telemetry` flag
-enables experience upload. Reflection runs weekly and updates Fry's identity.
+Experiences are stored in `~/.fry/experiences/`. During a build, in-progress
+checkpoint state lives under `.fry/consciousness/`. The `--telemetry` flag
+enables checkpoint-summary and lifecycle upload; failed uploads stay queued for
+retry. Reflection runs weekly and updates Fry's identity.
 
 ## Build Events
 

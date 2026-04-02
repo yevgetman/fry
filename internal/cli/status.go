@@ -27,6 +27,7 @@ var statusCmd = &cobra.Command{
 	Short: "Show current build state without making an LLM call",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectDir, _ := cmd.Flags().GetString("project-dir")
+		buildDir, _ := resolveBuildDir(projectDir)
 
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		if jsonOutput {
@@ -34,7 +35,8 @@ var statusCmd = &cobra.Command{
 		}
 
 		showConsciousness, _ := cmd.Flags().GetBool("consciousness")
-		if showConsciousness {
+		showConsciousnessRemote, _ := cmd.Flags().GetBool("consciousness-remote")
+		if showConsciousnessRemote {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
 
@@ -45,13 +47,22 @@ var statusCmd = &cobra.Command{
 			fmt.Fprint(cmd.OutOrStdout(), consciousness.FormatPipelineStats(stats))
 			return nil
 		}
+		if showConsciousness {
+			status, err := consciousness.ReadLocalStatus(buildDir)
+			if err != nil {
+				return fmt.Errorf("consciousness status: %w", err)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), consciousness.FormatLocalStatus(status))
+			return nil
+		}
 
 		return runStatusHumanReadable(cmd, projectDir)
 	},
 }
 
 func init() {
-	statusCmd.Flags().Bool("consciousness", false, "Show consciousness pipeline status")
+	statusCmd.Flags().Bool("consciousness", false, "Show local consciousness session health")
+	statusCmd.Flags().Bool("consciousness-remote", false, "Show remote consciousness pipeline stats")
 	statusCmd.Flags().Bool("json", false, "Output build state as JSON (for agent consumption)")
 	rootCmd.AddCommand(statusCmd)
 }

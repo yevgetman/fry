@@ -179,6 +179,11 @@ func TestExtractJSON(t *testing.T) {
 			want:  result{Name: "embedded", Value: 3},
 		},
 		{
+			name:  "last valid JSON object wins",
+			input: "first: {\"name\":\"wrong\",\"value\":\"oops\"}\nsecond: {\"name\":\"final\",\"value\":4}",
+			want:  result{Name: "final", Value: 4},
+		},
+		{
 			name:    "empty input",
 			input:   "",
 			wantErr: true,
@@ -218,6 +223,21 @@ func TestExtractJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExtractJSONWithDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	type result struct {
+		Name string `json:"name"`
+	}
+
+	var got result
+	diag, err := ExtractJSONWithDiagnostics("Reading prompt from stdin...\n```json\n{\"name\":\"fenced\"}\n```", &got)
+	require.NoError(t, err)
+	assert.Equal(t, result{Name: "fenced"}, got)
+	assert.True(t, diag.Repaired)
+	assert.Equal(t, "fenced_json", diag.Strategy)
 }
 
 func TestStripMarkdownFences(t *testing.T) {

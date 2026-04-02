@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yevgetman/fry/internal/config"
 )
 
 func TestUploadExperience_Success(t *testing.T) {
@@ -373,4 +375,67 @@ func TestUploadInBackground_FailureCaches(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("UploadInBackground did not complete in time")
 	}
+}
+
+func TestUploadEvent_Success(t *testing.T) {
+	t.Parallel()
+
+	var received UploadEnvelope
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"ok":true,"id":"evt","global_build_number":12}`))
+	}))
+	defer server.Close()
+
+	result, err := UploadEvent(context.Background(), server.URL, "token", UploadEnvelope{
+		SchemaVersion: 2,
+		ID:            "session-1-0001-checkpoint_summary",
+		EventType:     UploadEventCheckpointSummary,
+		SessionID:     "session-1",
+		Sequence:      1,
+		BuildMetadata: BuildMetadata{Engine: "claude", EffortLevel: "high", TotalSprints: 3, Outcome: "failure"},
+		SummaryText:   "Checkpoint summary",
+	})
+	require.NoError(t, err)
+	assert.True(t, result.OK)
+	assert.Equal(t, UploadEventCheckpointSummary, received.EventType)
+	assert.Equal(t, "Checkpoint summary", received.SummaryText)
+}
+
+func TestRetryProjectUploads_SuccessAndCounterUpdate(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.ConsciousnessUploadQueueDir), 0o755))
+	require.NoError(t, writeJSONAtomic(filepath.Join(dir, config.ConsciousnessSessionFile), SessionState{
+		SessionID: "session-1",
+		Status:    SessionStatusRunning,
+	}))
+	event := UploadEnvelope{
+		SchemaVersion: 2,
+		ID:            "session-1-0001-checkpoint_summary",
+		EventType:     UploadEventCheckpointSummary,
+		SessionID:     "session-1",
+		Sequence:      1,
+		BuildMetadata: BuildMetadata{Engine: "claude", EffortLevel: "high", TotalSprints: 3, Outcome: "failure"},
+		SummaryText:   "Checkpoint summary",
+	}
+	require.NoError(t, writeJSONAtomic(filepath.Join(dir, config.ConsciousnessUploadQueueDir, eventFilename(event)), event))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"ok":true,"id":"evt","global_build_number":13}`))
+	}))
+	defer server.Close()
+
+	count := RetryProjectUploads(context.Background(), server.URL, "token", dir)
+	assert.Equal(t, 1, count)
+	assert.Equal(t, 0, countJSONFiles(filepath.Join(dir, config.ConsciousnessUploadQueueDir)))
+
+	state, err := loadSessionState(filepath.Join(dir, config.ConsciousnessSessionFile))
+	require.NoError(t, err)
+	assert.Equal(t, 1, state.UploadAttempts)
+	assert.Equal(t, 1, state.UploadSuccesses)
+	assert.Equal(t, 0, state.PendingUploads)
 }

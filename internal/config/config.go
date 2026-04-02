@@ -130,8 +130,16 @@ const (
 	IdentityJSONFile        = "identity/identity.json"
 
 	// Experience collection constants
-	ExperiencesDir          = ".fry/experiences"
-	ConsciousnessPromptFile = ".fry/consciousness-prompt.md"
+	ExperiencesDir                    = ".fry/experiences"
+	ConsciousnessDir                  = ".fry/consciousness"
+	ConsciousnessSessionFile          = ".fry/consciousness/session.json"
+	ConsciousnessCheckpointsFile      = ".fry/consciousness/checkpoints.jsonl"
+	ConsciousnessCheckpointsDir       = ".fry/consciousness/checkpoints"
+	ConsciousnessScratchpadHistory    = ".fry/consciousness/scratchpad-history.jsonl"
+	ConsciousnessDistilledDir         = ".fry/consciousness/distilled"
+	ConsciousnessUploadQueueDir       = ".fry/consciousness/upload-queue"
+	ConsciousnessPromptFile           = ".fry/consciousness-prompt.md"
+	ConsciousnessCheckpointPromptFile = ".fry/consciousness/checkpoint-prompt.md"
 
 	// Telemetry / experience upload constants
 	SettingsFile         = ".fry/settings.json"

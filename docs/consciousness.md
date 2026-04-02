@@ -1,154 +1,206 @@
 # Consciousness
 
-The `consciousness` package synthesizes observer observations from a build into a coherent experience summary. Summaries are stored in `~/.fry/experiences/` as structured JSON records.
+The `consciousness` package persists observer output as a **durable session** instead of an in-memory end-of-build buffer. Every observer wake becomes a checkpoint on disk, checkpoint summaries are distilled incrementally, and the final build experience is synthesized from those checkpoint summaries rather than raw observer transcripts.
+
+The pipeline is non-fatal by design. If checkpoint persistence, distillation, or upload fails, Fry logs a warning and continues the build.
 
 ## Overview
 
-At the end of each build, the consciousness pipeline:
+The runtime model is session-based and append-only:
 
-1. Collects all `BuildObservation` records accumulated during the build
-2. Invokes the LLM once to synthesize observations into a narrative experience summary
-3. Persists the complete `BuildRecord` (metadata + observations + summary) to `~/.fry/experiences/`
+1. Start or resume a logical consciousness session for the build
+2. Persist a checkpoint immediately after each observer wake
+3. Distill each canonical checkpoint into a compact checkpoint summary
+4. Synthesize the final build experience from checkpoint summaries
+5. Persist the final `BuildRecord` to `~/.fry/experiences/`
+6. Queue lifecycle events and checkpoint summaries for retryable telemetry upload
 
-The pipeline is non-fatal by design. If synthesis or persistence fails, the build result is unaffected.
+This design keeps observations durable across:
 
-## Pipeline Stages
+- failed builds
+- interrupted builds
+- resumed builds
+- restarted Fry processes
+- partial upload failures
 
-### 1. Collection
+## Session Lifecycle
 
-`Collector` accumulates `BuildObservation` records throughout the build. Each observation captures a single observer wake-point: a timestamp, the wake-point label, the sprint number, and the observer's raw thoughts.
+`Collector` is the session manager. It owns the durable session state, the in-progress checkpoint files, and the final build record.
 
 ```go
-func (c *Collector) AddObservation(thoughts, wakePoint string, sprintNum int)
+func NewCollector(opts CollectorOptions) (*Collector, error)
 ```
 
-`AddObservation` is safe for concurrent use — it acquires an internal mutex before appending to the record. See [Observer](observer.md) for how and when observations are generated.
+`CollectorOptions.Mode` controls whether Fry creates a fresh logical session or resumes an existing one:
 
-### 2. Synthesis
+| Mode | Behavior |
+|---|---|
+| `new` | Clears prior runtime checkpoint state in `.fry/consciousness/`, creates a new session ID, and starts a new run segment |
+| `resume` | Reloads `.fry/consciousness/session.json`, reuses the prior session ID, rehydrates checkpoints and distilled summaries, and appends a resumed run segment |
 
-`SummarizeExperience()` invokes the configured LLM at build end, passing all observations as structured prompt context.
+The final long-term record stays at `~/.fry/experiences/build-<session-id>.json`. Resume reuses the same file and updates it as the logical build progresses.
+
+## Checkpoint Persistence
+
+After each observer wake, Fry persists an `ObservationCheckpoint` immediately:
+
+```go
+func (c *Collector) AddCheckpoint(checkpoint ObservationCheckpoint) (ObservationCheckpoint, error)
+```
+
+Each checkpoint stores:
+
+- session ID
+- sequence number
+- timestamp
+- wake point
+- sprint number
+- parse status: `ok`, `repaired`, or `failed`
+- canonical observation when parsing succeeded
+- scratchpad delta
+- structured directives
+- raw output log reference when parsing failed
+
+### Parse Integrity
+
+Observer output is parsed strictly:
+
+1. Try raw JSON
+2. Prefer fenced JSON blocks
+3. Fall back to the last valid JSON object in the output
+
+If no valid structured object can be recovered, the checkpoint is marked `parse_failed`, the raw output is quarantined via `raw_output_path`, and Fry does **not** promote the transcript into canonical observation fields.
+
+## Incremental Distillation
+
+Checkpoint summaries are created incrementally instead of only at build end:
+
+```go
+func DistillCheckpoint(ctx context.Context, opts DistillOpts) (CheckpointSummary, error)
+```
+
+Default cadence:
+
+- after sprint completion
+- after build audit
+- at build end
+- on interruption flush
+
+Each checkpoint summary contains:
+
+- a short narrative summary
+- extracted lessons
+- risk signals
+
+The summary is stored under `.fry/consciousness/distilled/<sequence>.json` and appended to the in-memory `BuildRecord`.
+
+## Final Experience Summary
+
+`SummarizeExperience()` no longer consumes raw observer thoughts directly. It requires distilled checkpoint summaries:
 
 ```go
 func SummarizeExperience(ctx context.Context, opts SummarizeOpts) (string, error)
 ```
 
-The function writes an ephemeral prompt to `.fry/consciousness-prompt.md`, invokes the engine, then deletes the prompt file. If the engine returns an error — regardless of whether it produced partial output — `SummarizeExperience` returns an error rather than partial data.
+The final output is a validated JSON object with a single `summary` field. If parsing fails or the engine exits non-zero, Fry rejects the result instead of trusting partial stdout.
 
-### 3. Persistence
+## Upload Model
 
-`Finalize()` sets the build outcome, stamps `EndTime`, and writes the complete `BuildRecord` to `~/.fry/experiences/build-<id>.json`.
+Telemetry now queues checkpoint-aware lifecycle events in `.fry/consciousness/upload-queue/` and retries them independently of final build completion.
 
-```go
-func (c *Collector) Finalize(outcome string) error
-```
+Event types:
 
-The build ID is generated at collector creation time via `generateBuildID()` (UUID v4 using `crypto/rand`, with a time-based fallback if `crypto/rand` fails). Retrieve it before or after finalization with `c.BuildID()`.
+- `session_started`
+- `checkpoint_summary`
+- `session_interrupted`
+- `session_completed`
 
-### 4. Upload
+Legacy final-summary uploads remain readable and retryable from `~/.fry/experiences/pending/`.
 
-When telemetry is enabled, `UploadInBackground()` sends the finalized `BuildRecord` to the central consciousness API (`POST /ingest`). The upload runs in a background goroutine with a 10-second timeout so it does not delay build exit.
+### Telemetry Resolution
 
-**Telemetry** is resolved from a priority chain:
+Telemetry enablement still uses the same priority chain:
 
-1. CLI flag: `--telemetry` / `--no-telemetry` (highest priority; `--no-telemetry` wins if both set)
-2. Environment variable: `FRY_TELEMETRY=1` or `FRY_TELEMETRY=0`
-3. Settings file: `~/.fry/settings.json` → `{"telemetry": true}` or `{"telemetry": false}`
-4. Default: **on** (`fry init` creates `~/.fry/settings.json` with telemetry enabled)
+1. CLI flag: `--telemetry` / `--no-telemetry`
+2. Environment: `FRY_TELEMETRY=1|0`
+3. Settings file: `~/.fry/settings.json`
+4. Default: enabled
 
-Authentication uses a compiled-in write-only key (same pattern as Sentry DSNs). The key only permits POSTing anonymized experience summaries — no read access to the Memory Store. The API enforces rate limiting (10 uploads per instance per hour) and payload validation.
+Authentication still uses the compiled-in write-only API key.
 
-**Offline resilience:** If the upload fails (network error, API down, timeout), the record is cached to `~/.fry/experiences/pending/pending-<id>.json`. On the next build with telemetry enabled, pending files are retried before the current upload. Pending files older than 7 days are pruned automatically.
+## Local Status
 
-**Instance identity:** Each upload includes an anonymized machine identifier — a SHA-256 hash of the hostname (first 16 hex chars). This is stable across builds on the same machine but not reversible to the hostname.
+`fry status --consciousness` now reports **local session health**, not remote memory-store stats.
 
-### 5. Transmutation
+It includes:
 
-A daily cron job (3:00 AM UTC) on the Cloudflare Worker processes pending experience summaries into atomized memories. For each summary:
+- checkpoints persisted
+- checkpoint summaries created
+- parse failures
+- repair successes
+- distillation successes and failures
+- upload attempts, successes, and pending count
+- session resume count
+- last update and flush timestamps
 
-1. **Claude API call** atomizes the summary into 3-8 discrete memories, each capturing one generalizable lesson
-2. **OpenAI embeddings** (`text-embedding-3-small`, 1536 dimensions) are generated for each memory in a single batch call
-3. **Reinforcement detection** compares each new memory's embedding against existing memories in the same category (cosine similarity ≥ 0.85). If similar: the existing memory's `reinforcement_count` increments instead of creating a duplicate
-4. **Write to Turso** `memories` table with category, significance/universality scores, and embedding
-
-**Memory categories:** `process`, `tooling`, `architecture`, `testing`, `review`, `audit`, `alignment`, `planning`, `domain`
-
-**Scoring:** Each memory receives:
-- `significance` (0-1): importance for future builds
-- `universality` (0-1): how broadly applicable beyond the specific build
-
-**Batch limit:** 10 summaries per cron run. Remaining summaries are picked up on subsequent runs.
-
-**Error handling:** If the Claude or OpenAI API fails for a summary, it stays `transmuted = 0` and retries on the next run. Reinforcement detection provides natural idempotency — partially processed summaries don't create duplicates on retry.
-
-### 6. Reflection
-
-A weekly cron job (4:00 AM UTC, Sundays) on the Cloudflare Worker synthesizes accumulated memories into an updated identity. Reflection closes the consciousness loop: memories become identity.
-
-**Algorithm:**
-1. **Minimum threshold:** Exits early if fewer than 50 memories exist
-2. **Compute effective weights** for all memories: `significance × reinforcement_boost / (1 + 0.3 × ln(1 + effective_age))`
-3. **Select top-200** memories by weight, plus compute corpus statistics
-4. **Fetch current identity.json** from GitHub via Contents API
-5. **Claude Sonnet** incrementally adjusts the identity — strengthening elements backed by high-weight memories, weakening elements with decaying support, adding new elements from strong novel memories
-6. **Prune** memories where `effective_weight < 0.05 AND reinforcement_count < 2` (forgetting)
-7. **Commit** updated `identity.json` to the fry GitHub repo via API
-8. **Log** the reflection run to the `reflection_log` table
-
-**Memory decay:** Logarithmic in build time (not wall time). Reinforced memories decay slower. A memory reinforced 5+ times across different instances stays high-weight indefinitely.
-
-**Manual trigger:** `fry reflect` sends a POST to the Worker's `/reflect` endpoint.
-
-## Identity
-
-Identity is the **continuous weighted compression of all memories**. It is stored as structured JSON (`templates/identity/identity.json`) and compiled into the binary via `go:embed`. The Reflection process is the only writer — identity is read-only during builds.
-
-**Format:** JSON with structured metadata (confidence scores, reinforcement counts per element). When injected into sprint prompts, the Go binary renders the JSON into natural-language markdown.
-
-**Layers:**
-- **Core:** Fundamental self-knowledge and values (highest stability)
-- **Disposition:** Behavioral tendencies derived from experience (most evolution)
-- **Domains:** Domain-specific wisdom, activated by build context (e.g., api-backend, frontend)
-
-Three functions load identity content:
-
-| Function | Content |
-|---|---|
-| `LoadCoreIdentity()` | Core identity + disposition (rendered from JSON, with .md fallback) |
-| `LoadDisposition()` | Disposition layer only |
-| `LoadFullIdentity()` | Core + disposition + all domain layers |
-
-The `fry identity` command prints the loaded identity to stdout (`--full` includes domain layers).
-
-The disposition layer is injected into sprint agent prompts to subtly influence build behavior without overriding explicit instructions. See [Observer](observer.md) for how identity feeds observer wake-point context.
-
-## Observer Integration
-
-Observations are added at each observer wake-point via `collector.AddObservation()`. The observer fires at configurable points during the sprint loop (post-sprint, post-alignment, etc.) and writes its thoughts to the collector. See [Observer](observer.md) for the full event model, effort-level gating, and wake-point list.
+`fry status --consciousness-remote` still fetches remote pipeline stats from the consciousness API.
 
 ## File Locations
 
 | Path | Purpose |
 |---|---|
-| `~/.fry/experiences/build-<uuid>.json` | Persistent build record (observations + summary + metadata) |
-| `.fry/consciousness-prompt.md` | Ephemeral synthesis prompt; written pre-run, deleted after |
-| `.fry/build-logs/consciousness_YYYYMMDD_HHMMSS.log` | Engine output log for the synthesis invocation |
-| `~/.fry/experiences/pending/pending-<uuid>.json` | Cached upload for retry (created on upload failure) |
+| `.fry/consciousness/session.json` | Durable in-progress session state |
+| `.fry/consciousness/checkpoints.jsonl` | Append-only checkpoint log |
+| `.fry/consciousness/checkpoints/<sequence>.json` | Per-checkpoint durable record |
+| `.fry/consciousness/scratchpad-history.jsonl` | Scratchpad delta history |
+| `.fry/consciousness/distilled/<sequence>.json` | Distilled checkpoint summary |
+| `.fry/consciousness/upload-queue/*.json` | Pending checkpoint/lifecycle uploads |
+| `.fry/consciousness-prompt.md` | Final experience synthesis prompt (transient) |
+| `.fry/consciousness/checkpoint-prompt.md` | Checkpoint distillation prompt (transient) |
+| `~/.fry/experiences/build-<session-id>.json` | Final long-term build record |
+| `~/.fry/experiences/pending/pending-<id>.json` | Legacy pending final-summary uploads |
 | `~/.fry/settings.json` | User settings (telemetry opt-in) |
 
 ## BuildRecord Schema
 
-`BuildRecord` is the complete record written to `~/.fry/experiences/`.
+`BuildRecord` remains backward-compatible with older experience files and now includes session-level durability fields.
 
 | Field | Type | Description |
 |---|---|---|
-| `ID` | `string` | UUID v4 build identifier |
-| `StartTime` | `time.Time` | Build start timestamp |
-| `EndTime` | `time.Time` | Build end timestamp (set by `Finalize`) |
-| `Engine` | `string` | Engine name used for the build |
-| `EffortLevel` | `string` | Effort level (`fast`, `standard`, `high`, `max`) |
-| `TotalSprints` | `int` | Number of sprints in the epic |
-| `Outcome` | `string` | Final build outcome (set by `Finalize`) |
-| `Observations` | `[]BuildObservation` | Observer observations collected during the build |
-| `Summary` | `string` | LLM-synthesized narrative (empty if synthesis was skipped or failed) |
+| `ID` | `string` | Stable logical build identifier |
+| `SessionID` | `string` | Durable session identifier (same logical build across resumes) |
+| `StartTime` | `time.Time` | Logical build start |
+| `EndTime` | `time.Time` | Most recent finalization timestamp |
+| `Engine` | `string` | Engine used for the build |
+| `EffortLevel` | `string` | Effort level |
+| `TotalSprints` | `int` | Sprint count |
+| `Outcome` | `string` | Current finalized outcome |
+| `Observations` | `[]BuildObservation` | Canonical observer observations only |
+| `Summary` | `string` | Final build experience summary |
+| `RunSegments` | `[]RunSegment` | Per-process execution segments within the logical build |
+| `CheckpointCount` | `int` | Persisted checkpoint count |
+| `CheckpointSummaries` | `[]CheckpointSummary` | Distilled checkpoint summaries |
+| `ParseFailures` | `int` | Failed observer parse count |
+| `RepairSuccesses` | `int` | Successful repair extraction count |
+| `Interrupted` | `bool` | Whether the logical build was interrupted |
+| `UploadState` | `string` | Current upload queue state |
 
-`BuildObservation` fields: `Timestamp`, `WakePoint`, `SprintNum`, `Thoughts`.
+Older `build-*.json` files without these fields still decode correctly.
+
+## Identity And Reflection
+
+Identity remains the **continuous weighted compression of accumulated memories**. It is still stored as structured JSON in `templates/identity/identity.json`, rendered into markdown for prompts, and updated only by the remote Reflection process.
+
+Use:
+
+```bash
+fry identity
+fry identity --full
+fry reflect
+```
+
+## Related Documentation
+
+- [Observer](observer.md)
+- [Commands](commands.md)
+- [Architecture](architecture.md)

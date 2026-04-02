@@ -507,11 +507,14 @@ fry status [flags]
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to inspect (default: current directory) |
-| `--consciousness` | Show consciousness pipeline status (memory count, transmutation, reflection) |
+| `--consciousness` | Show local consciousness session health (checkpoints, parse failures, uploads, resumes) |
+| `--consciousness-remote` | Show remote consciousness pipeline stats (memory count, transmutation, reflection) |
 
 ### Behavior
 
 - If a `.fry/epic.md` exists, prints a full build state report including sprint completion, environment readiness, deferred failures, and deviation count.
+- `--consciousness` reads project-local runtime state from `.fry/consciousness/` and reports checkpoint persistence, parse failures, checkpoint distillation health, upload queue state, and resume count.
+- `--consciousness-remote` queries the hosted consciousness API for global memory-store statistics.
 - If no active build exists, scans for archived builds in `.fry-archive/` and worktree builds in `.fry-worktrees/`, displaying a summary of each (epic name, sprint progress, exit reason). Shows up to 10 most recent archives.
 - If a worktree strategy is persisted but the worktree directory is missing, prints a message suggesting `fry run --continue`.
 
@@ -520,7 +523,8 @@ fry status [flags]
 ```bash
 fry status                              # Show build state for current directory
 fry status --project-dir /path/to/proj  # Show build state for a different project
-fry status --consciousness              # Show consciousness pipeline stats
+fry status --consciousness              # Show local consciousness session health
+fry status --consciousness-remote       # Show remote consciousness pipeline stats
 ```
 
 ### Example output (no active build)

@@ -14,7 +14,7 @@ internal/audit/             Post-sprint and post-build semantic audit (sprint au
 internal/cli/               Cobra command definitions (run, prepare, replan, init, exit, clean, status, identity, version, agent, events)
 internal/color/             ANSI color output with TTY detection and NO_COLOR support
 internal/config/            Constants: file paths, defaults, version string
-internal/consciousness/     End-of-build experience synthesis and BuildRecord collection
+internal/consciousness/     Session-based checkpoint persistence, checkpoint distillation, final experience synthesis, upload queue
 internal/continuerun/       Build state collection, LLM analysis, and resume logic for --continue
 internal/docker/            Docker Compose lifecycle management
 internal/engine/            AI engine abstraction (Claude, Codex, Ollama), tier-based model selection, validation
@@ -25,7 +25,7 @@ internal/lock/              File-based concurrency lock (PID-based)
 internal/log/               Timestamped logging with verbose mode
 internal/media/             Media directory scanner and manifest builder
 internal/metrics/           Token usage parsing for Claude and Codex engines
-internal/observer/          Metacognitive event recording, identity, and wake-up points
+internal/observer/          Metacognitive event recording, identity, scratchpad continuity, and strict wake-up parsing
 internal/preflight/         Pre-build validation checks
 internal/prepare/           Artifact generation (Steps 0-3), mode handling, project overview
 internal/report/            BuildReport JSON serialization
@@ -126,7 +126,7 @@ User Input (plans/, media/, assets/, or --user-prompt)
        │
        ├─ Build summary (summary/)
        ├─ Build audit (audit/ → engine/)
-       ├─ Consciousness synthesis (consciousness/ → engine/) — non-fatal
+       ├─ Consciousness checkpoint distillation + final synthesis (consciousness/ → engine/) — non-fatal
        ├─ Build report generation (report/) — writes .fry/build-report.json
        ├─ Archive on success (archive/) — writes .fry-archive/
        └─ Release lock

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/consciousness"
 	"github.com/yevgetman/fry/internal/engine"
 	"github.com/yevgetman/fry/internal/epic"
 	frylog "github.com/yevgetman/fry/internal/log"
@@ -43,14 +44,18 @@ type ObserverOpts struct {
 type Observation struct {
 	Thoughts        string
 	ScratchpadDelta string
-	Directives      []Directive
+	Directives      []consciousness.Directive
+	ParseStatus     consciousness.ParseStatus
+	ParseError      string
+	RawOutputPath   string
 }
 
-// Directive represents a structured instruction from the observer.
-type Directive struct {
-	Type  string
-	Value string
-}
+type InitMode string
+
+const (
+	InitModeNew    InitMode = "new"
+	InitModeResume InitMode = "resume"
+)
 
 // ShouldWakeUp returns whether the observer should wake at this point for the
 // given effort level.
@@ -67,27 +72,40 @@ func ShouldWakeUp(effort epic.EffortLevel, point WakePoint) bool {
 }
 
 // InitBuild initializes the observer for a new build.
-// Creates directory, resets scratchpad, emits build_start.
+// Deprecated: use InitNewSession or ResumeSession.
 func InitBuild(projectDir string, epicName string, effort string, totalSprints int) error {
+	return InitNewSession(projectDir, epicName, effort, totalSprints)
+}
+
+func InitNewSession(projectDir string, epicName string, effort string, totalSprints int) error {
+	return initSession(projectDir, epicName, effort, totalSprints, InitModeNew)
+}
+
+func ResumeSession(projectDir string, epicName string, effort string, totalSprints int) error {
+	return initSession(projectDir, epicName, effort, totalSprints, InitModeResume)
+}
+
+func initSession(projectDir string, epicName string, effort string, totalSprints int, mode InitMode) error {
 	dir := filepath.Join(projectDir, config.ObserverDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("init observer: create dir: %w", err)
 	}
 
-	// Reset scratchpad and events for this build
-	if err := WriteScratchpad(projectDir, ""); err != nil {
-		return fmt.Errorf("init observer: reset scratchpad: %w", err)
+	if mode == InitModeNew {
+		if err := WriteScratchpad(projectDir, ""); err != nil {
+			return fmt.Errorf("init observer: reset scratchpad: %w", err)
+		}
+		eventsPath := filepath.Join(projectDir, config.ObserverEventsFile)
+		_ = os.Remove(eventsPath)
 	}
-	eventsPath := filepath.Join(projectDir, config.ObserverEventsFile)
-	_ = os.Remove(eventsPath) // ignore error if file doesn't exist
 
-	// Emit build_start event
 	return EmitEvent(projectDir, Event{
 		Type: EventBuildStart,
 		Data: map[string]string{
 			"epic":          epicName,
 			"effort":        effort,
 			"total_sprints": strconv.Itoa(totalSprints),
+			"mode":          string(mode),
 		},
 	})
 }
@@ -228,11 +246,18 @@ func WakeUp(ctx context.Context, opts ObserverOpts) (*Observation, error) {
 	obs, parseErr := parseObserverResponse(output)
 	if parseErr != nil {
 		frylog.Log("  OBSERVER: parse warning: %v", parseErr)
-		obs = &Observation{Thoughts: output}
+	}
+	if obs == nil {
+		obs = &Observation{}
+	}
+	obs.RawOutputPath = logPath
+	if parseErr != nil && obs.ParseStatus == "" {
+		obs.ParseStatus = consciousness.ParseStatusFailed
+		obs.ParseError = parseErr.Error()
 	}
 
 	// 7. Append to scratchpad
-	if obs.ScratchpadDelta != "" {
+	if obs.ParseStatus != consciousness.ParseStatusFailed && obs.ScratchpadDelta != "" {
 		if err := AppendScratchpad(opts.ProjectDir, "\n---\n"+obs.ScratchpadDelta+"\n"); err != nil {
 			frylog.Log("  OBSERVER: scratchpad append failed: %v", err)
 		}

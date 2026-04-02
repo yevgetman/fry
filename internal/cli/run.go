@@ -693,10 +693,41 @@ var runCmd = &cobra.Command{
 
 		// Initialize observer metacognitive layer
 		observerEnabled := !runNoObserver && !runDryRun && ep.EffortLevel != epic.EffortFast
+		settings := consciousness.LoadSettings()
+		var telemetryFlag *bool
+		if runNoTelemetry {
+			telemetryFlag = telemetryBoolPtr(false)
+		} else if runTelemetry {
+			telemetryFlag = telemetryBoolPtr(true)
+		}
+		telemetryEnabled := consciousness.TelemetryEnabled(telemetryFlag, settings)
+		var collector *consciousness.Collector
+
 		if observerEnabled {
-			if initErr := observer.InitBuild(projectPath, ep.Name, string(ep.EffortLevel), ep.TotalSprints); initErr != nil {
+			initFn := observer.InitNewSession
+			sessionMode := consciousness.SessionModeNew
+			if runResume || runContinue || runSimpleContinue || auditOnlyResume {
+				initFn = observer.ResumeSession
+				sessionMode = consciousness.SessionModeResume
+			}
+			if initErr := initFn(projectPath, ep.Name, string(ep.EffortLevel), ep.TotalSprints); initErr != nil {
 				frlog.Log("WARNING: observer: init failed: %v", initErr)
 				observerEnabled = false
+			} else {
+				var collectErr error
+				collector, collectErr = consciousness.NewCollector(consciousness.CollectorOptions{
+					ProjectDir:    projectPath,
+					EpicName:      ep.Name,
+					Engine:        currentEngineName(),
+					EffortLevel:   string(ep.EffortLevel),
+					TotalSprints:  ep.TotalSprints,
+					CurrentSprint: startSprint,
+					Mode:          sessionMode,
+					UploadEnabled: telemetryEnabled,
+				})
+				if collectErr != nil {
+					frlog.Log("WARNING: consciousness: init failed: %v", collectErr)
+				}
 			}
 		}
 
@@ -706,10 +737,64 @@ var runCmd = &cobra.Command{
 			identityDisposition = disp
 		}
 
-		// Create observation collector for the consciousness pipeline
-		var collector *consciousness.Collector
-		if observerEnabled {
-			collector = consciousness.NewCollector(currentEngineName(), string(ep.EffortLevel), ep.TotalSprints)
+		uploadTimeout := time.Duration(config.UploadTimeoutSeconds) * time.Second
+		flushPendingUploads := func() {
+			if collector == nil || !telemetryEnabled {
+				return
+			}
+			_ = consciousness.UploadPendingInBackground(config.ConsciousnessAPIURL, config.ConsciousnessWriteKey, projectPath, uploadTimeout)
+		}
+		flushPendingUploads()
+		persistCheckpoint := func(baseCtx context.Context, checkpoint consciousness.ObservationCheckpoint) {
+			if collector == nil {
+				return
+			}
+			persisted, persistErr := collector.AddCheckpoint(checkpoint)
+			if persistErr != nil {
+				frlog.Log("WARNING: consciousness: could not persist checkpoint: %v", persistErr)
+				return
+			}
+			if collectorErr := collector.SetCurrentSprint(checkpoint.SprintNum); collectorErr != nil {
+				frlog.Log("WARNING: consciousness: could not update session sprint: %v", collectorErr)
+			}
+			if persisted.ParseStatus == consciousness.ParseStatusFailed {
+				return
+			}
+
+			distillCtx := baseCtx
+			cancel := func() {}
+			if distillCtx == nil || distillCtx.Err() != nil {
+				distillCtx, cancel = context.WithTimeout(context.Background(), uploadTimeout)
+			}
+			defer cancel()
+
+			distillEngine, distillErr := runPlanner.Build(currentEngineName(), mcpOpts...)
+			if distillErr != nil {
+				frlog.Log("WARNING: consciousness: could not create distillation engine: %v", distillErr)
+				return
+			}
+			distillModel := engine.ResolveModel("", currentEngineName(), string(ep.EffortLevel), engine.SessionExperienceSummary)
+			summary, distillErr := consciousness.DistillCheckpoint(distillCtx, consciousness.DistillOpts{
+				ProjectDir:  projectPath,
+				Engine:      distillEngine,
+				Model:       distillModel,
+				EffortLevel: string(ep.EffortLevel),
+				Record:      collector.GetRecord(),
+				Checkpoint:  persisted,
+				Verbose:     frlog.Verbose,
+			})
+			if distillErr != nil {
+				frlog.Log("WARNING: consciousness: checkpoint distillation failed: %v", distillErr)
+				if err := collector.RecordDistillationFailure(); err != nil {
+					frlog.Log("WARNING: consciousness: could not record distillation failure: %v", err)
+				}
+				return
+			}
+			if err := collector.RecordDistillation(summary); err != nil {
+				frlog.Log("WARNING: consciousness: could not persist checkpoint summary: %v", err)
+				return
+			}
+			flushPendingUploads()
 		}
 
 		exitErr := error(nil)
@@ -722,6 +807,11 @@ var runCmd = &cobra.Command{
 			mu.Lock()
 			currentSprint = sprintNum
 			mu.Unlock()
+			if collector != nil {
+				if err := collector.SetCurrentSprint(sprintNum); err != nil {
+					frlog.Log("WARNING: consciousness: could not update current sprint: %v", err)
+				}
+			}
 
 			if observerEnabled {
 				_ = observer.EmitEvent(projectPath, observer.Event{
@@ -818,6 +908,15 @@ var runCmd = &cobra.Command{
 					activeSprint := currentSprint
 					name := epicName
 					mu.Unlock()
+					if collector != nil {
+						persistCheckpoint(context.Background(), consciousness.ObservationCheckpoint{
+							CheckpointType: consciousness.CheckpointTypeInterruption,
+							WakePoint:      "interruption",
+							SprintNum:      activeSprint,
+							ParseStatus:    consciousness.ParseStatusOK,
+							ParseError:     "build interrupted by signal",
+						})
+					}
 					if activeSprint > 0 {
 						commitCtx, commitCancel := context.WithTimeout(context.Background(), 10*time.Second)
 						if err := git.CommitPartialWork(commitCtx, projectPath, name, activeSprint, spr.Name); err != nil {
@@ -1451,7 +1550,25 @@ var runCmd = &cobra.Command{
 					}); obsErr != nil {
 						frlog.Log("  OBSERVER: wake-up failed (non-fatal): %v", obsErr)
 					} else if obs != nil && collector != nil {
-						collector.AddObservation(obs.Thoughts, string(observer.WakeAfterSprint), spr.Number)
+						checkpoint := consciousness.ObservationCheckpoint{
+							CheckpointType:  consciousness.CheckpointTypeObservation,
+							WakePoint:       string(observer.WakeAfterSprint),
+							SprintNum:       spr.Number,
+							ParseStatus:     obs.ParseStatus,
+							ParseError:      obs.ParseError,
+							ScratchpadDelta: obs.ScratchpadDelta,
+							Directives:      obs.Directives,
+							RawOutputPath:   obs.RawOutputPath,
+						}
+						if obs.ParseStatus != consciousness.ParseStatusFailed && strings.TrimSpace(obs.Thoughts) != "" {
+							checkpoint.Observation = &consciousness.BuildObservation{
+								Timestamp: time.Now().UTC(),
+								WakePoint: string(observer.WakeAfterSprint),
+								SprintNum: spr.Number,
+								Thoughts:  obs.Thoughts,
+							}
+						}
+						persistCheckpoint(ctx, checkpoint)
 					}
 				}
 
@@ -1710,7 +1827,25 @@ var runCmd = &cobra.Command{
 				}); obsErr != nil {
 					frlog.Log("  OBSERVER: wake-up failed (non-fatal): %v", obsErr)
 				} else if obs != nil && collector != nil {
-					collector.AddObservation(obs.Thoughts, string(observer.WakeAfterBuildAudit), ep.TotalSprints)
+					checkpoint := consciousness.ObservationCheckpoint{
+						CheckpointType:  consciousness.CheckpointTypeObservation,
+						WakePoint:       string(observer.WakeAfterBuildAudit),
+						SprintNum:       ep.TotalSprints,
+						ParseStatus:     obs.ParseStatus,
+						ParseError:      obs.ParseError,
+						ScratchpadDelta: obs.ScratchpadDelta,
+						Directives:      obs.Directives,
+						RawOutputPath:   obs.RawOutputPath,
+					}
+					if obs.ParseStatus != consciousness.ParseStatusFailed && strings.TrimSpace(obs.Thoughts) != "" {
+						checkpoint.Observation = &consciousness.BuildObservation{
+							Timestamp: time.Now().UTC(),
+							WakePoint: string(observer.WakeAfterBuildAudit),
+							SprintNum: ep.TotalSprints,
+							Thoughts:  obs.Thoughts,
+						}
+					}
+					persistCheckpoint(ctx, checkpoint)
 				}
 			}
 		}
@@ -1769,7 +1904,7 @@ var runCmd = &cobra.Command{
 		steering.CleanupAll(projectPath)
 
 		// Observer: final wake-up at build end
-		if observerEnabled {
+		if observerEnabled && !wasInterrupted() {
 			_ = observer.EmitEvent(projectPath, observer.Event{
 				Type: observer.EventBuildEnd,
 				Data: map[string]string{"outcome": buildOutcome},
@@ -1794,13 +1929,31 @@ var runCmd = &cobra.Command{
 				}); obsErr != nil {
 					frlog.Log("  OBSERVER: final wake-up failed (non-fatal): %v", obsErr)
 				} else if obs != nil && collector != nil {
-					collector.AddObservation(obs.Thoughts, string(observer.WakeBuildEnd), ep.TotalSprints)
+					checkpoint := consciousness.ObservationCheckpoint{
+						CheckpointType:  consciousness.CheckpointTypeObservation,
+						WakePoint:       string(observer.WakeBuildEnd),
+						SprintNum:       ep.TotalSprints,
+						ParseStatus:     obs.ParseStatus,
+						ParseError:      obs.ParseError,
+						ScratchpadDelta: obs.ScratchpadDelta,
+						Directives:      obs.Directives,
+						RawOutputPath:   obs.RawOutputPath,
+					}
+					if obs.ParseStatus != consciousness.ParseStatusFailed && strings.TrimSpace(obs.Thoughts) != "" {
+						checkpoint.Observation = &consciousness.BuildObservation{
+							Timestamp: time.Now().UTC(),
+							WakePoint: string(observer.WakeBuildEnd),
+							SprintNum: ep.TotalSprints,
+							Thoughts:  obs.Thoughts,
+						}
+					}
+					persistCheckpoint(ctx, checkpoint)
 				}
 			}
 		}
 
-		// Synthesize observations into experience summary
-		if collector != nil && collector.ObservationCount() > 0 {
+		// Synthesize checkpoint summaries into the final experience summary.
+		if collector != nil && !wasInterrupted() && len(collector.GetRecord().CheckpointSummaries) > 0 {
 			consciousnessEngine, cErr := runPlanner.Build(currentEngineName(), mcpOpts...)
 			if cErr != nil {
 				frlog.Log("WARNING: could not create engine for experience summary: %v", cErr)
@@ -1843,6 +1996,7 @@ var runCmd = &cobra.Command{
 				frlog.Log("WARNING: could not write experience record: %v", finalizeErr)
 			} else {
 				frlog.Log("  CONSCIOUSNESS: experience record written to ~/.fry/experiences/")
+				flushPendingUploads()
 			}
 		}
 
@@ -1945,22 +2099,11 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		// Upload experience to consciousness API (background, bounded by timeout)
+		// Upload queued consciousness events in the background.
 		var uploadDone <-chan struct{}
-		if collector != nil {
-			settings := consciousness.LoadSettings()
-			var telemetryFlag *bool
-			if runNoTelemetry {
-				telemetryFlag = telemetryBoolPtr(false)
-			} else if runTelemetry {
-				telemetryFlag = telemetryBoolPtr(true)
-			}
-			if consciousness.TelemetryEnabled(telemetryFlag, settings) {
-				record := collector.GetRecord()
-				timeout := time.Duration(config.UploadTimeoutSeconds) * time.Second
-				uploadDone = consciousness.UploadInBackground(config.ConsciousnessAPIURL, config.ConsciousnessWriteKey, record, timeout)
-				frlog.Log("  CONSCIOUSNESS: experience upload initiated")
-			}
+		if collector != nil && telemetryEnabled {
+			uploadDone = consciousness.UploadPendingInBackground(config.ConsciousnessAPIURL, config.ConsciousnessWriteKey, projectPath, uploadTimeout)
+			frlog.Log("  CONSCIOUSNESS: upload queue flush initiated")
 		}
 
 		releaseLock()

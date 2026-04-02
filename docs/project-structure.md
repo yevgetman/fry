@@ -109,15 +109,22 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `build-summary.md` | Build summary report (persisted in project root) | `fry run` at runtime |
 | `build-audit.md` | Build audit report (persisted in project root) | `fry run` at runtime |
 | `.fry-archive/` | Archived builds (timestamped snapshots of `.fry/` + root outputs) | `fry clean` or auto-archive after successful full build |
-| `.fry/observer/events.jsonl` | Observer event stream (JSONL, reset per build) | `fry run` at runtime |
-| `.fry/observer/scratchpad.md` | Observer working memory (reset per build) | `fry run` at runtime |
+| `.fry/observer/events.jsonl` | Observer event stream (JSONL, reset only for a new logical session) | `fry run` at runtime |
+| `.fry/observer/scratchpad.md` | Observer working memory (preserved on resume) | `fry run` at runtime |
 | `.fry/observer/wake-prompt.md` | Observer wake-up prompt (transient, deleted after use) | `fry run` at runtime |
+| `.fry/consciousness/session.json` | Durable consciousness session state | `fry run` at runtime |
+| `.fry/consciousness/checkpoints.jsonl` | Append-only checkpoint log | `fry run` at runtime |
+| `.fry/consciousness/checkpoints/` | Per-checkpoint durable records | `fry run` at runtime |
+| `.fry/consciousness/scratchpad-history.jsonl` | Scratchpad delta history | `fry run` at runtime |
+| `.fry/consciousness/distilled/` | Distilled checkpoint summaries | `fry run` at runtime |
+| `.fry/consciousness/upload-queue/` | Pending checkpoint/lifecycle uploads | `fry run` at runtime |
 | `~/.fry/experiences/build-<id>.json` | Build experience record (observations + metadata) | `fry run` at runtime |
 | `~/.fry/experiences/pending/pending-<id>.json` | Cached upload for retry (created on upload failure) | `fry run` at runtime |
 | `~/.fry/settings.json` | User settings (telemetry enabled by default) | `fry init` or manual |
 | `.fry/build-logs/` | Per-iteration, per-sprint, resume, audit, and continue logs | `fry run` at runtime |
 | `.fry/.fry.lock` | Concurrency lock | `fry run` at runtime |
 | `.fry/consciousness-prompt.md` | Prompt assembled for experience synthesis invocation (transient, deleted after run) | `fry run` at runtime |
+| `.fry/consciousness/checkpoint-prompt.md` | Prompt assembled for checkpoint distillation (transient, deleted after run) | `fry run` at runtime |
 | `.fry/triage-prompt.md` | Prompt sent to LLM for task complexity classification (persists until next build) | `fry run` at runtime |
 | `.fry/triage-decision.txt` | LLM raw triage output (JSON); read by triage parser | `fry run` at runtime |
 | `.fry/git-strategy.txt` | Selected git branching strategy for the build; read by sprint runner | `fry run` at runtime |

@@ -11,15 +11,26 @@ import (
 
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
+	"github.com/yevgetman/fry/internal/textutil"
 )
 
-// SprintOutcome is a lightweight summary of a sprint result used for
-// experience synthesis. Defined here to avoid importing the sprint package.
+// SprintOutcome is a lightweight summary of a sprint result used for experience synthesis.
 type SprintOutcome struct {
 	Number       int
 	Name         string
 	Status       string
 	HealAttempts int
+}
+
+type DistillOpts struct {
+	ProjectDir  string
+	Engine      engine.Engine
+	Model       string
+	EffortLevel string
+	Record      BuildRecord
+	Checkpoint  ObservationCheckpoint
+	Verbose     bool
+	Stdout      io.Writer
 }
 
 // SummarizeOpts contains parameters for the end-of-build experience summary.
@@ -35,46 +46,128 @@ type SummarizeOpts struct {
 	Stdout        io.Writer
 }
 
-// SummarizeExperience invokes an LLM to synthesize all observer observations
-// from a build into a coherent experience summary. Returns the summary text.
-// Non-fatal by design — callers should treat errors as warnings.
+// DistillCheckpoint synthesizes a durable checkpoint summary from one persisted checkpoint.
+func DistillCheckpoint(ctx context.Context, opts DistillOpts) (CheckpointSummary, error) {
+	if opts.Engine == nil {
+		return CheckpointSummary{}, fmt.Errorf("distill checkpoint: engine is required")
+	}
+	if opts.Checkpoint.Sequence == 0 {
+		return CheckpointSummary{}, fmt.Errorf("distill checkpoint: checkpoint sequence is required")
+	}
+	if opts.Checkpoint.Observation == nil && opts.Checkpoint.CheckpointType != CheckpointTypeInterruption {
+		return CheckpointSummary{}, fmt.Errorf("distill checkpoint: canonical observation is required")
+	}
+
+	prompt := buildCheckpointPrompt(opts)
+	output, err := runConsciousnessSession(ctx, consciousnessRunOpts{
+		ProjectDir:  opts.ProjectDir,
+		PromptPath:  filepath.Join(opts.ProjectDir, config.ConsciousnessCheckpointPromptFile),
+		LogPrefix:   fmt.Sprintf("consciousness_checkpoint_%04d", opts.Checkpoint.Sequence),
+		Prompt:      prompt,
+		Engine:      opts.Engine,
+		Model:       opts.Model,
+		EffortLevel: opts.EffortLevel,
+		Verbose:     opts.Verbose,
+		Stdout:      opts.Stdout,
+	})
+	if err != nil {
+		return CheckpointSummary{}, err
+	}
+
+	var parsed distillResult
+	if _, err := textutil.ExtractJSONWithDiagnostics(output, &parsed); err != nil {
+		return CheckpointSummary{}, fmt.Errorf("distill checkpoint: %w", err)
+	}
+	if strings.TrimSpace(parsed.Summary) == "" {
+		return CheckpointSummary{}, fmt.Errorf("distill checkpoint: empty summary")
+	}
+
+	return CheckpointSummary{
+		SessionID:      opts.Record.SessionID,
+		Sequence:       opts.Checkpoint.Sequence,
+		CheckpointType: opts.Checkpoint.CheckpointType,
+		Timestamp:      time.Now().UTC(),
+		Summary:        strings.TrimSpace(parsed.Summary),
+		Lessons:        cleanList(parsed.Lessons),
+		RiskSignals:    cleanList(parsed.RiskSignals),
+	}, nil
+}
+
+// SummarizeExperience synthesizes a final build summary from checkpoint summaries only.
 func SummarizeExperience(ctx context.Context, opts SummarizeOpts) (string, error) {
 	if opts.Engine == nil {
 		return "", fmt.Errorf("summarize experience: engine is required")
 	}
-
-	select {
-	case <-ctx.Done():
-		return "", fmt.Errorf("summarize experience: %w", ctx.Err())
-	default:
+	if len(opts.Record.CheckpointSummaries) == 0 {
+		return "", fmt.Errorf("summarize experience: checkpoint summaries are required")
 	}
 
 	prompt := buildExperiencePrompt(opts)
-
-	// Write prompt file
-	promptPath := filepath.Join(opts.ProjectDir, config.ConsciousnessPromptFile)
-	if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
-		return "", fmt.Errorf("summarize experience: create dir: %w", err)
-	}
-	if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
-		return "", fmt.Errorf("summarize experience: write prompt: %w", err)
-	}
-
-	// Create log file
-	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
-	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
-		return "", fmt.Errorf("summarize experience: create logs dir: %w", err)
-	}
-	logPath := filepath.Join(buildLogsDir,
-		fmt.Sprintf("consciousness_%s.log", time.Now().Format("20060102_150405")),
-	)
-	logFile, err := os.Create(logPath)
+	output, err := runConsciousnessSession(ctx, consciousnessRunOpts{
+		ProjectDir:  opts.ProjectDir,
+		PromptPath:  filepath.Join(opts.ProjectDir, config.ConsciousnessPromptFile),
+		LogPrefix:   "consciousness_final",
+		Prompt:      prompt,
+		Engine:      opts.Engine,
+		Model:       opts.Model,
+		EffortLevel: opts.EffortLevel,
+		Verbose:     opts.Verbose,
+		Stdout:      opts.Stdout,
+	})
 	if err != nil {
-		return "", fmt.Errorf("summarize experience: create log: %w", err)
+		return "", err
+	}
+
+	var parsed summaryResult
+	if _, err := textutil.ExtractJSONWithDiagnostics(output, &parsed); err != nil {
+		return "", fmt.Errorf("summarize experience: %w", err)
+	}
+	summary := strings.TrimSpace(parsed.Summary)
+	if summary == "" {
+		return "", fmt.Errorf("summarize experience: empty summary")
+	}
+	return summary, nil
+}
+
+type consciousnessRunOpts struct {
+	ProjectDir  string
+	PromptPath  string
+	LogPrefix   string
+	Prompt      string
+	Engine      engine.Engine
+	Model       string
+	EffortLevel string
+	Verbose     bool
+	Stdout      io.Writer
+}
+
+func runConsciousnessSession(ctx context.Context, opts consciousnessRunOpts) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
+	if err := os.MkdirAll(filepath.Dir(opts.PromptPath), 0o755); err != nil {
+		return "", fmt.Errorf("consciousness session: create dir: %w", err)
+	}
+	if err := os.WriteFile(opts.PromptPath, []byte(opts.Prompt), 0o644); err != nil {
+		return "", fmt.Errorf("consciousness session: write prompt: %w", err)
 	}
 	defer func() {
-		_ = logFile.Close()
+		_ = os.Remove(opts.PromptPath)
 	}()
+
+	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)
+	if err := os.MkdirAll(buildLogsDir, 0o755); err != nil {
+		return "", fmt.Errorf("consciousness session: create logs dir: %w", err)
+	}
+	logPath := filepath.Join(buildLogsDir, fmt.Sprintf("%s_%s.log", opts.LogPrefix, time.Now().Format("20060102_150405")))
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		return "", fmt.Errorf("consciousness session: create log: %w", err)
+	}
+	defer func() { _ = logFile.Close() }()
 
 	runOpts := engine.RunOpts{
 		Model:       opts.Model,
@@ -82,7 +175,6 @@ func SummarizeExperience(ctx context.Context, opts SummarizeOpts) (string, error
 		EffortLevel: opts.EffortLevel,
 		WorkDir:     opts.ProjectDir,
 	}
-
 	if opts.Verbose {
 		stdout := opts.Stdout
 		if stdout == nil {
@@ -96,76 +188,125 @@ func SummarizeExperience(ctx context.Context, opts SummarizeOpts) (string, error
 		runOpts.Stderr = logFile
 	}
 
-	invocationPrompt := "Read and execute ALL instructions in " + config.ConsciousnessPromptFile + ". Do not create or modify any files."
+	invocationPrompt := "Read and execute ALL instructions in " + filepath.Base(opts.PromptPath) + ". Do not create or modify any other files."
 	output, _, runErr := opts.Engine.Run(ctx, invocationPrompt, runOpts)
 	if runErr != nil {
-		if strings.TrimSpace(output) == "" {
-			return "", fmt.Errorf("summarize experience: %w", runErr)
-		}
-		return "", fmt.Errorf("summarize experience: engine error with partial output: %w", runErr)
+		return "", fmt.Errorf("consciousness session: %w", runErr)
 	}
-
-	// Cleanup prompt file
-	_ = os.Remove(promptPath)
-
-	summary := strings.TrimSpace(output)
-	if summary == "" {
-		return "", fmt.Errorf("summarize experience: agent produced empty output")
-	}
-
-	return summary, nil
+	return strings.TrimSpace(output), nil
 }
 
-func buildExperiencePrompt(opts SummarizeOpts) string {
+func buildCheckpointPrompt(opts DistillOpts) string {
 	var b strings.Builder
-
-	b.WriteString("# Experience Synthesis\n\n")
-	b.WriteString("You are synthesizing a build's observer observations into a coherent experience summary.\n")
-	b.WriteString("Your output will be stored as part of Fry's memory pipeline and may eventually contribute to Fry's evolving identity.\n\n")
-
-	// Build metadata
+	b.WriteString("# Consciousness Checkpoint Distillation\n\n")
+	b.WriteString("Convert the durable checkpoint below into a compact structured summary.\n")
+	b.WriteString("Return exactly one JSON object and no prose outside it.\n\n")
 	b.WriteString("## Build Metadata\n\n")
-	b.WriteString(fmt.Sprintf("- **Engine:** %s\n", opts.Record.Engine))
-	b.WriteString(fmt.Sprintf("- **Effort:** %s\n", opts.Record.EffortLevel))
-	b.WriteString(fmt.Sprintf("- **Total Sprints:** %d\n", opts.Record.TotalSprints))
-	b.WriteString(fmt.Sprintf("- **Outcome:** %s\n\n", opts.BuildOutcome))
+	b.WriteString(fmt.Sprintf("- Session: %s\n", opts.Record.SessionID))
+	b.WriteString(fmt.Sprintf("- Engine: %s\n", opts.Record.Engine))
+	b.WriteString(fmt.Sprintf("- Effort: %s\n", opts.Record.EffortLevel))
+	b.WriteString(fmt.Sprintf("- Outcome so far: %s\n\n", strings.TrimSpace(opts.Record.Outcome)))
 
-	// Sprint results
-	if len(opts.SprintResults) > 0 {
-		b.WriteString("## Sprint Results\n\n")
-		b.WriteString("| Sprint | Name | Status | Alignment Attempts |\n")
-		b.WriteString("|--------|------|--------|--------------------|\n")
-		for _, r := range opts.SprintResults {
-			b.WriteString(fmt.Sprintf("| %d | %s | %s | %d |\n", r.Number, r.Name, r.Status, r.HealAttempts))
+	b.WriteString("## Checkpoint\n\n")
+	b.WriteString(fmt.Sprintf("- Sequence: %d\n", opts.Checkpoint.Sequence))
+	b.WriteString(fmt.Sprintf("- Type: %s\n", opts.Checkpoint.CheckpointType))
+	b.WriteString(fmt.Sprintf("- Wake point: %s\n", opts.Checkpoint.WakePoint))
+	b.WriteString(fmt.Sprintf("- Sprint: %d\n", opts.Checkpoint.SprintNum))
+	b.WriteString(fmt.Sprintf("- Parse status: %s\n\n", opts.Checkpoint.ParseStatus))
+
+	if opts.Checkpoint.Observation != nil {
+		b.WriteString("### Canonical Observation\n\n")
+		b.WriteString(opts.Checkpoint.Observation.Thoughts)
+		b.WriteString("\n\n")
+	}
+	if strings.TrimSpace(opts.Checkpoint.ScratchpadDelta) != "" {
+		b.WriteString("### Scratchpad Delta\n\n")
+		b.WriteString(opts.Checkpoint.ScratchpadDelta)
+		b.WriteString("\n\n")
+	}
+	if len(opts.Checkpoint.Directives) > 0 {
+		b.WriteString("### Directives\n\n")
+		for _, directive := range opts.Checkpoint.Directives {
+			b.WriteString(fmt.Sprintf("- %s: %s\n", directive.Type, directive.Value))
 		}
 		b.WriteString("\n")
 	}
 
-	// Observer observations
-	b.WriteString("## Observer Observations\n\n")
-	if len(opts.Record.Observations) == 0 {
-		b.WriteString("(No observations were recorded during this build.)\n\n")
-	} else {
-		for i, obs := range opts.Record.Observations {
-			b.WriteString(fmt.Sprintf("### Observation %d — %s (Sprint %d)\n\n", i+1, obs.WakePoint, obs.SprintNum))
-			b.WriteString(obs.Thoughts)
-			b.WriteString("\n\n")
+	b.WriteString("## Output Schema\n\n")
+	b.WriteString("```json\n")
+	b.WriteString("{\n")
+	b.WriteString("  \"summary\": \"One concise narrative paragraph.\",\n")
+	b.WriteString("  \"lessons\": [\"Short generalizable lesson\"],\n")
+	b.WriteString("  \"risk_signals\": [\"Short risk signal\"]\n")
+	b.WriteString("}\n")
+	b.WriteString("```\n\n")
+	b.WriteString("Constraints:\n")
+	b.WriteString("- Keep `summary` under 120 words.\n")
+	b.WriteString("- `lessons` and `risk_signals` must contain short strings only.\n")
+	b.WriteString("- Do not include raw transcripts, file paths, or markdown fences in field values.\n")
+	return b.String()
+}
+
+func buildExperiencePrompt(opts SummarizeOpts) string {
+	var b strings.Builder
+	b.WriteString("# Experience Synthesis\n\n")
+	b.WriteString("Synthesize the checkpoint summaries below into one final structured build experience.\n")
+	b.WriteString("Return exactly one JSON object and no prose outside it.\n\n")
+	b.WriteString("## Build Metadata\n\n")
+	b.WriteString(fmt.Sprintf("- Engine: %s\n", opts.Record.Engine))
+	b.WriteString(fmt.Sprintf("- Effort: %s\n", opts.Record.EffortLevel))
+	b.WriteString(fmt.Sprintf("- Total sprints: %d\n", opts.Record.TotalSprints))
+	b.WriteString(fmt.Sprintf("- Build outcome: %s\n", opts.BuildOutcome))
+	b.WriteString(fmt.Sprintf("- Checkpoints: %d\n", opts.Record.CheckpointCount))
+	b.WriteString(fmt.Sprintf("- Parse failures: %d\n\n", opts.Record.ParseFailures))
+
+	if len(opts.SprintResults) > 0 {
+		b.WriteString("## Sprint Results\n\n")
+		for _, result := range opts.SprintResults {
+			b.WriteString(fmt.Sprintf("- Sprint %d (%s): %s, heal attempts=%d\n", result.Number, result.Name, result.Status, result.HealAttempts))
 		}
+		b.WriteString("\n")
 	}
 
-	// Synthesis instructions
-	b.WriteString("## Instructions\n\n")
-	b.WriteString("Synthesize the observations above into a cohesive experience summary (200-500 words) that captures:\n\n")
-	b.WriteString("1. **What happened** — the narrative arc of this build\n")
-	b.WriteString("2. **What was surprising** — unexpected behaviors, failures, or successes\n")
-	b.WriteString("3. **What struggled** — alignment loops, audit cycling, sanity check failures, and their causes\n")
-	b.WriteString("4. **Process-level insights** — observations about how the build system performed, not what was built\n")
-	b.WriteString("5. **Generalizable lessons** — wisdom that would apply to future builds of any kind\n\n")
-	b.WriteString("**Important constraints:**\n")
-	b.WriteString("- Write in general terms. Do NOT include project-specific file paths, variable names, class names, or proprietary code.\n")
-	b.WriteString("- Focus on the build process and patterns, not the specific software being built.\n")
-	b.WriteString("- Write as a narrative, not a list of bullet points.\n")
-	b.WriteString("- Output ONLY the summary text. No headers, no preamble, no closing remarks.\n")
+	b.WriteString("## Checkpoint Summaries\n\n")
+	for _, summary := range opts.Record.CheckpointSummaries {
+		b.WriteString(fmt.Sprintf("### Sequence %d (%s)\n\n", summary.Sequence, summary.CheckpointType))
+		b.WriteString(summary.Summary)
+		b.WriteString("\n")
+		if len(summary.Lessons) > 0 {
+			b.WriteString("Lessons: ")
+			b.WriteString(strings.Join(summary.Lessons, "; "))
+			b.WriteString("\n")
+		}
+		if len(summary.RiskSignals) > 0 {
+			b.WriteString("Risk signals: ")
+			b.WriteString(strings.Join(summary.RiskSignals, "; "))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
 
+	b.WriteString("## Output Schema\n\n")
+	b.WriteString("```json\n")
+	b.WriteString("{\n")
+	b.WriteString("  \"summary\": \"A 200-500 word narrative summary of the build experience.\"\n")
+	b.WriteString("}\n")
+	b.WriteString("```\n\n")
+	b.WriteString("Constraints:\n")
+	b.WriteString("- Synthesize only from checkpoint summaries and build metadata above.\n")
+	b.WriteString("- Do not quote raw transcripts or raw observer output.\n")
+	b.WriteString("- Focus on process-level learning and generalizable lessons.\n")
+	b.WriteString("- Do not include markdown headers or bullet lists in `summary`.\n")
 	return b.String()
+}
+
+func cleanList(values []string) []string {
+	var cleaned []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			cleaned = append(cleaned, value)
+		}
+	}
+	return cleaned
 }
