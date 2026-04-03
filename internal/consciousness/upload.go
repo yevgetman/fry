@@ -291,6 +291,10 @@ func UploadInBackground(apiURL, apiToken string, record BuildRecord, timeout tim
 }
 
 func newLifecycleUpload(record BuildRecord, sequence int, eventType UploadEventType) UploadEnvelope {
+	summary := record.Summary
+	if strings.TrimSpace(summary) == "" {
+		summary = lifecycleSummaryFallback(record, eventType)
+	}
 	return UploadEnvelope{
 		SchemaVersion:  2,
 		ID:             uploadEventID(record.SessionID, sequence, eventType),
@@ -305,7 +309,20 @@ func newLifecycleUpload(record BuildRecord, sequence int, eventType UploadEventT
 			TotalSprints: record.TotalSprints,
 			Outcome:      record.Outcome,
 		},
-		SummaryText: record.Summary,
+		SummaryText: summary,
+	}
+}
+
+func lifecycleSummaryFallback(record BuildRecord, eventType UploadEventType) string {
+	switch eventType {
+	case UploadEventSessionStarted:
+		return fmt.Sprintf("Build started: %d sprints, %s effort, %s engine", record.TotalSprints, record.EffortLevel, record.Engine)
+	case UploadEventSessionInterrupted:
+		return fmt.Sprintf("Build interrupted: %d sprints, %s effort, %s engine", record.TotalSprints, record.EffortLevel, record.Engine)
+	case UploadEventSessionCompleted:
+		return fmt.Sprintf("Build completed: %d sprints, %s effort, %s engine, outcome=%s", record.TotalSprints, record.EffortLevel, record.Engine, record.Outcome)
+	default:
+		return string(eventType)
 	}
 }
 

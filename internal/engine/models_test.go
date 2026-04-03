@@ -249,6 +249,15 @@ func TestTierForSession(t *testing.T) {
 		{"observer-claude-max", "claude", "max", SessionObserver, TierStandard},
 		{"observer-codex-fast", "codex", "fast", SessionObserver, TierMini},
 		{"observer-codex-high", "codex", "high", SessionObserver, TierStandard},
+
+		// CodebaseMemory: Standard always
+		{"codebasemem-claude-fast", "claude", "fast", SessionCodebaseMemory, TierStandard},
+		{"codebasemem-claude-max", "claude", "max", SessionCodebaseMemory, TierStandard},
+		{"codebasemem-codex-fast", "codex", "fast", SessionCodebaseMemory, TierStandard},
+
+		// CodebaseScan: Standard always
+		{"codebasescan-claude-fast", "claude", "fast", SessionCodebaseScan, TierStandard},
+		{"codebasescan-codex-max", "codex", "max", SessionCodebaseScan, TierStandard},
 	}
 
 	for _, tc := range tests {

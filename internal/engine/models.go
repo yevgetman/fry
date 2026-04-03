@@ -255,7 +255,7 @@ func TierForSession(engineName, effort string, session SessionType) ModelTier {
 		return TierStandard
 
 	case SessionCodebaseMemory:
-		return TierMini
+		return TierStandard
 
 	default:
 		return TierStandard

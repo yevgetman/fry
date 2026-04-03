@@ -403,6 +403,32 @@ func TestUploadEvent_Success(t *testing.T) {
 	assert.Equal(t, "Checkpoint summary", received.SummaryText)
 }
 
+func TestNewLifecycleUpload_FallbackSummary(t *testing.T) {
+	t.Parallel()
+
+	// Record with empty summary — session_started events always have empty summary
+	record := BuildRecord{
+		SessionID:    "test-session",
+		Engine:       "claude",
+		EffortLevel:  "max",
+		TotalSprints: 5,
+	}
+
+	env := newLifecycleUpload(record, 0, UploadEventSessionStarted)
+	assert.NotEmpty(t, env.SummaryText, "session_started must have non-empty summary_text")
+	assert.Contains(t, env.SummaryText, "5 sprints")
+	assert.Contains(t, env.SummaryText, "max")
+	assert.Contains(t, env.SummaryText, "claude")
+
+	env = newLifecycleUpload(record, 1, UploadEventSessionInterrupted)
+	assert.Contains(t, env.SummaryText, "interrupted")
+
+	// Record with actual summary — should use it directly
+	record.Summary = "Custom summary text"
+	env = newLifecycleUpload(record, 2, UploadEventSessionCompleted)
+	assert.Equal(t, "Custom summary text", env.SummaryText)
+}
+
 func TestRetryProjectUploads_SuccessAndCounterUpdate(t *testing.T) {
 	t.Parallel()
 
