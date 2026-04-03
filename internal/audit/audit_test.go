@@ -533,6 +533,40 @@ func TestClusterFixFindingsGroupsAcrossSharedSubsystem(t *testing.T) {
 	assert.Equal(t, []string{"internal/api/create.go", "internal/api/update.go"}, clusters[0].TargetFiles)
 }
 
+func TestClusterFixFindingsDoesNotBridgeLooseThemes(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{
+			Location:       "internal/api/auth.go:12",
+			Description:    "Token refresh misses expiry validation",
+			Severity:       "HIGH",
+			RecommendedFix: "Add expiry validation before token refresh.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/api/cache.go:21",
+			Description:    "Refresh worker also skips expiry validation in cache path",
+			Severity:       "HIGH",
+			RecommendedFix: "Reuse expiry validation in the cache worker.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/api/cache.go:48",
+			Description:    "Cache worker drops warm sessions during serialization",
+			Severity:       "MODERATE",
+			RecommendedFix: "Preserve warm sessions in the cache worker serializer.",
+			OriginCycle:    1,
+		},
+	}
+
+	clusters := clusterFixFindings(findings)
+	require.Len(t, clusters, 2)
+	assert.Len(t, clusters[0].Findings, 2)
+	assert.Len(t, clusters[1].Findings, 1)
+	assert.Equal(t, "Cache worker drops warm sessions during serialization", clusters[1].Findings[0].Description)
+}
+
 // --- filterUnresolved tests ---
 
 func TestFilterUnresolved(t *testing.T) {

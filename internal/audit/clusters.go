@@ -94,12 +94,19 @@ func orderFindingsByCluster(findings []Finding) []Finding {
 }
 
 func clusterIncludesFinding(cluster remediationCluster, candidate Finding) bool {
+	matches := 0
 	for _, existing := range cluster.Findings {
 		if findingsBelongToSameCluster(existing, candidate) {
-			return true
+			matches++
 		}
 	}
-	return false
+	if matches == 0 {
+		return false
+	}
+	if len(cluster.Findings) <= 1 {
+		return true
+	}
+	return matches*2 > len(cluster.Findings)
 }
 
 func findingsBelongToSameCluster(a, b Finding) bool {
