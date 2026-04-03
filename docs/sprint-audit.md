@@ -145,6 +145,7 @@ Sprint audit metrics now distinguish between several kinds of churn:
 - **Trailing yield** -- a rolling summary across the most recent low-yield window so Fry can distinguish one bad cycle from a sustained decline
 - **Low-yield strategy changes** -- count of times Fry refreshed context and changed tactics because productivity dropped
 - **Low-yield stop reason** -- an explicit machine-readable reason when a progress-based audit stopped because productivity stayed low instead of converging
+- **Cache-aware token usage** -- per-call token telemetry now preserves normalized input/output totals plus raw cache-read and cache-creation input tokens when engines expose them
 
 These counters are written to `.fry/build-logs/sprintN_audit_metrics.json` and surfaced in `.fry/build-status.json` under `sprints[].audit.metrics`. When the audit exits early for low yield, Fry also sets `sprints[].audit.stop_reason`.
 
@@ -459,7 +460,7 @@ sprint1_audit_final_20060102_150405.log      # Final audit pass
 sprint1_audit_metrics.json                   # Per-call audit metrics for the sprint
 ```
 
-Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, no-op rate, accepted versus rejected fix passes, diff classifications, verify yield, per-cycle productivity summaries, low-yield strategy changes, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier and any final low-yield stop reason.
+Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, cache-read/cache-creation token detail, no-op rate, accepted versus rejected fix passes, diff classifications, verify yield, per-cycle productivity summaries, low-yield strategy changes, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier and any final low-yield stop reason.
 
 ## Cleanup
 

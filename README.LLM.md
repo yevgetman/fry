@@ -338,7 +338,7 @@ For each sprint (startSprint → endSprint):
      │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
      │  ├─ If the agent forgets to write the audit file, Fry tries to recover a structured report from final stdout/log output before failing
      │  ├─ Verify agent must emit explicit per-issue outcome statuses (for example `RESOLVED`, `BEHAVIOR_UNCHANGED`, `BLOCKED`); unrecoverable missing output fails the audit
-     │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`, including repeated-unchanged counters, per-cycle productivity summaries, trailing yield, and low-yield strategy/stop metadata
+     │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`, including repeated-unchanged counters, cache-aware token telemetry, per-cycle productivity summaries, trailing yield, and low-yield strategy/stop metadata
      │  └─ standard/high/max use effort+complexity-aware caps (falling back to legacy defaults when complexity is unknown)
  11. Git checkpoint commit
  12. Compact sprint progress → .fry/epic-progress.txt

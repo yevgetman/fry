@@ -557,7 +557,7 @@ The file contains:
 - `sprints[].audit.complexity`: classified sprint-audit complexity (`low`, `moderate`, `high`, or `unknown`)
 - `sprints[].audit.stop_reason`: why the audit exited early when it stopped for a non-pass reason such as low-yield termination
 - `sprints[].audit.blocker_counts` / `blockers`: unresolved blocker categories and details when the sprint is blocked by missing prerequisites
-- `sprints[].audit.metrics`: compact live metrics snapshot (calls, duration, no-op rate, verify yield, last-cycle/trailing productivity, repeated unchanged findings, suppressed unchanged reopenings, reopened-with-new-evidence count, low-yield strategy changes)
+- `sprints[].audit.metrics`: compact live metrics snapshot (calls, duration, no-op rate, verify yield, last-cycle/trailing productivity, repeated unchanged findings, suppressed unchanged reopenings, reopened-with-new-evidence count, low-yield strategy changes, and cache-aware token totals/details in the artifact)
 - `sprints[].audit.target_issues` and `issue_headlines`: what the audit loop is currently targeting
 - `build_audit`: final holistic audit result (present after build audit runs)
 
@@ -649,7 +649,7 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.
 - **Reopen detection:** If a previously resolved finding is re-raised under different wording (same file family and similar description), Fry suppresses it as a probable reopening rather than treating it as new. Unchanged-code reopenings must include explicit `**New Evidence:**` or they are suppressed as churn; severity escalation only bypasses suppression when the artifact fingerprint changed (a real regression). Suppressed reopenings are logged and shown in the monitor dashboard.
 - **Session continuity:** Verify remains stateless even when audit and fix sessions are being reused or refreshed.
-- Fry writes per-sprint audit metrics to `.fry/build-logs/sprintN_audit_metrics.json`, including churn counters, per-cycle productivity summaries, trailing yield, low-yield strategy/stop metadata, and same-role session refresh counts.
+- Fry writes per-sprint audit metrics to `.fry/build-logs/sprintN_audit_metrics.json`, including churn counters, cache-read/cache-creation token detail, per-cycle productivity summaries, trailing yield, low-yield strategy/stop metadata, and same-role session refresh counts.
 
 Read audit findings:
 
