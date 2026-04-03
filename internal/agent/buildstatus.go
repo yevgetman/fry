@@ -73,15 +73,18 @@ type AlignmentStatus struct {
 }
 
 type AuditMetricsSnapshot struct {
-	TotalCalls        int     `json:"total_calls"`
-	DurationMs        int64   `json:"duration_ms"`
-	NoOpFixCalls      int     `json:"no_op_fix_calls"`
-	AcceptedFixCalls  int     `json:"accepted_fix_calls"`
-	RejectedFixCalls  int     `json:"rejected_fix_calls"`
-	NoOpRate          float64 `json:"no_op_rate"`
-	VerifyCalls       int     `json:"verify_calls"`
-	VerifyResolutions int     `json:"verify_resolutions"`
-	VerifyYield       float64 `json:"verify_yield"`
+	TotalCalls              int     `json:"total_calls"`
+	DurationMs              int64   `json:"duration_ms"`
+	NoOpFixCalls            int     `json:"no_op_fix_calls"`
+	AcceptedFixCalls        int     `json:"accepted_fix_calls"`
+	RejectedFixCalls        int     `json:"rejected_fix_calls"`
+	RepeatedUnchanged       int     `json:"repeated_unchanged_findings"`
+	SuppressedUnchanged     int     `json:"suppressed_unchanged_findings"`
+	ReopenedWithNewEvidence int     `json:"reopened_with_new_evidence"`
+	NoOpRate                float64 `json:"no_op_rate"`
+	VerifyCalls             int     `json:"verify_calls"`
+	VerifyResolutions       int     `json:"verify_resolutions"`
+	VerifyYield             float64 `json:"verify_yield"`
 }
 
 // AuditStatus summarizes the per-sprint audit results.
@@ -133,7 +136,7 @@ func WriteBuildStatus(projectDir string, status *BuildStatus) error {
 		return fmt.Errorf("write status tmp: %w", err)
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath) // clean up on rename failure
+		_ = os.Remove(tmpPath) // clean up on rename failure
 		return fmt.Errorf("rename status file: %w", err)
 	}
 	return nil

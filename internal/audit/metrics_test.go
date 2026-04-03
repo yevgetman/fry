@@ -14,7 +14,11 @@ import (
 func TestAuditMetricsRecordAndSummary(t *testing.T) {
 	t.Parallel()
 
-	metrics := &AuditMetrics{}
+	metrics := &AuditMetrics{
+		RepeatedUnchangedFindings:   2,
+		SuppressedUnchangedFindings: 1,
+		ReopenedWithNewEvidence:     1,
+	}
 	metrics.Record(CallMetric{SessionType: engine.SessionAudit, PromptBytes: 100, DurationMs: 10})
 	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, PromptBytes: 120, DurationMs: 20, WasNoOp: true, ValidationResult: fixValidationRejected})
 	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, PromptBytes: 140, DurationMs: 25, ValidationResult: fixValidationAccepted})
@@ -25,6 +29,9 @@ func TestAuditMetricsRecordAndSummary(t *testing.T) {
 	assert.InDelta(t, 0.5, metrics.NoOpRate(), 0.001)
 	assert.Equal(t, 1, metrics.TotalAcceptedFixCalls())
 	assert.Equal(t, 1, metrics.TotalRejectedFixCalls())
+	assert.Equal(t, 2, metrics.Snapshot().RepeatedUnchanged)
+	assert.Equal(t, 1, metrics.Snapshot().SuppressedUnchanged)
+	assert.Equal(t, 1, metrics.Snapshot().ReopenedWithNewEvidence)
 	assert.InDelta(t, 2.0, metrics.VerifyYield(), 0.001)
 	assert.Equal(t, 110, metrics.AvgPromptBytes())
 }
@@ -52,6 +59,9 @@ func TestAuditMetricsMarshalJSON(t *testing.T) {
 	assert.Equal(t, float64(1), summary["no_op_fix_calls"])
 	assert.Equal(t, float64(0), summary["accepted_fix_calls"])
 	assert.Equal(t, float64(0), summary["rejected_fix_calls"])
+	assert.Equal(t, float64(0), summary["repeated_unchanged_findings"])
+	assert.Equal(t, float64(0), summary["suppressed_unchanged_findings"])
+	assert.Equal(t, float64(0), summary["reopened_with_new_evidence"])
 }
 
 func TestCallMetricTokenParsing(t *testing.T) {

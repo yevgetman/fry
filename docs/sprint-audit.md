@@ -79,13 +79,17 @@ On Claude and Codex, Fry also reuses same-role session continuity within the spr
 
 Each finding has a stable identity and tracks:
 - **Finding key** -- normalized file location plus description when a location is available; otherwise normalized description only
+- **Affected files** -- file targets derived from the finding location
+- **Artifact state** -- a lightweight fingerprint of the relevant file content or local code window
 - **Origin cycle** -- which outer audit cycle discovered it (for FIFO ordering)
+- **Last seen cycle** -- the most recent audit cycle that observed the finding family
 - **Resolution status** -- whether it has been verified as resolved
 
 When the re-audit runs (cycle 2+), findings are classified as:
 - **Resolved** -- previously known issue no longer found
 - **Persisting** -- previously known issue still present (keeps its original cycle number)
 - **New** -- issue not seen in previous cycles (assigned current cycle number)
+- **Repeated unchanged** -- same issue family against unchanged code; merged back into the existing active issue instead of re-queued as brand-new work
 
 This ensures older issues are always addressed before newer ones, avoids collapsing distinct same-worded issues in different files, and reduces wasted fix effort on re-discovering known issues.
 
@@ -102,11 +106,23 @@ Probable reopenings are **suppressed** from the active findings list and logged:
 [2026-04-01 12:20:00]   AUDIT: 2 findings classified as probable reopenings (suppressed)
 ```
 
-**Exception: genuine regressions.** If the re-raised finding has a **higher severity** than the original resolved finding, it is admitted as genuinely new. This ensures that actual regressions (where a fix made things worse) are not suppressed.
+If the relevant code state is **unchanged**, a reopened finding must include explicit `**New Evidence:**` explaining the new proof or new contract interpretation. Without that field, Fry suppresses the reopening as unchanged-code churn. If the unchanged-code reopening does include `**New Evidence:**`, Fry admits it and records that separately in the audit metrics.
+
+**Exception: genuine regressions.** If the re-raised finding has a **higher severity** than the original resolved finding and the artifact fingerprint changed, it is admitted as genuinely new. This ensures that actual regressions (where a later change made things worse) are not suppressed.
 
 A **resolved-finding ledger** accumulates all findings resolved across audit cycles (both by the inner fix loop and by the re-audit discovering they disappeared). The ledger persists for the lifetime of one `RunAuditLoop` call.
 
 The audit prompt also lists resolved themes on cycle 2+ and instructs the agent not to re-raise them without evidence of regression.
+
+## Metrics and Status
+
+Sprint audit metrics now distinguish between several kinds of churn:
+
+- **Repeated unchanged findings** -- the auditor restated an already-known issue family against the same artifact fingerprint
+- **Suppressed unchanged findings** -- a reopening against unchanged code was rejected because it lacked `**New Evidence:**`
+- **Reopened with new evidence** -- a reopening against unchanged code was admitted because the auditor supplied explicit justification
+
+These counters are written to `.fry/build-logs/sprintN_audit_metrics.json` and surfaced in `.fry/build-status.json` under `sprints[].audit.metrics`.
 
 ## Blocking vs Advisory
 

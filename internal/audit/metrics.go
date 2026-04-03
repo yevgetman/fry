@@ -29,25 +29,31 @@ type CallMetric struct {
 
 // AuditMetricsSnapshot is the small, monitor-friendly subset surfaced in build status.
 type AuditMetricsSnapshot struct {
-	TotalCalls        int     `json:"total_calls"`
-	DurationMs        int64   `json:"duration_ms"`
-	NoOpFixCalls      int     `json:"no_op_fix_calls"`
-	AcceptedFixCalls  int     `json:"accepted_fix_calls"`
-	RejectedFixCalls  int     `json:"rejected_fix_calls"`
-	NoOpRate          float64 `json:"no_op_rate"`
-	VerifyCalls       int     `json:"verify_calls"`
-	VerifyResolutions int     `json:"verify_resolutions"`
-	VerifyYield       float64 `json:"verify_yield"`
+	TotalCalls              int     `json:"total_calls"`
+	DurationMs              int64   `json:"duration_ms"`
+	NoOpFixCalls            int     `json:"no_op_fix_calls"`
+	AcceptedFixCalls        int     `json:"accepted_fix_calls"`
+	RejectedFixCalls        int     `json:"rejected_fix_calls"`
+	RepeatedUnchanged       int     `json:"repeated_unchanged_findings"`
+	SuppressedUnchanged     int     `json:"suppressed_unchanged_findings"`
+	ReopenedWithNewEvidence int     `json:"reopened_with_new_evidence"`
+	NoOpRate                float64 `json:"no_op_rate"`
+	VerifyCalls             int     `json:"verify_calls"`
+	VerifyResolutions       int     `json:"verify_resolutions"`
+	VerifyYield             float64 `json:"verify_yield"`
 }
 
 // AuditMetrics accumulates per-call audit telemetry for one RunAuditLoop invocation.
 type AuditMetrics struct {
-	Calls               []CallMetric   `json:"calls"`
-	OuterCycles         int            `json:"outer_cycles"`
-	ContentComplexity   ComplexityTier `json:"content_complexity,omitempty"`
-	ConvergedAtCycle    int            `json:"converged_at_cycle,omitempty"`
-	FinalFindingCount   int            `json:"final_finding_count"`
-	EscapedToBuildAudit int            `json:"escaped_to_build_audit,omitempty"`
+	Calls                       []CallMetric   `json:"calls"`
+	OuterCycles                 int            `json:"outer_cycles"`
+	ContentComplexity           ComplexityTier `json:"content_complexity,omitempty"`
+	ConvergedAtCycle            int            `json:"converged_at_cycle,omitempty"`
+	FinalFindingCount           int            `json:"final_finding_count"`
+	EscapedToBuildAudit         int            `json:"escaped_to_build_audit,omitempty"`
+	RepeatedUnchangedFindings   int            `json:"repeated_unchanged_findings,omitempty"`
+	SuppressedUnchangedFindings int            `json:"suppressed_unchanged_findings,omitempty"`
+	ReopenedWithNewEvidence     int            `json:"reopened_with_new_evidence,omitempty"`
 }
 
 func (m *AuditMetrics) Record(cm CallMetric) {
@@ -185,27 +191,33 @@ func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 		return AuditMetricsSnapshot{}
 	}
 	return AuditMetricsSnapshot{
-		TotalCalls:        m.TotalCalls(),
-		DurationMs:        m.TotalDurationMs(),
-		NoOpFixCalls:      m.TotalNoOpFixCalls(),
-		AcceptedFixCalls:  m.TotalAcceptedFixCalls(),
-		RejectedFixCalls:  m.TotalRejectedFixCalls(),
-		NoOpRate:          m.NoOpRate(),
-		VerifyCalls:       m.TotalVerifyCalls(),
-		VerifyResolutions: m.TotalVerifyResolutions(),
-		VerifyYield:       m.VerifyYield(),
+		TotalCalls:              m.TotalCalls(),
+		DurationMs:              m.TotalDurationMs(),
+		NoOpFixCalls:            m.TotalNoOpFixCalls(),
+		AcceptedFixCalls:        m.TotalAcceptedFixCalls(),
+		RejectedFixCalls:        m.TotalRejectedFixCalls(),
+		RepeatedUnchanged:       m.RepeatedUnchangedFindings,
+		SuppressedUnchanged:     m.SuppressedUnchangedFindings,
+		ReopenedWithNewEvidence: m.ReopenedWithNewEvidence,
+		NoOpRate:                m.NoOpRate(),
+		VerifyCalls:             m.TotalVerifyCalls(),
+		VerifyResolutions:       m.TotalVerifyResolutions(),
+		VerifyYield:             m.VerifyYield(),
 	}
 }
 
 func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 	type auditMetricsJSON struct {
-		Calls               []CallMetric         `json:"calls"`
-		OuterCycles         int                  `json:"outer_cycles"`
-		ContentComplexity   ComplexityTier       `json:"content_complexity,omitempty"`
-		ConvergedAtCycle    int                  `json:"converged_at_cycle,omitempty"`
-		FinalFindingCount   int                  `json:"final_finding_count"`
-		EscapedToBuildAudit int                  `json:"escaped_to_build_audit,omitempty"`
-		Summary             AuditMetricsSnapshot `json:"summary"`
+		Calls                       []CallMetric         `json:"calls"`
+		OuterCycles                 int                  `json:"outer_cycles"`
+		ContentComplexity           ComplexityTier       `json:"content_complexity,omitempty"`
+		ConvergedAtCycle            int                  `json:"converged_at_cycle,omitempty"`
+		FinalFindingCount           int                  `json:"final_finding_count"`
+		EscapedToBuildAudit         int                  `json:"escaped_to_build_audit,omitempty"`
+		RepeatedUnchangedFindings   int                  `json:"repeated_unchanged_findings,omitempty"`
+		SuppressedUnchangedFindings int                  `json:"suppressed_unchanged_findings,omitempty"`
+		ReopenedWithNewEvidence     int                  `json:"reopened_with_new_evidence,omitempty"`
+		Summary                     AuditMetricsSnapshot `json:"summary"`
 	}
 
 	payload := auditMetricsJSON{
@@ -218,6 +230,9 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 		payload.ConvergedAtCycle = m.ConvergedAtCycle
 		payload.FinalFindingCount = m.FinalFindingCount
 		payload.EscapedToBuildAudit = m.EscapedToBuildAudit
+		payload.RepeatedUnchangedFindings = m.RepeatedUnchangedFindings
+		payload.SuppressedUnchangedFindings = m.SuppressedUnchangedFindings
+		payload.ReopenedWithNewEvidence = m.ReopenedWithNewEvidence
 	}
 	return json.Marshal(payload)
 }

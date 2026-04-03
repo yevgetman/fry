@@ -334,10 +334,10 @@ func TestClassifyFindings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			resolved, persisting, newFindings := classifyFindings(tt.known, tt.current)
-			assert.Equal(t, tt.wantResolved, len(resolved), "resolved count")
-			assert.Equal(t, tt.wantPersisting, len(persisting), "persisting count")
-			assert.Equal(t, tt.wantNew, len(newFindings), "new count")
+			classification := classifyFindings(tt.known, tt.current)
+			assert.Equal(t, tt.wantResolved, len(classification.Resolved), "resolved count")
+			assert.Equal(t, tt.wantPersisting, len(classification.Persisting), "persisting count")
+			assert.Equal(t, tt.wantNew, len(classification.NewFindings), "new count")
 		})
 	}
 }
@@ -348,9 +348,9 @@ func TestClassifyFindingsPreservesOriginCycle(t *testing.T) {
 	known := []Finding{{Description: "Old issue", OriginCycle: 1, Severity: "HIGH"}}
 	current := []Finding{{Description: "Old issue", Severity: "MODERATE"}} // severity may change
 
-	_, persisting, _ := classifyFindings(known, current)
-	require.Len(t, persisting, 1)
-	assert.Equal(t, 1, persisting[0].OriginCycle, "should preserve original cycle")
+	classification := classifyFindings(known, current)
+	require.Len(t, classification.Persisting, 1)
+	assert.Equal(t, 1, classification.Persisting[0].OriginCycle, "should preserve original cycle")
 }
 
 // --- sortFindingsFIFO tests ---
@@ -1609,13 +1609,13 @@ func TestClassifyFindingsKeepsSameDescriptionDifferentLocationsDistinct(t *testi
 		{Location: "b.go:20", Description: "Nil check missing", Severity: "HIGH"},
 	}
 
-	resolved, persisting, newFindings := classifyFindings(known, current)
+	classification := classifyFindings(known, current)
 
-	require.Len(t, resolved, 1)
-	require.Len(t, persisting, 1)
-	assert.Empty(t, newFindings)
-	assert.Equal(t, "a.go:10", resolved[0].Location)
-	assert.Equal(t, "b.go:20", persisting[0].Location)
+	require.Len(t, classification.Resolved, 1)
+	require.Len(t, classification.Persisting, 1)
+	assert.Empty(t, classification.NewFindings)
+	assert.Equal(t, "a.go:10", classification.Resolved[0].Location)
+	assert.Equal(t, "b.go:20", classification.Persisting[0].Location)
 }
 
 func TestClassifyFindingsIgnoresLineNumberChurnForSameFile(t *testing.T) {
@@ -1628,12 +1628,12 @@ func TestClassifyFindingsIgnoresLineNumberChurnForSameFile(t *testing.T) {
 		{Location: "a.go:24", Description: "Nil check missing", Severity: "HIGH"},
 	}
 
-	resolved, persisting, newFindings := classifyFindings(known, current)
+	classification := classifyFindings(known, current)
 
-	assert.Empty(t, resolved)
-	assert.Len(t, persisting, 1)
-	assert.Empty(t, newFindings)
-	assert.Equal(t, 1, persisting[0].OriginCycle)
+	assert.Empty(t, classification.Resolved)
+	assert.Len(t, classification.Persisting, 1)
+	assert.Empty(t, classification.NewFindings)
+	assert.Equal(t, 1, classification.Persisting[0].OriginCycle)
 }
 
 // --- UnresolvedFindings in result test ---
@@ -2075,12 +2075,12 @@ func TestClassifyReopenings(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ledger := newResolvedLedger()
 			ledger.add(tt.resolved)
-			reopenings, genuineNew := classifyReopenings(tt.newFindings, ledger)
-			assert.Equal(t, tt.wantReopen, len(reopenings), "reopening count")
-			assert.Equal(t, tt.wantNew, len(genuineNew), "genuinely new count")
+			classification := classifyReopenings(tt.newFindings, ledger)
+			assert.Equal(t, tt.wantReopen, len(classification.Suppressed), "reopening count")
+			assert.Equal(t, tt.wantNew, len(classification.Admitted), "genuinely new count")
 			if tt.wantReopenKeys != nil {
 				for i, k := range tt.wantReopenKeys {
-					assert.Equal(t, k, reopenings[i].ReopenOf, "ReopenOf key")
+					assert.Equal(t, k, classification.Suppressed[i].ReopenOf, "ReopenOf key")
 				}
 			}
 		})
@@ -2091,9 +2091,9 @@ func TestClassifyReopeningsNilLedger(t *testing.T) {
 	t.Parallel()
 
 	findings := []Finding{{Description: "Some finding", Severity: "HIGH"}}
-	reopenings, genuineNew := classifyReopenings(findings, nil)
-	assert.Nil(t, reopenings)
-	assert.Equal(t, findings, genuineNew)
+	classification := classifyReopenings(findings, nil)
+	assert.Empty(t, classification.Suppressed)
+	assert.Equal(t, findings, classification.Admitted)
 }
 
 func TestAuditPromptIncludesResolvedThemes(t *testing.T) {
@@ -2130,6 +2130,7 @@ func TestAuditPromptAntiReopenInstruction(t *testing.T) {
 	prompt := buildAuditPrompt(opts, nil, nil)
 
 	assert.Contains(t, prompt, "previously resolved issue seems to recur under different wording")
+	assert.Contains(t, prompt, "New Evidence")
 }
 
 func TestRunAuditLoopSuppressesReopenings(t *testing.T) {
@@ -2172,6 +2173,46 @@ func TestRunAuditLoopSuppressesReopenings(t *testing.T) {
 	assert.Equal(t, 1, result.SuppressedReopenings, "one reopening should be suppressed")
 }
 
+func TestRunAuditLoopAllowsUnchangedReopeningWithNewEvidence(t *testing.T) {
+	t.Parallel()
+
+	findingsReport := "## Summary\nIssues found.\n\n## Findings\n- **Location:** src/handler.go:10\n- **Description:** SQL injection in request handler\n- **Severity:** HIGH\n- **Recommended Fix:** Use parameterized queries\n\n## Verdict\nFAIL\n"
+	reopenedWithEvidence := "## Summary\nIssues found.\n\n## Findings\n- **Location:** src/handler.go:10\n- **Description:** SQL injection still present in request handler\n- **Severity:** HIGH\n- **Recommended Fix:** Remove string-built queries\n- **New Evidence:** The prior fix only covered the list endpoint; this unchanged handler path still concatenates SQL directly.\n\n## Verdict\nFAIL\n"
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, idx int) {
+			auditFile := filepath.Join(projectDir, config.SprintAuditFile)
+			switch idx {
+			case 0:
+				writeFile(t, auditFile, findingsReport)
+			case 1:
+			case 2:
+				writeFile(t, auditFile, "- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 3:
+				writeFile(t, auditFile, reopenedWithEvidence)
+			case 4:
+			case 5:
+				writeFile(t, auditFile, "- **Issue:** 1\n- **Status:** RESOLVED\n- **Notes:** uncovered endpoint now uses parameterized queries too\n")
+			default:
+				writeFile(t, auditFile, cleanAudit)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterations = 5
+	opts.Epic.MaxAuditIterationsSet = true
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.True(t, result.Passed)
+	assert.Equal(t, 1, result.ReopenedWithEvidence)
+	require.NotNil(t, result.Metrics)
+	assert.Equal(t, 1, result.Metrics.Snapshot().ReopenedWithNewEvidence)
+}
+
 func TestRunAuditLoopAllowsGenuineRegression(t *testing.T) {
 	t.Parallel()
 
@@ -2185,13 +2226,18 @@ func TestRunAuditLoopAllowsGenuineRegression(t *testing.T) {
 		name: "codex",
 		sideEffect: func(projectDir string, idx int) {
 			auditFile := filepath.Join(projectDir, config.SprintAuditFile)
+			apiPath := filepath.Join(projectDir, "src", "api.go")
 			switch idx {
 			case 0: // cycle 1 audit
+				require.NoError(t, os.MkdirAll(filepath.Dir(apiPath), 0o755))
+				writeFile(t, apiPath, "package src\n\nfunc call() error {\n\tif err := work(); err != nil {\n\t\treturn nil\n\t}\n\treturn nil\n}\n")
 				writeFile(t, auditFile, moderateReport)
 			case 1: // cycle 1 fix
+				writeFile(t, apiPath, "package src\n\nfunc call() error {\n\tif err := work(); err != nil {\n\t\treturn err\n\t}\n\treturn nil\n}\n")
 			case 2: // cycle 1 verify
 				writeFile(t, auditFile, "- **Issue:** 1\n- **Status:** RESOLVED\n")
 			case 3: // cycle 2 re-audit — same theme but escalated severity
+				writeFile(t, apiPath, "package src\n\nfunc call() error {\n\t_ = work()\n\treturn nil\n}\n")
 				writeFile(t, auditFile, highReport)
 			default:
 				writeFile(t, auditFile, cleanAudit)

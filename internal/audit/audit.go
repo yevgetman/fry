@@ -31,9 +31,14 @@ type Finding struct {
 	Description    string
 	Severity       string
 	RecommendedFix string
-	OriginCycle    int    // which outer audit cycle discovered this finding
-	Resolved       bool   // whether this finding has been verified resolved
-	ReopenOf       string // if non-empty, exact key of the resolved finding this reopens
+	NewEvidence    string
+	AffectedFiles  []string
+
+	OriginCycle   int    // which outer audit cycle discovered this finding
+	LastSeenCycle int    // most recent outer audit cycle that observed this finding
+	ArtifactState string // lightweight fingerprint of the relevant artifact state
+	Resolved      bool   // whether this finding has been verified resolved
+	ReopenOf      string // if non-empty, exact key of the resolved finding this reopens
 }
 
 // key returns a normalized identity for deduplication and comparison across cycles.
@@ -98,6 +103,9 @@ type AuditResult struct {
 	SeverityCounts       map[string]int // count of findings per severity level
 	UnresolvedFindings   []Finding      // remaining findings after all cycles
 	SuppressedReopenings int            // findings suppressed as probable reopenings across all cycles
+	RepeatedUnchanged    int            // findings repeated against unchanged artifact state
+	SuppressedUnchanged  int            // unchanged-code reopenings suppressed for lack of new evidence
+	ReopenedWithEvidence int            // unchanged-code reopenings admitted because they carried explicit new evidence
 	Complexity           ComplexityTier
 	Metrics              *AuditMetrics
 }
@@ -150,6 +158,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	outerStaleCount := 0
 	outerTurnoverCount := 0
 	suppressedReopenings := 0
+	repeatedUnchanged := 0
+	suppressedUnchanged := 0
+	reopenedWithEvidence := 0
 	var lastCycle int
 
 	for cycle := 1; cycle <= maxOuter; cycle++ {
@@ -241,7 +252,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		if isAuditPass(maxSev) {
 			// LOW-only at max effort: attempt one fix pass before accepting.
 			if maxSev == "LOW" && opts.Epic.EffortLevel == epic.EffortMax {
-				lowFindings := parseFindings(string(content))
+				lowFindings := decorateFindings(opts.ProjectDir, parseFindings(string(content)), cycle)
 				if len(lowFindings) > 0 {
 					frylog.Log("  AUDIT: LOW-only at max effort — running single fix pass before accepting")
 					if err := runSingleLowFixPass(ctx, opts, lowFindings, cycle, buildLogsDir, auditMetrics); err != nil {
@@ -257,21 +268,24 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				Passed: true, Iterations: cycle,
 				MaxSeverity: maxSev, SeverityCounts: counts,
 				SuppressedReopenings: suppressedReopenings,
+				RepeatedUnchanged:    repeatedUnchanged,
+				SuppressedUnchanged:  suppressedUnchanged,
+				ReopenedWithEvidence: reopenedWithEvidence,
 				Complexity:           opts.Complexity,
 				Metrics:              auditMetrics,
 			}, nil
 		}
 
 		// Parse structured findings
-		currentFindings := parseFindings(string(content))
+		currentFindings := decorateFindings(opts.ProjectDir, parseFindings(string(content)), cycle)
 
 		// Fallback: severity indicates issues but no structured findings parsed
 		if len(currentFindings) == 0 {
-			currentFindings = []Finding{{
+			currentFindings = decorateFindings(opts.ProjectDir, []Finding{{
 				Description: "Audit agent reported issues but structured findings could not be parsed. See raw audit output for details.",
 				Severity:    maxSev,
 				OriginCycle: cycle,
-			}}
+			}}, cycle)
 		}
 
 		// Classify findings against known set
@@ -279,47 +293,76 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		var persisting []Finding
 		var newFindings []Finding
 		if cycle > 1 && len(knownFindings) > 0 {
-			justResolved, nextPersisting, nextNew := classifyFindings(knownFindings, currentFindings)
-			persisting = nextPersisting
+			classification := classifyFindings(knownFindings, currentFindings)
+			persisting = classification.Persisting
+			repeatedUnchanged += len(classification.RepeatedUnchanged)
+			auditMetrics.RepeatedUnchangedFindings += len(classification.RepeatedUnchanged)
 
 			// Record resolved findings in the ledger before classifying reopenings
-			resolved.add(justResolved)
+			resolved.add(classification.Resolved)
 
 			// Check if any "new" findings are reopenings of previously resolved themes
-			reopenings, genuineNew := classifyReopenings(nextNew, resolved)
-			newFindings = genuineNew
+			reopenings := classifyReopenings(classification.NewFindings, resolved)
+			newFindings = reopenings.Admitted
+			suppressedUnchanged += reopenings.SuppressedUnchanged
+			reopenedWithEvidence += reopenings.ReopenedWithNewEvidence
+			repeatedUnchanged += reopenings.SuppressedUnchanged
+			auditMetrics.SuppressedUnchangedFindings += reopenings.SuppressedUnchanged
+			auditMetrics.ReopenedWithNewEvidence += reopenings.ReopenedWithNewEvidence
+			auditMetrics.RepeatedUnchangedFindings += reopenings.SuppressedUnchanged
 
 			for i := range newFindings {
 				newFindings[i].OriginCycle = cycle
 			}
 			activeFindings = mergeFindings(persisting, newFindings)
-			if len(justResolved) > 0 {
-				frylog.Log("  AUDIT: %d previously known issues resolved", len(justResolved))
+			if len(classification.Resolved) > 0 {
+				frylog.Log("  AUDIT: %d previously known issues resolved", len(classification.Resolved))
 			}
-			if len(reopenings) > 0 {
-				suppressedReopenings += len(reopenings)
-				frylog.Log("  AUDIT: %d findings classified as probable reopenings (suppressed)", len(reopenings))
+			if len(classification.RepeatedUnchanged) > 0 {
+				frylog.Log("  AUDIT: %d unchanged-code finding restatements merged into existing active issues", len(classification.RepeatedUnchanged))
 			}
-			if len(genuineNew) > 0 {
-				frylog.Log("  AUDIT: %d new issues discovered", len(genuineNew))
+			if len(reopenings.Suppressed) > 0 {
+				suppressedReopenings += len(reopenings.Suppressed)
+				frylog.Log("  AUDIT: %d findings classified as probable reopenings (suppressed)", len(reopenings.Suppressed))
+			}
+			if reopenings.SuppressedUnchanged > 0 {
+				frylog.Log("  AUDIT: %d unchanged-code reopenings suppressed for lack of new evidence", reopenings.SuppressedUnchanged)
+			}
+			if reopenings.ReopenedWithNewEvidence > 0 {
+				frylog.Log("  AUDIT: %d unchanged-code reopenings admitted because they provided explicit new evidence", reopenings.ReopenedWithNewEvidence)
+			}
+			if len(newFindings) > 0 {
+				frylog.Log("  AUDIT: %d new issues discovered", len(newFindings))
 			}
 		} else {
-			for i := range currentFindings {
-				currentFindings[i].OriginCycle = cycle
-			}
 			// On cycle 2+ with empty knownFindings (all previously resolved),
 			// still check for reopenings against the resolved ledger.
 			if cycle > 1 && resolved.len() > 0 {
-				reopenings, genuineNew := classifyReopenings(currentFindings, resolved)
-				if len(reopenings) > 0 {
-					suppressedReopenings += len(reopenings)
-					frylog.Log("  AUDIT: %d findings classified as probable reopenings (suppressed)", len(reopenings))
+				reopenings := classifyReopenings(currentFindings, resolved)
+				if len(reopenings.Suppressed) > 0 {
+					suppressedReopenings += len(reopenings.Suppressed)
+					frylog.Log("  AUDIT: %d findings classified as probable reopenings (suppressed)", len(reopenings.Suppressed))
 				}
-				activeFindings = genuineNew
+				if reopenings.SuppressedUnchanged > 0 {
+					suppressedUnchanged += reopenings.SuppressedUnchanged
+					repeatedUnchanged += reopenings.SuppressedUnchanged
+					auditMetrics.SuppressedUnchangedFindings += reopenings.SuppressedUnchanged
+					auditMetrics.RepeatedUnchangedFindings += reopenings.SuppressedUnchanged
+					frylog.Log("  AUDIT: %d unchanged-code reopenings suppressed for lack of new evidence", reopenings.SuppressedUnchanged)
+				}
+				if reopenings.ReopenedWithNewEvidence > 0 {
+					reopenedWithEvidence += reopenings.ReopenedWithNewEvidence
+					auditMetrics.ReopenedWithNewEvidence += reopenings.ReopenedWithNewEvidence
+					frylog.Log("  AUDIT: %d unchanged-code reopenings admitted because they provided explicit new evidence", reopenings.ReopenedWithNewEvidence)
+				}
+				activeFindings = reopenings.Admitted
 			} else {
 				activeFindings = currentFindings
 			}
 		}
+
+		effectiveCounts := severityCountsForFindings(activeFindings)
+		effectiveMaxSev := maxSeverityForFindings(activeFindings)
 
 		// Check actionable count (HIGH/MODERATE/CRITICAL only)
 		actionable := countActionableFindings(activeFindings)
@@ -338,11 +381,14 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			frylog.Log("  AUDIT: pass (no actionable issues)")
 			auditMetrics.OuterCycles = cycle
 			auditMetrics.ConvergedAtCycle = cycle
-			auditMetrics.FinalFindingCount = totalSeverityCount(counts)
+			auditMetrics.FinalFindingCount = totalSeverityCount(effectiveCounts)
 			return &AuditResult{
 				Passed: true, Iterations: cycle,
-				MaxSeverity: maxSev, SeverityCounts: counts,
+				MaxSeverity: effectiveMaxSev, SeverityCounts: effectiveCounts,
 				SuppressedReopenings: suppressedReopenings,
+				RepeatedUnchanged:    repeatedUnchanged,
+				SuppressedUnchanged:  suppressedUnchanged,
+				ReopenedWithEvidence: reopenedWithEvidence,
 				Complexity:           opts.Complexity,
 				Metrics:              auditMetrics,
 			}, nil
@@ -378,7 +424,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		}
 
 		fixableCount := countFixable(activeFindings, includeLow)
-		frylog.Log("  AUDIT: %s — entering fix loop (%d issues)...", formatSeverityCounts(counts), fixableCount)
+		frylog.Log("  AUDIT: %s — entering fix loop (%d issues)...", formatSeverityCounts(effectiveCounts), fixableCount)
 
 		// Sort findings FIFO for fix agent
 		sortFindingsFIFO(activeFindings)
@@ -686,6 +732,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			Passed: true, Iterations: lastCycle,
 			MaxSeverity: maxSev, SeverityCounts: finalCounts,
 			SuppressedReopenings: suppressedReopenings,
+			RepeatedUnchanged:    repeatedUnchanged,
+			SuppressedUnchanged:  suppressedUnchanged,
+			ReopenedWithEvidence: reopenedWithEvidence,
 			Complexity:           opts.Complexity,
 			Metrics:              auditMetrics,
 		}, nil
@@ -697,8 +746,11 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		Iterations:           lastCycle,
 		MaxSeverity:          maxSev,
 		SeverityCounts:       finalCounts,
-		UnresolvedFindings:   parseFindings(string(content)),
+		UnresolvedFindings:   decorateFindings(opts.ProjectDir, parseFindings(string(content)), lastCycle),
 		SuppressedReopenings: suppressedReopenings,
+		RepeatedUnchanged:    repeatedUnchanged,
+		SuppressedUnchanged:  suppressedUnchanged,
+		ReopenedWithEvidence: reopenedWithEvidence,
 		Complexity:           opts.Complexity,
 		Metrics:              auditMetrics,
 	}, nil
@@ -925,7 +977,8 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 		b.WriteString("The following issues were identified and resolved in earlier audit cycles.\n")
 		b.WriteString("Do NOT re-raise these unless you observe a genuine regression (the code is\n")
 		b.WriteString("now WORSE than before the fix). Reworded versions of resolved findings will be\n")
-		b.WriteString("automatically suppressed.\n\n")
+		b.WriteString("automatically suppressed. If the relevant code state is unchanged but you still\n")
+		b.WriteString("believe the issue must be reopened, include **New Evidence** explaining why.\n\n")
 		i := 0
 		for _, f := range resolvedThemes.entries {
 			i++
@@ -952,7 +1005,9 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 	b.WriteString("Prefer issues directly connected to the sprint goals, changed files, or regressions caused by this sprint.\n")
 	b.WriteString("Only raise pre-existing issues when this sprint introduced, worsened, or clearly exposed them.\n")
 	b.WriteString("If a previously resolved issue seems to recur under different wording, verify that it is genuinely\n")
-	b.WriteString("a distinct problem or a regression before reporting it. Repeat findings under varied wording are unhelpful.\n\n")
+	b.WriteString("a distinct problem or a regression before reporting it. Repeat findings under varied wording are unhelpful.\n")
+	b.WriteString("Fry fingerprints relevant file state across audit cycles. If you raise the same issue family against\n")
+	b.WriteString("unchanged code, you must include **New Evidence** describing the new proof or contract interpretation.\n\n")
 
 	// Audit criteria
 	b.WriteString("## Audit Criteria\n")
@@ -1014,7 +1069,8 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 	b.WriteString("- **Location:** <file:line>\n")
 	b.WriteString("- **Description:** <what is wrong>\n")
 	b.WriteString("- **Severity:** CRITICAL | HIGH | MODERATE | LOW\n")
-	b.WriteString("- **Recommended Fix:** <how to fix>\n\n")
+	b.WriteString("- **Recommended Fix:** <how to fix>\n")
+	b.WriteString("- **New Evidence:** <required only when reopening an unchanged-code issue>\n\n")
 	b.WriteString("## Verdict\n")
 	b.WriteString("PASS (no issues or all LOW) or FAIL (CRITICAL/HIGH/MODERATE found)\n")
 	b.WriteString("```\n")
@@ -1198,6 +1254,7 @@ var (
 	locationRe       = regexp.MustCompile(`(?i)\*?\*?Location:\*?\*?\s*(.+)`)
 	descriptionRe    = regexp.MustCompile(`(?i)\*?\*?Description:\*?\*?\s*(.+)`)
 	recommendedFixRe = regexp.MustCompile(`(?i)\*?\*?Recommended\s*Fix:\*?\*?\s*(.+)`)
+	newEvidenceRe    = regexp.MustCompile(`(?i)\*?\*?New\s*Evidence:\*?\*?\s*(.+)`)
 )
 
 // parseFindings extracts structured findings from audit output. Each finding
@@ -1250,6 +1307,10 @@ func parseFindings(content string) []Finding {
 		if hasCurrent {
 			if m := recommendedFixRe.FindStringSubmatch(line); len(m) >= 2 {
 				current.RecommendedFix = strings.TrimSpace(m[1])
+				continue
+			}
+			if m := newEvidenceRe.FindStringSubmatch(line); len(m) >= 2 {
+				current.NewEvidence = strings.TrimSpace(m[1])
 				continue
 			}
 		}
@@ -1313,54 +1374,6 @@ func normalizeFindingLocation(value string) string {
 }
 
 // --- Classification and comparison ---
-
-// classifyFindings compares a set of known findings against newly parsed findings.
-// Returns findings that were resolved (no longer present), findings that persist
-// (still present from a previous cycle), and genuinely new findings.
-func classifyFindings(known, current []Finding) (resolved, persisting, newFindings []Finding) {
-	// Build a set of current finding keys for quick lookup.
-	currentKeys := make(map[string]struct{})
-	for _, f := range current {
-		currentKeys[f.key()] = struct{}{}
-	}
-
-	// Classify known findings as resolved or persisting.
-	knownKeys := make(map[string]struct{})
-	for _, kf := range known {
-		k := kf.key()
-		knownKeys[k] = struct{}{}
-		if _, exists := currentKeys[k]; exists {
-			// Issue persists — keep origin cycle from known.
-			// Find the matching current finding for updated fields.
-			for _, cf := range current {
-				if cf.key() == k {
-					cf.OriginCycle = kf.OriginCycle
-					persisting = append(persisting, cf)
-					break
-				}
-			}
-		} else {
-			resolved = append(resolved, kf)
-		}
-	}
-
-	// Collect genuinely new findings (not in known set). Use a seen set
-	// to avoid emitting duplicates from the current list.
-	seen := make(map[string]struct{})
-	for _, cf := range current {
-		k := cf.key()
-		if _, isKnown := knownKeys[k]; isKnown {
-			continue
-		}
-		if _, alreadySeen := seen[k]; alreadySeen {
-			continue
-		}
-		seen[k] = struct{}{}
-		newFindings = append(newFindings, cf)
-	}
-
-	return
-}
 
 // hasProgress returns true if the current finding set represents progress
 // compared to the previous set. Progress means: fewer findings, or different
@@ -1565,30 +1578,6 @@ func (rl *resolvedLedger) len() int {
 	return len(rl.entries)
 }
 
-// classifyReopenings examines new findings against the resolved ledger.
-// A finding that matches a resolved theme at the same or lower severity is
-// classified as a probable reopening. If severity escalated, it is treated
-// as a genuine regression and returned in genuinelyNew.
-func classifyReopenings(newFindings []Finding, ledger *resolvedLedger) (reopenings, genuinelyNew []Finding) {
-	if ledger == nil || ledger.len() == 0 {
-		return nil, newFindings
-	}
-	for _, f := range newFindings {
-		resolved, ok := ledger.findThemeMatch(f)
-		if !ok {
-			genuinelyNew = append(genuinelyNew, f)
-			continue
-		}
-		if severity.Rank(f.Severity) > severity.Rank(resolved.Severity) {
-			genuinelyNew = append(genuinelyNew, f)
-			continue
-		}
-		f.ReopenOf = resolved.key()
-		reopenings = append(reopenings, f)
-	}
-	return
-}
-
 // --- Sorting and grouping ---
 
 // sortFindingsFIFO sorts findings by OriginCycle ascending (oldest first),
@@ -1704,6 +1693,19 @@ func maxActionableSeverity(findings []Finding) string {
 	maxSev := ""
 	for _, f := range findings {
 		if !f.isActionable() {
+			continue
+		}
+		if severity.Rank(f.Severity) > severity.Rank(maxSev) {
+			maxSev = f.Severity
+		}
+	}
+	return maxSev
+}
+
+func maxSeverityForFindings(findings []Finding) string {
+	maxSev := ""
+	for _, f := range findings {
+		if f.Resolved {
 			continue
 		}
 		if severity.Rank(f.Severity) > severity.Rank(maxSev) {

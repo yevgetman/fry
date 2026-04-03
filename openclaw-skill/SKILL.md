@@ -555,7 +555,7 @@ The file contains:
 - `sprints[].audit.current_cycle` / `max_cycles`: outer audit-loop progress
 - `sprints[].audit.current_fix` / `max_fixes`: inner fix/verify-loop progress
 - `sprints[].audit.complexity`: classified sprint-audit complexity (`low`, `moderate`, `high`, or `unknown`)
-- `sprints[].audit.metrics`: compact live metrics snapshot (calls, duration, no-op rate, verify yield)
+- `sprints[].audit.metrics`: compact live metrics snapshot (calls, duration, no-op rate, verify yield, repeated unchanged findings, suppressed unchanged reopenings, reopened-with-new-evidence count)
 - `sprints[].audit.target_issues` and `issue_headlines`: what the audit loop is currently targeting
 - `build_audit`: final holistic audit result (present after build audit runs)
 
@@ -637,10 +637,11 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **Complexity-aware budgets:** Fry classifies the sprint diff as low, moderate, or high complexity and adjusts audit/fix loop caps and prompt emphasis accordingly.
 - **No-op skip:** If an audit-fix pass makes no real file changes, Fry skips verify and treats the attempt as stale progress.
 - **Fix history:** Later fix iterations receive a concise history of earlier failed attempts against the same findings.
+- **Unchanged-code churn suppression:** Fry fingerprints finding-related file state across cycles. If the auditor re-raises the same issue family against unchanged code, Fry merges it back into the existing active issue or suppresses the reopening unless the finding includes explicit `**New Evidence:**`.
 - When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
 - Relevant intentional divergences from `.fry/deviation-log.md` are injected into audit prompts so the auditor does not flag accepted design differences as defects.
 - If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.
-- **Reopen detection:** If a previously resolved finding is re-raised under different wording (same file family and similar description), Fry suppresses it as a probable reopening rather than treating it as new. Severity escalation bypasses suppression (genuine regressions are still caught). Suppressed reopenings are logged and shown in the monitor dashboard.
+- **Reopen detection:** If a previously resolved finding is re-raised under different wording (same file family and similar description), Fry suppresses it as a probable reopening rather than treating it as new. Unchanged-code reopenings must include explicit `**New Evidence:**` or they are suppressed as churn; severity escalation only bypasses suppression when the artifact fingerprint changed (a real regression). Suppressed reopenings are logged and shown in the monitor dashboard.
 - **Session continuity:** On Claude and Codex, audit-to-audit and fix-to-fix calls reuse same-role session IDs within the sprint audit. Verify remains stateless.
 - Fry writes per-sprint audit metrics to `.fry/build-logs/sprintN_audit_metrics.json`.
 

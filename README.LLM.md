@@ -73,6 +73,7 @@ fry/
 │   │   ├── build_audit.go       # Final holistic codebase audit
 │   │   ├── complexity.go        # Sprint complexity classification for adaptive audit budgets
 │   │   ├── deferred.go          # Deferred failure interaction analysis + validation checklist rendering
+│   │   ├── findingstate.go      # Finding artifact fingerprints + repeated-unchanged/reopening classification
 │   │   ├── fixhistory.go        # Per-finding fix-attempt history for audit fix prompts
 │   │   ├── metrics.go           # Per-call audit metrics and summaries
 │   │   ├── recovery.go          # Structured stdout/log recovery for audit outputs
@@ -336,7 +337,7 @@ For each sprint (startSprint → endSprint):
      │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
      │  ├─ If the agent forgets to write the audit file, Fry tries to recover a structured report from final stdout/log output before failing
      │  ├─ Verify agent must emit explicit RESOLVED/STILL PRESENT statuses; unrecoverable missing output fails the audit
-     │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`
+     │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`, including repeated-unchanged and unchanged-reopening counters
      │  └─ standard/high/max use effort+complexity-aware caps (falling back to legacy defaults when complexity is unknown)
  11. Git checkpoint commit
  12. Compact sprint progress → .fry/epic-progress.txt
@@ -613,6 +614,6 @@ Sprint prompts follow a 7-part convention: OPENER, REFERENCES, BUILD LIST, CONST
 - **Two-phase progress tracking:** per-sprint log (`sprint-progress.txt`) + cross-sprint compacted summaries (`epic-progress.txt`) for bounded context
 - **Promise tokens:** agent writes `===PROMISE: TOKEN===` to signal sprint completion → early exit
 - **No-op detection:** if git diff shows no changes for 2-3 consecutive iterations and sanity checks pass → early exit
-- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory, LOW included in fix at high/max effort (non-blocking); complexity classification adapts budgets and reconciliation guidance; resolved-finding ledger with fuzzy theme matching suppresses probable reopenings; fix passes are validated against Fry-owned diff contracts so empty, comment-only, and out-of-scope edits do not count as real remediation; same-role continuity is used for Claude/Codex audit and fix sessions only
+- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory, LOW included in fix at high/max effort (non-blocking); complexity classification adapts budgets and reconciliation guidance; finding artifact fingerprints merge unchanged-code restatements back into active issues and require explicit `New Evidence` before unchanged reopenings are admitted; resolved-finding ledger with fuzzy theme matching suppresses probable reopenings; fix passes are validated against Fry-owned diff contracts so empty, comment-only, and out-of-scope edits do not count as real remediation; same-role continuity is used for Claude/Codex audit and fix sessions only
 - **Graceful signal handling:** Ctrl+C saves partial work via git checkpoint
 - **Engine abstraction:** any CLI-based AI tool can be added by implementing `Engine` interface (2 methods: `Run`, `Name`)

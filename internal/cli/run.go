@@ -3114,13 +3114,18 @@ func updateBuildStatusAuditProgress(status *agent.BuildStatus, sprintNum int, pr
 		Reopenings:     progress.Reopenings,
 		Complexity:     string(progress.Complexity),
 		Metrics: &agent.AuditMetricsSnapshot{
-			TotalCalls:        progress.Metrics.TotalCalls,
-			DurationMs:        progress.Metrics.DurationMs,
-			NoOpFixCalls:      progress.Metrics.NoOpFixCalls,
-			NoOpRate:          progress.Metrics.NoOpRate,
-			VerifyCalls:       progress.Metrics.VerifyCalls,
-			VerifyResolutions: progress.Metrics.VerifyResolutions,
-			VerifyYield:       progress.Metrics.VerifyYield,
+			TotalCalls:              progress.Metrics.TotalCalls,
+			DurationMs:              progress.Metrics.DurationMs,
+			NoOpFixCalls:            progress.Metrics.NoOpFixCalls,
+			AcceptedFixCalls:        progress.Metrics.AcceptedFixCalls,
+			RejectedFixCalls:        progress.Metrics.RejectedFixCalls,
+			RepeatedUnchanged:       progress.Metrics.RepeatedUnchanged,
+			SuppressedUnchanged:     progress.Metrics.SuppressedUnchanged,
+			ReopenedWithNewEvidence: progress.Metrics.ReopenedWithNewEvidence,
+			NoOpRate:                progress.Metrics.NoOpRate,
+			VerifyCalls:             progress.Metrics.VerifyCalls,
+			VerifyResolutions:       progress.Metrics.VerifyResolutions,
+			VerifyYield:             progress.Metrics.VerifyYield,
 		},
 	}
 }
@@ -3150,15 +3155,18 @@ func buildStatusAuditMetricsSnapshot(metrics *audit.AuditMetrics) *agent.AuditMe
 	}
 	snapshot := metrics.Snapshot()
 	return &agent.AuditMetricsSnapshot{
-		TotalCalls:        snapshot.TotalCalls,
-		DurationMs:        snapshot.DurationMs,
-		NoOpFixCalls:      snapshot.NoOpFixCalls,
-		AcceptedFixCalls:  snapshot.AcceptedFixCalls,
-		RejectedFixCalls:  snapshot.RejectedFixCalls,
-		NoOpRate:          snapshot.NoOpRate,
-		VerifyCalls:       snapshot.VerifyCalls,
-		VerifyResolutions: snapshot.VerifyResolutions,
-		VerifyYield:       snapshot.VerifyYield,
+		TotalCalls:              snapshot.TotalCalls,
+		DurationMs:              snapshot.DurationMs,
+		NoOpFixCalls:            snapshot.NoOpFixCalls,
+		AcceptedFixCalls:        snapshot.AcceptedFixCalls,
+		RejectedFixCalls:        snapshot.RejectedFixCalls,
+		RepeatedUnchanged:       snapshot.RepeatedUnchanged,
+		SuppressedUnchanged:     snapshot.SuppressedUnchanged,
+		ReopenedWithNewEvidence: snapshot.ReopenedWithNewEvidence,
+		NoOpRate:                snapshot.NoOpRate,
+		VerifyCalls:             snapshot.VerifyCalls,
+		VerifyResolutions:       snapshot.VerifyResolutions,
+		VerifyYield:             snapshot.VerifyYield,
 	}
 }
 
