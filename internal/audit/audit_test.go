@@ -1548,12 +1548,55 @@ func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
 	assert.Contains(t, result.StopReason, "low_yield")
 	assert.Equal(t, result.StopReason, result.Metrics.LowYieldStopReason)
 	assert.Equal(t, 1, result.Metrics.LowYieldStrategyChanges)
+	assert.Equal(t, 2, result.Metrics.StrategyShiftCount())
+	assert.Contains(t, result.Metrics.LastStrategyShift(), strategyTriggerLowYield)
 	require.Len(t, result.Metrics.CycleSummaries, 2)
 	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[0].FixYield, 0.001)
 	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[1].VerifyYield, 0.001)
 	assert.Len(t, eng.prompts, 11)
 	assert.Contains(t, secondCycleFixPrompt, "### Issue 1")
 	assert.NotContains(t, secondCycleFixPrompt, "### Issue 2")
+}
+
+func TestRunAuditLoopRecordsCachePressureStrategyShift(t *testing.T) {
+	t.Parallel()
+
+	const findings = "## Findings\n- **Location:** tracked.txt:1\n- **Description:** Missing booking validation\n- **Severity:** HIGH\n- **Recommended Fix:** Validate the booking payload.\n- **Location:** tracked-extra.txt:1\n- **Description:** Missing duplicate-submit protection\n- **Severity:** HIGH\n- **Recommended Fix:** Make submits idempotent.\n\n## Verdict\nFAIL\n"
+	eng := &stubEngine{
+		name: "claude",
+		outputs: []string{
+			`{"usage":{"input_tokens":2000,"cache_read_input_tokens":250000,"output_tokens":100}}`,
+			`{"usage":{"input_tokens":50,"output_tokens":25}}`,
+			`{"usage":{"input_tokens":40,"output_tokens":20}}`,
+			`{"usage":{"input_tokens":30,"output_tokens":15}}`,
+		},
+		sideEffect: func(projectDir string, callIndex int) {
+			switch callIndex {
+			case 0:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
+			case 1:
+				writeFile(t, filepath.Join(projectDir, "tracked.txt"), "fixed\n")
+			case 2:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), "- **Issue:** 1\n- **Status:** RESOLVED\n\n- **Issue:** 2\n- **Status:** RESOLVED\n")
+			case 3:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), cleanAudit)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	initAuditGitRepo(t, opts.ProjectDir)
+	opts.Epic.EffortLevel = epic.EffortHigh
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.True(t, result.Passed)
+	require.NotNil(t, result.Metrics)
+	assert.GreaterOrEqual(t, result.Metrics.StrategyShiftCount(), 1)
+	assert.Contains(t, result.Metrics.LastStrategyShift(), strategyActionRefreshAuditSession)
+	require.Len(t, result.Metrics.CycleSummaries, 2)
+	assert.Equal(t, 250000, result.Metrics.CycleSummaries[0].CacheReadInput)
+	assert.Equal(t, 2235, result.Metrics.CycleSummaries[0].TokenTotal)
 }
 
 func TestIsTurnoverChurn(t *testing.T) {

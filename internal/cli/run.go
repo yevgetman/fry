@@ -3172,6 +3172,8 @@ func updateBuildStatusAuditProgress(status *agent.BuildStatus, sprintNum int, pr
 			TrailingVerifyYield:      progress.Metrics.TrailingVerifyYield,
 			TrailingNoOpRate:         progress.Metrics.TrailingNoOpRate,
 			TrailingMsPerResolution:  progress.Metrics.TrailingMsPerResolution,
+			StrategyShiftCount:       progress.Metrics.StrategyShiftCount,
+			LastStrategyShift:        progress.Metrics.LastStrategyShift,
 			LowYieldStrategyChanges:  progress.Metrics.LowYieldStrategyChanges,
 			LowYieldStopReason:       progress.Metrics.LowYieldStopReason,
 		},
@@ -3298,6 +3300,8 @@ func buildStatusAuditMetricsSnapshot(metrics *audit.AuditMetrics) *agent.AuditMe
 		TrailingVerifyYield:      snapshot.TrailingVerifyYield,
 		TrailingNoOpRate:         snapshot.TrailingNoOpRate,
 		TrailingMsPerResolution:  snapshot.TrailingMsPerResolution,
+		StrategyShiftCount:       snapshot.StrategyShiftCount,
+		LastStrategyShift:        snapshot.LastStrategyShift,
 		LowYieldStrategyChanges:  snapshot.LowYieldStrategyChanges,
 		LowYieldStopReason:       snapshot.LowYieldStopReason,
 	}

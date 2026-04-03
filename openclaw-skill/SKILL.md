@@ -557,7 +557,7 @@ The file contains:
 - `sprints[].audit.complexity`: classified sprint-audit complexity (`low`, `moderate`, `high`, or `unknown`)
 - `sprints[].audit.stop_reason`: why the audit exited early when it stopped for a non-pass reason such as low-yield termination
 - `sprints[].audit.blocker_counts` / `blockers`: unresolved blocker categories and details when the sprint is blocked by missing prerequisites
-- `sprints[].audit.metrics`: compact live metrics snapshot (calls, duration, no-op rate, verify yield, last-cycle/trailing productivity, repeated unchanged findings, suppressed unchanged reopenings, reopened-with-new-evidence count, low-yield strategy changes, and cache-aware token totals/details in the artifact)
+- `sprints[].audit.metrics`: compact live metrics snapshot (calls, duration, no-op rate, verify yield, last-cycle/trailing productivity, repeated unchanged findings, suppressed unchanged reopenings, reopened-with-new-evidence count, strategy-shift count/last shift, low-yield strategy changes, and cache-aware token totals/details in the artifact)
 - `sprints[].audit.target_issues` and `issue_headlines`: what the audit loop is currently targeting
 - `build_audit`: final holistic audit result (present after build audit runs)
 
@@ -644,6 +644,7 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **Blocker separation:** Fry distinguishes `product_defect` findings from `environment_blocker`, `harness_blocker`, and `external_dependency_blocker` findings. Blocker findings stay out of the normal code-fix loop and are surfaced as blocked audit outcomes with preserved blocker details.
 - **Budgeted session continuity:** On Claude and Codex, audit-to-audit and fix-to-fix calls reuse same-role sessions until per-role call, prompt-size, token, or carry-forward budgets are exceeded. Fry then refreshes the session and prepends a compact carry-forward summary so the audit can continue without dragging unbounded context forward.
 - **Yield-aware stop rules:** Fry records per-cycle productivity and trailing yield. When progress-based audit cycles keep producing weak fix/verify returns, Fry refreshes context, limits the next cycle to a single issue, and can stop with an explicit low-yield reason instead of burning more cycles in the same mode.
+- **Strategy governor:** Fry records named reactions when health thresholds trip during audit, including batch narrowing for high no-op rates, fix-session refresh on repeated `BEHAVIOR_UNCHANGED` outcomes, and audit-session refresh when token burn or cache pressure spikes.
 - When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
 - Relevant intentional divergences from `.fry/deviation-log.md` are injected into audit prompts so the auditor does not flag accepted design differences as defects.
 - If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.

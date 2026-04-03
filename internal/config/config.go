@@ -84,6 +84,9 @@ const (
 	AuditLowYieldFixYieldFloor           = 0.50
 	AuditLowYieldNoOpRateFloor           = 0.50
 	AuditLowYieldStopCycles              = 2
+	AuditGovernorTokenBurnThreshold      = 20_000
+	AuditGovernorCacheReadThreshold      = 100_000
+	AuditGovernorCachePressureMultiplier = 4.0
 	BehaviorUnchangedEscalationThreshold = 2
 	BehaviorUnchangedStopThreshold       = 3
 

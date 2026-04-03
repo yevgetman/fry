@@ -527,6 +527,13 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 					if signal.Count >= config.BehaviorUnchangedStopThreshold {
 						frylog.Log("  AUDIT FIX: behavior unchanged for %s across %d verify passes — moving to re-audit", signal.Label, signal.Count)
 						auditMetrics.BehaviorUnchangedEscalations++
+						auditMetrics.RecordStrategyShift(StrategyShift{
+							Cycle:     cycle,
+							Iteration: fixIter,
+							Trigger:   strategyTriggerBehaviorUnchanged,
+							Action:    strategyActionStopFixLoop,
+							Detail:    fmt.Sprintf("%s repeated %d times", signal.Label, signal.Count),
+						})
 						innerStaleCount = maxInnerStaleIterations
 						escalatedKeys = nil
 						break
@@ -542,6 +549,13 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 					unresolved = filterFindingsByKey(unresolved, escalatedKeys)
 					fixPromptOpts.BehaviorGuidance = buildBehaviorGuidance(unresolved, behaviorSignals)
 					auditMetrics.BehaviorUnchangedEscalations++
+					auditMetrics.RecordStrategyShift(StrategyShift{
+						Cycle:     cycle,
+						Iteration: fixIter,
+						Trigger:   strategyTriggerBehaviorUnchanged,
+						Action:    strategyActionRefreshFixSession,
+						Detail:    fmt.Sprintf("%d issue(s) narrowed after repeated unchanged behavior", len(unresolved)),
+					})
 					frylog.Log("  AUDIT FIX: %d issue(s) repeated behavior-unchanged — narrowing batch and refreshing fix session", len(unresolved))
 					if fixSession != nil {
 						fixSession.Clear()
@@ -772,6 +786,39 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		shouldStopForLowYield := false
 		if progressBased && fixableCount > lowYieldSingleIssueBatchLimit {
 			currentCycleSummary, ok := auditMetrics.LastCycleSummary()
+			if ok {
+				if currentCycleSummary.NoOpRate >= config.AuditLowYieldNoOpRateFloor && nextCycleFixBatchLimit == 0 {
+					nextCycleFixBatchLimit = lowYieldSingleIssueBatchLimit
+					auditMetrics.RecordStrategyShift(StrategyShift{
+						Cycle:   cycle,
+						Trigger: strategyTriggerNoOpRate,
+						Action:  strategyActionNarrowBatch,
+						Detail:  fmt.Sprintf("no-op rate %.0f%%", currentCycleSummary.NoOpRate*100),
+					})
+				}
+				if hasTokenBurnPressure(currentCycleSummary) {
+					if auditSession != nil {
+						auditSession.Clear()
+					}
+					auditMetrics.RecordStrategyShift(StrategyShift{
+						Cycle:   cycle,
+						Trigger: strategyTriggerTokenBurn,
+						Action:  strategyActionRefreshAuditSession,
+						Detail:  fmt.Sprintf("token_total=%d", currentCycleSummary.TokenTotal),
+					})
+				}
+				if hasCachePressure(currentCycleSummary) {
+					if auditSession != nil {
+						auditSession.Clear()
+					}
+					auditMetrics.RecordStrategyShift(StrategyShift{
+						Cycle:   cycle,
+						Trigger: strategyTriggerCachePressure,
+						Action:  strategyActionRefreshAuditSession,
+						Detail:  fmt.Sprintf("cache_read_input=%d token_total=%d", currentCycleSummary.CacheReadInput, currentCycleSummary.TokenTotal),
+					})
+				}
+			}
 			if ok && isLowYieldStrategyCycle(currentCycleSummary) {
 				lowYieldStreak++
 				frylog.Log(
@@ -785,11 +832,23 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				if shouldStopForLowYieldCycle(currentCycleSummary, trailingSummary, lowYieldStreak) {
 					lowYieldStopReason = formatLowYieldStopReason(currentCycleSummary, trailingSummary)
 					auditMetrics.LowYieldStopReason = lowYieldStopReason
+					auditMetrics.RecordStrategyShift(StrategyShift{
+						Cycle:   cycle,
+						Trigger: strategyTriggerLowYield,
+						Action:  strategyActionStopAudit,
+						Detail:  lowYieldStopReason,
+					})
 					frylog.Log("  AUDIT: stopping — %s", lowYieldStopReason)
 					shouldStopForLowYield = true
 				} else {
 					nextCycleFixBatchLimit = lowYieldSingleIssueBatchLimit
 					auditMetrics.RecordLowYieldStrategyChange(lowYieldStrategySingleIssueNextCycle)
+					auditMetrics.RecordStrategyShift(StrategyShift{
+						Cycle:   cycle,
+						Trigger: strategyTriggerLowYield,
+						Action:  lowYieldStrategySingleIssueNextCycle,
+						Detail:  fmt.Sprintf("fix_yield=%.2f verify_yield=%.2f", currentCycleSummary.FixYield, currentCycleSummary.VerifyYield),
+					})
 					if auditSession != nil {
 						auditSession.Clear()
 					}

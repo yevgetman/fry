@@ -70,6 +70,7 @@ The inner loop carries forward structured history so each fix iteration has more
 - **Fix attempt history** -- The fix prompt includes concise summaries of prior attempts that targeted the same findings, including whether the attempt was a no-op, which issues remained, and any verification notes.
 - **Strategy escalation** -- If the same finding comes back `BEHAVIOR_UNCHANGED` repeatedly, Fry narrows the next fix batch to the stuck findings, refreshes fix-session context, and can stop the current fix loop early instead of grinding through more low-yield retries.
 - **Yield-aware mode shifts** -- Fry records per-cycle productivity (fix yield, verify yield, no-op rate, and milliseconds per resolved finding). When progress-based cycles keep spending calls with weak returns, Fry refreshes audit context and runs the next cycle in single-issue mode before deciding whether to stop early.
+- **Runtime strategy governor** -- Fry also reacts to unhealthy runtime signals while the audit is still in flight. High no-op rates can narrow the next batch, repeated `BEHAVIOR_UNCHANGED` outcomes can refresh fix-session context, and cache-heavy or token-heavy cycles can force a fresh audit session for the next pass.
 - **Explicit verify boundary** -- Verify sessions stay stateless and never inherit fix-session context. This keeps the trust boundary between remediation and validation intact.
 
 On Claude and Codex, Fry also reuses same-role session continuity within the sprint audit:
@@ -146,6 +147,7 @@ Sprint audit metrics now distinguish between several kinds of churn:
 - **Low-yield strategy changes** -- count of times Fry refreshed context and changed tactics because productivity dropped
 - **Low-yield stop reason** -- an explicit machine-readable reason when a progress-based audit stopped because productivity stayed low instead of converging
 - **Cache-aware token usage** -- per-call token telemetry now preserves normalized input/output totals plus raw cache-read and cache-creation input tokens when engines expose them
+- **Strategy shifts** -- named governor reactions such as `narrow_batch`, `refresh_fix_session`, `refresh_audit_session`, and `stop_audit`, each recorded with its trigger and cycle/iteration context
 
 These counters are written to `.fry/build-logs/sprintN_audit_metrics.json` and surfaced in `.fry/build-status.json` under `sprints[].audit.metrics`. When the audit exits early for low yield, Fry also sets `sprints[].audit.stop_reason`.
 

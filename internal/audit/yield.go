@@ -8,7 +8,17 @@ import (
 )
 
 const (
+	strategyTriggerBehaviorUnchanged     = "behavior_unchanged"
+	strategyTriggerNoOpRate              = "no_op_rate"
+	strategyTriggerLowYield              = "low_yield"
+	strategyTriggerTokenBurn             = "token_burn"
+	strategyTriggerCachePressure         = "cache_pressure"
+	strategyActionNarrowBatch            = "narrow_batch"
 	lowYieldStrategySingleIssueNextCycle = "single_issue_next_cycle"
+	strategyActionRefreshAuditSession    = "refresh_audit_session"
+	strategyActionRefreshFixSession      = "refresh_fix_session"
+	strategyActionStopAudit              = "stop_audit"
+	strategyActionStopFixLoop            = "stop_fix_loop"
 	lowYieldSingleIssueBatchLimit        = 1
 )
 
@@ -52,4 +62,26 @@ func formatLowYieldStopReason(current, trailing CycleProductivity) string {
 		)
 	}
 	return strings.Join(parts, " ")
+}
+
+func hasTokenBurnPressure(current CycleProductivity) bool {
+	return current.TokenTotal >= config.AuditGovernorTokenBurnThreshold
+}
+
+func hasCachePressure(current CycleProductivity) bool {
+	if current.CacheReadInput >= config.AuditGovernorCacheReadThreshold {
+		return true
+	}
+	if current.TokenTotal <= 0 {
+		return false
+	}
+	return float64(current.CacheReadInput) >= float64(current.TokenTotal)*config.AuditGovernorCachePressureMultiplier
+}
+
+func formatStrategyShift(shift StrategyShift) string {
+	parts := []string{shift.Trigger, shift.Action}
+	if shift.Detail != "" {
+		parts = append(parts, shift.Detail)
+	}
+	return strings.Join(parts, ": ")
 }

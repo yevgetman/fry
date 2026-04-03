@@ -30,19 +30,32 @@ type CallMetric struct {
 	Tokens               tokenmetrics.TokenUsage `json:"tokens"`
 }
 
+type StrategyShift struct {
+	Cycle     int    `json:"cycle"`
+	Iteration int    `json:"iteration,omitempty"`
+	Trigger   string `json:"trigger"`
+	Action    string `json:"action"`
+	Detail    string `json:"detail,omitempty"`
+}
+
 // CycleProductivity summarizes audit productivity for one completed outer cycle.
 type CycleProductivity struct {
-	Cycle             int     `json:"cycle"`
-	TotalCalls        int     `json:"total_calls"`
-	DurationMs        int64   `json:"duration_ms"`
-	FixCalls          int     `json:"fix_calls"`
-	NoOpFixCalls      int     `json:"no_op_fix_calls"`
-	VerifyCalls       int     `json:"verify_calls"`
-	VerifyResolutions int     `json:"verify_resolutions"`
-	FixYield          float64 `json:"fix_yield"`
-	VerifyYield       float64 `json:"verify_yield"`
-	NoOpRate          float64 `json:"no_op_rate"`
-	MsPerResolution   float64 `json:"ms_per_resolution"`
+	Cycle              int     `json:"cycle"`
+	TotalCalls         int     `json:"total_calls"`
+	DurationMs         int64   `json:"duration_ms"`
+	FixCalls           int     `json:"fix_calls"`
+	NoOpFixCalls       int     `json:"no_op_fix_calls"`
+	VerifyCalls        int     `json:"verify_calls"`
+	VerifyResolutions  int     `json:"verify_resolutions"`
+	InputTokens        int     `json:"input_tokens"`
+	OutputTokens       int     `json:"output_tokens"`
+	TokenTotal         int     `json:"token_total"`
+	CacheReadInput     int     `json:"cache_read_input"`
+	CacheCreationInput int     `json:"cache_creation_input"`
+	FixYield           float64 `json:"fix_yield"`
+	VerifyYield        float64 `json:"verify_yield"`
+	NoOpRate           float64 `json:"no_op_rate"`
+	MsPerResolution    float64 `json:"ms_per_resolution"`
 }
 
 // AuditMetricsSnapshot is the small, monitor-friendly subset surfaced in build status.
@@ -70,6 +83,8 @@ type AuditMetricsSnapshot struct {
 	TrailingVerifyYield      float64 `json:"trailing_verify_yield"`
 	TrailingNoOpRate         float64 `json:"trailing_no_op_rate"`
 	TrailingMsPerResolution  float64 `json:"trailing_ms_per_resolution"`
+	StrategyShiftCount       int     `json:"strategy_shift_count"`
+	LastStrategyShift        string  `json:"last_strategy_shift,omitempty"`
 	LowYieldStrategyChanges  int     `json:"low_yield_strategy_changes"`
 	LowYieldStopReason       string  `json:"low_yield_stop_reason,omitempty"`
 }
@@ -77,6 +92,7 @@ type AuditMetricsSnapshot struct {
 // AuditMetrics accumulates per-call audit telemetry for one RunAuditLoop invocation.
 type AuditMetrics struct {
 	Calls                        []CallMetric        `json:"calls"`
+	StrategyShifts               []StrategyShift     `json:"strategy_shifts,omitempty"`
 	CycleSummaries               []CycleProductivity `json:"cycle_summaries,omitempty"`
 	OuterCycles                  int                 `json:"outer_cycles"`
 	ContentComplexity            ComplexityTier      `json:"content_complexity,omitempty"`
@@ -253,6 +269,11 @@ func (m *AuditMetrics) cycleSummaryFromCalls(cycle int) CycleProductivity {
 			summary.VerifyCalls++
 			summary.VerifyResolutions += call.Resolutions
 		}
+		summary.InputTokens += call.Tokens.Input
+		summary.OutputTokens += call.Tokens.Output
+		summary.TokenTotal += call.Tokens.Total
+		summary.CacheReadInput += call.Tokens.CacheReadInput
+		summary.CacheCreationInput += call.Tokens.CacheCreationInput
 	}
 	if summary.FixCalls > 0 {
 		summary.FixYield = float64(summary.VerifyResolutions) / float64(summary.FixCalls)
@@ -304,6 +325,11 @@ func (m *AuditMetrics) TrailingCycleSummary(window int) (CycleProductivity, bool
 		summary.NoOpFixCalls += cycleSummary.NoOpFixCalls
 		summary.VerifyCalls += cycleSummary.VerifyCalls
 		summary.VerifyResolutions += cycleSummary.VerifyResolutions
+		summary.InputTokens += cycleSummary.InputTokens
+		summary.OutputTokens += cycleSummary.OutputTokens
+		summary.TokenTotal += cycleSummary.TokenTotal
+		summary.CacheReadInput += cycleSummary.CacheReadInput
+		summary.CacheCreationInput += cycleSummary.CacheCreationInput
 	}
 	if summary.FixCalls > 0 {
 		summary.FixYield = float64(summary.VerifyResolutions) / float64(summary.FixCalls)
@@ -332,6 +358,28 @@ func (m *AuditMetrics) RecordLowYieldStrategyChange(reason string) {
 		m.LowYieldStrategyReasons = make(map[string]int)
 	}
 	m.LowYieldStrategyReasons[reason]++
+}
+
+func (m *AuditMetrics) RecordStrategyShift(shift StrategyShift) {
+	if m == nil {
+		return
+	}
+	m.StrategyShifts = append(m.StrategyShifts, shift)
+}
+
+func (m *AuditMetrics) StrategyShiftCount() int {
+	if m == nil {
+		return 0
+	}
+	return len(m.StrategyShifts)
+}
+
+func (m *AuditMetrics) LastStrategyShift() string {
+	if m == nil || len(m.StrategyShifts) == 0 {
+		return ""
+	}
+	last := m.StrategyShifts[len(m.StrategyShifts)-1]
+	return formatStrategyShift(last)
 }
 
 func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
@@ -364,6 +412,8 @@ func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 		TrailingVerifyYield:      trailingSummary.VerifyYield,
 		TrailingNoOpRate:         trailingSummary.NoOpRate,
 		TrailingMsPerResolution:  trailingSummary.MsPerResolution,
+		StrategyShiftCount:       m.StrategyShiftCount(),
+		LastStrategyShift:        m.LastStrategyShift(),
 		LowYieldStrategyChanges:  m.LowYieldStrategyChanges,
 		LowYieldStopReason:       m.LowYieldStopReason,
 	}
@@ -372,6 +422,7 @@ func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 	type auditMetricsJSON struct {
 		Calls                        []CallMetric         `json:"calls"`
+		StrategyShifts               []StrategyShift      `json:"strategy_shifts,omitempty"`
 		CycleSummaries               []CycleProductivity  `json:"cycle_summaries,omitempty"`
 		OuterCycles                  int                  `json:"outer_cycles"`
 		ContentComplexity            ComplexityTier       `json:"content_complexity,omitempty"`
@@ -396,6 +447,7 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 	}
 	if m != nil {
 		payload.Calls = m.Calls
+		payload.StrategyShifts = m.StrategyShifts
 		payload.CycleSummaries = m.CycleSummaries
 		payload.OuterCycles = m.OuterCycles
 		payload.ContentComplexity = m.ContentComplexity

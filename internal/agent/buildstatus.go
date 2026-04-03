@@ -96,6 +96,8 @@ type AuditMetricsSnapshot struct {
 	TrailingVerifyYield      float64 `json:"trailing_verify_yield"`
 	TrailingNoOpRate         float64 `json:"trailing_no_op_rate"`
 	TrailingMsPerResolution  float64 `json:"trailing_ms_per_resolution"`
+	StrategyShiftCount       int     `json:"strategy_shift_count"`
+	LastStrategyShift        string  `json:"last_strategy_shift,omitempty"`
 	LowYieldStrategyChanges  int     `json:"low_yield_strategy_changes"`
 	LowYieldStopReason       string  `json:"low_yield_stop_reason,omitempty"`
 }
