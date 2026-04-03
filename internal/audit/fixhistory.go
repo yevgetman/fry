@@ -2,9 +2,20 @@ package audit
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/yevgetman/fry/internal/textutil"
+)
+
+const (
+	verifyStatusResolved             = "RESOLVED"
+	verifyStatusPartiallyResolved    = "PARTIALLY_RESOLVED"
+	verifyStatusStillPresent         = "STILL_PRESENT"
+	verifyStatusBehaviorUnchanged    = "BEHAVIOR_UNCHANGED"
+	verifyStatusEvidenceInconclusive = "EVIDENCE_INCONCLUSIVE"
+	verifyStatusBlocked              = "BLOCKED"
+	verifyStatusNoOp                 = "NO-OP"
 )
 
 type verificationResult struct {
@@ -29,6 +40,13 @@ type FixOutcome struct {
 
 type FixHistory struct {
 	attempts []FixAttempt
+}
+
+type BehaviorUnchangedSignal struct {
+	FindingKey string
+	Label      string
+	Count      int
+	LatestNote string
 }
 
 func (h *FixHistory) Record(a FixAttempt) {
@@ -129,10 +147,55 @@ func renderFixAttempts(attempts []FixAttempt) string {
 	return b.String()
 }
 
+func (h *FixHistory) BehaviorUnchangedSignals(findings []Finding) []BehaviorUnchangedSignal {
+	if h == nil || len(h.attempts) == 0 || len(findings) == 0 {
+		return nil
+	}
+
+	relevant := make(map[string]BehaviorUnchangedSignal, len(findings))
+	for _, finding := range findings {
+		key := finding.key()
+		relevant[key] = BehaviorUnchangedSignal{
+			FindingKey: key,
+			Label:      findingLabel(finding),
+		}
+	}
+
+	for i := len(h.attempts) - 1; i >= 0; i-- {
+		attempt := h.attempts[i]
+		for _, outcome := range attempt.Outcomes {
+			signal, ok := relevant[outcome.FindingKey]
+			if !ok || normalizeVerificationStatus(outcome.Status) != verifyStatusBehaviorUnchanged {
+				continue
+			}
+			signal.Count++
+			if signal.LatestNote == "" {
+				signal.LatestNote = strings.TrimSpace(outcome.Reason)
+			}
+			relevant[outcome.FindingKey] = signal
+		}
+	}
+
+	signals := make([]BehaviorUnchangedSignal, 0, len(relevant))
+	for _, signal := range relevant {
+		if signal.Count == 0 {
+			continue
+		}
+		signals = append(signals, signal)
+	}
+	sort.SliceStable(signals, func(i, j int) bool {
+		if signals[i].Count != signals[j].Count {
+			return signals[i].Count > signals[j].Count
+		}
+		return signals[i].Label < signals[j].Label
+	})
+	return signals
+}
+
 func buildOutcomes(findings []Finding, results []verificationResult) []FixOutcome {
 	outcomes := make([]FixOutcome, 0, len(findings))
 	for i, finding := range findings {
-		status := "STILL PRESENT"
+		status := verifyStatusStillPresent
 		notes := ""
 		if i < len(results) {
 			if normalized := normalizeVerificationStatus(results[i].Status); normalized != "" {
@@ -187,10 +250,27 @@ func findingLabel(f Finding) string {
 }
 
 func normalizeVerificationStatus(status string) string {
-	normalized := strings.ToUpper(strings.Join(strings.Fields(strings.TrimSpace(status)), " "))
+	normalized := strings.ToUpper(strings.TrimSpace(status))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	normalized = strings.Join(strings.Fields(normalized), "_")
 	switch normalized {
-	case "RESOLVED", "STILL PRESENT", "NO-OP":
+	case verifyStatusResolved,
+		verifyStatusPartiallyResolved,
+		verifyStatusStillPresent,
+		verifyStatusBehaviorUnchanged,
+		verifyStatusEvidenceInconclusive,
+		verifyStatusBlocked:
 		return normalized
+	case "NO_OP", verifyStatusNoOp:
+		return verifyStatusNoOp
+	case "STILLPRESENT":
+		return verifyStatusStillPresent
+	case "PARTIALLYRESOLVED":
+		return verifyStatusPartiallyResolved
+	case "BEHAVIORUNCHANGED":
+		return verifyStatusBehaviorUnchanged
+	case "EVIDENCEINCONCLUSIVE":
+		return verifyStatusEvidenceInconclusive
 	default:
 		return ""
 	}

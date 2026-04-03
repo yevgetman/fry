@@ -82,7 +82,35 @@ func TestBuildOutcomesIncludesVerifierNotes(t *testing.T) {
 	t.Parallel()
 
 	finding := Finding{Location: "a.go:10", Description: "Issue A", Severity: "HIGH"}
-	outcomes := buildOutcomes([]Finding{finding}, []verificationResult{{Status: "STILL PRESENT", Notes: "guard clause still missing"}})
+	outcomes := buildOutcomes([]Finding{finding}, []verificationResult{{Status: "BEHAVIOR_UNCHANGED", Notes: "guard clause still missing"}})
 	require.Len(t, outcomes, 1)
 	assert.Equal(t, "guard clause still missing", outcomes[0].Reason)
+	assert.Equal(t, verifyStatusBehaviorUnchanged, outcomes[0].Status)
+}
+
+func TestFixHistoryBehaviorUnchangedSignals(t *testing.T) {
+	t.Parallel()
+
+	finding := Finding{Location: "a.go:10", Description: "Issue A", Severity: "HIGH"}
+	history := &FixHistory{}
+	history.Record(FixAttempt{
+		Cycle:       1,
+		Iteration:   1,
+		Targeted:    []string{findingLabel(finding)},
+		DiffSummary: "a.go | 2 ++",
+		Outcomes:    buildOutcomes([]Finding{finding}, []verificationResult{{Status: "BEHAVIOR_UNCHANGED", Notes: "comment added; branch unchanged"}}),
+	})
+	history.Record(FixAttempt{
+		Cycle:       1,
+		Iteration:   2,
+		Targeted:    []string{findingLabel(finding)},
+		DiffSummary: "a.go | 1 +",
+		Outcomes:    buildOutcomes([]Finding{finding}, []verificationResult{{Status: "BEHAVIOR_UNCHANGED", Notes: "same nil path still executes"}}),
+	})
+
+	signals := history.BehaviorUnchangedSignals([]Finding{finding})
+
+	require.Len(t, signals, 1)
+	assert.Equal(t, 2, signals[0].Count)
+	assert.Equal(t, "same nil path still executes", signals[0].LatestNote)
 }

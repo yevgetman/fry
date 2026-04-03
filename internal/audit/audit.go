@@ -81,6 +81,7 @@ type AuditOpts struct {
 	Mode                string
 	Stdout              io.Writer // optional; defaults to os.Stdout when Verbose is true
 	SessionCarryForward string
+	BehaviorGuidance    string
 }
 
 // AuditProgress describes the live state of a sprint audit cycle.
@@ -501,6 +502,37 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			if len(unresolved) == 0 {
 				break
 			}
+			behaviorSignals := fixHistory.BehaviorUnchangedSignals(unresolved)
+			fixPromptOpts := opts
+			if len(behaviorSignals) > 0 {
+				fixPromptOpts.BehaviorGuidance = buildBehaviorGuidance(unresolved, behaviorSignals)
+
+				var escalatedKeys []string
+				for _, signal := range behaviorSignals {
+					if signal.Count >= config.BehaviorUnchangedStopThreshold {
+						frylog.Log("  AUDIT FIX: behavior unchanged for %s across %d verify passes — moving to re-audit", signal.Label, signal.Count)
+						auditMetrics.BehaviorUnchangedEscalations++
+						innerStaleCount = maxInnerStaleIterations
+						escalatedKeys = nil
+						break
+					}
+					if signal.Count >= config.BehaviorUnchangedEscalationThreshold {
+						escalatedKeys = append(escalatedKeys, signal.FindingKey)
+					}
+				}
+				if innerStaleCount >= maxInnerStaleIterations {
+					break
+				}
+				if len(escalatedKeys) > 0 {
+					unresolved = filterFindingsByKey(unresolved, escalatedKeys)
+					fixPromptOpts.BehaviorGuidance = buildBehaviorGuidance(unresolved, behaviorSignals)
+					auditMetrics.BehaviorUnchangedEscalations++
+					frylog.Log("  AUDIT FIX: %d issue(s) repeated behavior-unchanged — narrowing batch and refreshing fix session", len(unresolved))
+					if fixSession != nil {
+						fixSession.Clear()
+					}
+				}
+			}
 
 			emitAuditProgress(opts.ProgressFn, AuditProgress{
 				Stage:        "fixing",
@@ -522,7 +554,6 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 			// Build and write fix prompt
 			fixContract := newFixContract(unresolved)
-			fixPromptOpts := opts
 			fixRefreshReason := ""
 			if fixSession != nil {
 				fixRefreshReason = fixSession.MaybeRefresh(len(unresolved))
@@ -672,6 +703,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 			verifyResults := parseVerificationResults(string(verifyContent), unresolved)
 			verifyResolutions := countResolvedVerificationResults(verifyResults)
+			auditMetrics.BehaviorUnchangedOutcomes += countVerificationResultsWithStatus(verifyResults, verifyStatusBehaviorUnchanged)
 			auditMetrics.Record(CallMetric{
 				SessionType: engine.SessionAuditVerify,
 				Cycle:       cycle,
@@ -1175,6 +1207,11 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory
 		b.WriteString(carry)
 		b.WriteString("\n\n")
 	}
+	if guidance := strings.TrimSpace(opts.BehaviorGuidance); guidance != "" {
+		b.WriteString("## Behavior-Unchanged Guidance\n\n")
+		b.WriteString(guidance)
+		b.WriteString("\n\n")
+	}
 	skipLow := !fixIncludesLow(opts.Epic)
 	if opts.Mode == "writing" {
 		b.WriteString("The content audit found issues. Fix ONLY the issues listed below.\n")
@@ -1266,6 +1303,51 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory
 	return b.String()
 }
 
+func buildBehaviorGuidance(findings []Finding, signals []BehaviorUnchangedSignal) string {
+	if len(findings) == 0 || len(signals) == 0 {
+		return ""
+	}
+
+	contract := newFixContract(findings)
+	signalByKey := make(map[string]BehaviorUnchangedSignal, len(signals))
+	for _, signal := range signals {
+		signalByKey[signal.FindingKey] = signal
+	}
+
+	var b strings.Builder
+	b.WriteString("Verify has already shown that earlier remediations left the relevant behavior unchanged.\n")
+	b.WriteString("Do not answer with comments, TODOs, rationale-only edits, logging-only changes, or notes about what should happen.\n")
+	b.WriteString("Change the executable code path or data flow that still exhibits the issue.\n\n")
+
+	for _, finding := range findings {
+		signal, ok := signalByKey[finding.key()]
+		if !ok {
+			continue
+		}
+		issueID := 0
+		for _, issue := range contract.Issues {
+			if issue.FindingKey == finding.key() {
+				issueID = issue.ID
+				break
+			}
+		}
+		if issueID > 0 {
+			fmt.Fprintf(&b, "### Issue %d\n", issueID)
+		} else {
+			b.WriteString("### Issue\n")
+		}
+		fmt.Fprintf(&b, "- **Verify Outcome:** BEHAVIOR_UNCHANGED (%d prior verify passes)\n", signal.Count)
+		if strings.TrimSpace(signal.LatestNote) != "" {
+			fmt.Fprintf(&b, "- **Unchanged Behavior:** %s\n", strings.TrimSpace(signal.LatestNote))
+		} else {
+			b.WriteString("- **Unchanged Behavior:** the previously attempted remediation did not change the relevant runtime logic path\n")
+		}
+		b.WriteString("- **Required Response:** make a concrete code-path change that resolves the issue; explanation-only edits do not count\n\n")
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
 func buildVerifyPrompt(opts AuditOpts, findings []Finding) string {
 	var b strings.Builder
 
@@ -1275,12 +1357,16 @@ func buildVerifyPrompt(opts AuditOpts, findings []Finding) string {
 	b.WriteString("Do NOT look for new issues. Only verify the listed issues.\n")
 	b.WriteString("Do NOT modify any source code.\n\n")
 	b.WriteString("Base your judgment on the current repository state, not on prior notes or claimed fixes.\n\n")
+	b.WriteString("Use `BEHAVIOR_UNCHANGED` when the recent remediation did not materially change the executable code path for the issue.\n")
+	b.WriteString("That includes comment-only, rationale-only, note-only, logging-only, or otherwise non-behavioral edits.\n\n")
 
 	b.WriteString("Write your results to .fry/sprint-audit.txt in this format:\n\n")
 	b.WriteString("For each issue:\n")
 	b.WriteString("- **Issue:** <number>\n")
-	b.WriteString("- **Status:** RESOLVED | STILL PRESENT\n\n")
+	b.WriteString("- **Status:** RESOLVED | PARTIALLY_RESOLVED | BEHAVIOR_UNCHANGED | EVIDENCE_INCONCLUSIVE | BLOCKED | STILL_PRESENT\n\n")
 	b.WriteString("- **Notes:** <brief evidence or reason>\n\n")
+	b.WriteString("- For `BEHAVIOR_UNCHANGED`, name the exact logic path, branch, or data flow that remained unchanged.\n")
+	b.WriteString("- For `BLOCKED`, name the missing prerequisite or environment dependency.\n\n")
 
 	b.WriteString("## Issues to Verify\n\n")
 
@@ -1426,7 +1512,7 @@ func parseFindings(content string) []Finding {
 // Regexes for verification status parsing.
 var (
 	issueNumberRe       = regexp.MustCompile(`(?i)\*?\*?Issue:\*?\*?\s*(\d+)`)
-	statusRe            = regexp.MustCompile(`(?i)\*?\*?Status:\*?\*?\s*(RESOLVED|STILL\s*PRESENT)`)
+	statusRe            = regexp.MustCompile(`(?i)\*?\*?Status:\*?\*?\s*([A-Z_][A-Z_\s-]*)`)
 	notesRe             = regexp.MustCompile(`(?i)\*?\*?Notes:\*?\*?\s*(.+)`)
 	locationHashLineRe  = regexp.MustCompile(`(?i)#l\d+(?:c\d+)?$`)
 	locationColonLineRe = regexp.MustCompile(`:\d+(?::\d+)?$`)
@@ -1437,7 +1523,7 @@ var (
 func parseVerificationResults(content string, findings []Finding) []verificationResult {
 	results := make([]verificationResult, len(findings))
 	for i := range results {
-		results[i].Status = "STILL PRESENT"
+		results[i].Status = verifyStatusStillPresent
 	}
 
 	currentIssue := -1
@@ -1832,7 +1918,7 @@ func countResolved(findings []Finding) int {
 // The results slice is aligned with the checked slice (a subset of all findings).
 func applyResolutionsByKey(all []Finding, checked []Finding, results []verificationResult) {
 	for i, result := range results {
-		if i >= len(checked) || normalizeVerificationStatus(result.Status) != "RESOLVED" {
+		if i >= len(checked) || normalizeVerificationStatus(result.Status) != verifyStatusResolved {
 			continue
 		}
 		key := checked[i].key()
@@ -1848,11 +1934,41 @@ func applyResolutionsByKey(all []Finding, checked []Finding, results []verificat
 func countResolvedVerificationResults(results []verificationResult) int {
 	total := 0
 	for _, result := range results {
-		if normalizeVerificationStatus(result.Status) == "RESOLVED" {
+		if normalizeVerificationStatus(result.Status) == verifyStatusResolved {
 			total++
 		}
 	}
 	return total
+}
+
+func countVerificationResultsWithStatus(results []verificationResult, status string) int {
+	total := 0
+	for _, result := range results {
+		if normalizeVerificationStatus(result.Status) == status {
+			total++
+		}
+	}
+	return total
+}
+
+func filterFindingsByKey(findings []Finding, keys []string) []Finding {
+	if len(findings) == 0 || len(keys) == 0 {
+		return findings
+	}
+	keySet := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		keySet[key] = struct{}{}
+	}
+	filtered := make([]Finding, 0, len(findings))
+	for _, finding := range findings {
+		if _, ok := keySet[finding.key()]; ok {
+			filtered = append(filtered, finding)
+		}
+	}
+	if len(filtered) == 0 {
+		return findings
+	}
+	return filtered
 }
 
 // --- Severity helpers ---

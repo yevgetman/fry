@@ -74,7 +74,7 @@ fry/
 │   │   ├── complexity.go        # Sprint complexity classification for adaptive audit budgets
 │   │   ├── deferred.go          # Deferred failure interaction analysis + validation checklist rendering
 │   │   ├── findingstate.go      # Finding artifact fingerprints + repeated-unchanged/reopening classification
-│   │   ├── fixhistory.go        # Per-finding fix-attempt history for audit fix prompts
+│   │   ├── fixhistory.go        # Per-finding fix-attempt history + behavior-unchanged escalation signals for audit fix prompts
 │   │   ├── metrics.go           # Per-call audit metrics and summaries
 │   │   ├── recovery.go          # Structured stdout/log recovery for audit outputs
 │   │   ├── session.go           # Same-role audit session continuity budgets, refresh logic, and session file management
@@ -337,7 +337,7 @@ For each sprint (startSprint → endSprint):
      │  ├─ Claude/Codex reuse same-role audit and fix sessions within the sprint audit; verify remains stateless
      │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
      │  ├─ If the agent forgets to write the audit file, Fry tries to recover a structured report from final stdout/log output before failing
-     │  ├─ Verify agent must emit explicit RESOLVED/STILL PRESENT statuses; unrecoverable missing output fails the audit
+     │  ├─ Verify agent must emit explicit per-issue outcome statuses (for example `RESOLVED`, `BEHAVIOR_UNCHANGED`, `BLOCKED`); unrecoverable missing output fails the audit
      │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`, including repeated-unchanged and unchanged-reopening counters
      │  └─ standard/high/max use effort+complexity-aware caps (falling back to legacy defaults when complexity is unknown)
  11. Git checkpoint commit

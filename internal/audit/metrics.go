@@ -39,6 +39,8 @@ type AuditMetricsSnapshot struct {
 	RepeatedUnchanged       int     `json:"repeated_unchanged_findings"`
 	SuppressedUnchanged     int     `json:"suppressed_unchanged_findings"`
 	ReopenedWithNewEvidence int     `json:"reopened_with_new_evidence"`
+	BehaviorUnchanged       int     `json:"behavior_unchanged_outcomes"`
+	BehaviorEscalations     int     `json:"behavior_unchanged_escalations"`
 	SessionRefreshes        int     `json:"session_refreshes"`
 	NoOpRate                float64 `json:"no_op_rate"`
 	VerifyCalls             int     `json:"verify_calls"`
@@ -48,17 +50,19 @@ type AuditMetricsSnapshot struct {
 
 // AuditMetrics accumulates per-call audit telemetry for one RunAuditLoop invocation.
 type AuditMetrics struct {
-	Calls                       []CallMetric   `json:"calls"`
-	OuterCycles                 int            `json:"outer_cycles"`
-	ContentComplexity           ComplexityTier `json:"content_complexity,omitempty"`
-	ConvergedAtCycle            int            `json:"converged_at_cycle,omitempty"`
-	FinalFindingCount           int            `json:"final_finding_count"`
-	EscapedToBuildAudit         int            `json:"escaped_to_build_audit,omitempty"`
-	RepeatedUnchangedFindings   int            `json:"repeated_unchanged_findings,omitempty"`
-	SuppressedUnchangedFindings int            `json:"suppressed_unchanged_findings,omitempty"`
-	ReopenedWithNewEvidence     int            `json:"reopened_with_new_evidence,omitempty"`
-	SessionRefreshes            int            `json:"session_refreshes,omitempty"`
-	SessionRefreshReasons       map[string]int `json:"session_refresh_reasons,omitempty"`
+	Calls                        []CallMetric   `json:"calls"`
+	OuterCycles                  int            `json:"outer_cycles"`
+	ContentComplexity            ComplexityTier `json:"content_complexity,omitempty"`
+	ConvergedAtCycle             int            `json:"converged_at_cycle,omitempty"`
+	FinalFindingCount            int            `json:"final_finding_count"`
+	EscapedToBuildAudit          int            `json:"escaped_to_build_audit,omitempty"`
+	RepeatedUnchangedFindings    int            `json:"repeated_unchanged_findings,omitempty"`
+	SuppressedUnchangedFindings  int            `json:"suppressed_unchanged_findings,omitempty"`
+	ReopenedWithNewEvidence      int            `json:"reopened_with_new_evidence,omitempty"`
+	BehaviorUnchangedOutcomes    int            `json:"behavior_unchanged_outcomes,omitempty"`
+	BehaviorUnchangedEscalations int            `json:"behavior_unchanged_escalations,omitempty"`
+	SessionRefreshes             int            `json:"session_refreshes,omitempty"`
+	SessionRefreshReasons        map[string]int `json:"session_refresh_reasons,omitempty"`
 }
 
 func (m *AuditMetrics) Record(cm CallMetric) {
@@ -211,6 +215,8 @@ func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 		RepeatedUnchanged:       m.RepeatedUnchangedFindings,
 		SuppressedUnchanged:     m.SuppressedUnchangedFindings,
 		ReopenedWithNewEvidence: m.ReopenedWithNewEvidence,
+		BehaviorUnchanged:       m.BehaviorUnchangedOutcomes,
+		BehaviorEscalations:     m.BehaviorUnchangedEscalations,
 		SessionRefreshes:        m.SessionRefreshes,
 		NoOpRate:                m.NoOpRate(),
 		VerifyCalls:             m.TotalVerifyCalls(),
@@ -221,18 +227,20 @@ func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 
 func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 	type auditMetricsJSON struct {
-		Calls                       []CallMetric         `json:"calls"`
-		OuterCycles                 int                  `json:"outer_cycles"`
-		ContentComplexity           ComplexityTier       `json:"content_complexity,omitempty"`
-		ConvergedAtCycle            int                  `json:"converged_at_cycle,omitempty"`
-		FinalFindingCount           int                  `json:"final_finding_count"`
-		EscapedToBuildAudit         int                  `json:"escaped_to_build_audit,omitempty"`
-		RepeatedUnchangedFindings   int                  `json:"repeated_unchanged_findings,omitempty"`
-		SuppressedUnchangedFindings int                  `json:"suppressed_unchanged_findings,omitempty"`
-		ReopenedWithNewEvidence     int                  `json:"reopened_with_new_evidence,omitempty"`
-		SessionRefreshes            int                  `json:"session_refreshes,omitempty"`
-		SessionRefreshReasons       map[string]int       `json:"session_refresh_reasons,omitempty"`
-		Summary                     AuditMetricsSnapshot `json:"summary"`
+		Calls                        []CallMetric         `json:"calls"`
+		OuterCycles                  int                  `json:"outer_cycles"`
+		ContentComplexity            ComplexityTier       `json:"content_complexity,omitempty"`
+		ConvergedAtCycle             int                  `json:"converged_at_cycle,omitempty"`
+		FinalFindingCount            int                  `json:"final_finding_count"`
+		EscapedToBuildAudit          int                  `json:"escaped_to_build_audit,omitempty"`
+		RepeatedUnchangedFindings    int                  `json:"repeated_unchanged_findings,omitempty"`
+		SuppressedUnchangedFindings  int                  `json:"suppressed_unchanged_findings,omitempty"`
+		ReopenedWithNewEvidence      int                  `json:"reopened_with_new_evidence,omitempty"`
+		BehaviorUnchangedOutcomes    int                  `json:"behavior_unchanged_outcomes,omitempty"`
+		BehaviorUnchangedEscalations int                  `json:"behavior_unchanged_escalations,omitempty"`
+		SessionRefreshes             int                  `json:"session_refreshes,omitempty"`
+		SessionRefreshReasons        map[string]int       `json:"session_refresh_reasons,omitempty"`
+		Summary                      AuditMetricsSnapshot `json:"summary"`
 	}
 
 	payload := auditMetricsJSON{
@@ -248,6 +256,8 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 		payload.RepeatedUnchangedFindings = m.RepeatedUnchangedFindings
 		payload.SuppressedUnchangedFindings = m.SuppressedUnchangedFindings
 		payload.ReopenedWithNewEvidence = m.ReopenedWithNewEvidence
+		payload.BehaviorUnchangedOutcomes = m.BehaviorUnchangedOutcomes
+		payload.BehaviorUnchangedEscalations = m.BehaviorUnchangedEscalations
 		payload.SessionRefreshes = m.SessionRefreshes
 		payload.SessionRefreshReasons = m.SessionRefreshReasons
 	}

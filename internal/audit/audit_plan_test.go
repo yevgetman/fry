@@ -21,6 +21,8 @@ func TestBuildVerifyPromptRequestsNotes(t *testing.T) {
 	prompt := buildVerifyPrompt(opts, []Finding{{Description: "Issue A", Severity: "HIGH"}})
 
 	assert.Contains(t, prompt, "**Notes:**")
+	assert.Contains(t, prompt, "BEHAVIOR_UNCHANGED")
+	assert.Contains(t, prompt, "exact logic path")
 }
 
 func TestAuditPromptIncludesReconciliationDirective(t *testing.T) {
@@ -248,6 +250,50 @@ func TestRunAuditLoopFixHistoryIntegration(t *testing.T) {
 	assert.Equal(t, ComplexityModerate, result.Complexity)
 	require.NotNil(t, result.Metrics)
 	assert.GreaterOrEqual(t, result.Metrics.TotalCalls(), 4)
+}
+
+func TestRunAuditLoopBehaviorUnchangedSharpensNextFixPrompt(t *testing.T) {
+	t.Parallel()
+
+	var secondFixPrompt string
+	findings := "## Findings\n- **Location:** tracked.txt:1\n- **Description:** Missing error handling\n- **Severity:** HIGH\n- **Recommended Fix:** Add a nil guard\n\n## Verdict\nFAIL\n"
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			switch callIndex {
+			case 0:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
+			case 1:
+				writeFile(t, filepath.Join(projectDir, "tracked.txt"), "first fix\n")
+			case 2:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), "- **Issue:** 1\n- **Status:** BEHAVIOR_UNCHANGED\n- **Notes:** only a comment was added; the error-handling branch is still unchanged\n")
+			case 3:
+				data, err := os.ReadFile(filepath.Join(projectDir, config.AuditPromptFile))
+				require.NoError(t, err)
+				secondFixPrompt = string(data)
+				writeFile(t, filepath.Join(projectDir, "tracked.txt"), "second fix\n")
+			case 4:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), "- **Issue:** 1\n- **Status:** RESOLVED\n- **Notes:** the nil path now returns an error\n")
+			case 5:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), cleanAudit)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	initAuditGitRepo(t, opts.ProjectDir)
+	opts.Epic.MaxAuditIterations = 1
+	opts.Complexity = ComplexityModerate
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.True(t, result.Passed)
+	require.NotNil(t, result.Metrics)
+	assert.Equal(t, 1, result.Metrics.BehaviorUnchangedOutcomes)
+	assert.Contains(t, secondFixPrompt, "## Behavior-Unchanged Guidance")
+	assert.Contains(t, secondFixPrompt, "Issue 1")
+	assert.Contains(t, secondFixPrompt, "only a comment was added")
+	assert.Contains(t, secondFixPrompt, "Do not answer with comments")
 }
 
 func initAuditGitRepo(t *testing.T, projectDir string) {

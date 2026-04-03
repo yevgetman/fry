@@ -48,14 +48,14 @@ The audit uses a two-level loop with three types of agent sessions:
 
 ### Outer loop (audit cycles)
 
-Each outer cycle runs the **audit agent** to review the codebase. On cycle 2+, the audit prompt includes previously identified issues and asks the agent to verify each as RESOLVED or STILL PRESENT while also scanning for new issues.
+Each outer cycle runs the **audit agent** to review the codebase. On cycle 2+, the audit prompt includes previously identified issues and asks the agent to verify each prior issue while also scanning for new issues.
 
 ### Inner loop (fix iterations per cycle)
 
 For each audit report, the **fix agent** runs repeatedly until all issues above LOW severity from that report are resolved:
 
 1. **Fix agent** -- reads the structured issue list (FIFO ordered, oldest first) and makes minimal code changes. It is instructed to focus exclusively on the listed issues and not search for new ones.
-2. **Verify agent** -- checks whether the specific issues have been resolved without modifying code. Reports each issue as RESOLVED or STILL PRESENT.
+2. **Verify agent** -- checks whether the specific issues have been resolved without modifying code. Reports each issue with a concrete outcome such as `RESOLVED`, `PARTIALLY_RESOLVED`, `BEHAVIOR_UNCHANGED`, `EVIDENCE_INCONCLUSIVE`, `BLOCKED`, or `STILL_PRESENT`.
 3. If all actionable issues are resolved, the inner loop breaks and triggers a re-audit.
 4. If no new issues are resolved for 2 consecutive fix iterations, the inner loop breaks (stale detection).
 
@@ -66,7 +66,9 @@ The inner loop carries forward structured history so each fix iteration has more
 - **No-op detection** -- Fry fingerprints the worktree before and after each fix pass. If the fix agent made no material file changes (excluding progress artifacts), Fry logs a no-op, skips verify, increments the stale counter, and moves directly to the next fix attempt or re-audit.
 - **Fix contract validation** -- Every fix pass carries a Fry-owned diff contract: numbered issue IDs, declared target files derived from the findings, and expected evidence. Empty diffs, comment-only diffs, and out-of-scope diffs are rejected before they count as real remediation attempts.
 - **Already-fixed verification routing** -- If the fix agent claims an issue is already fixed and produces no behavioral diff, Fry routes that claim to verify instead of counting the pass as a normal remediation attempt.
+- **Behavior-unchanged verification** -- Verify can explicitly report `BEHAVIOR_UNCHANGED` when a remediation left the executable logic path untouched. The next fix prompt then carries issue-specific guidance with the unchanged path summary and a direct instruction not to answer with comments, rationale-only edits, or other non-behavioral changes.
 - **Fix attempt history** -- The fix prompt includes concise summaries of prior attempts that targeted the same findings, including whether the attempt was a no-op, which issues remained, and any verification notes.
+- **Strategy escalation** -- If the same finding comes back `BEHAVIOR_UNCHANGED` repeatedly, Fry narrows the next fix batch to the stuck findings, refreshes fix-session context, and can stop the current fix loop early instead of grinding through more low-yield retries.
 - **Explicit verify boundary** -- Verify sessions stay stateless and never inherit fix-session context. This keeps the trust boundary between remediation and validation intact.
 
 On Claude and Codex, Fry also reuses same-role session continuity within the sprint audit:
@@ -134,6 +136,8 @@ Sprint audit metrics now distinguish between several kinds of churn:
 - **Repeated unchanged findings** -- the auditor restated an already-known issue family against the same artifact fingerprint
 - **Suppressed unchanged findings** -- a reopening against unchanged code was rejected because it lacked `**New Evidence:**`
 - **Reopened with new evidence** -- a reopening against unchanged code was admitted because the auditor supplied explicit justification
+- **Behavior-unchanged outcomes** -- verify concluded that the attempted remediation did not materially change the executable code path
+- **Behavior-unchanged escalations** -- Fry narrowed the next fix batch, refreshed fix-session context, or stopped the current fix loop early because the same issue kept coming back behavior-unchanged
 - **Session refreshes** -- Fry reset a same-role audit or fix session because it exceeded a configured continuity budget
 - **Session refresh reasons** -- per-reason counts for why a refresh occurred (call budget, prompt budget, token budget, or oversized carry-forward set)
 
@@ -323,9 +327,9 @@ After each fix iteration, a lightweight verify agent checks resolution:
 | Context | Source |
 |---|---|
 | Issues to verify | Numbered list of unresolved issues with location and severity |
-| Instructions | Check each issue, report RESOLVED or STILL PRESENT |
+| Instructions | Check each issue and report `RESOLVED`, `PARTIALLY_RESOLVED`, `BEHAVIOR_UNCHANGED`, `EVIDENCE_INCONCLUSIVE`, `BLOCKED`, or `STILL_PRESENT` |
 
-The verify agent does not look for new issues and does not modify source code. Each verify session must write explicit statuses and optional notes to `.fry/sprint-audit.txt`. Fry first tries to recover those statuses from the agent's final stdout/log output; if recovery fails, the audit fails rather than treating missing output as an implicit pass.
+The verify agent does not look for new issues and does not modify source code. Each verify session must write explicit statuses and optional notes to `.fry/sprint-audit.txt`. When verify uses `BEHAVIOR_UNCHANGED`, it should name the exact logic path, branch, or data flow that remained unchanged so Fry can feed that evidence into the next remediation prompt. Fry first tries to recover those statuses from the agent's final stdout/log output; if recovery fails, the audit fails rather than treating missing output as an implicit pass.
 
 ## Effort Level Interaction
 

@@ -15,9 +15,11 @@ func TestAuditMetricsRecordAndSummary(t *testing.T) {
 	t.Parallel()
 
 	metrics := &AuditMetrics{
-		RepeatedUnchangedFindings:   2,
-		SuppressedUnchangedFindings: 1,
-		ReopenedWithNewEvidence:     1,
+		RepeatedUnchangedFindings:    2,
+		SuppressedUnchangedFindings:  1,
+		ReopenedWithNewEvidence:      1,
+		BehaviorUnchangedOutcomes:    3,
+		BehaviorUnchangedEscalations: 1,
 	}
 	metrics.Record(CallMetric{SessionType: engine.SessionAudit, PromptBytes: 100, DurationMs: 10})
 	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, PromptBytes: 120, DurationMs: 20, WasNoOp: true, ValidationResult: fixValidationRejected})
@@ -32,6 +34,8 @@ func TestAuditMetricsRecordAndSummary(t *testing.T) {
 	assert.Equal(t, 2, metrics.Snapshot().RepeatedUnchanged)
 	assert.Equal(t, 1, metrics.Snapshot().SuppressedUnchanged)
 	assert.Equal(t, 1, metrics.Snapshot().ReopenedWithNewEvidence)
+	assert.Equal(t, 3, metrics.Snapshot().BehaviorUnchanged)
+	assert.Equal(t, 1, metrics.Snapshot().BehaviorEscalations)
 	assert.InDelta(t, 2.0, metrics.VerifyYield(), 0.001)
 	assert.Equal(t, 110, metrics.AvgPromptBytes())
 }
@@ -49,10 +53,12 @@ func TestAuditMetricsMarshalJSON(t *testing.T) {
 				SessionRefreshReason: "call budget reached (4)",
 			},
 		},
-		OuterCycles:       2,
-		ContentComplexity: ComplexityModerate,
-		FinalFindingCount: 1,
-		SessionRefreshes:  1,
+		OuterCycles:                  2,
+		ContentComplexity:            ComplexityModerate,
+		FinalFindingCount:            1,
+		BehaviorUnchangedOutcomes:    1,
+		BehaviorUnchangedEscalations: 1,
+		SessionRefreshes:             1,
 		SessionRefreshReasons: map[string]int{
 			"call budget reached (4)": 1,
 		},
@@ -72,6 +78,8 @@ func TestAuditMetricsMarshalJSON(t *testing.T) {
 	assert.Equal(t, float64(0), summary["repeated_unchanged_findings"])
 	assert.Equal(t, float64(0), summary["suppressed_unchanged_findings"])
 	assert.Equal(t, float64(0), summary["reopened_with_new_evidence"])
+	assert.Equal(t, float64(1), summary["behavior_unchanged_outcomes"])
+	assert.Equal(t, float64(1), summary["behavior_unchanged_escalations"])
 	assert.Equal(t, float64(1), summary["session_refreshes"])
 	assert.Equal(t, float64(1), payload["session_refreshes"])
 	assert.Equal(t, float64(1), payload["session_refresh_reasons"].(map[string]any)["call budget reached (4)"])

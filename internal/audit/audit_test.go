@@ -282,6 +282,11 @@ func TestParseVerificationStatuses(t *testing.T) {
 			content:  "- Issue: 2\n- Status: RESOLVED\n",
 			expected: []bool{false, true, false},
 		},
+		{
+			name:     "behavior unchanged does not resolve",
+			content:  "- **Issue:** 2\n- **Status:** BEHAVIOR_UNCHANGED\n",
+			expected: []bool{false, false, false},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -289,7 +294,7 @@ func TestParseVerificationStatuses(t *testing.T) {
 			result := parseVerificationResults(tt.content, findings)
 			resolved := make([]bool, len(result))
 			for i, entry := range result {
-				resolved[i] = normalizeVerificationStatus(entry.Status) == "RESOLVED"
+				resolved[i] = normalizeVerificationStatus(entry.Status) == verifyStatusResolved
 			}
 			assert.Equal(t, tt.expected, resolved)
 		})
@@ -836,7 +841,7 @@ func TestBuildVerifyPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "## Issues to Verify")
 	assert.Contains(t, prompt, "1. [src/main.go:10] Null pointer (CRITICAL)")
 	assert.Contains(t, prompt, "2. Missing validation (HIGH)")
-	assert.Contains(t, prompt, "RESOLVED | STILL PRESENT")
+	assert.Contains(t, prompt, "BEHAVIOR_UNCHANGED")
 }
 
 // --- Severity parsing tests ---
@@ -1602,7 +1607,7 @@ func TestApplyResolutionsByKey(t *testing.T) {
 		{Description: "Issue A", Severity: "HIGH"},
 		{Description: "Issue C", Severity: "CRITICAL"},
 	}
-	resolved := []verificationResult{{Status: "RESOLVED"}, {Status: "STILL PRESENT"}}
+	resolved := []verificationResult{{Status: verifyStatusResolved}, {Status: verifyStatusStillPresent}}
 
 	applyResolutionsByKey(all, checked, resolved)
 
@@ -1622,7 +1627,7 @@ func TestApplyResolutionsByKeyUsesLocationAwareIdentity(t *testing.T) {
 		{Location: "a.go:10", Description: "Duplicate issue", Severity: "HIGH"},
 	}
 
-	applyResolutionsByKey(all, checked, []verificationResult{{Status: "RESOLVED"}})
+	applyResolutionsByKey(all, checked, []verificationResult{{Status: verifyStatusResolved}})
 
 	assert.True(t, all[0].Resolved)
 	assert.False(t, all[1].Resolved)

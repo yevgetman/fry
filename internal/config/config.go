@@ -64,20 +64,22 @@ const (
 	AuditFixInvocationPrompt    = "Read and execute ALL instructions in .fry/audit-prompt.md. This is an audit fix session. Fix only the listed issues and preserve unrelated behavior."
 
 	// Two-level audit loop constants
-	DefaultMaxOuterAuditCycles = 3   // outer audit cycles (medium/default)
-	DefaultMaxInnerFixIter     = 3   // fix attempts per audit report (medium/default)
-	MaxOuterCyclesHighCap      = 12  // outer audit cycles at high effort
-	MaxOuterCyclesMaxCap       = 100 // outer audit cycles at max effort (safety valve; stale detection governs actual exit)
-	MaxInnerFixIterHigh        = 7   // inner fix cap at high effort
-	MaxInnerFixIterMax         = 10  // inner fix cap at max effort
-	AuditSessionMaxCalls       = 3   // max same-role audit continuity calls before refresh
-	AuditSessionMaxPromptBytes = 24_000
-	AuditSessionMaxTokens      = 12_000
-	AuditSessionMaxCarry       = 8 // unresolved findings carried into one same-role audit session before refresh
-	FixSessionMaxCalls         = 4
-	FixSessionMaxPromptBytes   = 32_000
-	FixSessionMaxTokens        = 16_000
-	FixSessionMaxCarry         = 10 // unresolved findings carried into one same-role fix session before refresh
+	DefaultMaxOuterAuditCycles           = 3   // outer audit cycles (medium/default)
+	DefaultMaxInnerFixIter               = 3   // fix attempts per audit report (medium/default)
+	MaxOuterCyclesHighCap                = 12  // outer audit cycles at high effort
+	MaxOuterCyclesMaxCap                 = 100 // outer audit cycles at max effort (safety valve; stale detection governs actual exit)
+	MaxInnerFixIterHigh                  = 7   // inner fix cap at high effort
+	MaxInnerFixIterMax                   = 10  // inner fix cap at max effort
+	AuditSessionMaxCalls                 = 3   // max same-role audit continuity calls before refresh
+	AuditSessionMaxPromptBytes           = 24_000
+	AuditSessionMaxTokens                = 12_000
+	AuditSessionMaxCarry                 = 8 // unresolved findings carried into one same-role audit session before refresh
+	FixSessionMaxCalls                   = 4
+	FixSessionMaxPromptBytes             = 32_000
+	FixSessionMaxTokens                  = 16_000
+	FixSessionMaxCarry                   = 10 // unresolved findings carried into one same-role fix session before refresh
+	BehaviorUnchangedEscalationThreshold = 2
+	BehaviorUnchangedStopThreshold       = 3
 
 	DeferredFailuresFile = ".fry/deferred-failures.md"
 

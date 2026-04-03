@@ -81,6 +81,8 @@ type AuditMetricsSnapshot struct {
 	RepeatedUnchanged       int     `json:"repeated_unchanged_findings"`
 	SuppressedUnchanged     int     `json:"suppressed_unchanged_findings"`
 	ReopenedWithNewEvidence int     `json:"reopened_with_new_evidence"`
+	BehaviorUnchanged       int     `json:"behavior_unchanged_outcomes"`
+	BehaviorEscalations     int     `json:"behavior_unchanged_escalations"`
 	SessionRefreshes        int     `json:"session_refreshes"`
 	NoOpRate                float64 `json:"no_op_rate"`
 	VerifyCalls             int     `json:"verify_calls"`
