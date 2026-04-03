@@ -93,6 +93,17 @@ When the re-audit runs (cycle 2+), findings are classified as:
 
 This ensures older issues are always addressed before newer ones, avoids collapsing distinct same-worded issues in different files, and reduces wasted fix effort on re-discovering known issues.
 
+### Blocker categories
+
+Sprint audit also distinguishes between broken product work and blocked execution prerequisites. Findings can be classified as:
+
+- `product_defect`
+- `environment_blocker`
+- `harness_blocker`
+- `external_dependency_blocker`
+
+Blocker findings are still tracked and can stop the sprint, but Fry does **not** send them through the normal code-fix loop. Instead, the audit result preserves the blocker details so the build can report that the sprint is blocked rather than broken.
+
 ### Reopen detection
 
 When the audit agent re-raises a previously resolved requirement theme under different wording, Fry detects this as a **probable reopening** rather than treating it as a new finding. This prevents the audit loop from churning on the same requirement family when the agent shifts its interpretation between cycles.
@@ -126,8 +137,9 @@ These counters are written to `.fry/build-logs/sprintN_audit_metrics.json` and s
 
 ## Blocking vs Advisory
 
-After the audit loop exhausts its cycles, the outcome depends on the highest remaining severity:
+After the audit loop exhausts its cycles, the outcome depends on the remaining findings:
 
+- **Blocker findings remain** -- The sprint is marked **blocked**. Fry preserves the blocker category and details in `build-status.json` and does not spend normal fix iterations trying to patch around missing secrets, runtimes, or external services.
 - **CRITICAL or HIGH** -- The sprint **fails** and the epic stops. The build summary shows `FAIL (audit: CRITICAL)` or `FAIL (audit: HIGH)`. You can resume with `fry run <epic> <sprint>` after fixing the issues.
 - **MODERATE** -- The sprint **continues** with an advisory warning logged to the build output and build summary. This prevents moderate semantic disagreements between two AI agents from stalling the entire build.
 - **LOW or none** -- The audit passes cleanly. At **max** effort, LOW-only findings trigger one fix agent attempt before accepting (see below). At all other effort levels, LOW-only is an immediate pass.

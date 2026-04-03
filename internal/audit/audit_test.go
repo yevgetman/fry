@@ -197,6 +197,24 @@ func TestParseFindings(t *testing.T) {
 				{Description: "HIGHLY unusual pattern", Severity: "LOW"},
 			},
 		},
+		{
+			name: "captures blocker category and details",
+			content: "## Findings\n" +
+				"- **Location:** test/bootstrap.go:12\n" +
+				"- **Description:** Missing SUPABASE secrets prevent bootstrap\n" +
+				"- **Severity:** HIGH\n" +
+				"- **Category:** environment_blocker\n" +
+				"- **Blocker Details:** missing SUPABASE_URL, SUPABASE_SERVICE_KEY\n" +
+				"- **Recommended Fix:** provide the required secrets before rerunning audit\n",
+			expected: []Finding{{
+				Location:       "test/bootstrap.go:12",
+				Description:    "Missing SUPABASE secrets prevent bootstrap",
+				Severity:       "HIGH",
+				Category:       FindingCategoryEnvironmentBlocker,
+				BlockerDetails: "missing SUPABASE_URL, SUPABASE_SERVICE_KEY",
+				RecommendedFix: "provide the required secrets before rerunning audit",
+			}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1666,6 +1684,7 @@ func TestFilterFixable(t *testing.T) {
 		{Description: "Critical bug", Severity: "CRITICAL"},
 		{Description: "High bug", Severity: "HIGH"},
 		{Description: "Moderate issue", Severity: "MODERATE"},
+		{Description: "Missing SUPABASE_URL", Severity: "HIGH", Category: FindingCategoryEnvironmentBlocker},
 		{Description: "Low style", Severity: "LOW"},
 		{Description: "No severity", Severity: ""},
 		{Description: "Resolved high", Severity: "HIGH", Resolved: true},
@@ -1693,13 +1712,14 @@ func TestCountFixable(t *testing.T) {
 
 	findings := []Finding{
 		{Description: "A", Severity: "HIGH"},
+		{Description: "Harness blocker", Severity: "HIGH", Category: FindingCategoryHarnessBlocker},
 		{Description: "B", Severity: "LOW"},
 		{Description: "C", Severity: "MODERATE", Resolved: true},
 		{Description: "D", Severity: "LOW", Resolved: true},
 	}
 
 	// countFixable counts ALL findings matching severity filter (resolved or not)
-	// because it serves as the total denominator in progress logs.
+	// because it serves as the total denominator in progress logs, but it excludes blocker categories.
 	assert.Equal(t, 2, countFixable(findings, false)) // HIGH + resolved MODERATE
 	assert.Equal(t, 4, countFixable(findings, true))  // all four
 }

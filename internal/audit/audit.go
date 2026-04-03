@@ -30,6 +30,8 @@ type Finding struct {
 	Location       string
 	Description    string
 	Severity       string
+	Category       string
+	BlockerDetails string
 	RecommendedFix string
 	NewEvidence    string
 	AffectedFiles  []string
@@ -89,6 +91,7 @@ type AuditProgress struct {
 	MaxFixes     int
 	TargetIssues int
 	Findings     map[string]int
+	Blockers     map[string]int
 	Headlines    []string
 	Reopenings   int // count of findings suppressed as probable reopenings
 	Complexity   ComplexityTier
@@ -106,6 +109,9 @@ type AuditResult struct {
 	RepeatedUnchanged    int            // findings repeated against unchanged artifact state
 	SuppressedUnchanged  int            // unchanged-code reopenings suppressed for lack of new evidence
 	ReopenedWithEvidence int            // unchanged-code reopenings admitted because they carried explicit new evidence
+	Blocked              bool           // true when unresolved blocker-class findings remain
+	BlockerCounts        map[string]int // blocker category -> count
+	Blockers             []Finding      // unresolved blocker details
 	Complexity           ComplexityTier
 	Metrics              *AuditMetrics
 }
@@ -363,6 +369,8 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 		effectiveCounts := severityCountsForFindings(activeFindings)
 		effectiveMaxSev := maxSeverityForFindings(activeFindings)
+		activeBlockers := filterBlockers(activeFindings)
+		activeBlockerCounts := blockerCounts(activeFindings)
 
 		// Check actionable count (HIGH/MODERATE/CRITICAL only)
 		actionable := countActionableFindings(activeFindings)
@@ -389,6 +397,33 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				RepeatedUnchanged:    repeatedUnchanged,
 				SuppressedUnchanged:  suppressedUnchanged,
 				ReopenedWithEvidence: reopenedWithEvidence,
+				BlockerCounts:        activeBlockerCounts,
+				Blockers:             activeBlockers,
+				Complexity:           opts.Complexity,
+				Metrics:              auditMetrics,
+			}, nil
+		}
+
+		fixableCount := countFixableProductFindings(activeFindings, includeLow)
+		if fixableCount == 0 && len(activeBlockers) > 0 {
+			frylog.Log("  AUDIT: blocked by %d non-product findings — skipping code-fix loop", len(activeBlockers))
+			auditMetrics.OuterCycles = cycle
+			auditMetrics.ConvergedAtCycle = cycle
+			auditMetrics.FinalFindingCount = totalSeverityCount(effectiveCounts)
+			return &AuditResult{
+				Passed:               false,
+				Blocking:             true,
+				Blocked:              true,
+				Iterations:           cycle,
+				MaxSeverity:          effectiveMaxSev,
+				SeverityCounts:       effectiveCounts,
+				UnresolvedFindings:   collectUnresolved(activeFindings),
+				SuppressedReopenings: suppressedReopenings,
+				RepeatedUnchanged:    repeatedUnchanged,
+				SuppressedUnchanged:  suppressedUnchanged,
+				ReopenedWithEvidence: reopenedWithEvidence,
+				BlockerCounts:        activeBlockerCounts,
+				Blockers:             activeBlockers,
 				Complexity:           opts.Complexity,
 				Metrics:              auditMetrics,
 			}, nil
@@ -423,8 +458,10 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			}
 		}
 
-		fixableCount := countFixable(activeFindings, includeLow)
 		frylog.Log("  AUDIT: %s — entering fix loop (%d issues)...", formatSeverityCounts(effectiveCounts), fixableCount)
+		if len(activeBlockers) > 0 {
+			frylog.Log("  AUDIT: %d blocker findings will stay out of the normal code-fix loop", len(activeBlockers))
+		}
 
 		// Sort findings FIFO for fix agent
 		sortFindingsFIFO(activeFindings)
@@ -444,7 +481,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				return nil, err
 			}
 
-			unresolved := filterFixable(activeFindings, includeLow)
+			unresolved := filterFixableProductFindings(activeFindings, includeLow)
 			if len(unresolved) == 0 {
 				break
 			}
@@ -457,6 +494,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				MaxFixes:     maxInner,
 				TargetIssues: len(unresolved),
 				Findings:     severityCountsForFindings(unresolved),
+				Blockers:     activeBlockerCounts,
 				Headlines:    findingHeadlines(unresolved, 3),
 				Complexity:   opts.Complexity,
 				Metrics:      auditMetrics.Snapshot(),
@@ -565,6 +603,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				MaxFixes:     maxInner,
 				TargetIssues: len(unresolved),
 				Findings:     severityCountsForFindings(unresolved),
+				Blockers:     activeBlockerCounts,
 				Headlines:    findingHeadlines(unresolved, 3),
 				Complexity:   opts.Complexity,
 				Metrics:      auditMetrics.Snapshot(),
@@ -624,8 +663,8 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			})
 
 			nowResolved := countResolved(activeFindings)
-			totalFixable := countFixable(activeFindings, includeLow)
-			remaining := filterFixable(activeFindings, includeLow)
+			totalFixable := countFixableProductFindings(activeFindings, includeLow)
+			remaining := filterFixableProductFindings(activeFindings, includeLow)
 			frylog.Log("  AUDIT VERIFY  cycle %d  fix %d/%d — %d of %d resolved",
 				cycle, fixIter, maxInner, nowResolved, totalFixable)
 
@@ -721,8 +760,11 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		return nil, err
 	}
 
+	finalFindings := decorateFindings(opts.ProjectDir, parseFindings(string(content)), lastCycle)
 	maxSev := parseAuditSeverity(string(content))
 	finalCounts := countAuditSeverities(string(content))
+	finalBlockers := filterBlockers(finalFindings)
+	finalBlockerCounts := blockerCounts(finalFindings)
 	auditMetrics.OuterCycles = lastCycle
 	auditMetrics.FinalFindingCount = totalSeverityCount(finalCounts)
 	if isAuditPass(maxSev) {
@@ -735,6 +777,8 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			RepeatedUnchanged:    repeatedUnchanged,
 			SuppressedUnchanged:  suppressedUnchanged,
 			ReopenedWithEvidence: reopenedWithEvidence,
+			BlockerCounts:        finalBlockerCounts,
+			Blockers:             finalBlockers,
 			Complexity:           opts.Complexity,
 			Metrics:              auditMetrics,
 		}, nil
@@ -742,15 +786,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 	return &AuditResult{
 		Passed:               false,
-		Blocking:             isBlockingSeverity(maxSev),
+		Blocking:             isBlockingSeverity(maxSev) || len(finalBlockers) > 0,
+		Blocked:              len(finalBlockers) > 0,
 		Iterations:           lastCycle,
 		MaxSeverity:          maxSev,
 		SeverityCounts:       finalCounts,
-		UnresolvedFindings:   decorateFindings(opts.ProjectDir, parseFindings(string(content)), lastCycle),
+		UnresolvedFindings:   finalFindings,
 		SuppressedReopenings: suppressedReopenings,
 		RepeatedUnchanged:    repeatedUnchanged,
 		SuppressedUnchanged:  suppressedUnchanged,
 		ReopenedWithEvidence: reopenedWithEvidence,
+		BlockerCounts:        finalBlockerCounts,
+		Blockers:             finalBlockers,
 		Complexity:           opts.Complexity,
 		Metrics:              auditMetrics,
 	}, nil
@@ -1008,6 +1055,9 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 	b.WriteString("a distinct problem or a regression before reporting it. Repeat findings under varied wording are unhelpful.\n")
 	b.WriteString("Fry fingerprints relevant file state across audit cycles. If you raise the same issue family against\n")
 	b.WriteString("unchanged code, you must include **New Evidence** describing the new proof or contract interpretation.\n\n")
+	b.WriteString("Classify each finding as `product_defect`, `environment_blocker`, `harness_blocker`, or `external_dependency_blocker`.\n")
+	b.WriteString("Use blocker categories when tests or runtime behavior fail because secrets, services, Docker/test harness setup,\n")
+	b.WriteString("or external dependencies are unavailable. Do not classify those as product defects.\n\n")
 
 	// Audit criteria
 	b.WriteString("## Audit Criteria\n")
@@ -1069,6 +1119,8 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 	b.WriteString("- **Location:** <file:line>\n")
 	b.WriteString("- **Description:** <what is wrong>\n")
 	b.WriteString("- **Severity:** CRITICAL | HIGH | MODERATE | LOW\n")
+	b.WriteString("- **Category:** product_defect | environment_blocker | harness_blocker | external_dependency_blocker\n")
+	b.WriteString("- **Blocker Details:** <required for blocker categories; list missing env vars, services, runtimes, or prerequisites>\n")
 	b.WriteString("- **Recommended Fix:** <how to fix>\n")
 	b.WriteString("- **New Evidence:** <required only when reopening an unchanged-code issue>\n\n")
 	b.WriteString("## Verdict\n")
@@ -1301,6 +1353,17 @@ func parseFindings(content string) []Finding {
 				current.Severity = m
 			}
 			continue
+		}
+
+		if hasCurrent {
+			if m := categoryRe.FindStringSubmatch(line); len(m) >= 2 {
+				current.Category = normalizeFindingCategory(strings.TrimSpace(m[1]))
+				continue
+			}
+			if m := blockerDetailsRe.FindStringSubmatch(line); len(m) >= 2 {
+				current.BlockerDetails = strings.TrimSpace(m[1])
+				continue
+			}
 		}
 
 		// Check for Recommended Fix
@@ -1637,27 +1700,17 @@ func filterUnresolved(findings []Finding) []Finding {
 
 // filterFixable returns unresolved findings eligible for fix at the given effort level.
 // At high/max effort (includeLow=true), LOW findings are included alongside higher-severity items.
-// At other levels, only findings above LOW are returned (same as filterUnresolved).
+// At other levels, only product-defect findings above LOW are returned.
 func filterFixable(findings []Finding, includeLow bool) []Finding {
-	var result []Finding
-	for _, f := range findings {
-		if f.Severity == "" || f.Resolved {
-			continue
-		}
-		if !includeLow && f.Severity == "LOW" {
-			continue
-		}
-		result = append(result, f)
-	}
-	return result
+	return filterFixableProductFindings(findings, includeLow)
 }
 
 // countFixable counts findings in scope for the fix agent at the given effort level,
-// regardless of resolution status. Used as the total denominator in progress logs.
+// excluding blocker categories. Used as the total denominator in progress logs.
 func countFixable(findings []Finding, includeLow bool) int {
 	n := 0
 	for _, f := range findings {
-		if f.Severity == "" {
+		if f.Severity == "" || f.isBlocker() {
 			continue
 		}
 		if !includeLow && f.Severity == "LOW" {

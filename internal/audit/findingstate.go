@@ -33,6 +33,7 @@ func decorateFindings(projectDir string, findings []Finding, cycle int) []Findin
 	decorated := make([]Finding, len(findings))
 	for i := range findings {
 		decorated[i] = findings[i]
+		decorated[i].Category = decorated[i].categoryOrDefault()
 		if decorated[i].OriginCycle == 0 {
 			decorated[i].OriginCycle = cycle
 		}

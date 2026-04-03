@@ -1131,6 +1131,28 @@ var runCmd = &cobra.Command{
 						)
 					}
 					if !auditResult.Passed {
+						if auditResult.Blocked {
+							blockerSummary := auditSummarizeBlockers(auditResult)
+							frlog.Log("  AUDIT: BLOCKED — %s", blockerSummary)
+							if cleanupErr := audit.Cleanup(projectPath); cleanupErr != nil {
+								frlog.Log("WARNING: audit cleanup failed: %v", cleanupErr)
+							}
+							failStatus := fmt.Sprintf("BLOCKED (audit: %s)", summarizeAuditBlockerCategories(auditResult.BlockerCounts))
+							mu.Lock()
+							results[sprintNum-startSprint].Status = failStatus
+							results[sprintNum-startSprint].AuditWarning = blockerSummary
+							mu.Unlock()
+							if err := sprint.AppendToEpicProgress(projectPath,
+								fmt.Sprintf("## Sprint %d: %s \u2014 %s\n\n", spr.Number, spr.Name, failStatus)); err != nil {
+								frlog.Log("warning: append epic progress: %v", err)
+							}
+							fmt.Fprintf(cmd.OutOrStdout(), "Resume:   fry run --resume --sprint %d\n", spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Restart:  fry run --sprint %d\n", spr.Number)
+							fmt.Fprintf(cmd.OutOrStdout(), "Continue: fry run --continue\n")
+							exitErr = fmt.Errorf("sprint %d audit blocked: %s after %d cycles",
+								spr.Number, failStatus, auditResult.Iterations)
+							break
+						}
 						if auditResult.Blocking {
 							frlog.Log("  AUDIT: FAILED — %s remain after %d audit cycles",
 								audit.FormatCounts(auditResult.SeverityCounts), auditResult.Iterations)
@@ -3067,20 +3089,27 @@ func updateBuildStatusAudit(status *agent.BuildStatus, sprintNum int, auditResul
 		return
 	}
 	outcome := "pass"
-	if auditResult.Blocking {
+	if auditResult.Blocked {
+		outcome = "blocked"
+	} else if auditResult.Blocking {
 		outcome = "failed"
 	} else if !auditResult.Passed {
 		outcome = "advisory"
 	}
 	status.Sprints[idx].Audit = &agent.AuditStatus{
-		Cycles:     auditResult.Iterations,
-		Findings:   auditResult.SeverityCounts,
-		Outcome:    outcome,
-		Complexity: string(auditResult.Complexity),
-		Metrics:    buildStatusAuditMetricsSnapshot(auditResult.Metrics),
+		Cycles:        auditResult.Iterations,
+		Findings:      auditResult.SeverityCounts,
+		Outcome:       outcome,
+		Blocked:       auditResult.Blocked,
+		BlockerCounts: auditResult.BlockerCounts,
+		Blockers:      buildStatusAuditBlockers(auditResult.Blockers),
+		Complexity:    string(auditResult.Complexity),
+		Metrics:       buildStatusAuditMetricsSnapshot(auditResult.Metrics),
 	}
 	// Update sprint status if audit failed
-	if auditResult.Blocking {
+	if auditResult.Blocked {
+		status.Sprints[idx].Status = fmt.Sprintf("BLOCKED (audit: %s)", summarizeAuditBlockerCategories(auditResult.BlockerCounts))
+	} else if auditResult.Blocking {
 		status.Sprints[idx].Status = fmt.Sprintf("FAIL (audit: %s)", auditResult.MaxSeverity)
 	}
 }
@@ -3099,10 +3128,15 @@ func updateBuildStatusAuditProgress(status *agent.BuildStatus, sprintNum int, pr
 	if findings == nil && current != nil {
 		findings = current.Findings
 	}
+	blockers := progress.Blockers
+	if blockers == nil && current != nil {
+		blockers = current.BlockerCounts
+	}
 	status.Sprints[idx].Audit = &agent.AuditStatus{
 		Cycles:         progress.Cycle,
 		Findings:       findings,
 		Outcome:        "running",
+		BlockerCounts:  blockers,
 		Active:         true,
 		Stage:          progress.Stage,
 		CurrentCycle:   progress.Cycle,
@@ -3128,6 +3162,78 @@ func updateBuildStatusAuditProgress(status *agent.BuildStatus, sprintNum int, pr
 			VerifyYield:             progress.Metrics.VerifyYield,
 		},
 	}
+}
+
+func buildStatusAuditBlockers(findings []audit.Finding) []agent.AuditBlocker {
+	if len(findings) == 0 {
+		return nil
+	}
+	blockers := make([]agent.AuditBlocker, 0, len(findings))
+	for _, finding := range findings {
+		details := strings.TrimSpace(finding.BlockerDetails)
+		if details == "" {
+			details = strings.TrimSpace(finding.Description)
+		}
+		blockers = append(blockers, agent.AuditBlocker{
+			Category: finding.Category,
+			Location: finding.Location,
+			Details:  textutil.TruncateUTF8(details, 256),
+			Severity: finding.Severity,
+		})
+	}
+	return blockers
+}
+
+func summarizeAuditBlockerCategories(counts map[string]int) string {
+	if len(counts) == 0 {
+		return "blockers"
+	}
+	order := []string{
+		audit.FindingCategoryEnvironmentBlocker,
+		audit.FindingCategoryHarnessBlocker,
+		audit.FindingCategoryExternalDependencyBlocker,
+	}
+	var parts []string
+	for _, category := range order {
+		if counts[category] > 0 {
+			parts = append(parts, category)
+		}
+	}
+	if len(parts) == 0 {
+		for category := range counts {
+			parts = append(parts, category)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func auditSummarizeBlockers(result *audit.AuditResult) string {
+	if result == nil {
+		return "blocked by unresolved audit prerequisites"
+	}
+	summary := strings.TrimSpace(auditSummarizeBlockerFindings(result.Blockers))
+	if summary == "" {
+		return "blocked by unresolved audit prerequisites"
+	}
+	return summary
+}
+
+func auditSummarizeBlockerFindings(findings []audit.Finding) string {
+	if len(findings) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(findings))
+	for _, finding := range findings {
+		detail := strings.TrimSpace(finding.BlockerDetails)
+		if detail == "" {
+			detail = strings.TrimSpace(finding.Description)
+		}
+		if detail == "" {
+			continue
+		}
+		parts = append(parts, finding.Category+": "+detail)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // updateBuildStatusReview updates a sprint's review verdict in the build status.

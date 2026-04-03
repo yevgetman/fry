@@ -550,11 +550,12 @@ The file contains:
 - `sprints[].status`: per-sprint outcome (`running`, `PASS`, `PASS (aligned)`, `FAIL`, etc.)
 - `sprints[].sanity_checks`: pass/fail per check with type and target
 - `sprints[].alignment.attempts`: how many alignment iterations were needed
-- `sprints[].audit.outcome`: `running`, `pass`, `failed`, or `advisory`
+- `sprints[].audit.outcome`: `running`, `pass`, `blocked`, `failed`, or `advisory`
 - `sprints[].audit.stage`: current sprint-audit sub-phase (`auditing`, `fixing`, `verifying`) when `active=true`
 - `sprints[].audit.current_cycle` / `max_cycles`: outer audit-loop progress
 - `sprints[].audit.current_fix` / `max_fixes`: inner fix/verify-loop progress
 - `sprints[].audit.complexity`: classified sprint-audit complexity (`low`, `moderate`, `high`, or `unknown`)
+- `sprints[].audit.blocker_counts` / `blockers`: unresolved blocker categories and details when the sprint is blocked by missing prerequisites
 - `sprints[].audit.metrics`: compact live metrics snapshot (calls, duration, no-op rate, verify yield, repeated unchanged findings, suppressed unchanged reopenings, reopened-with-new-evidence count)
 - `sprints[].audit.target_issues` and `issue_headlines`: what the audit loop is currently targeting
 - `build_audit`: final holistic audit result (present after build audit runs)
@@ -638,6 +639,7 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **No-op skip:** If an audit-fix pass makes no real file changes, Fry skips verify and treats the attempt as stale progress.
 - **Fix history:** Later fix iterations receive a concise history of earlier failed attempts against the same findings.
 - **Unchanged-code churn suppression:** Fry fingerprints finding-related file state across cycles. If the auditor re-raises the same issue family against unchanged code, Fry merges it back into the existing active issue or suppresses the reopening unless the finding includes explicit `**New Evidence:**`.
+- **Blocker separation:** Fry distinguishes `product_defect` findings from `environment_blocker`, `harness_blocker`, and `external_dependency_blocker` findings. Blocker findings stay out of the normal code-fix loop and are surfaced as blocked audit outcomes with preserved blocker details.
 - When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
 - Relevant intentional divergences from `.fry/deviation-log.md` are injected into audit prompts so the auditor does not flag accepted design differences as defects.
 - If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.

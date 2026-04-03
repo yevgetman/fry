@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yevgetman/fry/internal/agent"
+	"github.com/yevgetman/fry/internal/audit"
 	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/continuerun"
 	"github.com/yevgetman/fry/internal/epic"
@@ -165,6 +166,40 @@ func TestMarkBuildFailed(t *testing.T) {
 	originalPhaseData, err := os.ReadFile(filepath.Join(originalDir, config.BuildPhaseFile))
 	require.NoError(t, err)
 	assert.Equal(t, "failed\n", string(originalPhaseData))
+}
+
+func TestUpdateBuildStatusAuditBlocked(t *testing.T) {
+	t.Parallel()
+
+	status := &agent.BuildStatus{
+		Sprints: []agent.SprintStatus{{
+			Number: 1,
+			Name:   "Setup",
+			Status: "running",
+		}},
+	}
+
+	updateBuildStatusAudit(status, 1, &audit.AuditResult{
+		Passed:         false,
+		Blocking:       true,
+		Blocked:        true,
+		Iterations:     1,
+		SeverityCounts: map[string]int{"HIGH": 1},
+		BlockerCounts:  map[string]int{audit.FindingCategoryEnvironmentBlocker: 1},
+		Blockers: []audit.Finding{{
+			Category:       audit.FindingCategoryEnvironmentBlocker,
+			Location:       "test/bootstrap.go:12",
+			BlockerDetails: "missing SUPABASE_URL, SUPABASE_SERVICE_KEY",
+			Severity:       "HIGH",
+		}},
+	})
+
+	require.NotNil(t, status.Sprints[0].Audit)
+	assert.Equal(t, "blocked", status.Sprints[0].Audit.Outcome)
+	assert.True(t, status.Sprints[0].Audit.Blocked)
+	assert.Equal(t, "BLOCKED (audit: environment_blocker)", status.Sprints[0].Status)
+	require.Len(t, status.Sprints[0].Audit.Blockers, 1)
+	assert.Contains(t, status.Sprints[0].Audit.Blockers[0].Details, "SUPABASE_URL")
 }
 
 func TestSettleGracefulExitWritesResumePoint(t *testing.T) {

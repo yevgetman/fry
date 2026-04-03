@@ -144,6 +144,70 @@ func TestRunAuditLoopRejectsCommentOnlyFixBeforeVerify(t *testing.T) {
 	}
 }
 
+func TestRunAuditLoopBlocksEnvironmentFindingWithoutFixLoop(t *testing.T) {
+	t.Parallel()
+
+	blockerReport := "## Findings\n- **Location:** test/bootstrap.go:12\n- **Description:** Missing SUPABASE secrets prevent integration bootstrap\n- **Severity:** HIGH\n- **Category:** environment_blocker\n- **Blocker Details:** missing SUPABASE_URL, SUPABASE_SERVICE_KEY\n- **Recommended Fix:** set the required secrets before rerunning audit\n\n## Verdict\nFAIL\n"
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			if callIndex == 0 {
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), blockerReport)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.False(t, result.Passed)
+	assert.True(t, result.Blocked)
+	assert.True(t, result.Blocking)
+	assert.Equal(t, map[string]int{FindingCategoryEnvironmentBlocker: 1}, result.BlockerCounts)
+	require.Len(t, result.Blockers, 1)
+	assert.Contains(t, result.Blockers[0].BlockerDetails, "SUPABASE_URL")
+	assert.Equal(t, 1, eng.callIndex, "blocker-only audit should not enter fix loop")
+	for _, prompt := range eng.prompts {
+		assert.NotEqual(t, config.AuditFixInvocationPrompt, prompt)
+	}
+}
+
+func TestRunAuditLoopFixesProductDefectsButLeavesBlockersOutOfFixPrompt(t *testing.T) {
+	t.Parallel()
+
+	report := "## Findings\n- **Location:** src/api.go:20\n- **Description:** Missing error handling\n- **Severity:** HIGH\n- **Category:** product_defect\n- **Recommended Fix:** handle the returned error\n\n- **Location:** test/bootstrap.go:12\n- **Description:** Missing SUPABASE secrets prevent integration bootstrap\n- **Severity:** HIGH\n- **Category:** environment_blocker\n- **Blocker Details:** missing SUPABASE_URL, SUPABASE_SERVICE_KEY\n- **Recommended Fix:** set the required secrets before rerunning audit\n\n## Verdict\nFAIL\n"
+	var fixPrompt string
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			switch callIndex {
+			case 0:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), report)
+			case 1:
+				data, err := os.ReadFile(filepath.Join(projectDir, config.AuditPromptFile))
+				require.NoError(t, err)
+				fixPrompt = string(data)
+				writeFile(t, filepath.Join(projectDir, "src", "api.go"), "package src\n\nfunc run() error { return nil }\n")
+			case 2:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), "- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 3:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), "## Findings\n- **Location:** test/bootstrap.go:12\n- **Description:** Missing SUPABASE secrets prevent integration bootstrap\n- **Severity:** HIGH\n- **Category:** environment_blocker\n- **Blocker Details:** missing SUPABASE_URL, SUPABASE_SERVICE_KEY\n- **Recommended Fix:** set the required secrets before rerunning audit\n\n## Verdict\nFAIL\n")
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	initAuditGitRepo(t, opts.ProjectDir)
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.False(t, result.Passed)
+	assert.True(t, result.Blocked)
+	assert.Contains(t, fixPrompt, "Missing error handling")
+	assert.NotContains(t, fixPrompt, "SUPABASE")
+	require.Len(t, result.Blockers, 1)
+	assert.Equal(t, FindingCategoryEnvironmentBlocker, result.Blockers[0].Category)
+}
+
 func TestRunAuditLoopFixHistoryIntegration(t *testing.T) {
 	t.Parallel()
 

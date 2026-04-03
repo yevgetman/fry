@@ -87,11 +87,21 @@ type AuditMetricsSnapshot struct {
 	VerifyYield             float64 `json:"verify_yield"`
 }
 
+type AuditBlocker struct {
+	Category string `json:"category"`
+	Location string `json:"location,omitempty"`
+	Details  string `json:"details,omitempty"`
+	Severity string `json:"severity,omitempty"`
+}
+
 // AuditStatus summarizes the per-sprint audit results.
 type AuditStatus struct {
 	Cycles         int                   `json:"cycles"`
 	Findings       map[string]int        `json:"findings"` // severity -> count
 	Outcome        string                `json:"outcome"`  // pass, failed, advisory, running
+	Blocked        bool                  `json:"blocked,omitempty"`
+	BlockerCounts  map[string]int        `json:"blocker_counts,omitempty"`
+	Blockers       []AuditBlocker        `json:"blockers,omitempty"`
 	Active         bool                  `json:"active,omitempty"`
 	Stage          string                `json:"stage,omitempty"`           // auditing, fixing, verifying
 	CurrentCycle   int                   `json:"current_cycle,omitempty"`   // current outer audit cycle
