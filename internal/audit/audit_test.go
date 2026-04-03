@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -716,6 +717,19 @@ func TestAuditPromptSkipsResolvedPreviousFindings(t *testing.T) {
 	assert.Contains(t, prompt, "Active issue")
 }
 
+func TestAuditPromptIncludesSessionRefreshSummary(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	opts.SessionCarryForward = "Session refreshed because call budget reached (3).\n- src/api.go:20: Missing error handling [HIGH]"
+
+	prompt := buildAuditPrompt(opts, nil, nil)
+
+	assert.Contains(t, prompt, "## Session Refresh Summary")
+	assert.Contains(t, prompt, "call budget reached (3)")
+	assert.Contains(t, prompt, "Missing error handling")
+}
+
 func TestAuditFixPromptFIFO(t *testing.T) {
 	t.Parallel()
 
@@ -788,6 +802,23 @@ func TestAuditFixPromptIncludesFixContract(t *testing.T) {
 	assert.Contains(t, prompt, "**Target Files:** internal/audit/audit.go")
 	assert.Contains(t, prompt, "already fixed")
 	assert.Contains(t, prompt, "### Issue 1")
+}
+
+func TestAuditFixPromptIncludesSessionRefreshSummary(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	opts.SessionCarryForward = "Session refreshed because token budget reached (16000 tokens).\nRecent failed fix attempts:\n- Attempt 1: no-op."
+
+	prompt := buildAuditFixPrompt(opts, []Finding{{
+		Description: "missing nil guard",
+		Severity:    "HIGH",
+		OriginCycle: 1,
+	}}, nil)
+
+	assert.Contains(t, prompt, "## Session Refresh Summary")
+	assert.Contains(t, prompt, "token budget reached (16000 tokens)")
+	assert.Contains(t, prompt, "Recent failed fix attempts")
 }
 
 func TestBuildVerifyPrompt(t *testing.T) {
@@ -2332,4 +2363,56 @@ func TestRunAuditLoopUsesSameRoleSessionContinuity(t *testing.T) {
 
 	assert.NoFileExists(t, auditSessionPath(opts.ProjectDir, opts.Sprint.Number))
 	assert.NoFileExists(t, fixSessionPath(opts.ProjectDir, opts.Sprint.Number, 1))
+}
+
+func TestRunAuditLoopRefreshesSameRoleSessionsWhenBudgetExceeded(t *testing.T) {
+	t.Parallel()
+
+	const auditSessionID = "019d5066-9bd1-7cb1-b421-e73a9d1d0f67"
+	const fixSessionID = "019d5066-f512-7bc1-aba8-e45cf2fb9a84"
+
+	eng := &stubEngine{
+		name: "codex",
+		outputs: []string{
+			fmt.Sprintf("{\"type\":\"thread.started\",\"thread_id\":\"%s\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"audit 1\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"output_tokens\":5}}\n", auditSessionID),
+			fmt.Sprintf("{\"type\":\"thread.started\",\"thread_id\":\"%s\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"fix 1\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":8,\"output_tokens\":4}}\n", fixSessionID),
+			"verify one",
+			"{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"agent_message\",\"text\":\"audit clean\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":6,\"output_tokens\":2}}\n",
+		},
+		sideEffect: func(projectDir string, idx int) {
+			auditFile := filepath.Join(projectDir, config.SprintAuditFile)
+			switch idx {
+			case 0:
+				writeFile(t, auditFile, highFindings)
+			case 2:
+				writeFile(t, auditFile, "- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 3:
+				writeFile(t, auditFile, cleanAudit)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+	opts.Epic.MaxAuditIterations = 3
+	opts.Epic.MaxAuditIterationsSet = true
+	opts.Sprint.Prompt = strings.Repeat("x", config.FixSessionMaxPromptBytes+2_000)
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.True(t, result.Passed)
+	require.Len(t, eng.runOpts, 4)
+
+	assert.Equal(t, "", eng.runOpts[0].SessionID)
+	assert.Equal(t, "", eng.runOpts[1].SessionID)
+	assert.Equal(t, "", eng.runOpts[3].SessionID)
+	assert.Equal(t, 1, result.Metrics.SessionRefreshes)
+	assert.Equal(t, 1, result.Metrics.Snapshot().SessionRefreshes)
+
+	promptBytes, err := os.ReadFile(filepath.Join(opts.ProjectDir, config.AuditPromptFile))
+	require.NoError(t, err)
+	prompt := string(promptBytes)
+	assert.Contains(t, prompt, "## Session Refresh Summary")
+	assert.Contains(t, prompt, "prompt budget reached")
+	assert.Contains(t, prompt, "Missing error handling")
 }

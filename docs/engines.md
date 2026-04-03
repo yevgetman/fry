@@ -250,6 +250,9 @@ Rules:
 - Fry only resumes **same-role** audit sessions: audit-to-audit and fix-to-fix.
 - Fry never resumes fix into verify. Verify stays stateless by design.
 - Session IDs are explicit and file-backed under `.fry/sessions/`; Fry does not rely on "most recent session" heuristics.
+- Same-role continuity is budgeted. Fry refreshes audit and fix sessions when they exceed per-role call, prompt-size, token, or carry-forward thresholds.
+- When Fry refreshes a session, the next same-role call starts from a fresh session and receives a compact carry-forward summary of unresolved findings plus recent failed fix attempts.
+- Sprint audit metrics record session refresh counts and refresh reasons in `.fry/build-logs/sprintN_audit_metrics.json` and surface the refresh count in `.fry/build-status.json`.
 - If session capture or resume fails, Fry silently falls back to the existing stateless behavior.
 
 ## Rate-Limit Resilience

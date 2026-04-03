@@ -74,6 +74,8 @@ On Claude and Codex, Fry also reuses same-role session continuity within the spr
 - **Audit continuity** -- outer audit cycle 1, cycle 2, and the final audit pass reuse the same audit session when possible.
 - **Fix continuity** -- fix iteration 1, 2, 3, and so on within one outer cycle reuse the same fix session.
 - **Verify isolation** -- verify never resumes the fix session.
+- **Budgeted refresh** -- audit and fix continuity are capped by per-role call, prompt-size, token, and carry-forward budgets. When a session exceeds its budget, Fry clears the stored session ID and starts the next same-role call from a fresh session.
+- **Carry-forward summary** -- refreshed sessions receive a compact summary that explains why the refresh happened, lists the unresolved findings being carried forward, and includes recent failed fix attempts relevant to those findings.
 
 ### Issue tracking across cycles
 
@@ -132,6 +134,8 @@ Sprint audit metrics now distinguish between several kinds of churn:
 - **Repeated unchanged findings** -- the auditor restated an already-known issue family against the same artifact fingerprint
 - **Suppressed unchanged findings** -- a reopening against unchanged code was rejected because it lacked `**New Evidence:**`
 - **Reopened with new evidence** -- a reopening against unchanged code was admitted because the auditor supplied explicit justification
+- **Session refreshes** -- Fry reset a same-role audit or fix session because it exceeded a configured continuity budget
+- **Session refresh reasons** -- per-reason counts for why a refresh occurred (call budget, prompt budget, token budget, or oversized carry-forward set)
 
 These counters are written to `.fry/build-logs/sprintN_audit_metrics.json` and surfaced in `.fry/build-status.json` under `sprints[].audit.metrics`.
 

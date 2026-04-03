@@ -2,6 +2,7 @@ package audit
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/yevgetman/fry/internal/engine"
 	tokenmetrics "github.com/yevgetman/fry/internal/metrics"
@@ -9,22 +10,23 @@ import (
 
 // CallMetric captures the observable outcome of one audit, fix, or verify call.
 type CallMetric struct {
-	SessionType         engine.SessionType      `json:"session_type"`
-	Cycle               int                     `json:"cycle"`
-	Iteration           int                     `json:"iteration"`
-	IssueIDs            []int                   `json:"issue_ids,omitempty"`
-	PromptBytes         int                     `json:"prompt_bytes"`
-	OutputBytes         int                     `json:"output_bytes"`
-	DurationMs          int64                   `json:"duration_ms"`
-	Model               string                  `json:"model,omitempty"`
-	WasNoOp             bool                    `json:"was_no_op,omitempty"`
-	DeclaredTargetFiles []string                `json:"declared_target_files,omitempty"`
-	ChangedFiles        []string                `json:"changed_files,omitempty"`
-	DiffClassification  string                  `json:"diff_classification,omitempty"`
-	ValidationResult    string                  `json:"validation_result,omitempty"`
-	AlreadyFixedClaim   bool                    `json:"already_fixed_claim,omitempty"`
-	Resolutions         int                     `json:"resolutions,omitempty"`
-	Tokens              tokenmetrics.TokenUsage `json:"tokens"`
+	SessionType          engine.SessionType      `json:"session_type"`
+	Cycle                int                     `json:"cycle"`
+	Iteration            int                     `json:"iteration"`
+	SessionRefreshReason string                  `json:"session_refresh_reason,omitempty"`
+	IssueIDs             []int                   `json:"issue_ids,omitempty"`
+	PromptBytes          int                     `json:"prompt_bytes"`
+	OutputBytes          int                     `json:"output_bytes"`
+	DurationMs           int64                   `json:"duration_ms"`
+	Model                string                  `json:"model,omitempty"`
+	WasNoOp              bool                    `json:"was_no_op,omitempty"`
+	DeclaredTargetFiles  []string                `json:"declared_target_files,omitempty"`
+	ChangedFiles         []string                `json:"changed_files,omitempty"`
+	DiffClassification   string                  `json:"diff_classification,omitempty"`
+	ValidationResult     string                  `json:"validation_result,omitempty"`
+	AlreadyFixedClaim    bool                    `json:"already_fixed_claim,omitempty"`
+	Resolutions          int                     `json:"resolutions,omitempty"`
+	Tokens               tokenmetrics.TokenUsage `json:"tokens"`
 }
 
 // AuditMetricsSnapshot is the small, monitor-friendly subset surfaced in build status.
@@ -37,6 +39,7 @@ type AuditMetricsSnapshot struct {
 	RepeatedUnchanged       int     `json:"repeated_unchanged_findings"`
 	SuppressedUnchanged     int     `json:"suppressed_unchanged_findings"`
 	ReopenedWithNewEvidence int     `json:"reopened_with_new_evidence"`
+	SessionRefreshes        int     `json:"session_refreshes"`
 	NoOpRate                float64 `json:"no_op_rate"`
 	VerifyCalls             int     `json:"verify_calls"`
 	VerifyResolutions       int     `json:"verify_resolutions"`
@@ -54,6 +57,8 @@ type AuditMetrics struct {
 	RepeatedUnchangedFindings   int            `json:"repeated_unchanged_findings,omitempty"`
 	SuppressedUnchangedFindings int            `json:"suppressed_unchanged_findings,omitempty"`
 	ReopenedWithNewEvidence     int            `json:"reopened_with_new_evidence,omitempty"`
+	SessionRefreshes            int            `json:"session_refreshes,omitempty"`
+	SessionRefreshReasons       map[string]int `json:"session_refresh_reasons,omitempty"`
 }
 
 func (m *AuditMetrics) Record(cm CallMetric) {
@@ -61,6 +66,13 @@ func (m *AuditMetrics) Record(cm CallMetric) {
 		return
 	}
 	m.Calls = append(m.Calls, cm)
+	if reason := strings.TrimSpace(cm.SessionRefreshReason); reason != "" {
+		m.SessionRefreshes++
+		if m.SessionRefreshReasons == nil {
+			m.SessionRefreshReasons = make(map[string]int)
+		}
+		m.SessionRefreshReasons[reason]++
+	}
 }
 
 func (m *AuditMetrics) TotalCalls() int {
@@ -199,6 +211,7 @@ func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 		RepeatedUnchanged:       m.RepeatedUnchangedFindings,
 		SuppressedUnchanged:     m.SuppressedUnchangedFindings,
 		ReopenedWithNewEvidence: m.ReopenedWithNewEvidence,
+		SessionRefreshes:        m.SessionRefreshes,
 		NoOpRate:                m.NoOpRate(),
 		VerifyCalls:             m.TotalVerifyCalls(),
 		VerifyResolutions:       m.TotalVerifyResolutions(),
@@ -217,6 +230,8 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 		RepeatedUnchangedFindings   int                  `json:"repeated_unchanged_findings,omitempty"`
 		SuppressedUnchangedFindings int                  `json:"suppressed_unchanged_findings,omitempty"`
 		ReopenedWithNewEvidence     int                  `json:"reopened_with_new_evidence,omitempty"`
+		SessionRefreshes            int                  `json:"session_refreshes,omitempty"`
+		SessionRefreshReasons       map[string]int       `json:"session_refresh_reasons,omitempty"`
 		Summary                     AuditMetricsSnapshot `json:"summary"`
 	}
 
@@ -233,6 +248,8 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 		payload.RepeatedUnchangedFindings = m.RepeatedUnchangedFindings
 		payload.SuppressedUnchangedFindings = m.SuppressedUnchangedFindings
 		payload.ReopenedWithNewEvidence = m.ReopenedWithNewEvidence
+		payload.SessionRefreshes = m.SessionRefreshes
+		payload.SessionRefreshReasons = m.SessionRefreshReasons
 	}
 	return json.Marshal(payload)
 }

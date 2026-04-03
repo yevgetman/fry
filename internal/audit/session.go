@@ -17,25 +17,31 @@ var (
 )
 
 type sessionContinuity struct {
-	engineName string
-	path       string
-	id         string
+	engineName  string
+	role        string
+	path        string
+	id          string
+	callCount   int
+	promptBytes int
+	tokenTotal  int
+	refreshes   int
 }
 
 func newAuditSessionContinuity(projectDir string, sprintNum int, engineName string) *sessionContinuity {
-	return newSessionContinuity(engineName, auditSessionPath(projectDir, sprintNum))
+	return newSessionContinuity(engineName, "audit", auditSessionPath(projectDir, sprintNum))
 }
 
 func newFixSessionContinuity(projectDir string, sprintNum, cycle int, engineName string) *sessionContinuity {
-	return newSessionContinuity(engineName, fixSessionPath(projectDir, sprintNum, cycle))
+	return newSessionContinuity(engineName, "fix", fixSessionPath(projectDir, sprintNum, cycle))
 }
 
-func newSessionContinuity(engineName, path string) *sessionContinuity {
+func newSessionContinuity(engineName, role, path string) *sessionContinuity {
 	if !supportsSessionContinuity(engineName) {
 		return nil
 	}
 	return &sessionContinuity{
 		engineName: strings.ToLower(strings.TrimSpace(engineName)),
+		role:       strings.ToLower(strings.TrimSpace(role)),
 		path:       path,
 		id:         loadSessionID(path),
 	}
@@ -77,7 +83,73 @@ func (s *sessionContinuity) Clear() {
 		return
 	}
 	s.id = ""
+	s.callCount = 0
+	s.promptBytes = 0
+	s.tokenTotal = 0
 	_ = os.Remove(s.path)
+}
+
+type sessionBudget struct {
+	MaxCalls       int
+	MaxPromptBytes int
+	MaxTokens      int
+	MaxCarry       int
+}
+
+func sessionBudgetForRole(role string) sessionBudget {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "fix":
+		return sessionBudget{
+			MaxCalls:       config.FixSessionMaxCalls,
+			MaxPromptBytes: config.FixSessionMaxPromptBytes,
+			MaxTokens:      config.FixSessionMaxTokens,
+			MaxCarry:       config.FixSessionMaxCarry,
+		}
+	default:
+		return sessionBudget{
+			MaxCalls:       config.AuditSessionMaxCalls,
+			MaxPromptBytes: config.AuditSessionMaxPromptBytes,
+			MaxTokens:      config.AuditSessionMaxTokens,
+			MaxCarry:       config.AuditSessionMaxCarry,
+		}
+	}
+}
+
+func (s *sessionContinuity) MaybeRefresh(carryForwardCount int) string {
+	if s == nil || s.id == "" {
+		return ""
+	}
+
+	budget := sessionBudgetForRole(s.role)
+	var reasons []string
+	if budget.MaxCalls > 0 && s.callCount >= budget.MaxCalls {
+		reasons = append(reasons, fmt.Sprintf("call budget reached (%d)", s.callCount))
+	}
+	if budget.MaxPromptBytes > 0 && s.promptBytes >= budget.MaxPromptBytes {
+		reasons = append(reasons, fmt.Sprintf("prompt budget reached (%d bytes)", s.promptBytes))
+	}
+	if budget.MaxTokens > 0 && s.tokenTotal >= budget.MaxTokens {
+		reasons = append(reasons, fmt.Sprintf("token budget reached (%d tokens)", s.tokenTotal))
+	}
+	if budget.MaxCarry > 0 && carryForwardCount > budget.MaxCarry {
+		reasons = append(reasons, fmt.Sprintf("carry-forward set too large (%d findings)", carryForwardCount))
+	}
+	if len(reasons) == 0 {
+		return ""
+	}
+
+	s.refreshes++
+	s.Clear()
+	return strings.Join(reasons, "; ")
+}
+
+func (s *sessionContinuity) RecordCall(promptBytes, tokenTotal int) {
+	if s == nil {
+		return
+	}
+	s.callCount++
+	s.promptBytes += promptBytes
+	s.tokenTotal += tokenTotal
 }
 
 func cleanupAuditSessions(projectDir string, sprintNum int) error {

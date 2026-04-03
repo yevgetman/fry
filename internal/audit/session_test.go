@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 )
 
@@ -74,4 +75,57 @@ func TestAgentTranscriptNormalizesStructuredOutput(t *testing.T) {
 	assert.Contains(t, codexTranscript, "Recovered verification summary")
 	assert.Contains(t, claudeTranscript, "assistant")
 	assert.Contains(t, codexTranscript, "assistant")
+}
+
+func TestSessionContinuityMaybeRefreshCallBudget(t *testing.T) {
+	t.Parallel()
+
+	session := &sessionContinuity{
+		engineName: "codex",
+		role:       "audit",
+		id:         "019d5066-f512-7bc1-aba8-e45cf2fb9a84",
+		callCount:  3,
+	}
+
+	reason := session.MaybeRefresh(0)
+
+	require.Equal(t, "call budget reached (3)", reason)
+	assert.Equal(t, "", session.id)
+	assert.Equal(t, 0, session.callCount)
+	assert.Equal(t, 1, session.refreshes)
+}
+
+func TestSessionContinuityMaybeRefreshTokenAndCarryBudget(t *testing.T) {
+	t.Parallel()
+
+	session := &sessionContinuity{
+		engineName:  "claude",
+		role:        "fix",
+		id:          "34429d2b-d11c-4b8b-b84a-896dd59bcc80",
+		promptBytes: 32_000,
+		tokenTotal:  16_000,
+	}
+
+	reason := session.MaybeRefresh(config.FixSessionMaxCarry + 1)
+
+	assert.Contains(t, reason, "prompt budget reached (32000 bytes)")
+	assert.Contains(t, reason, "token budget reached (16000 tokens)")
+	assert.Contains(t, reason, "carry-forward set too large")
+	assert.Equal(t, "", session.id)
+	assert.Equal(t, 0, session.promptBytes)
+	assert.Equal(t, 0, session.tokenTotal)
+	assert.Equal(t, 1, session.refreshes)
+}
+
+func TestSessionContinuityRecordCallAccumulatesUsage(t *testing.T) {
+	t.Parallel()
+
+	session := &sessionContinuity{}
+
+	session.RecordCall(125, 42)
+	session.RecordCall(75, 8)
+
+	assert.Equal(t, 2, session.callCount)
+	assert.Equal(t, 200, session.promptBytes)
+	assert.Equal(t, 50, session.tokenTotal)
 }

@@ -640,12 +640,13 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **Fix history:** Later fix iterations receive a concise history of earlier failed attempts against the same findings.
 - **Unchanged-code churn suppression:** Fry fingerprints finding-related file state across cycles. If the auditor re-raises the same issue family against unchanged code, Fry merges it back into the existing active issue or suppresses the reopening unless the finding includes explicit `**New Evidence:**`.
 - **Blocker separation:** Fry distinguishes `product_defect` findings from `environment_blocker`, `harness_blocker`, and `external_dependency_blocker` findings. Blocker findings stay out of the normal code-fix loop and are surfaced as blocked audit outcomes with preserved blocker details.
+- **Budgeted session continuity:** On Claude and Codex, audit-to-audit and fix-to-fix calls reuse same-role sessions until per-role call, prompt-size, token, or carry-forward budgets are exceeded. Fry then refreshes the session and prepends a compact carry-forward summary so the audit can continue without dragging unbounded context forward.
 - When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
 - Relevant intentional divergences from `.fry/deviation-log.md` are injected into audit prompts so the auditor does not flag accepted design differences as defects.
 - If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.
 - **Reopen detection:** If a previously resolved finding is re-raised under different wording (same file family and similar description), Fry suppresses it as a probable reopening rather than treating it as new. Unchanged-code reopenings must include explicit `**New Evidence:**` or they are suppressed as churn; severity escalation only bypasses suppression when the artifact fingerprint changed (a real regression). Suppressed reopenings are logged and shown in the monitor dashboard.
-- **Session continuity:** On Claude and Codex, audit-to-audit and fix-to-fix calls reuse same-role session IDs within the sprint audit. Verify remains stateless.
-- Fry writes per-sprint audit metrics to `.fry/build-logs/sprintN_audit_metrics.json`.
+- **Session continuity:** Verify remains stateless even when audit and fix sessions are being reused or refreshed.
+- Fry writes per-sprint audit metrics to `.fry/build-logs/sprintN_audit_metrics.json`, including churn counters, verify yield, and same-role session refresh counts.
 
 Read audit findings:
 

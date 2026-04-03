@@ -69,17 +69,18 @@ func fixIncludesLow(ep *epic.Epic) bool {
 }
 
 type AuditOpts struct {
-	ProjectDir string
-	Sprint     *epic.Sprint
-	Epic       *epic.Epic
-	Engine     engine.Engine
-	Complexity ComplexityTier
-	GitDiff    string                 // initial diff; used if DiffFn is nil
-	DiffFn     func() (string, error) // if set, called before each audit pass to refresh the diff
-	ProgressFn func(AuditProgress)
-	Verbose    bool
-	Mode       string
-	Stdout     io.Writer // optional; defaults to os.Stdout when Verbose is true
+	ProjectDir          string
+	Sprint              *epic.Sprint
+	Epic                *epic.Epic
+	Engine              engine.Engine
+	Complexity          ComplexityTier
+	GitDiff             string                 // initial diff; used if DiffFn is nil
+	DiffFn              func() (string, error) // if set, called before each audit pass to refresh the diff
+	ProgressFn          func(AuditProgress)
+	Verbose             bool
+	Mode                string
+	Stdout              io.Writer // optional; defaults to os.Stdout when Verbose is true
+	SessionCarryForward string
 }
 
 // AuditProgress describes the live state of a sprint audit cycle.
@@ -192,8 +193,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 		refreshDiff(&opts)
 
+		auditPromptOpts := opts
+		auditRefreshReason := ""
+		if auditSession != nil {
+			auditRefreshReason = auditSession.MaybeRefresh(len(filterUnresolved(knownFindings)))
+			if auditRefreshReason != "" {
+				auditPromptOpts.SessionCarryForward = buildSessionCarryForwardSummary(auditRefreshReason, filterUnresolved(knownFindings), fixHistory)
+				frylog.Log("  AUDIT: refreshing same-role audit session before cycle %d (%s)", cycle, auditRefreshReason)
+			}
+		}
+
 		// Build and write audit prompt (with known findings for verification on cycle 2+)
-		auditPrompt := buildAuditPrompt(opts, knownFindings, resolved)
+		auditPrompt := buildAuditPrompt(auditPromptOpts, knownFindings, resolved)
 		if err := writePromptFile(promptPath, auditPrompt); err != nil {
 			return nil, fmt.Errorf("run audit loop: write audit prompt: %w", err)
 		}
@@ -220,15 +231,20 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		auditPromptBytes := promptFileSize(promptPath)
 		auditStarted := time.Now()
 		auditOutput, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, auditLogPath, auditModel, engine.SessionAudit, auditSession)
+		auditTokens := tokenmetrics.ParseTokens(opts.Engine.Name(), auditOutput)
 		auditMetrics.Record(CallMetric{
-			SessionType: engine.SessionAudit,
-			Cycle:       cycle,
-			PromptBytes: auditPromptBytes,
-			OutputBytes: len(auditOutput),
-			DurationMs:  time.Since(auditStarted).Milliseconds(),
-			Model:       auditModel,
-			Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), auditOutput),
+			SessionType:          engine.SessionAudit,
+			Cycle:                cycle,
+			SessionRefreshReason: auditRefreshReason,
+			PromptBytes:          auditPromptBytes,
+			OutputBytes:          len(auditOutput),
+			DurationMs:           time.Since(auditStarted).Milliseconds(),
+			Model:                auditModel,
+			Tokens:               auditTokens,
 		})
+		if auditSession != nil {
+			auditSession.RecordCall(auditPromptBytes, auditTokens.Total)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -506,7 +522,16 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 			// Build and write fix prompt
 			fixContract := newFixContract(unresolved)
-			fixPrompt := buildAuditFixPrompt(opts, unresolved, fixHistory)
+			fixPromptOpts := opts
+			fixRefreshReason := ""
+			if fixSession != nil {
+				fixRefreshReason = fixSession.MaybeRefresh(len(unresolved))
+				if fixRefreshReason != "" {
+					fixPromptOpts.SessionCarryForward = buildSessionCarryForwardSummary(fixRefreshReason, unresolved, fixHistory)
+					frylog.Log("  AUDIT FIX: refreshing same-role fix session before cycle %d iteration %d (%s)", cycle, fixIter, fixRefreshReason)
+				}
+			}
+			fixPrompt := buildAuditFixPrompt(fixPromptOpts, unresolved, fixHistory)
 			if err := writePromptFile(promptPath, fixPrompt); err != nil {
 				return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
 			}
@@ -535,23 +560,28 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			} else {
 				diffAssessment = assessFixDiff(fixContract, diffText, postFixFingerprint, fixOutput)
 			}
+			fixTokens := tokenmetrics.ParseTokens(opts.Engine.Name(), fixOutput)
 			auditMetrics.Record(CallMetric{
-				SessionType:         engine.SessionAuditFix,
-				Cycle:               cycle,
-				Iteration:           fixIter,
-				IssueIDs:            fixContract.IssueIDs(),
-				PromptBytes:         fixPromptBytes,
-				OutputBytes:         len(fixOutput),
-				DurationMs:          time.Since(fixStarted).Milliseconds(),
-				Model:               fixModel,
-				WasNoOp:             fixWasNoOp,
-				DeclaredTargetFiles: fixContract.TargetFiles(),
-				ChangedFiles:        diffAssessment.ChangedFiles,
-				DiffClassification:  diffAssessment.DiffClassification,
-				ValidationResult:    diffAssessment.ValidationResult,
-				AlreadyFixedClaim:   diffAssessment.AlreadyFixedClaim,
-				Tokens:              tokenmetrics.ParseTokens(opts.Engine.Name(), fixOutput),
+				SessionType:          engine.SessionAuditFix,
+				Cycle:                cycle,
+				Iteration:            fixIter,
+				SessionRefreshReason: fixRefreshReason,
+				IssueIDs:             fixContract.IssueIDs(),
+				PromptBytes:          fixPromptBytes,
+				OutputBytes:          len(fixOutput),
+				DurationMs:           time.Since(fixStarted).Milliseconds(),
+				Model:                fixModel,
+				WasNoOp:              fixWasNoOp,
+				DeclaredTargetFiles:  fixContract.TargetFiles(),
+				ChangedFiles:         diffAssessment.ChangedFiles,
+				DiffClassification:   diffAssessment.DiffClassification,
+				ValidationResult:     diffAssessment.ValidationResult,
+				AlreadyFixedClaim:    diffAssessment.AlreadyFixedClaim,
+				Tokens:               fixTokens,
 			})
+			if fixSession != nil {
+				fixSession.RecordCall(fixPromptBytes, fixTokens.Total)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -929,6 +959,11 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "# SPRINT AUDIT — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name)
+	if carry := strings.TrimSpace(opts.SessionCarryForward); carry != "" {
+		b.WriteString("## Session Refresh Summary\n\n")
+		b.WriteString(carry)
+		b.WriteString("\n\n")
+	}
 
 	b.WriteString("## Your Role\n")
 	if opts.Mode == "writing" {
@@ -1135,6 +1170,11 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory
 	contract := newFixContract(findings)
 
 	fmt.Fprintf(&b, "# AUDIT FIX — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name)
+	if carry := strings.TrimSpace(opts.SessionCarryForward); carry != "" {
+		b.WriteString("## Session Refresh Summary\n\n")
+		b.WriteString(carry)
+		b.WriteString("\n\n")
+	}
 	skipLow := !fixIncludesLow(opts.Epic)
 	if opts.Mode == "writing" {
 		b.WriteString("The content audit found issues. Fix ONLY the issues listed below.\n")

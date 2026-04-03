@@ -41,11 +41,21 @@ func TestAuditMetricsMarshalJSON(t *testing.T) {
 
 	metrics := &AuditMetrics{
 		Calls: []CallMetric{
-			{SessionType: engine.SessionAuditFix, PromptBytes: 120, DurationMs: 20, WasNoOp: true},
+			{
+				SessionType:          engine.SessionAuditFix,
+				PromptBytes:          120,
+				DurationMs:           20,
+				WasNoOp:              true,
+				SessionRefreshReason: "call budget reached (4)",
+			},
 		},
 		OuterCycles:       2,
 		ContentComplexity: ComplexityModerate,
 		FinalFindingCount: 1,
+		SessionRefreshes:  1,
+		SessionRefreshReasons: map[string]int{
+			"call budget reached (4)": 1,
+		},
 	}
 
 	data, err := json.Marshal(metrics)
@@ -62,6 +72,9 @@ func TestAuditMetricsMarshalJSON(t *testing.T) {
 	assert.Equal(t, float64(0), summary["repeated_unchanged_findings"])
 	assert.Equal(t, float64(0), summary["suppressed_unchanged_findings"])
 	assert.Equal(t, float64(0), summary["reopened_with_new_evidence"])
+	assert.Equal(t, float64(1), summary["session_refreshes"])
+	assert.Equal(t, float64(1), payload["session_refreshes"])
+	assert.Equal(t, float64(1), payload["session_refresh_reasons"].(map[string]any)["call budget reached (4)"])
 }
 
 func TestCallMetricTokenParsing(t *testing.T) {
@@ -74,4 +87,20 @@ func TestCallMetricTokenParsing(t *testing.T) {
 	assert.Equal(t, 14, claude.Total)
 	assert.Equal(t, 10, codex.Total)
 	assert.Equal(t, 0, ollama.Total)
+}
+
+func TestAuditMetricsRecordTracksSessionRefreshes(t *testing.T) {
+	t.Parallel()
+
+	metrics := &AuditMetrics{}
+
+	metrics.Record(CallMetric{SessionType: engine.SessionAudit, SessionRefreshReason: "call budget reached (3)"})
+	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, SessionRefreshReason: "call budget reached (3)"})
+	metrics.Record(CallMetric{SessionType: engine.SessionAuditVerify})
+
+	snapshot := metrics.Snapshot()
+
+	assert.Equal(t, 2, metrics.SessionRefreshes)
+	assert.Equal(t, 2, metrics.SessionRefreshReasons["call budget reached (3)"])
+	assert.Equal(t, 2, snapshot.SessionRefreshes)
 }

@@ -77,7 +77,8 @@ fry/
 │   │   ├── fixhistory.go        # Per-finding fix-attempt history for audit fix prompts
 │   │   ├── metrics.go           # Per-call audit metrics and summaries
 │   │   ├── recovery.go          # Structured stdout/log recovery for audit outputs
-│   │   └── session.go           # Same-role audit session continuity (Claude/Codex) + session file management
+│   │   ├── session.go           # Same-role audit session continuity budgets, refresh logic, and session file management
+│   │   └── session_summary.go   # Compact carry-forward summaries used when audit/fix sessions refresh
 │   ├── triage/
 │   │   ├── types.go             # Complexity, TriageDecision types
 │   │   ├── triage.go            # Classify (single LLM call), ParseClassification, prompt builder
@@ -189,7 +190,7 @@ fry/
 | `deferred-failures.md` | Sanity check failures below threshold, deferred to build audit |
 | `sprint-audit.txt` | Current sprint's audit findings (agent-written or recovered from structured stdout) |
 | `audit-prompt.md` | Assembled audit, fix, or verify prompt |
-| `sessions/` | Transient same-role audit session IDs for Claude/Codex continuity |
+| `sessions/` | Transient same-role audit session IDs for Claude/Codex continuity; refreshed automatically when continuity budgets are exceeded |
 | `validation-checklist.md` | Build-audit checklist synthesized from deferred failure analysis |
 | `review-prompt.md` | Assembled review prompt |
 | `summary-prompt.md` | Assembled summary prompt |
