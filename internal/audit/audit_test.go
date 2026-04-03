@@ -436,6 +436,103 @@ func TestGroupByCycle(t *testing.T) {
 	assert.Len(t, groups[2].findings, 1)
 }
 
+func TestClusterFixFindingsGroupsBySharedScopeAndTheme(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{
+			Location:       "internal/api/handler.go:12",
+			Description:    "Missing input validation on create endpoint",
+			Severity:       "HIGH",
+			RecommendedFix: "Validate required fields before writing to storage.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/api/handler.go:44",
+			Description:    "Create endpoint still accepts malformed payloads without validation",
+			Severity:       "MODERATE",
+			RecommendedFix: "Reuse the same validation guard before decoding.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/billing/worker.go:19",
+			Description:    "Billing retry loop ignores context cancellation",
+			Severity:       "HIGH",
+			RecommendedFix: "Stop retrying once the worker context is canceled.",
+			OriginCycle:    2,
+		},
+	}
+
+	clusters := clusterFixFindings(findings)
+	require.Len(t, clusters, 2)
+	assert.Len(t, clusters[0].Findings, 2)
+	assert.Equal(t, "internal/api/handler: validation endpoint", clusters[0].Label)
+	assert.Contains(t, clusters[0].Reason, "shared scope")
+	assert.Contains(t, clusters[0].Reason, "requirement theme")
+	assert.Equal(t, []string{"internal/api/handler.go"}, clusters[0].TargetFiles)
+	assert.Len(t, clusters[1].Findings, 1)
+}
+
+func TestOrderFindingsByClusterKeepsClusterMembersAdjacent(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{
+			Location:       "internal/api/handler.go:12",
+			Description:    "Missing input validation on create endpoint",
+			Severity:       "HIGH",
+			RecommendedFix: "Validate required fields before writing to storage.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/billing/worker.go:19",
+			Description:    "Billing retry loop ignores context cancellation",
+			Severity:       "HIGH",
+			RecommendedFix: "Stop retrying once the worker context is canceled.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/api/handler.go:44",
+			Description:    "Create endpoint still accepts malformed payloads without validation",
+			Severity:       "MODERATE",
+			RecommendedFix: "Reuse the same validation guard before decoding.",
+			OriginCycle:    1,
+		},
+	}
+
+	ordered := orderFindingsByCluster(findings)
+	require.Len(t, ordered, 3)
+	assert.Equal(t, "internal/api/handler.go:12", ordered[0].Location)
+	assert.Equal(t, "internal/api/handler.go:44", ordered[1].Location)
+	assert.Equal(t, "internal/billing/worker.go:19", ordered[2].Location)
+}
+
+func TestClusterFixFindingsGroupsAcrossSharedSubsystem(t *testing.T) {
+	t.Parallel()
+
+	findings := []Finding{
+		{
+			Location:       "internal/api/create.go:12",
+			Description:    "Create flow skips tenant validation",
+			Severity:       "HIGH",
+			RecommendedFix: "Run tenant validation before writing the record.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/api/update.go:21",
+			Description:    "Update flow also skips tenant validation",
+			Severity:       "HIGH",
+			RecommendedFix: "Reuse the tenant validation guard in the update path.",
+			OriginCycle:    1,
+		},
+	}
+
+	clusters := clusterFixFindings(findings)
+	require.Len(t, clusters, 1)
+	assert.Equal(t, "internal/api: validation tenant", clusters[0].Label)
+	assert.Equal(t, []string{"internal/api/create.go", "internal/api/update.go"}, clusters[0].TargetFiles)
+}
+
 // --- filterUnresolved tests ---
 
 func TestFilterUnresolved(t *testing.T) {
@@ -745,27 +842,49 @@ func TestAuditFixPromptFIFO(t *testing.T) {
 	}
 	prompt := buildAuditFixPrompt(opts, findings, nil)
 
+	assert.Contains(t, prompt, "## Remediation Clusters")
 	assert.Contains(t, prompt, "## Issues to Fix")
-	assert.Contains(t, prompt, "oldest issues first")
-	assert.Contains(t, prompt, "priority order")
+	assert.Contains(t, prompt, "Clusters are ordered oldest first")
 	assert.Contains(t, prompt, "Old issue")
 	assert.Contains(t, prompt, "New issue")
-	// Multiple cycles → shows cycle headers
-	assert.Contains(t, prompt, "### From Audit Cycle 1")
-	assert.Contains(t, prompt, "### From Audit Cycle 2")
+	assert.Contains(t, prompt, "- **Origin Cycle:** 1")
+	assert.Contains(t, prompt, "- **Origin Cycle:** 2")
 }
 
-func TestAuditFixPromptSingleCycleNoCycleHeader(t *testing.T) {
+func TestAuditFixPromptGroupsRelatedIssuesIntoClusters(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	findings := []Finding{
-		{Description: "Issue A", Severity: "HIGH", OriginCycle: 1},
-		{Description: "Issue B", Severity: "MODERATE", OriginCycle: 1},
+		{
+			Location:       "internal/api/handler.go:12",
+			Description:    "Missing input validation on create endpoint",
+			Severity:       "HIGH",
+			RecommendedFix: "Validate required fields before writing to storage.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/api/handler.go:44",
+			Description:    "Create endpoint still accepts malformed payloads without validation",
+			Severity:       "MODERATE",
+			RecommendedFix: "Reuse the same validation guard before decoding.",
+			OriginCycle:    1,
+		},
+		{
+			Location:       "internal/billing/worker.go:19",
+			Description:    "Billing retry loop ignores context cancellation",
+			Severity:       "HIGH",
+			RecommendedFix: "Stop retrying once the worker context is canceled.",
+			OriginCycle:    2,
+		},
 	}
 	prompt := buildAuditFixPrompt(opts, findings, nil)
 
-	assert.NotContains(t, prompt, "### From Audit Cycle")
+	assert.Contains(t, prompt, "### Cluster 1:")
+	assert.Contains(t, prompt, "### Cluster 2:")
+	assert.Contains(t, prompt, "**Issue IDs:** 1, 2")
+	assert.Contains(t, prompt, "- **Cluster:** Cluster 1")
+	assert.Contains(t, prompt, "- **Cluster:** Cluster 2")
 }
 
 func TestAuditFixPromptWritingMode(t *testing.T) {
@@ -803,6 +922,7 @@ func TestAuditFixPromptIncludesFixContract(t *testing.T) {
 	}}, nil)
 
 	assert.Contains(t, prompt, "## Fix Contract")
+	assert.Contains(t, prompt, "## Remediation Clusters")
 	assert.Contains(t, prompt, "### Issue 1 Contract")
 	assert.Contains(t, prompt, "**Target Files:** internal/audit/audit.go")
 	assert.Contains(t, prompt, "already fixed")

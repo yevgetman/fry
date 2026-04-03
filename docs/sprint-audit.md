@@ -1,6 +1,6 @@
 # Sprint Audit
 
-The sprint audit is a semantic quality gate that runs by default after each sprint passes sanity checks. It uses a two-level loop: an outer audit cycle discovers issues, and an inner fix loop resolves them before re-auditing. Issues are tracked individually across cycles and prioritized FIFO (oldest first). The prompt adapts to sprint complexity, intentional deviations, and prior failed fix attempts so the loop spends less time rediscovering the same problems. This complements the syntactic sanity check system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
+The sprint audit is a semantic quality gate that runs by default after each sprint passes sanity checks. It uses a two-level loop: an outer audit cycle discovers issues, and an inner fix loop resolves them before re-auditing. Issues are tracked individually across cycles and prioritized FIFO (oldest first), but Fry now clusters related findings by remediation scope before handing them to the fix agent so one pass can address a coherent defect family instead of a flat stream of unrelated items. The prompt adapts to sprint complexity, intentional deviations, and prior failed fix attempts so the loop spends less time rediscovering the same problems. This complements the syntactic sanity check system (`@check_file`, `@check_cmd`, etc.) with deeper, AI-driven review.
 
 ## How It Works
 
@@ -54,7 +54,7 @@ Each outer cycle runs the **audit agent** to review the codebase. On cycle 2+, t
 
 For each audit report, the **fix agent** runs repeatedly until all issues above LOW severity from that report are resolved:
 
-1. **Fix agent** -- reads the structured issue list (FIFO ordered, oldest first) and makes minimal code changes. It is instructed to focus exclusively on the listed issues and not search for new ones.
+1. **Fix agent** -- reads the structured issue list (FIFO ordered, oldest first) and the remediation clusters Fry derived from shared file family, subsystem, and requirement theme. It is instructed to focus exclusively on the listed issues, address each cluster coherently, and not search for new ones.
 2. **Verify agent** -- checks whether the specific issues have been resolved without modifying code. Reports each issue with a concrete outcome such as `RESOLVED`, `PARTIALLY_RESOLVED`, `BEHAVIOR_UNCHANGED`, `EVIDENCE_INCONCLUSIVE`, `BLOCKED`, or `STILL_PRESENT`.
 3. If all actionable issues are resolved, the inner loop breaks and triggers a re-audit.
 4. If no new issues are resolved for 2 consecutive fix iterations, the inner loop breaks (stale detection).
@@ -65,6 +65,7 @@ The inner loop carries forward structured history so each fix iteration has more
 
 - **No-op detection** -- Fry fingerprints the worktree before and after each fix pass. If the fix agent made no material file changes (excluding progress artifacts), Fry logs a no-op, skips verify, increments the stale counter, and moves directly to the next fix attempt or re-audit.
 - **Fix contract validation** -- Every fix pass carries a Fry-owned diff contract: numbered issue IDs, declared target files derived from the findings, and expected evidence. Empty diffs, comment-only diffs, and out-of-scope diffs are rejected before they count as real remediation attempts.
+- **Remediation clustering** -- Before each fix pass, Fry groups related findings into remediation clusters using shared file families, shared subsystem paths, and overlapping requirement-theme tokens. Fix prompts target those clusters first, while individual issue IDs remain stable for diff validation and verify.
 - **Already-fixed verification routing** -- If the fix agent claims an issue is already fixed and produces no behavioral diff, Fry routes that claim to verify instead of counting the pass as a normal remediation attempt.
 - **Behavior-unchanged verification** -- Verify can explicitly report `BEHAVIOR_UNCHANGED` when a remediation left the executable logic path untouched. The next fix prompt then carries issue-specific guidance with the unchanged path summary and a direct instruction not to answer with comments, rationale-only edits, or other non-behavioral changes.
 - **Fix attempt history** -- The fix prompt includes concise summaries of prior attempts that targeted the same findings, including whether the attempt was a no-op, which issues remained, and any verification notes.
@@ -98,6 +99,21 @@ When the re-audit runs (cycle 2+), findings are classified as:
 - **Repeated unchanged** -- same issue family against unchanged code; merged back into the existing active issue instead of re-queued as brand-new work
 
 This ensures older issues are always addressed before newer ones, avoids collapsing distinct same-worded issues in different files, and reduces wasted fix effort on re-discovering known issues.
+
+### Remediation clusters
+
+Each fix batch is rendered in two layers:
+
+- **Cluster summary** -- a short heading such as `internal/api: validation payload` plus the grouped issue IDs and target files
+- **Issue detail** -- the full per-finding contract entry that verify will later check one-by-one
+
+The clustering pass is intentionally conservative. Fry only groups findings when they share both a plausible remediation theme and a compatible scope signal:
+
+- **Shared file family** -- same path family such as `internal/api/handler`
+- **Shared subsystem** -- same leading path scope such as `internal/api`
+- **Shared requirement theme** -- overlapping significant tokens from the description and recommended fix text
+
+This keeps traceability at the issue level while giving the fix agent a more coherent batch to work on.
 
 ### Blocker categories
 

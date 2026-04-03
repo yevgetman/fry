@@ -513,7 +513,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				return nil, err
 			}
 
-			unresolved := filterFixableProductFindings(activeFindings, includeLow)
+			unresolved := orderFindingsByCluster(filterFixableProductFindings(activeFindings, includeLow))
 			if len(unresolved) == 0 {
 				break
 			}
@@ -565,6 +565,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			if cycleFixBatchLimit > 0 && len(unresolved) > cycleFixBatchLimit {
 				unresolved = append([]Finding(nil), unresolved[:cycleFixBatchLimit]...)
 			}
+			targetClusters := clusterFixFindings(unresolved)
 
 			emitAuditProgress(opts.ProgressFn, AuditProgress{
 				Stage:        "fixing",
@@ -581,8 +582,8 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			})
 
 			fixModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditFix)
-			frylog.Log("  AUDIT FIX  cycle %d  fix %d/%d — targeting %d issues (oldest first)  engine=%s  model=%s",
-				cycle, fixIter, maxInner, len(unresolved), opts.Engine.Name(), fixModel)
+			frylog.Log("  AUDIT FIX  cycle %d  fix %d/%d — targeting %d issues across %d cluster(s)  engine=%s  model=%s",
+				cycle, fixIter, maxInner, len(unresolved), len(targetClusters), opts.Engine.Name(), fixModel)
 
 			// Build and write fix prompt
 			fixContract := newFixContract(unresolved)
@@ -1364,25 +1365,48 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory
 	b.WriteString(opts.Sprint.Prompt)
 	b.WriteString("\n\n")
 
-	b.WriteString("## Issues to Fix\n\n")
-	b.WriteString("Issues are listed in priority order (oldest first, highest severity within age group).\n\n")
+	clusters := clusterFixFindings(findings)
+	issueIDsByKey := make(map[string]int, len(contract.Issues))
+	for _, issue := range contract.Issues {
+		issueIDsByKey[issue.FindingKey] = issue.ID
+	}
 
-	// Group by origin cycle for clarity
-	groups := groupByCycle(findings)
-	for _, group := range groups {
-		if len(groups) > 1 {
-			fmt.Fprintf(&b, "### From Audit Cycle %d\n\n", group.cycle)
+	b.WriteString("## Remediation Clusters\n\n")
+	b.WriteString("Clusters are ordered oldest first. Address each cluster as a coherent remediation batch while preserving the per-issue contracts below.\n\n")
+	for _, cluster := range clusters {
+		fmt.Fprintf(&b, "### Cluster %d: %s\n", cluster.ID, cluster.Label)
+		if cluster.Reason != "" {
+			fmt.Fprintf(&b, "- **Why Grouped:** %s\n", cluster.Reason)
 		}
-		for _, f := range group.findings {
-			issueID := 0
-			for _, issue := range contract.Issues {
-				if issue.FindingKey == f.key() {
-					issueID = issue.ID
-					break
-				}
+		if len(cluster.TargetFiles) > 0 {
+			fmt.Fprintf(&b, "- **Target Files:** %s\n", strings.Join(cluster.TargetFiles, ", "))
+		}
+		var clusterIssueIDs []string
+		for _, finding := range cluster.Findings {
+			if issueID := issueIDsByKey[finding.key()]; issueID > 0 {
+				clusterIssueIDs = append(clusterIssueIDs, strconv.Itoa(issueID))
 			}
+		}
+		if len(clusterIssueIDs) > 0 {
+			fmt.Fprintf(&b, "- **Issue IDs:** %s\n", strings.Join(clusterIssueIDs, ", "))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("## Issues to Fix\n\n")
+	b.WriteString("Issue details stay fully traceable for verification. Within each cluster, preserve issue order.\n\n")
+	for _, cluster := range clusters {
+		fmt.Fprintf(&b, "### Cluster %d: %s\n\n", cluster.ID, cluster.Label)
+		for _, f := range cluster.Findings {
+			issueID := issueIDsByKey[f.key()]
 			if issueID > 0 {
 				fmt.Fprintf(&b, "### Issue %d\n", issueID)
+			} else {
+				b.WriteString("### Issue\n")
+			}
+			fmt.Fprintf(&b, "- **Cluster:** Cluster %d\n", cluster.ID)
+			if f.OriginCycle > 0 {
+				fmt.Fprintf(&b, "- **Origin Cycle:** %d\n", f.OriginCycle)
 			}
 			if f.Location != "" {
 				fmt.Fprintf(&b, "- **Location:** %s\n", f.Location)
