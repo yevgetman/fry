@@ -57,7 +57,7 @@ A single agent carries out the work to complete a sprint (although there is a pa
 
 Once a sprint is complete, [sanity checks](docs/sanity-checks.md) run to verify the deliverables. If any checks fail, an [alignment system](docs/alignment.md) deploys to fix the issues.
 
-If/when all sanity checks pass, an [audit process](docs/sprint-audit.md) is deployed to ensure the work has been completed with no bugs, edge cases covered, etc. — basically that it was done well. The audit process is layered and iterative, making multiple passes (based on effort level) to ensure issues are fixed on a first-in-first-out basis before a follow-up audit is run to verify and/or surface new issues. The process repeats until the exit condition is met.
+If/when all sanity checks pass, an [audit process](docs/sprint-audit.md) is deployed to ensure the work has been completed with no bugs, edge cases covered, etc. — basically that it was done well. The audit process is layered and iterative, making multiple passes (based on effort level) to ensure issues are fixed on a first-in-first-out basis before a follow-up audit is run to verify and/or surface new issues. Fix passes are validated against a scoped diff contract so empty, comment-only, and out-of-scope edits do not count as real remediation. The process repeats until the exit condition is met.
 
 The build continues in this manner until complete.
 
@@ -114,7 +114,7 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Promise tokens** -- `===PROMISE: TOKEN===` signals sprint completion
 - **Sanity checks** -- machine-executable checks run after each sprint with a configurable failure threshold (`@max_fail_percent`, default 20%) — minor failures are deferred rather than blocking the build
 - **Alignment** -- automatic re-runs with targeted fix prompts on sanity check failure; `--resume` picks up where a failed build left off with boosted alignment attempts; `--continue` uses an LLM agent to analyze build state and auto-resume (automatically restores the build mode from the previous run)
-- **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop, architecture-aware context from `.fry/codebase.md` when available, and fallback recovery when the agent prints structured findings but forgets to write `.fry/sprint-audit.txt` (CRITICAL/HIGH block the build; MODERATE is advisory)
+- **Sprint audit** -- post-sprint semantic review by a separate AI agent, with automatic fix loop, diff-contract validation for fix passes, architecture-aware context from `.fry/codebase.md` when available, and fallback recovery when the agent prints structured findings but forgets to write `.fry/sprint-audit.txt` (CRITICAL/HIGH block the build; MODERATE is advisory)
 - **Build audit** -- final holistic codebase audit after the entire epic completes, with iterative remediation and the same report-recovery fallback for missing `build-audit.md`
 - **Build summary** -- comprehensive `build-summary.md` generated after all sprints, covering what was built, events, audit findings, and advisories
 - **Build archiving** -- on successful full builds, `.fry/` and root-level outputs are auto-archived to `.fry-archive/`; run `fry clean` to archive manually

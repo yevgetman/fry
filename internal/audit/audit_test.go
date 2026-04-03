@@ -754,6 +754,24 @@ func TestAuditFixPromptIncludesCodebaseContext(t *testing.T) {
 	assert.Contains(t, prompt, "Preserve unrelated behavior")
 }
 
+func TestAuditFixPromptIncludesFixContract(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	prompt := buildAuditFixPrompt(opts, []Finding{{
+		Location:       "internal/audit/audit.go:123",
+		Description:    "missing nil guard",
+		Severity:       "HIGH",
+		RecommendedFix: "Add the nil guard before dereference.",
+	}}, nil)
+
+	assert.Contains(t, prompt, "## Fix Contract")
+	assert.Contains(t, prompt, "### Issue 1 Contract")
+	assert.Contains(t, prompt, "**Target Files:** internal/audit/audit.go")
+	assert.Contains(t, prompt, "already fixed")
+	assert.Contains(t, prompt, "### Issue 1")
+}
+
 func TestBuildVerifyPrompt(t *testing.T) {
 	t.Parallel()
 

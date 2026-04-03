@@ -9,16 +9,22 @@ import (
 
 // CallMetric captures the observable outcome of one audit, fix, or verify call.
 type CallMetric struct {
-	SessionType engine.SessionType      `json:"session_type"`
-	Cycle       int                     `json:"cycle"`
-	Iteration   int                     `json:"iteration"`
-	PromptBytes int                     `json:"prompt_bytes"`
-	OutputBytes int                     `json:"output_bytes"`
-	DurationMs  int64                   `json:"duration_ms"`
-	Model       string                  `json:"model,omitempty"`
-	WasNoOp     bool                    `json:"was_no_op,omitempty"`
-	Resolutions int                     `json:"resolutions,omitempty"`
-	Tokens      tokenmetrics.TokenUsage `json:"tokens"`
+	SessionType         engine.SessionType      `json:"session_type"`
+	Cycle               int                     `json:"cycle"`
+	Iteration           int                     `json:"iteration"`
+	IssueIDs            []int                   `json:"issue_ids,omitempty"`
+	PromptBytes         int                     `json:"prompt_bytes"`
+	OutputBytes         int                     `json:"output_bytes"`
+	DurationMs          int64                   `json:"duration_ms"`
+	Model               string                  `json:"model,omitempty"`
+	WasNoOp             bool                    `json:"was_no_op,omitempty"`
+	DeclaredTargetFiles []string                `json:"declared_target_files,omitempty"`
+	ChangedFiles        []string                `json:"changed_files,omitempty"`
+	DiffClassification  string                  `json:"diff_classification,omitempty"`
+	ValidationResult    string                  `json:"validation_result,omitempty"`
+	AlreadyFixedClaim   bool                    `json:"already_fixed_claim,omitempty"`
+	Resolutions         int                     `json:"resolutions,omitempty"`
+	Tokens              tokenmetrics.TokenUsage `json:"tokens"`
 }
 
 // AuditMetricsSnapshot is the small, monitor-friendly subset surfaced in build status.
@@ -26,6 +32,8 @@ type AuditMetricsSnapshot struct {
 	TotalCalls        int     `json:"total_calls"`
 	DurationMs        int64   `json:"duration_ms"`
 	NoOpFixCalls      int     `json:"no_op_fix_calls"`
+	AcceptedFixCalls  int     `json:"accepted_fix_calls"`
+	RejectedFixCalls  int     `json:"rejected_fix_calls"`
 	NoOpRate          float64 `json:"no_op_rate"`
 	VerifyCalls       int     `json:"verify_calls"`
 	VerifyResolutions int     `json:"verify_resolutions"`
@@ -117,6 +125,32 @@ func (m *AuditMetrics) TotalVerifyCalls() int {
 	return total
 }
 
+func (m *AuditMetrics) TotalAcceptedFixCalls() int {
+	if m == nil {
+		return 0
+	}
+	total := 0
+	for _, call := range m.Calls {
+		if call.SessionType == engine.SessionAuditFix && call.ValidationResult == fixValidationAccepted {
+			total++
+		}
+	}
+	return total
+}
+
+func (m *AuditMetrics) TotalRejectedFixCalls() int {
+	if m == nil {
+		return 0
+	}
+	total := 0
+	for _, call := range m.Calls {
+		if call.SessionType == engine.SessionAuditFix && call.ValidationResult == fixValidationRejected {
+			total++
+		}
+	}
+	return total
+}
+
 func (m *AuditMetrics) TotalVerifyResolutions() int {
 	if m == nil {
 		return 0
@@ -154,6 +188,8 @@ func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 		TotalCalls:        m.TotalCalls(),
 		DurationMs:        m.TotalDurationMs(),
 		NoOpFixCalls:      m.TotalNoOpFixCalls(),
+		AcceptedFixCalls:  m.TotalAcceptedFixCalls(),
+		RejectedFixCalls:  m.TotalRejectedFixCalls(),
 		NoOpRate:          m.NoOpRate(),
 		VerifyCalls:       m.TotalVerifyCalls(),
 		VerifyResolutions: m.TotalVerifyResolutions(),

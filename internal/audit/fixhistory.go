@@ -150,18 +150,6 @@ func buildOutcomes(findings []Finding, results []verificationResult) []FixOutcom
 	return outcomes
 }
 
-func buildNoOpOutcomes(findings []Finding) []FixOutcome {
-	outcomes := make([]FixOutcome, 0, len(findings))
-	for _, finding := range findings {
-		outcomes = append(outcomes, FixOutcome{
-			FindingKey: finding.key(),
-			Label:      findingLabel(finding),
-			Status:     "NO-OP",
-		})
-	}
-	return outcomes
-}
-
 func findingSet(findings []Finding) map[string]struct{} {
 	keys := make(map[string]struct{}, len(findings))
 	for _, finding := range findings {

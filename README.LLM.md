@@ -329,7 +329,8 @@ For each sprint (startSprint → endSprint):
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
      │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
      │  ├─ Sprint diff is classified as low/moderate/high complexity to adapt prompt emphasis and loop budgets
-     │  ├─ Fix loop skips verify on no-op fix attempts and carries forward per-finding fix history
+     │  ├─ Fix loop validates each pass against a diff contract (issue IDs, target files, expected evidence), rejects empty/comment-only/out-of-scope diffs, and routes already-fixed no-op claims to verify
+     │  ├─ Fix loop skips verify on true no-op fix attempts and carries forward per-finding fix history
      │  ├─ Audit prompts include relevant intentional divergences from `.fry/deviation-log.md`
      │  ├─ Claude/Codex reuse same-role audit and fix sessions within the sprint audit; verify remains stateless
      │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
@@ -612,6 +613,6 @@ Sprint prompts follow a 7-part convention: OPENER, REFERENCES, BUILD LIST, CONST
 - **Two-phase progress tracking:** per-sprint log (`sprint-progress.txt`) + cross-sprint compacted summaries (`epic-progress.txt`) for bounded context
 - **Promise tokens:** agent writes `===PROMISE: TOKEN===` to signal sprint completion → early exit
 - **No-op detection:** if git diff shows no changes for 2-3 consecutive iterations and sanity checks pass → early exit
-- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory, LOW included in fix at high/max effort (non-blocking); complexity classification adapts budgets and reconciliation guidance; resolved-finding ledger with fuzzy theme matching suppresses probable reopenings; no-op fix detection skips wasted verify calls; same-role continuity is used for Claude/Codex audit and fix sessions only
+- **Two-level audit loop:** outer cycles discover issues, inner loops fix them FIFO; per-finding tracking across cycles with verify agents; CRITICAL/HIGH block, MODERATE is advisory, LOW included in fix at high/max effort (non-blocking); complexity classification adapts budgets and reconciliation guidance; resolved-finding ledger with fuzzy theme matching suppresses probable reopenings; fix passes are validated against Fry-owned diff contracts so empty, comment-only, and out-of-scope edits do not count as real remediation; same-role continuity is used for Claude/Codex audit and fix sessions only
 - **Graceful signal handling:** Ctrl+C saves partial work via git checkpoint
 - **Engine abstraction:** any CLI-based AI tool can be added by implementing `Engine` interface (2 methods: `Run`, `Name`)

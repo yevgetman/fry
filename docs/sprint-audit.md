@@ -64,6 +64,8 @@ For each audit report, the **fix agent** runs repeatedly until all issues above 
 The inner loop carries forward structured history so each fix iteration has more context than the last:
 
 - **No-op detection** -- Fry fingerprints the worktree before and after each fix pass. If the fix agent made no material file changes (excluding progress artifacts), Fry logs a no-op, skips verify, increments the stale counter, and moves directly to the next fix attempt or re-audit.
+- **Fix contract validation** -- Every fix pass carries a Fry-owned diff contract: numbered issue IDs, declared target files derived from the findings, and expected evidence. Empty diffs, comment-only diffs, and out-of-scope diffs are rejected before they count as real remediation attempts.
+- **Already-fixed verification routing** -- If the fix agent claims an issue is already fixed and produces no behavioral diff, Fry routes that claim to verify instead of counting the pass as a normal remediation attempt.
 - **Fix attempt history** -- The fix prompt includes concise summaries of prior attempts that targeted the same findings, including whether the attempt was a no-op, which issues remained, and any verification notes.
 - **Explicit verify boundary** -- Verify sessions stay stateless and never inherit fix-session context. This keeps the trust boundary between remediation and validation intact.
 
@@ -416,7 +418,7 @@ sprint1_audit_final_20060102_150405.log      # Final audit pass
 sprint1_audit_metrics.json                   # Per-call audit metrics for the sprint
 ```
 
-Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, no-op rate, verify yield, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier.
+Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, no-op rate, accepted versus rejected fix passes, diff classifications, verify yield, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier.
 
 ## Cleanup
 

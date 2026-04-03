@@ -421,6 +421,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				cycle, fixIter, maxInner, len(unresolved), opts.Engine.Name(), fixModel)
 
 			// Build and write fix prompt
+			fixContract := newFixContract(unresolved)
 			fixPrompt := buildAuditFixPrompt(opts, unresolved, fixHistory)
 			if err := writePromptFile(promptPath, fixPrompt); err != nil {
 				return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
@@ -436,16 +437,36 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			fixOutput, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel, engine.SessionAuditFix, fixSession)
 			postFixFingerprint := git.WorktreeFingerprintForNoopDetection(ctx, opts.ProjectDir)
 			fixWasNoOp := preFixFingerprint == postFixFingerprint
+			diffSummary := summarizeNoopFingerprint(postFixFingerprint)
+			diffAssessment := FixDiffAssessment{
+				DiffSummary:        diffSummary,
+				DiffClassification: diffClassificationBehavioral,
+				ValidationResult:   fixValidationAccepted,
+			}
+			if fixWasNoOp {
+				diffAssessment = assessFixDiff(fixContract, "", postFixFingerprint, fixOutput)
+			} else if diffText, diffErr := git.GitDiffForAudit(ctx, opts.ProjectDir); diffErr != nil {
+				frylog.Log("WARNING: git diff for audit-fix contract validation failed: %v", diffErr)
+				diffAssessment.ChangedFiles = fixContract.TargetFiles()
+			} else {
+				diffAssessment = assessFixDiff(fixContract, diffText, postFixFingerprint, fixOutput)
+			}
 			auditMetrics.Record(CallMetric{
-				SessionType: engine.SessionAuditFix,
-				Cycle:       cycle,
-				Iteration:   fixIter,
-				PromptBytes: fixPromptBytes,
-				OutputBytes: len(fixOutput),
-				DurationMs:  time.Since(fixStarted).Milliseconds(),
-				Model:       fixModel,
-				WasNoOp:     fixWasNoOp,
-				Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), fixOutput),
+				SessionType:         engine.SessionAuditFix,
+				Cycle:               cycle,
+				Iteration:           fixIter,
+				IssueIDs:            fixContract.IssueIDs(),
+				PromptBytes:         fixPromptBytes,
+				OutputBytes:         len(fixOutput),
+				DurationMs:          time.Since(fixStarted).Milliseconds(),
+				Model:               fixModel,
+				WasNoOp:             fixWasNoOp,
+				DeclaredTargetFiles: fixContract.TargetFiles(),
+				ChangedFiles:        diffAssessment.ChangedFiles,
+				DiffClassification:  diffAssessment.DiffClassification,
+				ValidationResult:    diffAssessment.ValidationResult,
+				AlreadyFixedClaim:   diffAssessment.AlreadyFixedClaim,
+				Tokens:              tokenmetrics.ParseTokens(opts.Engine.Name(), fixOutput),
 			})
 			if err != nil {
 				return nil, err
@@ -454,15 +475,21 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				return nil, err
 			}
 
-			diffSummary := summarizeNoopFingerprint(postFixFingerprint)
-			if fixWasNoOp {
-				frylog.Log("  AUDIT FIX: no-op (no file changes) — skipping verify")
+			if diffAssessment.ValidationResult == fixValidationRejected {
+				switch diffAssessment.DiffClassification {
+				case diffClassificationCommentOnly:
+					frylog.Log("  AUDIT FIX: rejected comment-only diff — skipping verify")
+				case diffClassificationOutOfScope:
+					frylog.Log("  AUDIT FIX: rejected out-of-scope diff — skipping verify")
+				default:
+					frylog.Log("  AUDIT FIX: no-op (no file changes) — skipping verify")
+				}
 				fixHistory.Record(FixAttempt{
 					Cycle:       cycle,
 					Iteration:   fixIter,
 					Targeted:    targetedFindingLabels(unresolved),
-					DiffSummary: diffSummary,
-					Outcomes:    buildNoOpOutcomes(unresolved),
+					DiffSummary: diffAssessment.DiffSummary,
+					Outcomes:    buildRejectedOutcomes(unresolved, diffAssessment),
 				})
 				innerStaleCount++
 				if innerStaleCount >= maxInnerStaleIterations {
@@ -470,6 +497,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 					break
 				}
 				continue
+			}
+			if diffAssessment.ValidationResult == fixValidationVerifyOnly {
+				frylog.Log("  AUDIT FIX: already-fixed claim with no behavioral diff — verifying claim")
 			}
 
 			// Remove stale audit file before verify
@@ -543,7 +573,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				Cycle:       cycle,
 				Iteration:   fixIter,
 				Targeted:    targetedFindingLabels(unresolved),
-				DiffSummary: diffSummary,
+				DiffSummary: diffAssessment.DiffSummary,
 				Outcomes:    buildOutcomes(unresolved, verifyResults),
 			})
 
@@ -691,6 +721,7 @@ func runSingleLowFixPass(ctx context.Context, opts AuditOpts, findings []Finding
 		cycle, len(findings), opts.Engine.Name(), fixModel)
 
 	promptPath := filepath.Join(opts.ProjectDir, config.AuditPromptFile)
+	fixContract := newFixContract(findings)
 	fixPrompt := buildAuditFixPrompt(opts, findings, nil)
 	if err := writePromptFile(promptPath, fixPrompt); err != nil {
 		return fmt.Errorf("run single low fix pass: write fix prompt: %w", err)
@@ -704,16 +735,33 @@ func runSingleLowFixPass(ctx context.Context, opts AuditOpts, findings []Finding
 	fixStarted := time.Now()
 	fixOutput, err := runAgentWithLog(ctx, opts, config.AuditFixInvocationPrompt, fixLogPath, fixModel, engine.SessionAuditFix, nil)
 	postFixFingerprint := git.WorktreeFingerprintForNoopDetection(ctx, opts.ProjectDir)
+	fixWasNoOp := preFixFingerprint == postFixFingerprint
+	diffAssessment := FixDiffAssessment{
+		DiffSummary:        summarizeNoopFingerprint(postFixFingerprint),
+		DiffClassification: diffClassificationBehavioral,
+		ValidationResult:   fixValidationAccepted,
+	}
+	if fixWasNoOp {
+		diffAssessment = assessFixDiff(fixContract, "", postFixFingerprint, fixOutput)
+	} else if diffText, diffErr := git.GitDiffForAudit(ctx, opts.ProjectDir); diffErr == nil {
+		diffAssessment = assessFixDiff(fixContract, diffText, postFixFingerprint, fixOutput)
+	}
 	if auditMetrics != nil {
 		auditMetrics.Record(CallMetric{
-			SessionType: engine.SessionAuditFix,
-			Cycle:       cycle,
-			PromptBytes: fixPromptBytes,
-			OutputBytes: len(fixOutput),
-			DurationMs:  time.Since(fixStarted).Milliseconds(),
-			Model:       fixModel,
-			WasNoOp:     preFixFingerprint == postFixFingerprint,
-			Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), fixOutput),
+			SessionType:         engine.SessionAuditFix,
+			Cycle:               cycle,
+			IssueIDs:            fixContract.IssueIDs(),
+			PromptBytes:         fixPromptBytes,
+			OutputBytes:         len(fixOutput),
+			DurationMs:          time.Since(fixStarted).Milliseconds(),
+			Model:               fixModel,
+			WasNoOp:             fixWasNoOp,
+			DeclaredTargetFiles: fixContract.TargetFiles(),
+			ChangedFiles:        diffAssessment.ChangedFiles,
+			DiffClassification:  diffAssessment.DiffClassification,
+			ValidationResult:    diffAssessment.ValidationResult,
+			AlreadyFixedClaim:   diffAssessment.AlreadyFixedClaim,
+			Tokens:              tokenmetrics.ParseTokens(opts.Engine.Name(), fixOutput),
 		})
 	}
 	return err
@@ -976,6 +1024,7 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 
 func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory) string {
 	var b strings.Builder
+	contract := newFixContract(findings)
 
 	fmt.Fprintf(&b, "# AUDIT FIX — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name)
 	skipLow := !fixIncludesLow(opts.Epic)
@@ -996,6 +1045,20 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory
 	b.WriteString("**Important:** Focus exclusively on fixing the listed issues. Do not search\n")
 	b.WriteString("for new issues. Address the oldest issues first (listed in priority order).\n\n")
 	b.WriteString("Preserve unrelated behavior, follow existing patterns, and avoid broad refactors unless a listed issue requires one.\n\n")
+	b.WriteString("## Fix Contract\n")
+	b.WriteString("Fry will validate your diff against this contract before the fix counts as a real remediation pass.\n")
+	b.WriteString("Empty diffs, comment-only diffs, and changes outside the declared target files are rejected.\n")
+	b.WriteString("If you believe an issue is already fixed, explain that in your final response instead of adding placeholder edits; Fry will verify that claim separately.\n\n")
+
+	for _, issue := range contract.Issues {
+		fmt.Fprintf(&b, "### Issue %d Contract\n", issue.ID)
+		if len(issue.TargetFiles) > 0 {
+			fmt.Fprintf(&b, "- **Target Files:** %s\n", strings.Join(issue.TargetFiles, ", "))
+		} else {
+			b.WriteString("- **Target Files:** (not declared; keep scope minimal and directly tied to the issue)\n")
+		}
+		fmt.Fprintf(&b, "- **Expected Evidence:** %s\n\n", issue.ExpectedEvidence)
+	}
 
 	appendCodebaseContext(&b, opts.ProjectDir)
 
@@ -1013,6 +1076,16 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory
 			fmt.Fprintf(&b, "### From Audit Cycle %d\n\n", group.cycle)
 		}
 		for _, f := range group.findings {
+			issueID := 0
+			for _, issue := range contract.Issues {
+				if issue.FindingKey == f.key() {
+					issueID = issue.ID
+					break
+				}
+			}
+			if issueID > 0 {
+				fmt.Fprintf(&b, "### Issue %d\n", issueID)
+			}
 			if f.Location != "" {
 				fmt.Fprintf(&b, "- **Location:** %s\n", f.Location)
 			}

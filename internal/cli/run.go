@@ -3153,6 +3153,8 @@ func buildStatusAuditMetricsSnapshot(metrics *audit.AuditMetrics) *agent.AuditMe
 		TotalCalls:        snapshot.TotalCalls,
 		DurationMs:        snapshot.DurationMs,
 		NoOpFixCalls:      snapshot.NoOpFixCalls,
+		AcceptedFixCalls:  snapshot.AcceptedFixCalls,
+		RejectedFixCalls:  snapshot.RejectedFixCalls,
 		NoOpRate:          snapshot.NoOpRate,
 		VerifyCalls:       snapshot.VerifyCalls,
 		VerifyResolutions: snapshot.VerifyResolutions,

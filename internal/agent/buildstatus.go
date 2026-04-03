@@ -76,6 +76,8 @@ type AuditMetricsSnapshot struct {
 	TotalCalls        int     `json:"total_calls"`
 	DurationMs        int64   `json:"duration_ms"`
 	NoOpFixCalls      int     `json:"no_op_fix_calls"`
+	AcceptedFixCalls  int     `json:"accepted_fix_calls"`
+	RejectedFixCalls  int     `json:"rejected_fix_calls"`
 	NoOpRate          float64 `json:"no_op_rate"`
 	VerifyCalls       int     `json:"verify_calls"`
 	VerifyResolutions int     `json:"verify_resolutions"`
