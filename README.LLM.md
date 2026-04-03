@@ -338,7 +338,7 @@ For each sprint (startSprint → endSprint):
      │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
      │  ├─ If the agent forgets to write the audit file, Fry tries to recover a structured report from final stdout/log output before failing
      │  ├─ Verify agent must emit explicit per-issue outcome statuses (for example `RESOLVED`, `BEHAVIOR_UNCHANGED`, `BLOCKED`); unrecoverable missing output fails the audit
-     │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`, including repeated-unchanged and unchanged-reopening counters
+     │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`, including repeated-unchanged counters, per-cycle productivity summaries, trailing yield, and low-yield strategy/stop metadata
      │  └─ standard/high/max use effort+complexity-aware caps (falling back to legacy defaults when complexity is unknown)
  11. Git checkpoint commit
  12. Compact sprint progress → .fry/epic-progress.txt
@@ -443,6 +443,12 @@ Key flags:
 | `MaxOuterCyclesMaxCap` | `100` | Outer audit cycles at max effort (safety valve; stale detection governs actual exit) |
 | `MaxInnerFixIterHigh` | `7` | Inner fix iterations at high effort |
 | `MaxInnerFixIterMax` | `10` | Inner fix iterations at max effort |
+| `AuditLowYieldTrailingCycles` | `2` | Recent cycles included in trailing productivity checks |
+| `AuditLowYieldMinFixCalls` | `2` | Minimum fix attempts before low-yield heuristics engage |
+| `AuditLowYieldVerifyYieldFloor` | `0.75` | Verify-yield floor for low-productivity detection |
+| `AuditLowYieldFixYieldFloor` | `0.50` | Fix-yield floor for low-productivity detection |
+| `AuditLowYieldNoOpRateFloor` | `0.50` | No-op-rate floor for low-productivity detection |
+| `AuditLowYieldStopCycles` | `2` | Consecutive low-yield cycles before early stop |
 | `DefaultDockerReadyTimeout` | `30` | Seconds for Docker health check |
 | `DefaultMaxDeviationScope` | `3` | Max sprints affected by replan |
 | `MaxAuditDiffBytes` | `100000` | Max diff size for audit context |

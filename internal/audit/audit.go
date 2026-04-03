@@ -115,6 +115,7 @@ type AuditResult struct {
 	BlockerCounts        map[string]int // blocker category -> count
 	Blockers             []Finding      // unresolved blocker details
 	Complexity           ComplexityTier
+	StopReason           string
 	Metrics              *AuditMetrics
 }
 
@@ -169,10 +170,15 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	repeatedUnchanged := 0
 	suppressedUnchanged := 0
 	reopenedWithEvidence := 0
+	lowYieldStreak := 0
+	nextCycleFixBatchLimit := 0
+	lowYieldStopReason := ""
 	var lastCycle int
 
 	for cycle := 1; cycle <= maxOuter; cycle++ {
 		lastCycle = cycle
+		cycleFixBatchLimit := nextCycleFixBatchLimit
+		nextCycleFixBatchLimit = 0
 
 		select {
 		case <-ctx.Done():
@@ -284,6 +290,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				}
 			}
 			frylog.Log("  AUDIT: pass (%s)", formatSeverityCounts(counts))
+			auditMetrics.RecordCycleSummary(cycle)
 			auditMetrics.OuterCycles = cycle
 			auditMetrics.ConvergedAtCycle = cycle
 			auditMetrics.FinalFindingCount = totalSeverityCount(counts)
@@ -404,6 +411,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				}
 			}
 			frylog.Log("  AUDIT: pass (no actionable issues)")
+			auditMetrics.RecordCycleSummary(cycle)
 			auditMetrics.OuterCycles = cycle
 			auditMetrics.ConvergedAtCycle = cycle
 			auditMetrics.FinalFindingCount = totalSeverityCount(effectiveCounts)
@@ -424,6 +432,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		fixableCount := countFixableProductFindings(activeFindings, includeLow)
 		if fixableCount == 0 && len(activeBlockers) > 0 {
 			frylog.Log("  AUDIT: blocked by %d non-product findings — skipping code-fix loop", len(activeBlockers))
+			auditMetrics.RecordCycleSummary(cycle)
 			auditMetrics.OuterCycles = cycle
 			auditMetrics.ConvergedAtCycle = cycle
 			auditMetrics.FinalFindingCount = totalSeverityCount(effectiveCounts)
@@ -442,6 +451,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				BlockerCounts:        activeBlockerCounts,
 				Blockers:             activeBlockers,
 				Complexity:           opts.Complexity,
+				StopReason:           lowYieldStopReason,
 				Metrics:              auditMetrics,
 			}, nil
 		}
@@ -454,6 +464,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				outerStaleCount++
 				frylog.Log("  AUDIT: no progress detected (%d/%d stale cycles)", outerStaleCount, maxStaleIterations)
 				if outerStaleCount >= maxStaleIterations {
+					auditMetrics.RecordCycleSummary(cycle)
 					frylog.Log("  AUDIT: stopping — no progress after %d cycles", cycle)
 					break
 				}
@@ -466,6 +477,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 					outerTurnoverCount++
 					frylog.Log("  AUDIT: full actionable turnover detected (%d/%d churn cycles)", outerTurnoverCount, maxTurnoverIterations)
 					if outerTurnoverCount >= maxTurnoverIterations {
+						auditMetrics.RecordCycleSummary(cycle)
 						frylog.Log("  AUDIT: stopping — audit findings are churning without convergence after %d cycles", cycle)
 						break
 					}
@@ -482,6 +494,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 		// Sort findings FIFO for fix agent
 		sortFindingsFIFO(activeFindings)
+		if cycleFixBatchLimit > 0 && countFixableProductFindings(activeFindings, includeLow) > cycleFixBatchLimit {
+			frylog.Log("  AUDIT: low-yield mode active — limiting cycle %d fix batches to %d issue(s)", cycle, cycleFixBatchLimit)
+		}
 
 		// Inner fix loop
 		innerStaleCount := 0
@@ -532,6 +547,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 						fixSession.Clear()
 					}
 				}
+			}
+			if cycleFixBatchLimit > 0 && len(unresolved) > cycleFixBatchLimit {
+				unresolved = append([]Finding(nil), unresolved[:cycleFixBatchLimit]...)
 			}
 
 			emitAuditProgress(opts.ProgressFn, AuditProgress{
@@ -749,6 +767,38 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		if fixSession != nil {
 			fixSession.Clear()
 		}
+		auditMetrics.RecordCycleSummary(cycle)
+
+		shouldStopForLowYield := false
+		if progressBased && fixableCount > lowYieldSingleIssueBatchLimit {
+			currentCycleSummary, ok := auditMetrics.LastCycleSummary()
+			if ok && isLowYieldStrategyCycle(currentCycleSummary) {
+				lowYieldStreak++
+				frylog.Log(
+					"  AUDIT: low-yield cycle detected (cycle %d, fix yield %.2f, verify yield %.2f, no-op %.0f%%)",
+					cycle,
+					currentCycleSummary.FixYield,
+					currentCycleSummary.VerifyYield,
+					currentCycleSummary.NoOpRate*100,
+				)
+				trailingSummary, _ := auditMetrics.TrailingCycleSummary(config.AuditLowYieldTrailingCycles)
+				if shouldStopForLowYieldCycle(currentCycleSummary, trailingSummary, lowYieldStreak) {
+					lowYieldStopReason = formatLowYieldStopReason(currentCycleSummary, trailingSummary)
+					auditMetrics.LowYieldStopReason = lowYieldStopReason
+					frylog.Log("  AUDIT: stopping — %s", lowYieldStopReason)
+					shouldStopForLowYield = true
+				} else {
+					nextCycleFixBatchLimit = lowYieldSingleIssueBatchLimit
+					auditMetrics.RecordLowYieldStrategyChange(lowYieldStrategySingleIssueNextCycle)
+					if auditSession != nil {
+						auditSession.Clear()
+					}
+					frylog.Log("  AUDIT: next cycle will refresh audit context and run in single-issue low-yield mode")
+				}
+			} else {
+				lowYieldStreak = 0
+			}
+		}
 
 		// Record findings resolved in this cycle's inner fix loop
 		for _, f := range activeFindings {
@@ -759,6 +809,9 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		// Update known findings for next outer cycle
 		knownFindings = collectUnresolved(activeFindings)
 		fixHistory.PruneResolved(knownFindings)
+		if shouldStopForLowYield {
+			break
+		}
 	}
 
 	// Log remaining LOW findings at high/max effort
@@ -861,6 +914,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		BlockerCounts:        finalBlockerCounts,
 		Blockers:             finalBlockers,
 		Complexity:           opts.Complexity,
+		StopReason:           lowYieldStopReason,
 		Metrics:              auditMetrics,
 	}, nil
 }

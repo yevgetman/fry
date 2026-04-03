@@ -78,6 +78,12 @@ const (
 	FixSessionMaxPromptBytes             = 32_000
 	FixSessionMaxTokens                  = 16_000
 	FixSessionMaxCarry                   = 10 // unresolved findings carried into one same-role fix session before refresh
+	AuditLowYieldTrailingCycles          = 2
+	AuditLowYieldMinFixCalls             = 2
+	AuditLowYieldVerifyYieldFloor        = 0.75
+	AuditLowYieldFixYieldFloor           = 0.50
+	AuditLowYieldNoOpRateFloor           = 0.50
+	AuditLowYieldStopCycles              = 2
 	BehaviorUnchangedEscalationThreshold = 2
 	BehaviorUnchangedStopThreshold       = 3
 

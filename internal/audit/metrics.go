@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/engine"
 	tokenmetrics "github.com/yevgetman/fry/internal/metrics"
 )
@@ -29,40 +30,69 @@ type CallMetric struct {
 	Tokens               tokenmetrics.TokenUsage `json:"tokens"`
 }
 
+// CycleProductivity summarizes audit productivity for one completed outer cycle.
+type CycleProductivity struct {
+	Cycle             int     `json:"cycle"`
+	TotalCalls        int     `json:"total_calls"`
+	DurationMs        int64   `json:"duration_ms"`
+	FixCalls          int     `json:"fix_calls"`
+	NoOpFixCalls      int     `json:"no_op_fix_calls"`
+	VerifyCalls       int     `json:"verify_calls"`
+	VerifyResolutions int     `json:"verify_resolutions"`
+	FixYield          float64 `json:"fix_yield"`
+	VerifyYield       float64 `json:"verify_yield"`
+	NoOpRate          float64 `json:"no_op_rate"`
+	MsPerResolution   float64 `json:"ms_per_resolution"`
+}
+
 // AuditMetricsSnapshot is the small, monitor-friendly subset surfaced in build status.
 type AuditMetricsSnapshot struct {
-	TotalCalls              int     `json:"total_calls"`
-	DurationMs              int64   `json:"duration_ms"`
-	NoOpFixCalls            int     `json:"no_op_fix_calls"`
-	AcceptedFixCalls        int     `json:"accepted_fix_calls"`
-	RejectedFixCalls        int     `json:"rejected_fix_calls"`
-	RepeatedUnchanged       int     `json:"repeated_unchanged_findings"`
-	SuppressedUnchanged     int     `json:"suppressed_unchanged_findings"`
-	ReopenedWithNewEvidence int     `json:"reopened_with_new_evidence"`
-	BehaviorUnchanged       int     `json:"behavior_unchanged_outcomes"`
-	BehaviorEscalations     int     `json:"behavior_unchanged_escalations"`
-	SessionRefreshes        int     `json:"session_refreshes"`
-	NoOpRate                float64 `json:"no_op_rate"`
-	VerifyCalls             int     `json:"verify_calls"`
-	VerifyResolutions       int     `json:"verify_resolutions"`
-	VerifyYield             float64 `json:"verify_yield"`
+	TotalCalls               int     `json:"total_calls"`
+	DurationMs               int64   `json:"duration_ms"`
+	NoOpFixCalls             int     `json:"no_op_fix_calls"`
+	AcceptedFixCalls         int     `json:"accepted_fix_calls"`
+	RejectedFixCalls         int     `json:"rejected_fix_calls"`
+	RepeatedUnchanged        int     `json:"repeated_unchanged_findings"`
+	SuppressedUnchanged      int     `json:"suppressed_unchanged_findings"`
+	ReopenedWithNewEvidence  int     `json:"reopened_with_new_evidence"`
+	BehaviorUnchanged        int     `json:"behavior_unchanged_outcomes"`
+	BehaviorEscalations      int     `json:"behavior_unchanged_escalations"`
+	SessionRefreshes         int     `json:"session_refreshes"`
+	NoOpRate                 float64 `json:"no_op_rate"`
+	VerifyCalls              int     `json:"verify_calls"`
+	VerifyResolutions        int     `json:"verify_resolutions"`
+	VerifyYield              float64 `json:"verify_yield"`
+	LastCycleFixYield        float64 `json:"last_cycle_fix_yield"`
+	LastCycleVerifyYield     float64 `json:"last_cycle_verify_yield"`
+	LastCycleNoOpRate        float64 `json:"last_cycle_no_op_rate"`
+	LastCycleMsPerResolution float64 `json:"last_cycle_ms_per_resolution"`
+	TrailingFixYield         float64 `json:"trailing_fix_yield"`
+	TrailingVerifyYield      float64 `json:"trailing_verify_yield"`
+	TrailingNoOpRate         float64 `json:"trailing_no_op_rate"`
+	TrailingMsPerResolution  float64 `json:"trailing_ms_per_resolution"`
+	LowYieldStrategyChanges  int     `json:"low_yield_strategy_changes"`
+	LowYieldStopReason       string  `json:"low_yield_stop_reason,omitempty"`
 }
 
 // AuditMetrics accumulates per-call audit telemetry for one RunAuditLoop invocation.
 type AuditMetrics struct {
-	Calls                        []CallMetric   `json:"calls"`
-	OuterCycles                  int            `json:"outer_cycles"`
-	ContentComplexity            ComplexityTier `json:"content_complexity,omitempty"`
-	ConvergedAtCycle             int            `json:"converged_at_cycle,omitempty"`
-	FinalFindingCount            int            `json:"final_finding_count"`
-	EscapedToBuildAudit          int            `json:"escaped_to_build_audit,omitempty"`
-	RepeatedUnchangedFindings    int            `json:"repeated_unchanged_findings,omitempty"`
-	SuppressedUnchangedFindings  int            `json:"suppressed_unchanged_findings,omitempty"`
-	ReopenedWithNewEvidence      int            `json:"reopened_with_new_evidence,omitempty"`
-	BehaviorUnchangedOutcomes    int            `json:"behavior_unchanged_outcomes,omitempty"`
-	BehaviorUnchangedEscalations int            `json:"behavior_unchanged_escalations,omitempty"`
-	SessionRefreshes             int            `json:"session_refreshes,omitempty"`
-	SessionRefreshReasons        map[string]int `json:"session_refresh_reasons,omitempty"`
+	Calls                        []CallMetric        `json:"calls"`
+	CycleSummaries               []CycleProductivity `json:"cycle_summaries,omitempty"`
+	OuterCycles                  int                 `json:"outer_cycles"`
+	ContentComplexity            ComplexityTier      `json:"content_complexity,omitempty"`
+	ConvergedAtCycle             int                 `json:"converged_at_cycle,omitempty"`
+	FinalFindingCount            int                 `json:"final_finding_count"`
+	EscapedToBuildAudit          int                 `json:"escaped_to_build_audit,omitempty"`
+	RepeatedUnchangedFindings    int                 `json:"repeated_unchanged_findings,omitempty"`
+	SuppressedUnchangedFindings  int                 `json:"suppressed_unchanged_findings,omitempty"`
+	ReopenedWithNewEvidence      int                 `json:"reopened_with_new_evidence,omitempty"`
+	BehaviorUnchangedOutcomes    int                 `json:"behavior_unchanged_outcomes,omitempty"`
+	BehaviorUnchangedEscalations int                 `json:"behavior_unchanged_escalations,omitempty"`
+	SessionRefreshes             int                 `json:"session_refreshes,omitempty"`
+	SessionRefreshReasons        map[string]int      `json:"session_refresh_reasons,omitempty"`
+	LowYieldStrategyChanges      int                 `json:"low_yield_strategy_changes,omitempty"`
+	LowYieldStrategyReasons      map[string]int      `json:"low_yield_strategy_reasons,omitempty"`
+	LowYieldStopReason           string              `json:"low_yield_stop_reason,omitempty"`
 }
 
 func (m *AuditMetrics) Record(cm CallMetric) {
@@ -202,32 +232,147 @@ func (m *AuditMetrics) VerifyYield() float64 {
 	return float64(m.TotalVerifyResolutions()) / float64(verifyCalls)
 }
 
+func (m *AuditMetrics) cycleSummaryFromCalls(cycle int) CycleProductivity {
+	summary := CycleProductivity{Cycle: cycle}
+	if m == nil || cycle <= 0 {
+		return summary
+	}
+	for _, call := range m.Calls {
+		if call.Cycle != cycle {
+			continue
+		}
+		summary.TotalCalls++
+		summary.DurationMs += call.DurationMs
+		switch call.SessionType {
+		case engine.SessionAuditFix:
+			summary.FixCalls++
+			if call.WasNoOp {
+				summary.NoOpFixCalls++
+			}
+		case engine.SessionAuditVerify:
+			summary.VerifyCalls++
+			summary.VerifyResolutions += call.Resolutions
+		}
+	}
+	if summary.FixCalls > 0 {
+		summary.FixYield = float64(summary.VerifyResolutions) / float64(summary.FixCalls)
+		summary.NoOpRate = float64(summary.NoOpFixCalls) / float64(summary.FixCalls)
+	}
+	if summary.VerifyCalls > 0 {
+		summary.VerifyYield = float64(summary.VerifyResolutions) / float64(summary.VerifyCalls)
+	}
+	if summary.VerifyResolutions > 0 {
+		summary.MsPerResolution = float64(summary.DurationMs) / float64(summary.VerifyResolutions)
+	}
+	return summary
+}
+
+func (m *AuditMetrics) RecordCycleSummary(cycle int) {
+	if m == nil || cycle <= 0 {
+		return
+	}
+	summary := m.cycleSummaryFromCalls(cycle)
+	for i := range m.CycleSummaries {
+		if m.CycleSummaries[i].Cycle == cycle {
+			m.CycleSummaries[i] = summary
+			return
+		}
+	}
+	m.CycleSummaries = append(m.CycleSummaries, summary)
+}
+
+func (m *AuditMetrics) LastCycleSummary() (CycleProductivity, bool) {
+	if m == nil || len(m.CycleSummaries) == 0 {
+		return CycleProductivity{}, false
+	}
+	return m.CycleSummaries[len(m.CycleSummaries)-1], true
+}
+
+func (m *AuditMetrics) TrailingCycleSummary(window int) (CycleProductivity, bool) {
+	if m == nil || len(m.CycleSummaries) == 0 || window <= 0 {
+		return CycleProductivity{}, false
+	}
+	if window > len(m.CycleSummaries) {
+		window = len(m.CycleSummaries)
+	}
+	selected := m.CycleSummaries[len(m.CycleSummaries)-window:]
+	summary := CycleProductivity{Cycle: selected[len(selected)-1].Cycle}
+	for _, cycleSummary := range selected {
+		summary.TotalCalls += cycleSummary.TotalCalls
+		summary.DurationMs += cycleSummary.DurationMs
+		summary.FixCalls += cycleSummary.FixCalls
+		summary.NoOpFixCalls += cycleSummary.NoOpFixCalls
+		summary.VerifyCalls += cycleSummary.VerifyCalls
+		summary.VerifyResolutions += cycleSummary.VerifyResolutions
+	}
+	if summary.FixCalls > 0 {
+		summary.FixYield = float64(summary.VerifyResolutions) / float64(summary.FixCalls)
+	}
+	if summary.VerifyCalls > 0 {
+		summary.VerifyYield = float64(summary.VerifyResolutions) / float64(summary.VerifyCalls)
+	}
+	if summary.FixCalls > 0 {
+		summary.NoOpRate = float64(summary.NoOpFixCalls) / float64(summary.FixCalls)
+	}
+	if summary.VerifyResolutions > 0 {
+		summary.MsPerResolution = float64(summary.DurationMs) / float64(summary.VerifyResolutions)
+	}
+	return summary, true
+}
+
+func (m *AuditMetrics) RecordLowYieldStrategyChange(reason string) {
+	if m == nil {
+		return
+	}
+	m.LowYieldStrategyChanges++
+	if reason == "" {
+		return
+	}
+	if m.LowYieldStrategyReasons == nil {
+		m.LowYieldStrategyReasons = make(map[string]int)
+	}
+	m.LowYieldStrategyReasons[reason]++
+}
+
 func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 	if m == nil {
 		return AuditMetricsSnapshot{}
 	}
+	lastCycleSummary, _ := m.LastCycleSummary()
+	trailingSummary, _ := m.TrailingCycleSummary(config.AuditLowYieldTrailingCycles)
 	return AuditMetricsSnapshot{
-		TotalCalls:              m.TotalCalls(),
-		DurationMs:              m.TotalDurationMs(),
-		NoOpFixCalls:            m.TotalNoOpFixCalls(),
-		AcceptedFixCalls:        m.TotalAcceptedFixCalls(),
-		RejectedFixCalls:        m.TotalRejectedFixCalls(),
-		RepeatedUnchanged:       m.RepeatedUnchangedFindings,
-		SuppressedUnchanged:     m.SuppressedUnchangedFindings,
-		ReopenedWithNewEvidence: m.ReopenedWithNewEvidence,
-		BehaviorUnchanged:       m.BehaviorUnchangedOutcomes,
-		BehaviorEscalations:     m.BehaviorUnchangedEscalations,
-		SessionRefreshes:        m.SessionRefreshes,
-		NoOpRate:                m.NoOpRate(),
-		VerifyCalls:             m.TotalVerifyCalls(),
-		VerifyResolutions:       m.TotalVerifyResolutions(),
-		VerifyYield:             m.VerifyYield(),
+		TotalCalls:               m.TotalCalls(),
+		DurationMs:               m.TotalDurationMs(),
+		NoOpFixCalls:             m.TotalNoOpFixCalls(),
+		AcceptedFixCalls:         m.TotalAcceptedFixCalls(),
+		RejectedFixCalls:         m.TotalRejectedFixCalls(),
+		RepeatedUnchanged:        m.RepeatedUnchangedFindings,
+		SuppressedUnchanged:      m.SuppressedUnchangedFindings,
+		ReopenedWithNewEvidence:  m.ReopenedWithNewEvidence,
+		BehaviorUnchanged:        m.BehaviorUnchangedOutcomes,
+		BehaviorEscalations:      m.BehaviorUnchangedEscalations,
+		SessionRefreshes:         m.SessionRefreshes,
+		NoOpRate:                 m.NoOpRate(),
+		VerifyCalls:              m.TotalVerifyCalls(),
+		VerifyResolutions:        m.TotalVerifyResolutions(),
+		VerifyYield:              m.VerifyYield(),
+		LastCycleFixYield:        lastCycleSummary.FixYield,
+		LastCycleVerifyYield:     lastCycleSummary.VerifyYield,
+		LastCycleNoOpRate:        lastCycleSummary.NoOpRate,
+		LastCycleMsPerResolution: lastCycleSummary.MsPerResolution,
+		TrailingFixYield:         trailingSummary.FixYield,
+		TrailingVerifyYield:      trailingSummary.VerifyYield,
+		TrailingNoOpRate:         trailingSummary.NoOpRate,
+		TrailingMsPerResolution:  trailingSummary.MsPerResolution,
+		LowYieldStrategyChanges:  m.LowYieldStrategyChanges,
+		LowYieldStopReason:       m.LowYieldStopReason,
 	}
 }
 
 func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 	type auditMetricsJSON struct {
 		Calls                        []CallMetric         `json:"calls"`
+		CycleSummaries               []CycleProductivity  `json:"cycle_summaries,omitempty"`
 		OuterCycles                  int                  `json:"outer_cycles"`
 		ContentComplexity            ComplexityTier       `json:"content_complexity,omitempty"`
 		ConvergedAtCycle             int                  `json:"converged_at_cycle,omitempty"`
@@ -240,6 +385,9 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 		BehaviorUnchangedEscalations int                  `json:"behavior_unchanged_escalations,omitempty"`
 		SessionRefreshes             int                  `json:"session_refreshes,omitempty"`
 		SessionRefreshReasons        map[string]int       `json:"session_refresh_reasons,omitempty"`
+		LowYieldStrategyChanges      int                  `json:"low_yield_strategy_changes,omitempty"`
+		LowYieldStrategyReasons      map[string]int       `json:"low_yield_strategy_reasons,omitempty"`
+		LowYieldStopReason           string               `json:"low_yield_stop_reason,omitempty"`
 		Summary                      AuditMetricsSnapshot `json:"summary"`
 	}
 
@@ -248,6 +396,7 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 	}
 	if m != nil {
 		payload.Calls = m.Calls
+		payload.CycleSummaries = m.CycleSummaries
 		payload.OuterCycles = m.OuterCycles
 		payload.ContentComplexity = m.ContentComplexity
 		payload.ConvergedAtCycle = m.ConvergedAtCycle
@@ -260,6 +409,9 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 		payload.BehaviorUnchangedEscalations = m.BehaviorUnchangedEscalations
 		payload.SessionRefreshes = m.SessionRefreshes
 		payload.SessionRefreshReasons = m.SessionRefreshReasons
+		payload.LowYieldStrategyChanges = m.LowYieldStrategyChanges
+		payload.LowYieldStrategyReasons = m.LowYieldStrategyReasons
+		payload.LowYieldStopReason = m.LowYieldStopReason
 	}
 	return json.Marshal(payload)
 }

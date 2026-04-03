@@ -1504,6 +1504,58 @@ func TestRunAuditLoopProgressStopsOnTurnoverChurnAfterWarmup(t *testing.T) {
 	assert.Len(t, eng.prompts, 62)
 }
 
+func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
+	t.Parallel()
+
+	const repeatedHighFindings = "## Findings\n- **Location:** src/first.go:10\n- **Description:** Missing booking consistency guard\n- **Severity:** HIGH\n- **Recommended Fix:** Add the missing guard and keep booking state transitions consistent.\n- **Location:** src/second.go:20\n- **Description:** Missing idempotency handling for duplicate submits\n- **Severity:** HIGH\n- **Recommended Fix:** Make duplicate submits idempotent.\n\n## Verdict\nFAIL\n"
+	var secondCycleFixPrompt string
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			auditPath := filepath.Join(projectDir, config.SprintAuditFile)
+			promptPath := filepath.Join(projectDir, config.AuditPromptFile)
+			switch callIndex {
+			case 0, 5, 10:
+				writeFile(t, auditPath, repeatedHighFindings)
+			case 1, 3, 6, 8:
+				if callIndex == 6 {
+					data, err := os.ReadFile(promptPath)
+					require.NoError(t, err)
+					secondCycleFixPrompt = string(data)
+				}
+				writeFile(t, filepath.Join(projectDir, "src/first.go"), fmt.Sprintf("package main\n\nconst attempt = %d\n", callIndex))
+			case 2, 4:
+				writeFile(t, auditPath,
+					"- **Issue:** 1\n- **Status:** STILL_PRESENT\n\n- **Issue:** 2\n- **Status:** STILL_PRESENT\n")
+			case 7, 9:
+				writeFile(t, auditPath,
+					"- **Issue:** 1\n- **Status:** STILL_PRESENT\n")
+			}
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.EffortLevel = epic.EffortHigh
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Metrics)
+
+	assert.False(t, result.Passed)
+	assert.True(t, result.Blocking)
+	assert.Equal(t, "HIGH", result.MaxSeverity)
+	assert.Contains(t, result.StopReason, "low_yield")
+	assert.Equal(t, result.StopReason, result.Metrics.LowYieldStopReason)
+	assert.Equal(t, 1, result.Metrics.LowYieldStrategyChanges)
+	require.Len(t, result.Metrics.CycleSummaries, 2)
+	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[0].FixYield, 0.001)
+	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[1].VerifyYield, 0.001)
+	assert.Len(t, eng.prompts, 11)
+	assert.Contains(t, secondCycleFixPrompt, "### Issue 1")
+	assert.NotContains(t, secondCycleFixPrompt, "### Issue 2")
+}
+
 func TestIsTurnoverChurn(t *testing.T) {
 	t.Parallel()
 

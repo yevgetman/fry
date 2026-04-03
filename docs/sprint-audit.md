@@ -34,7 +34,7 @@ Sprint passes sanity checks
        │       ├─ All resolved, no new → PASS
        │       └─ Issues remain or new found → inner fix loop again
        │
-       └─ Repeat until PASS, iterations exhausted, or stale
+       └─ Repeat until PASS, iterations exhausted, stale, or low-yield stop
                │
                ├─ CRITICAL or HIGH → sprint FAILS, epic stops
                └─ MODERATE → advisory warning, build continues
@@ -69,6 +69,7 @@ The inner loop carries forward structured history so each fix iteration has more
 - **Behavior-unchanged verification** -- Verify can explicitly report `BEHAVIOR_UNCHANGED` when a remediation left the executable logic path untouched. The next fix prompt then carries issue-specific guidance with the unchanged path summary and a direct instruction not to answer with comments, rationale-only edits, or other non-behavioral changes.
 - **Fix attempt history** -- The fix prompt includes concise summaries of prior attempts that targeted the same findings, including whether the attempt was a no-op, which issues remained, and any verification notes.
 - **Strategy escalation** -- If the same finding comes back `BEHAVIOR_UNCHANGED` repeatedly, Fry narrows the next fix batch to the stuck findings, refreshes fix-session context, and can stop the current fix loop early instead of grinding through more low-yield retries.
+- **Yield-aware mode shifts** -- Fry records per-cycle productivity (fix yield, verify yield, no-op rate, and milliseconds per resolved finding). When progress-based cycles keep spending calls with weak returns, Fry refreshes audit context and runs the next cycle in single-issue mode before deciding whether to stop early.
 - **Explicit verify boundary** -- Verify sessions stay stateless and never inherit fix-session context. This keeps the trust boundary between remediation and validation intact.
 
 On Claude and Codex, Fry also reuses same-role session continuity within the sprint audit:
@@ -140,8 +141,12 @@ Sprint audit metrics now distinguish between several kinds of churn:
 - **Behavior-unchanged escalations** -- Fry narrowed the next fix batch, refreshed fix-session context, or stopped the current fix loop early because the same issue kept coming back behavior-unchanged
 - **Session refreshes** -- Fry reset a same-role audit or fix session because it exceeded a configured continuity budget
 - **Session refresh reasons** -- per-reason counts for why a refresh occurred (call budget, prompt budget, token budget, or oversized carry-forward set)
+- **Cycle summaries** -- per-cycle productivity snapshots with fix yield, verify yield, no-op rate, and milliseconds per resolved finding
+- **Trailing yield** -- a rolling summary across the most recent low-yield window so Fry can distinguish one bad cycle from a sustained decline
+- **Low-yield strategy changes** -- count of times Fry refreshed context and changed tactics because productivity dropped
+- **Low-yield stop reason** -- an explicit machine-readable reason when a progress-based audit stopped because productivity stayed low instead of converging
 
-These counters are written to `.fry/build-logs/sprintN_audit_metrics.json` and surfaced in `.fry/build-status.json` under `sprints[].audit.metrics`.
+These counters are written to `.fry/build-logs/sprintN_audit_metrics.json` and surfaced in `.fry/build-status.json` under `sprints[].audit.metrics`. When the audit exits early for low yield, Fry also sets `sprints[].audit.stop_reason`.
 
 ## Blocking vs Advisory
 
@@ -454,7 +459,7 @@ sprint1_audit_final_20060102_150405.log      # Final audit pass
 sprint1_audit_metrics.json                   # Per-call audit metrics for the sprint
 ```
 
-Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, no-op rate, accepted versus rejected fix passes, diff classifications, verify yield, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier.
+Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, no-op rate, accepted versus rejected fix passes, diff classifications, verify yield, per-cycle productivity summaries, low-yield strategy changes, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier and any final low-yield stop reason.
 
 ## Cleanup
 
