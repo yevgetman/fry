@@ -507,6 +507,9 @@ fry status [flags]
 | Flag | Description |
 |---|---|
 | `--project-dir <path>` | Project directory to inspect (default: current directory) |
+| `--json` | Output build state as JSON for agent consumption |
+| `--runs` | List all stored run snapshots in `.fry/runs/` |
+| `--run <id>` | Show detailed status for a specific run (accepts full ID or timestamp suffix) |
 | `--consciousness` | Show local consciousness session health (checkpoints, parse failures, uploads, resumes) |
 | `--consciousness-remote` | Show remote consciousness pipeline stats (memory count, transmutation, reflection) |
 
@@ -517,12 +520,16 @@ fry status [flags]
 - `--consciousness-remote` queries the hosted consciousness API for global memory-store statistics.
 - If no active build exists, scans for archived builds in `.fry-archive/` and worktree builds in `.fry-worktrees/`, displaying a summary of each (epic name, sprint progress, exit reason). Shows up to 10 most recent archives.
 - If a worktree strategy is persisted but the worktree directory is missing, prints a message suggesting `fry run --continue`.
+- `--runs` lists all per-run status snapshots in `.fry/runs/`, showing run ID, type (fresh/continue/resume/retry), status, sprint count, start time, and parent run ID. Each build invocation creates an immutable snapshot so that later retries cannot erase earlier run history.
+- `--run <id>` shows the full build status for a specific run. Accepts the full run ID (e.g., `run-20260402-100000`) or just the timestamp suffix (e.g., `20260402-100000`).
 
 ### Examples
 
 ```bash
 fry status                              # Show build state for current directory
 fry status --project-dir /path/to/proj  # Show build state for a different project
+fry status --runs                       # List all run snapshots
+fry status --run 20260402-100000        # Show status for a specific run
 fry status --consciousness              # Show local consciousness session health
 fry status --consciousness-remote       # Show remote consciousness pipeline stats
 ```

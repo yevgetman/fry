@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/config"
 )
 
@@ -187,4 +189,145 @@ func TestStatusCommandConsciousnessLocal(t *testing.T) {
 	assert.Contains(t, output, "Checkpoints persisted: 3")
 	assert.Contains(t, output, "Parse failures:        1")
 	assert.Contains(t, output, "1 pending")
+}
+
+func newTestCmdWithRunsFlags(t *testing.T, projectDir string) *cobra.Command {
+	t.Helper()
+	cmd := &cobra.Command{}
+	cmd.Flags().String("project-dir", projectDir, "")
+	cmd.Flags().Bool("runs", false, "")
+	cmd.Flags().String("run", "", "")
+	cmd.Flags().Bool("json", false, "")
+	cmd.Flags().Bool("consciousness", false, "")
+	cmd.Flags().Bool("consciousness-remote", false, "")
+	cmd.SetContext(context.Background())
+	return cmd
+}
+
+func writeRunSnapshot(t *testing.T, dir, runID string, status *agent.BuildStatus) {
+	t.Helper()
+	runDir := filepath.Join(dir, config.RunsDir, runID)
+	require.NoError(t, os.MkdirAll(runDir, 0o755))
+	data, err := json.MarshalIndent(status, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(runDir, "build-status.json"), data, 0o644))
+}
+
+func TestStatusRuns_ListsRuns(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	writeRunSnapshot(t, dir, "run-20260402-100000", &agent.BuildStatus{
+		Version: 1,
+		Run:     &agent.RunMeta{RunID: "run-20260402-100000", RunType: agent.RunTypeFresh},
+		Build:   agent.BuildInfo{Epic: "Test", Status: "completed"},
+		Sprints: []agent.SprintStatus{{Number: 1, Name: "S1", Status: "PASS"}},
+	})
+	writeRunSnapshot(t, dir, "run-20260403-060000", &agent.BuildStatus{
+		Version: 1,
+		Run:     &agent.RunMeta{RunID: "run-20260403-060000", RunType: agent.RunTypeContinue, ParentRunID: "run-20260402-100000"},
+		Build:   agent.BuildInfo{Epic: "Test", Status: "failed"},
+		Sprints: []agent.SprintStatus{{Number: 1, Name: "S1", Status: "running"}},
+	})
+
+	var buf bytes.Buffer
+	cmd := newTestCmdWithRunsFlags(t, dir)
+	require.NoError(t, cmd.Flags().Set("runs", "true"))
+	cmd.SetOut(&buf)
+
+	err := statusCmd.RunE(cmd, []string{})
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "run-20260402-100000")
+	assert.Contains(t, output, "run-20260403-060000")
+	assert.Contains(t, output, "fresh")
+	assert.Contains(t, output, "continue")
+	assert.Contains(t, output, "completed")
+	assert.Contains(t, output, "failed")
+}
+
+func TestStatusRuns_Empty(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	var buf bytes.Buffer
+	cmd := newTestCmdWithRunsFlags(t, dir)
+	require.NoError(t, cmd.Flags().Set("runs", "true"))
+	cmd.SetOut(&buf)
+
+	err := statusCmd.RunE(cmd, []string{})
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "No run snapshots found")
+}
+
+func TestStatusRun_ByID(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	writeRunSnapshot(t, dir, "run-20260402-100000", &agent.BuildStatus{
+		Version: 1,
+		Run:     &agent.RunMeta{RunID: "run-20260402-100000", RunType: agent.RunTypeFresh},
+		Build: agent.BuildInfo{
+			Epic:   "Specific Run",
+			Status: "completed",
+			Engine: "claude",
+			Effort: "max",
+		},
+		Sprints: []agent.SprintStatus{
+			{Number: 1, Name: "Scaffolding", Status: "PASS"},
+			{Number: 2, Name: "Core", Status: "PASS"},
+		},
+	})
+
+	var buf bytes.Buffer
+	cmd := newTestCmdWithRunsFlags(t, dir)
+	require.NoError(t, cmd.Flags().Set("run", "run-20260402-100000"))
+	cmd.SetOut(&buf)
+
+	err := statusCmd.RunE(cmd, []string{})
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "run-20260402-100000")
+	assert.Contains(t, output, "Specific Run")
+	assert.Contains(t, output, "completed")
+	assert.Contains(t, output, "Scaffolding")
+	assert.Contains(t, output, "Core")
+}
+
+func TestStatusRun_ByShortID(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	writeRunSnapshot(t, dir, "run-20260402-100000", &agent.BuildStatus{
+		Version: 1,
+		Run:     &agent.RunMeta{RunID: "run-20260402-100000", RunType: agent.RunTypeFresh},
+		Build:   agent.BuildInfo{Epic: "Short ID Test", Status: "completed"},
+		Sprints: []agent.SprintStatus{},
+	})
+
+	var buf bytes.Buffer
+	cmd := newTestCmdWithRunsFlags(t, dir)
+	// Pass without the "run-" prefix — should auto-prepend
+	require.NoError(t, cmd.Flags().Set("run", "20260402-100000"))
+	cmd.SetOut(&buf)
+
+	err := statusCmd.RunE(cmd, []string{})
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Short ID Test")
+}
+
+func TestStatusRun_NotFound(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	var buf bytes.Buffer
+	cmd := newTestCmdWithRunsFlags(t, dir)
+	require.NoError(t, cmd.Flags().Set("run", "run-nonexistent"))
+	cmd.SetOut(&buf)
+
+	err := statusCmd.RunE(cmd, []string{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
 }

@@ -281,3 +281,275 @@ func TestWriteBuildStatus_CreatesDirectory(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
 }
+
+func TestGenerateRunID(t *testing.T) {
+	t.Parallel()
+
+	id := GenerateRunID()
+	assert.True(t, len(id) > len(config.RunPrefix), "run ID should have a timestamp suffix")
+	assert.Equal(t, config.RunPrefix, id[:len(config.RunPrefix)])
+}
+
+func TestWriteBuildStatus_PerRunSnapshot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	runID := "run-20260402-100000"
+	status := &BuildStatus{
+		Version: 1,
+		Run: &RunMeta{
+			RunID:   runID,
+			RunType: RunTypeFresh,
+		},
+		Build: BuildInfo{
+			Epic:   "Snapshot Test",
+			Status: "running",
+		},
+		Sprints: []SprintStatus{},
+	}
+
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	// Verify top-level file
+	topLevel, err := ReadBuildStatus(dir)
+	require.NoError(t, err)
+	require.NotNil(t, topLevel)
+	assert.Equal(t, "Snapshot Test", topLevel.Build.Epic)
+	require.NotNil(t, topLevel.Run)
+	assert.Equal(t, runID, topLevel.Run.RunID)
+
+	// Verify per-run snapshot
+	runStatus, err := ReadRunStatus(dir, runID)
+	require.NoError(t, err)
+	require.NotNil(t, runStatus)
+	assert.Equal(t, "Snapshot Test", runStatus.Build.Epic)
+	assert.Equal(t, runID, runStatus.Run.RunID)
+	assert.Equal(t, RunTypeFresh, runStatus.Run.RunType)
+}
+
+func TestWriteBuildStatus_RunSnapshotUpdatesInPlace(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	runID := "run-20260402-100000"
+	status := &BuildStatus{
+		Version: 1,
+		Run:     &RunMeta{RunID: runID, RunType: RunTypeFresh},
+		Build:   BuildInfo{Epic: "Update Test", Status: "running"},
+		Sprints: []SprintStatus{},
+	}
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	// Update status
+	status.Build.Status = "completed"
+	status.Sprints = append(status.Sprints, SprintStatus{Number: 1, Name: "S1", Status: "PASS"})
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	// Verify per-run snapshot reflects latest update
+	runStatus, err := ReadRunStatus(dir, runID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", runStatus.Build.Status)
+	require.Len(t, runStatus.Sprints, 1)
+}
+
+func TestWriteBuildStatus_LaterRunDoesNotEraseEarlier(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// First run completes
+	run1 := &BuildStatus{
+		Version: 1,
+		Run:     &RunMeta{RunID: "run-20260402-100000", RunType: RunTypeFresh},
+		Build: BuildInfo{
+			Epic:         "My App",
+			Status:       "completed",
+			TotalSprints: 10,
+		},
+		Sprints: []SprintStatus{
+			{Number: 1, Name: "S1", Status: "PASS"},
+			{Number: 2, Name: "S2", Status: "PASS"},
+		},
+	}
+	require.NoError(t, WriteBuildStatus(dir, run1))
+
+	// Second run (retry) overwrites top-level, starts from sprint 1
+	run2 := &BuildStatus{
+		Version: 1,
+		Run:     &RunMeta{RunID: "run-20260403-060000", RunType: RunTypeRetry, ParentRunID: "run-20260402-100000"},
+		Build: BuildInfo{
+			Epic:         "My App",
+			Status:       "failed",
+			TotalSprints: 10,
+		},
+		Sprints: []SprintStatus{
+			{Number: 1, Name: "S1", Status: "running"},
+		},
+	}
+	require.NoError(t, WriteBuildStatus(dir, run2))
+
+	// Top-level shows the later run
+	topLevel, err := ReadBuildStatus(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "failed", topLevel.Build.Status)
+	assert.Equal(t, "run-20260403-060000", topLevel.Run.RunID)
+
+	// But the first run's snapshot is preserved
+	firstRun, err := ReadRunStatus(dir, "run-20260402-100000")
+	require.NoError(t, err)
+	require.NotNil(t, firstRun, "first run's snapshot must survive the later retry")
+	assert.Equal(t, "completed", firstRun.Build.Status)
+	assert.Len(t, firstRun.Sprints, 2)
+}
+
+func TestReadRunStatus_NotFound(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	result, err := ReadRunStatus(dir, "run-nonexistent")
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestScanRuns_Empty(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	runs, err := ScanRuns(dir)
+	assert.NoError(t, err)
+	assert.Nil(t, runs)
+}
+
+func TestScanRuns_MultipleRuns(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// Create two run snapshots
+	for _, r := range []struct {
+		id      string
+		runType RunType
+		status  string
+		started time.Time
+	}{
+		{"run-20260402-100000", RunTypeFresh, "completed", time.Date(2026, 4, 2, 10, 0, 0, 0, time.UTC)},
+		{"run-20260403-060000", RunTypeContinue, "failed", time.Date(2026, 4, 3, 6, 0, 0, 0, time.UTC)},
+	} {
+		status := &BuildStatus{
+			Version: 1,
+			Run:     &RunMeta{RunID: r.id, RunType: r.runType},
+			Build: BuildInfo{
+				Epic:      "Test",
+				Status:    r.status,
+				StartedAt: r.started,
+			},
+			Sprints: []SprintStatus{{Number: 1, Name: "S1", Status: "PASS"}},
+		}
+		runDir := filepath.Join(dir, config.RunsDir, r.id)
+		require.NoError(t, os.MkdirAll(runDir, 0o755))
+		data, err := json.MarshalIndent(status, "", "  ")
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(runDir, "build-status.json"), data, 0o644))
+	}
+
+	runs, err := ScanRuns(dir)
+	require.NoError(t, err)
+	require.Len(t, runs, 2)
+
+	// Sorted newest-first
+	assert.Equal(t, "run-20260403-060000", runs[0].RunID)
+	assert.Equal(t, RunTypeContinue, runs[0].RunType)
+	assert.Equal(t, "failed", runs[0].Status)
+
+	assert.Equal(t, "run-20260402-100000", runs[1].RunID)
+	assert.Equal(t, RunTypeFresh, runs[1].RunType)
+	assert.Equal(t, "completed", runs[1].Status)
+	assert.Equal(t, 1, runs[1].Sprints)
+}
+
+func TestScanRuns_SkipsNonRunDirs(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	runsRoot := filepath.Join(dir, config.RunsDir)
+	require.NoError(t, os.MkdirAll(runsRoot, 0o755))
+
+	// Create a non-run directory
+	require.NoError(t, os.MkdirAll(filepath.Join(runsRoot, "not-a-run"), 0o755))
+	// Create a file
+	require.NoError(t, os.WriteFile(filepath.Join(runsRoot, "stray-file.txt"), []byte("hi"), 0o644))
+
+	runs, err := ScanRuns(dir)
+	require.NoError(t, err)
+	assert.Empty(t, runs)
+}
+
+func TestLatestRunID(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// No status file yet
+	assert.Equal(t, "", LatestRunID(dir))
+
+	// Status without RunMeta
+	status := &BuildStatus{
+		Version: 1,
+		Build:   BuildInfo{Status: "running"},
+		Sprints: []SprintStatus{},
+	}
+	require.NoError(t, WriteBuildStatus(dir, status))
+	assert.Equal(t, "", LatestRunID(dir))
+
+	// Status with RunMeta
+	status.Run = &RunMeta{RunID: "run-20260402-100000", RunType: RunTypeFresh}
+	require.NoError(t, WriteBuildStatus(dir, status))
+	assert.Equal(t, "run-20260402-100000", LatestRunID(dir))
+}
+
+func TestRunMeta_ContinueLineage(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// Fresh run
+	status := &BuildStatus{
+		Version: 1,
+		Run:     &RunMeta{RunID: "run-20260401-100000", RunType: RunTypeFresh},
+		Build:   BuildInfo{Epic: "Lineage Test", Status: "completed"},
+		Sprints: []SprintStatus{},
+	}
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	// Continue run references the parent
+	status.Run = &RunMeta{
+		RunID:       "run-20260401-120000",
+		RunType:     RunTypeContinue,
+		ParentRunID: "run-20260401-100000",
+	}
+	status.Build.Status = "running"
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	// Verify lineage in the continue run's snapshot
+	continueStatus, err := ReadRunStatus(dir, "run-20260401-120000")
+	require.NoError(t, err)
+	assert.Equal(t, RunTypeContinue, continueStatus.Run.RunType)
+	assert.Equal(t, "run-20260401-100000", continueStatus.Run.ParentRunID)
+
+	// Verify original run is still accessible
+	freshStatus, err := ReadRunStatus(dir, "run-20260401-100000")
+	require.NoError(t, err)
+	assert.Equal(t, "completed", freshStatus.Build.Status)
+}
+
+func TestWriteBuildStatus_NoRunMeta_SkipsSnapshot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	status := &BuildStatus{
+		Version: 1,
+		Build:   BuildInfo{Status: "running"},
+		Sprints: []SprintStatus{},
+	}
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	// Runs directory should not be created
+	_, err := os.Stat(filepath.Join(dir, config.RunsDir))
+	assert.True(t, os.IsNotExist(err), "runs dir should not exist when no RunMeta")
+}

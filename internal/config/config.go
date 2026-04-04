@@ -108,6 +108,10 @@ const (
 	BuildAuditInvocationPrompt = "Read and execute ALL instructions in .fry/build-audit-prompt.md. You are performing a final holistic audit of the entire codebase. Audit, classify, report, remediate, and re-audit as instructed in the prompt."
 	BuildAuditCompleteFile     = ".fry/build-audit-complete"
 
+	// Run snapshot constants
+	RunsDir   = ".fry/runs"
+	RunPrefix = "run-" // run directory names: run-YYYYMMDD-HHMMSS
+
 	// Archive constants
 	ArchiveDir    = ".fry-archive"
 	ArchivePrefix = ".fry--build--"

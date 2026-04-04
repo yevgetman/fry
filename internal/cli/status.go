@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -28,6 +29,18 @@ var statusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectDir, _ := cmd.Flags().GetString("project-dir")
 		buildDir, _ := resolveBuildDir(projectDir)
+
+		// --runs: list all run snapshots
+		showRuns, _ := cmd.Flags().GetBool("runs")
+		if showRuns {
+			return runStatusRuns(cmd, projectDir)
+		}
+
+		// --run <id>: show a specific run
+		runID, _ := cmd.Flags().GetString("run")
+		if runID != "" {
+			return runStatusByRunID(cmd, projectDir, runID)
+		}
 
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		if jsonOutput {
@@ -64,6 +77,8 @@ func init() {
 	statusCmd.Flags().Bool("consciousness", false, "Show local consciousness session health")
 	statusCmd.Flags().Bool("consciousness-remote", false, "Show remote consciousness pipeline stats")
 	statusCmd.Flags().Bool("json", false, "Output build state as JSON (for agent consumption)")
+	statusCmd.Flags().Bool("runs", false, "List all run snapshots")
+	statusCmd.Flags().String("run", "", "Show status for a specific run ID")
 	rootCmd.AddCommand(statusCmd)
 }
 
@@ -92,6 +107,94 @@ func readPhase(dirs ...string) string {
 		}
 	}
 	return ""
+}
+
+// runStatusRuns lists all run snapshots in .fry/runs/.
+func runStatusRuns(cmd *cobra.Command, projectDir string) error {
+	buildDir, _ := resolveBuildDir(projectDir)
+
+	runs, err := agent.ScanRuns(buildDir)
+	if err != nil {
+		return fmt.Errorf("scan runs: %w", err)
+	}
+	if len(runs) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No run snapshots found.")
+		return nil
+	}
+
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+	if jsonOutput {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(runs)
+	}
+
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "RUN ID\tTYPE\tSTATUS\tSPRINTS\tSTARTED\tPARENT")
+	for _, r := range runs {
+		parent := r.ParentID
+		if parent == "" {
+			parent = "-"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n",
+			r.RunID,
+			r.RunType,
+			r.Status,
+			r.Sprints,
+			r.StartedAt.Format("2006-01-02 15:04"),
+			parent,
+		)
+	}
+	return w.Flush()
+}
+
+// runStatusByRunID shows the build status for a specific run ID.
+func runStatusByRunID(cmd *cobra.Command, projectDir, runID string) error {
+	buildDir, _ := resolveBuildDir(projectDir)
+
+	// Allow prefix match: if the user gives a short prefix, find the first match.
+	if !strings.HasPrefix(runID, config.RunPrefix) {
+		runID = config.RunPrefix + runID
+	}
+
+	status, err := agent.ReadRunStatus(buildDir, runID)
+	if err != nil {
+		return fmt.Errorf("read run %s: %w", runID, err)
+	}
+	if status == nil {
+		return fmt.Errorf("run %s not found", runID)
+	}
+
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+	if jsonOutput {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(status)
+	}
+
+	// Human-readable output for a specific run
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Run:     %s\n", runID)
+	if status.Run != nil {
+		fmt.Fprintf(out, "Type:    %s\n", status.Run.RunType)
+		if status.Run.ParentRunID != "" {
+			fmt.Fprintf(out, "Parent:  %s\n", status.Run.ParentRunID)
+		}
+	}
+	fmt.Fprintf(out, "Epic:    %s\n", status.Build.Epic)
+	fmt.Fprintf(out, "Status:  %s\n", status.Build.Status)
+	if status.Build.Phase != "" {
+		fmt.Fprintf(out, "Phase:   %s\n", status.Build.Phase)
+	}
+	fmt.Fprintf(out, "Engine:  %s\n", status.Build.Engine)
+	fmt.Fprintf(out, "Effort:  %s\n", status.Build.Effort)
+	fmt.Fprintf(out, "Started: %s\n", status.Build.StartedAt.Format(time.RFC3339))
+	fmt.Fprintf(out, "Updated: %s\n", status.UpdatedAt.Format(time.RFC3339))
+	fmt.Fprintf(out, "\nSprints (%d):\n", len(status.Sprints))
+	for _, sp := range status.Sprints {
+		fmt.Fprintf(out, "  %2d. %-40s %s\n", sp.Number, sp.Name, sp.Status)
+	}
+	return nil
 }
 
 func runStatusJSON(cmd *cobra.Command, projectDir string) error {

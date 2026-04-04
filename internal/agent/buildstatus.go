@@ -5,10 +5,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/yevgetman/fry/internal/config"
 )
+
+// RunType describes how a build run was initiated.
+type RunType string
+
+const (
+	RunTypeFresh    RunType = "fresh"
+	RunTypeContinue RunType = "continue"
+	RunTypeRetry    RunType = "retry"
+	RunTypeResume   RunType = "resume"
+)
+
+// RunMeta captures the lineage of a build run.
+type RunMeta struct {
+	RunID       string  `json:"run_id"`
+	RunType     RunType `json:"run_type"`
+	ParentRunID string  `json:"parent_run_id,omitempty"`
+}
 
 // BuildStatus is a machine-readable snapshot of the entire build state,
 // written atomically to .fry/build-status.json after every meaningful
@@ -16,6 +35,7 @@ import (
 type BuildStatus struct {
 	Version    int               `json:"version"`
 	UpdatedAt  time.Time         `json:"updated_at"`
+	Run        *RunMeta          `json:"run,omitempty"`
 	Build      BuildInfo         `json:"build"`
 	Sprints    []SprintStatus    `json:"sprints"`
 	BuildAudit *BuildAuditStatus `json:"build_audit,omitempty"`
@@ -144,8 +164,15 @@ type BuildAuditStatus struct {
 	Findings map[string]int `json:"findings,omitempty"`
 }
 
+// GenerateRunID creates a timestamp-based run identifier.
+func GenerateRunID() string {
+	return config.RunPrefix + time.Now().Format("20060102-150405")
+}
+
 // WriteBuildStatus atomically writes the build status to .fry/build-status.json.
-// It writes to a temporary file first, then renames to avoid partial reads.
+// If the status has a RunMeta with a RunID, it also writes an immutable snapshot
+// to .fry/runs/<run-id>/build-status.json so that later retries cannot erase
+// earlier run history.
 func WriteBuildStatus(projectDir string, status *BuildStatus) error {
 	status.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(status, "", "  ")
@@ -153,17 +180,36 @@ func WriteBuildStatus(projectDir string, status *BuildStatus) error {
 		return fmt.Errorf("marshal build status: %w", err)
 	}
 	data = append(data, '\n')
-	path := filepath.Join(projectDir, config.BuildStatusFile)
+
+	// Write the top-level status file (latest pointer).
+	if err := atomicWrite(filepath.Join(projectDir, config.BuildStatusFile), data); err != nil {
+		return err
+	}
+
+	// Write the per-run snapshot if a run ID is set.
+	if status.Run != nil && status.Run.RunID != "" {
+		runDir := filepath.Join(projectDir, config.RunsDir, status.Run.RunID)
+		runPath := filepath.Join(runDir, "build-status.json")
+		if err := atomicWrite(runPath, data); err != nil {
+			return fmt.Errorf("write run snapshot: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// atomicWrite writes data to path via a temporary file and atomic rename.
+func atomicWrite(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create status dir: %w", err)
+		return fmt.Errorf("create dir for %s: %w", filepath.Base(path), err)
 	}
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		return fmt.Errorf("write status tmp: %w", err)
+		return fmt.Errorf("write tmp %s: %w", filepath.Base(path), err)
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		_ = os.Remove(tmpPath) // clean up on rename failure
-		return fmt.Errorf("rename status file: %w", err)
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("rename %s: %w", filepath.Base(path), err)
 	}
 	return nil
 }
@@ -171,7 +217,17 @@ func WriteBuildStatus(projectDir string, status *BuildStatus) error {
 // ReadBuildStatus reads and parses .fry/build-status.json.
 // Returns nil, nil if the file does not exist.
 func ReadBuildStatus(projectDir string) (*BuildStatus, error) {
-	path := filepath.Join(projectDir, config.BuildStatusFile)
+	return readBuildStatusFrom(filepath.Join(projectDir, config.BuildStatusFile))
+}
+
+// ReadRunStatus reads a specific run's build-status.json by run ID.
+// Returns nil, nil if the run directory or status file does not exist.
+func ReadRunStatus(projectDir, runID string) (*BuildStatus, error) {
+	path := filepath.Join(projectDir, config.RunsDir, runID, "build-status.json")
+	return readBuildStatusFrom(path)
+}
+
+func readBuildStatusFrom(path string) (*BuildStatus, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -184,4 +240,72 @@ func ReadBuildStatus(projectDir string) (*BuildStatus, error) {
 		return nil, fmt.Errorf("parse build status: %w", err)
 	}
 	return &status, nil
+}
+
+// RunSummary is a lightweight snapshot of a run, extracted from the runs directory.
+type RunSummary struct {
+	RunID     string    `json:"run_id"`
+	RunType   RunType   `json:"run_type"`
+	ParentID  string    `json:"parent_run_id,omitempty"`
+	Epic      string    `json:"epic"`
+	Status    string    `json:"status"`
+	Phase     string    `json:"phase,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Sprints   int       `json:"sprints"`
+}
+
+// ScanRuns reads .fry/runs/ and returns a summary for each run,
+// sorted newest-first. Returns nil, nil if the runs directory does not exist.
+func ScanRuns(projectDir string) ([]RunSummary, error) {
+	runsRoot := filepath.Join(projectDir, config.RunsDir)
+	entries, err := os.ReadDir(runsRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("scan runs: %w", err)
+	}
+
+	var summaries []RunSummary
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), config.RunPrefix) {
+			continue
+		}
+		statusPath := filepath.Join(runsRoot, entry.Name(), "build-status.json")
+		status, err := readBuildStatusFrom(statusPath)
+		if err != nil || status == nil {
+			continue
+		}
+		summary := RunSummary{
+			RunID:     entry.Name(),
+			Epic:      status.Build.Epic,
+			Status:    status.Build.Status,
+			Phase:     status.Build.Phase,
+			StartedAt: status.Build.StartedAt,
+			UpdatedAt: status.UpdatedAt,
+			Sprints:   len(status.Sprints),
+		}
+		if status.Run != nil {
+			summary.RunType = status.Run.RunType
+			summary.ParentID = status.Run.ParentRunID
+		}
+		summaries = append(summaries, summary)
+	}
+
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].StartedAt.After(summaries[j].StartedAt)
+	})
+
+	return summaries, nil
+}
+
+// LatestRunID returns the RunID from the current top-level build-status.json,
+// or empty string if no run metadata exists.
+func LatestRunID(projectDir string) string {
+	status, err := ReadBuildStatus(projectDir)
+	if err != nil || status == nil || status.Run == nil {
+		return ""
+	}
+	return status.Run.RunID
 }
