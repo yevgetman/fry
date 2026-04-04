@@ -82,6 +82,7 @@ func init() {
 	rootCmd.AddCommand(identityCmd)
 	rootCmd.AddCommand(reflectCmd)
 	rootCmd.AddCommand(agentCmd)
+	rootCmd.AddCommand(teamCmd)
 	rootCmd.AddCommand(eventsCmd)
 	rootCmd.AddCommand(auditCmd)
 	rootCmd.AddCommand(monitorCmd)

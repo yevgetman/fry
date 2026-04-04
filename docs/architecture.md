@@ -11,7 +11,7 @@ internal/agentrun/          Shared dual-log execution harness for sprint and hea
 internal/archive/           Timestamped snapshots of .fry/ and build outputs into .fry-archive/
 internal/assets/            Supplementary assets scanner and content builder (prepare-only)
 internal/audit/             Post-sprint and post-build semantic audit (sprint audit loop + build audit)
-internal/cli/               Cobra command definitions (run, prepare, replan, init, exit, clean, status, identity, version, agent, events)
+internal/cli/               Cobra command definitions (run, prepare, replan, init, exit, clean, status, identity, version, agent, events, team)
 internal/color/             ANSI color output with TTY detection and NO_COLOR support
 internal/config/            Constants: file paths, defaults, version string
 internal/consciousness/     Session-based checkpoint persistence, checkpoint distillation, final experience synthesis, upload queue
@@ -34,6 +34,7 @@ internal/shellhook/         Shell command execution for hooks
 internal/sprint/            Sprint execution loop, prompt assembly, progress tracking
 internal/steering/          File-based IPC for mid-build human intervention (directives, holds, pauses, graceful exits, resume points)
 internal/summary/           Build summary generation (post-epic agent session)
+internal/team/              Standalone tmux-backed team runtime (state, workers, tasks, liveness, fan-in)
 internal/textutil/          Text utilities (markdown stripping, file timestamps, artifact resolution)
 internal/triage/            Task complexity classification and programmatic epic generation
 internal/verify/            Sanity check parsing, execution, and diagnostic collection
@@ -54,6 +55,7 @@ templates/                  Embedded templates (AGENTS.md, epic-example, verific
 | `fry replan` | Re-run the sprint review and replanning pass |
 | `fry version` | Print the Fry version |
 | `fry events` | List build events; `--follow --json` for real-time streaming |
+| `fry team` | Operate the standalone team runtime (tmux workers, tasks, scale, pause/resume, shutdown) |
 | `fry agent prompt` | Print the agent system prompt (artifact schema, lifecycle, identity) |
 | `fry status --json` | Output structured build state as JSON (for agent consumption) |
 | `fry reflect` | Trigger the Reflection pipeline remotely |
@@ -171,3 +173,14 @@ The `Makefile` provides standard targets:
 - `github.com/stretchr/testify` — Testing utilities (test-only)
 
 No other external dependencies. The binary is fully self-contained.
+
+## Team Runtime Layer
+
+The standalone team runtime lives under `internal/team/` and follows the same artifact-first pattern as the main build runner. A team persists:
+
+- config and lifecycle state in `.fry/team/<team-id>/config.json`
+- tasks as one JSON file per task under `.fry/team/<team-id>/tasks/`
+- worker identity, status, and heartbeat files under `.fry/team/<team-id>/workers/<worker-id>/`
+- locks, logs, and merge artifacts under `.fry/team/<team-id>/locks/` and `artifacts/`
+
+Lifecycle events are mirrored into the shared observer stream, which lets existing `fry events`, `fry status`, and `fry monitor` surfaces consume team activity without a separate transport.

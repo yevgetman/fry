@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/yevgetman/fry/internal/agent"
 	"github.com/yevgetman/fry/internal/config"
+	"github.com/yevgetman/fry/internal/team"
 )
 
 func newTestCmd(t *testing.T, projectDir string) *cobra.Command {
@@ -189,6 +191,46 @@ func TestStatusCommandConsciousnessLocal(t *testing.T) {
 	assert.Contains(t, output, "Checkpoints persisted: 3")
 	assert.Contains(t, output, "Parse failures:        1")
 	assert.Contains(t, output, "1 pending")
+}
+
+func TestStatusCommandIncludesActiveTeamRuntime(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".fry"), 0o755))
+	cfg := &team.Config{
+		TeamID:           "demo-team",
+		ProjectDir:       dir,
+		BuildDir:         dir,
+		Status:           team.StatusRunning,
+		TMuxSession:      "demo-session",
+		GitIsolationMode: team.IsolationShared,
+	}
+	require.NoError(t, team.SaveConfig(dir, cfg))
+	require.NoError(t, os.WriteFile(team.ActiveTeamPath(dir), []byte("demo-team\n"), 0o644))
+	require.NoError(t, team.SaveTask(dir, "demo-team", &team.Task{
+		ID:        "001",
+		Title:     "test",
+		Status:    team.TaskPending,
+		CreatedAt: time.Now().UTC(),
+	}))
+	require.NoError(t, team.SaveIdentity(dir, "demo-team", &team.WorkerIdentity{
+		WorkerID: "worker-1",
+		Role:     "executor",
+		WorkDir:  dir,
+		Status:   team.WorkerIdle,
+	}))
+	require.NoError(t, team.SaveWorkerRecord(dir, "demo-team", &team.WorkerRecord{
+		WorkerID:      "worker-1",
+		Status:        team.WorkerIdle,
+		DesiredStatus: team.WorkerRunning,
+	}))
+
+	var buf bytes.Buffer
+	fakeCmd := newTestCmd(t, dir)
+	fakeCmd.SetOut(&buf)
+
+	err := statusCmd.RunE(fakeCmd, []string{})
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Active Team Runtime: demo-team (running)")
 }
 
 func newTestCmdWithRunsFlags(t *testing.T, projectDir string) *cobra.Command {
