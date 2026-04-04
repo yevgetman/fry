@@ -20,7 +20,7 @@ Fry is a Go CLI tool that orchestrates AI agents (OpenAI Codex, Claude Code, or 
 fry/
 ├── cmd/fry/main.go              # Entry point — calls cli.Execute()
 ├── internal/
-│   ├── cli/                     # Cobra commands: root, run, config, init, prepare, replan, clean, version, status, identity
+│   ├── cli/                     # Cobra commands: root, run, config, init, prepare, replan, clean, destroy, exit, monitor, reflect, audit, agent, status, identity, version
 │   │   ├── root.go              # Persistent flags (--project-dir, --verbose/-v, --engine, etc.)
 │   │   ├── engine_factory.go    # Sticky engine planner + resilient/failover engine construction
 │   │   ├── run.go               # Main orchestration: sprint loop, audit, review, continue
@@ -36,6 +36,7 @@ fry/
 │   │   ├── color.go             # ANSI color utilities, TTY detection, NO_COLOR support
 │   │   └── logcolor.go          # Pattern-matched log line colorizer
 │   ├── config/config.go         # All constants: paths, defaults, invocation prompts
+│   ├── confirm/                 # Interactive confirmation via file-based IPC
 │   ├── settings/
 │   │   ├── settings.go          # Repo-local Fry settings (.fry/config.json): Load, Save, GetEngine, SetEngine
 │   │   └── settings_test.go     # Tests for repo-local settings persistence and validation
@@ -61,6 +62,7 @@ fry/
 │   │   ├── prompt.go            # Layered prompt assembly (10 layers, 0.5 through 5)
 │   │   ├── progress.go          # Iteration memory management
 │   │   └── compactor.go         # Sprint progress → epic-progress summarization
+│   ├── steering/                # Graceful exits, stop requests, hold/pause sentinels, and resume points
 │   ├── verify/
 │   │   ├── types.go             # CheckType: FILE, FILE_CONTAINS, CMD, CMD_OUTPUT, TEST
 │   │   ├── parser.go            # verification.md parser
