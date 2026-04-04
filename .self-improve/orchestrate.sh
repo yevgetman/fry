@@ -500,7 +500,7 @@ triage_issue_item() {
     render_issue_triage_prompt "$issue_json" > "$prompt_file"
     rm -f "$decision_file"
 
-    log "  TRIAGE: sizing #$issue_number — $title"
+    log "  TRIAGE: sizing #$issue_number — $title" >&2
     if ! fry run \
         --triage-only \
         --user-prompt-file "$prompt_file" \
@@ -508,7 +508,7 @@ triage_issue_item() {
         --yes \
         --no-project-overview \
         --project-dir "$project_dir" >> "$LOG_FILE" 2>&1; then
-        log "  WARNING: triage failed for #$issue_number — defaulting to complex/high"
+        log "  WARNING: triage failed for #$issue_number — defaulting to complex/high" >&2
         rm -f "$prompt_file"
         echo "$issue_json" | jq \
             --arg declared_effort "$declared_effort" \
@@ -535,7 +535,7 @@ triage_issue_item() {
         complexity="COMPLEX"
         suggested_effort=""
         triage_reason="triage decision file missing; defaulted to complex/high"
-        log "  WARNING: triage decision missing for #$issue_number — defaulting to complex/high"
+        log "  WARNING: triage decision missing for #$issue_number — defaulting to complex/high" >&2
     fi
 
     triaged_effort="$(resolve_triage_effort "$complexity" "$suggested_effort")"
