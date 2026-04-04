@@ -51,6 +51,15 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Standalone audit | `fry audit --project-dir <dir>` |
 | Standalone audit (SARIF) | `fry audit --sarif --project-dir <dir>` |
 | Dry run | `fry run --dry-run --project-dir <dir>` |
+| Start team runtime | `fry team start --workers 3 --project-dir <dir>` |
+| Team status | `fry team status --project-dir <dir>` |
+| Scale team | `fry team scale --add 2 --project-dir <dir>` |
+| Pause team | `fry team pause --project-dir <dir>` |
+| Resume team | `fry team resume --project-dir <dir>` |
+| Shutdown team | `fry team shutdown --project-dir <dir>` |
+| Attach to team | `fry team attach --project-dir <dir>` |
+| Assign tasks | `fry team assign --task-file tasks.json --project-dir <dir>` |
+| Disable telemetry | `fry run -y --no-telemetry --project-dir <dir>` |
 
 ## How to Pass Tasks to Fry
 
@@ -377,6 +386,8 @@ sessions_spawn({
 | `--dry-run` | (flag) | off | Preview without executing |
 | `--sarif` | (flag) | off | Write SARIF 2.1.0 audit output |
 | `--show-tokens` | (flag) | off | Print per-sprint token usage |
+| `--telemetry` | (flag) | on | Enable experience upload to consciousness API |
+| `--no-telemetry` | (flag) | off | Disable experience upload |
 | `--verbose`, `-v` | (flag) | off | Verbose logging; on `fry monitor`, include granular synthetic events |
 
 ### Effort levels
@@ -628,6 +639,8 @@ Fry verifies sprint output with five check types defined in `.fry/verification.m
 | Command succeeds | `@check_cmd <command>` | Exit code 0 |
 | Command output | `@check_cmd_output <cmd> \| <pattern>` | Stdout matches pattern |
 | Tests pass | `@check_test <command>` | Exit 0 and zero test failures |
+
+Before the sprint loop begins, Fry runs **harness self-validation** on all sanity check file targets — checking for absolute paths, path traversal (`../`), missing parent directories, and empty targets. Issues are reported as warnings so broken checks don't silently pass.
 
 When checks fail, Fry runs an alignment loop to auto-fix. If alignment stalls,
 the sprint may pass with deferred failures (below `@max_fail_percent` threshold).
@@ -901,6 +914,71 @@ sessions_spawn({
 
 Resume auto-detects the build mode (software/planning/writing) and git
 strategy (branch/worktree) from `.fry/build-mode.txt` and `.fry/git-strategy.txt`.
+
+## Team Runtime
+
+Fry includes a standalone tmux-backed team runtime for multi-worker parallel builds. The team runtime manages workers, assigns tasks, handles liveness, and integrates outputs.
+
+### Starting a Team
+
+```bash
+fry team start --workers 3 --project-dir /path/to/project
+fry team start --workers 2 --role executor,executor --task-file tasks.json --project-dir /path/to/project
+fry team start --workers 4 --git-isolation per-worker-worktree --project-dir /path/to/project
+```
+
+Key flags:
+- `--workers N` — number of workers to spawn
+- `--role role1,role2` — worker roles (repeat or comma-separate; default: executor)
+- `--task-file path` — JSON task file to load at startup
+- `--git-isolation shared|per-worker-worktree` — how workers share the codebase (default: shared for single worker, per-worker-worktree for multiple workers in git repos)
+- `--team id` — explicit team identifier (auto-generated if omitted)
+- `--executable-path path` — override fry binary path for worker hosts
+
+### Managing a Team
+
+```bash
+fry team status                          # Show team status (human-readable)
+fry team status --json                   # Show team status (JSON)
+fry team assign --task-file tasks.json   # Load new tasks
+fry team pause                           # Pause task claiming
+fry team resume                          # Resume + reconcile dead workers
+fry team scale --add 2                   # Add workers
+fry team scale --remove worker-1         # Drain/remove a worker
+fry team attach                          # Attach to tmux session
+fry team shutdown                        # Graceful shutdown
+fry team shutdown --force                # Force kill tmux session
+```
+
+### Task File Format
+
+Task files are JSON arrays or `{ "tasks": [...] }` objects:
+
+```json
+[
+  {"id": "001", "title": "Build API", "role": "executor", "priority": 1, "command": "fry run -y"},
+  {"id": "002", "title": "Build UI", "role": "executor", "priority": 2, "command": "fry run -y"}
+]
+```
+
+### Git Isolation Modes
+
+- **shared** — all workers share the same working directory. Suitable for single-worker teams or non-git projects.
+- **per-worker-worktree** — each worker gets its own git worktree. Outputs are auto-merged on completion; merge results are summarized in `.fry/team/<team-id>/artifacts/merge-report.md`.
+
+### Team State
+
+Team state lives under `.fry/team/<team-id>/`:
+- `config.json` — team configuration and lifecycle state
+- `tasks/` — per-task state files
+- `workers/<worker-id>/` — worker identity, status, heartbeat
+- `locks/` — worker-level task locks
+- `artifacts/` — worker logs and task outputs
+- `events.jsonl` — team-specific event log
+
+Team lifecycle events are mirrored into the shared observer stream, so `fry events`, `fry status`, and `fry monitor` consume team activity without a separate transport.
+
+---
 
 ## Consciousness Pipeline
 

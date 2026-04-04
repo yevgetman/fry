@@ -61,6 +61,14 @@ your-project/
     codebase-memories/                   #   Accumulated codebase-specific learnings (persistent across cleans)
       001-2026-03-29-auth-env-req.md    #     Individual memory with frontmatter (confidence, source, reinforced)
       002-2026-03-29-test-db-setup.md   #     Extracted post-build, deduplicated, compacted at 50+
+    team/                                #   Team runtime state (created by fry team start)
+      <team-id>/                         #     One directory per team
+        config.json                      #       Team configuration and lifecycle
+        tasks/                           #       Per-task state files
+        workers/                         #       Per-worker identity and records
+        locks/                           #       Worker-level task locks
+        artifacts/                       #       Worker logs and task outputs
+        events.jsonl                     #       Team-specific event log
     build-logs/                          #   Per-iteration logs
     .fry.lock                            #   Concurrency lock
   build-summary.md                       # Build summary report (persisted in project root)
@@ -141,6 +149,13 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `.fry/summary-prompt.md` | Exact assembled summary generation prompt; preserved after invocation for resumability. | `fry run` at runtime |
 | `.fry/confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, deleted after response) | `fry run --confirm-file` or `fry prepare --confirm-file` |
 | `.fry/confirm-response.json` | Agent's response to the prompt (transient, deleted after read) | Written by agent |
+| `.fry/team/<team-id>/config.json` | Team runtime configuration and lifecycle state | `fry team start` |
+| `.fry/team/<team-id>/tasks/<task-id>.json` | Per-task state (status, assigned worker, output) | `fry team start` or `fry team assign` |
+| `.fry/team/<team-id>/workers/<worker-id>/identity.json` | Worker identity (role, work dir, status) | `fry team start` |
+| `.fry/team/<team-id>/workers/<worker-id>/record.json` | Worker record (status, desired status, heartbeat) | `fry team start` at runtime |
+| `.fry/team/<team-id>/locks/` | Worker-level task locks | `fry team start` at runtime |
+| `.fry/team/<team-id>/artifacts/` | Worker logs and task outputs | `fry team start` at runtime |
+| `.fry/team/<team-id>/events.jsonl` | Team-specific event log | `fry team start` at runtime |
 
 ### Auto-Generation Behavior
 

@@ -31,7 +31,13 @@ fry/
 │   │   ├── clean.go             # Archive .fry/ and build outputs to .fry-archive/
 │   │   ├── destroy.go           # Remove all fry artifacts completely (inverse of init)
 │   │   ├── version.go           # Version subcommand
-│   │   └── status.go            # Show current build state (no LLM call)
+│   │   ├── status.go            # Show current build state (no LLM call)
+│   │   ├── team.go              # Standalone tmux-backed team runtime (start, status, scale, pause, resume, shutdown, attach, assign)
+│   │   ├── agent.go             # Agent foundation commands (prompt) + events command
+│   │   ├── monitor.go           # Real-time build monitoring (event stream, dashboard, log tail)
+│   │   ├── identity.go          # Print compiled-in identity
+│   │   ├── reflect.go           # Trigger identity reflection
+│   │   └── audit.go             # Standalone build-level audit
 │   ├── color/
 │   │   ├── color.go             # ANSI color utilities, TTY detection, NO_COLOR support
 │   │   └── logcolor.go          # Pattern-matched log line colorizer
@@ -67,7 +73,8 @@ fry/
 │   │   ├── types.go             # CheckType: FILE, FILE_CONTAINS, CMD, CMD_OUTPUT, TEST
 │   │   ├── parser.go            # verification.md parser
 │   │   ├── runner.go            # Check execution with timeout
-│   │   └── collector.go         # Failure report aggregation
+│   │   ├── collector.go         # Failure report aggregation
+│   │   └── selfcheck.go         # Harness self-validation: ValidateHarness checks file targets for absolute paths, traversal, missing parents
 │   ├── heal/heal.go             # Alignment loop on sanity check failure (package name `heal` is backward-compatible)
 │   ├── agent/                   # Build state assembly, build status persistence, and runtime events for `fry status`
 │   │   ├── buildstatus.go       # BuildStatus, RunMeta, RunSummary types; WriteBuildStatus (atomic + per-run snapshot); ScanRuns
@@ -112,7 +119,9 @@ fry/
 │   │   ├── strategy.go          # SetupStrategy, ResolveAutoStrategy, GenerateBranchName, worktree/branch helpers
 │   │   └── scan.go              # ScanWorktreeBuilds (scan .fry-worktrees/ for builds)
 │   ├── docker/docker.go         # Docker Compose lifecycle, health checks
-│   ├── preflight/preflight.go   # Pre-build tool/command validation
+│   ├── preflight/
+│   │   ├── preflight.go         # Pre-build tool/command validation
+│   │   └── sprint_infer.go      # Sprint-scoped preflight: infer env vars, Docker refs, external tools from prompt text
 │   ├── archive/
 │   │   ├── archive.go           # Build archiving (.fry/ → .fry-archive/)
 │   │   └── scan.go              # BuildSummary type, ScanArchives, ScanBuildDir (lightweight build scanning)
@@ -156,6 +165,17 @@ fry/
 │   │   ├── enrichment.go        # Pure event enrichment: elapsed times, sprint fractions, phase transitions
 │   │   ├── stream.go            # Monitor orchestrator: New, Run (continuous), Snapshot (one-shot)
 │   │   └── render.go            # Rendering: stream, dashboard (including live sprint-audit progress), log tail, waiting/ended messages
+│   ├── team/
+│   │   ├── runtime.go           # Team lifecycle: Start, Resume, Shutdown, Scale
+│   │   ├── types.go             # Config, Task, WorkerIdentity, WorkerRecord, StartOptions, IsolationMode
+│   │   ├── state.go             # Team state persistence: SaveConfig, LoadConfig, SaveTask, LoadTasks
+│   │   ├── workers.go           # Worker management: SaveIdentity, SaveWorkerRecord, ListWorkers
+│   │   ├── tasks.go             # Task state: SaveTask, LoadTasks, ClaimTask, CompleteTask
+│   │   ├── liveness.go          # Worker liveness checks and dead-worker reconciliation
+│   │   ├── status.go            # Team status rendering for fry status and fry team status
+│   │   ├── paths.go             # Team directory path helpers
+│   │   ├── integration.go       # Output integration: worktree merge, integrated-output assembly
+│   │   └── tmux.go              # tmux session management: create, attach, spawn worker panes
 │   ├── metrics/tokens.go        # Token usage parsing for Claude and Codex engines
 │   ├── report/report.go         # BuildReport types and JSON serialisation (--json-report)
 │   ├── shellhook/shellhook.go   # Pre-sprint/iteration shell commands
@@ -170,7 +190,7 @@ fry/
 │   └── identity/                # Compiled-in identity layers (read-only during builds)
 │       ├── core.md              # Fundamental self-knowledge (~500 tokens, always loaded)
 │       └── disposition.md       # Behavioral tendencies (~500 tokens, always loaded)
-├── docs/                        # 26 user-facing documentation files (see below)
+├── docs/                        # 31 user-facing documentation files (see below)
 ├── plans/                       # User-authored inputs
 │   ├── plan.md                  # Build strategy (what to build)
 │   └── executive.md             # Project context (why to build it)
@@ -224,6 +244,7 @@ fry/
 | `build-phase.txt` | Current build phase (triage, prepare, sprint, audit, build-audit, complete, failed) for `fry status` |
 | `build-status.json` | Machine-readable build status snapshot (latest-run pointer); updated atomically after every state change. Contains `run` field with `run_id`, `run_type`, and `parent_run_id` for lineage tracking |
 | `runs/<run-id>/build-status.json` | Immutable per-run status snapshot; one per build/continue/resume invocation, queryable via `fry status --run` |
+| `rolling-results.json` | Compact per-sprint outcomes (number, name, status, duration); updated after every sprint for resumable final-stage reporting |
 | `build-report.json` | Machine-readable BuildReport JSON (written at build end with `--json-report`) |
 | `confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, `--confirm-file`) |
 | `confirm-response.json` | Agent response to interactive prompt (transient, `--confirm-file`) |
@@ -295,6 +316,30 @@ All engines are wrapped in a `ResilientEngine` decorator (`internal/engine/resil
 | high | 25 | 10 |
 | max | 40 | 10 |
 
+### ReportingFailure (`internal/agent/buildstatus.go`)
+
+```go
+type ReportingFailure struct {
+    Stage   string `json:"stage"`             // build_audit, summary
+    Message string `json:"message,omitempty"` // error description
+}
+```
+
+Separates core build completion from post-build reporting failures. When a build succeeds but the audit or summary generation fails (e.g. quota exhaustion), the build status is set to `completed_with_reporting_failure` instead of `failed`.
+
+### RollingSprintResult (`internal/agent/buildstatus.go`)
+
+```go
+type RollingSprintResult struct {
+    Number      int     `json:"number"`
+    Name        string  `json:"name"`
+    Status      string  `json:"status"`
+    DurationSec float64 `json:"duration_sec,omitempty"`
+}
+```
+
+Compact per-sprint outcome persisted to `.fry/rolling-results.json` after each sprint. Provides durable structured input for resumable final-stage reporting so that build audit and summary can resume from disk state rather than reconstructing from raw logs.
+
 ### Sanity Checks (`internal/verify/types.go`)
 
 Five check primitives: `@check_file` (file exists), `@check_file_contains` (regex match in file), `@check_cmd` (command exits 0), `@check_cmd_output` (command output matches regex), `@check_test` (go test command passes (exits 0 AND zero test failures detected; test count and framework are parsed from output)).
@@ -322,21 +367,23 @@ Before sprint loop:
   2. Git init (if needed)
   3. Git strategy setup (new repos stay on current branch for the first build; otherwise branch/worktree creation and artifact copy; persisted to .fry/git-strategy.txt)
   4. --continue: collect build state + structured resume point + LLM analysis (auto-detect resume point, reattach to persisted strategy)
+  5. Harness self-validation: validates sanity check file targets (absolute paths, path traversal, missing parents, empty targets)
 
 For each sprint (startSprint → endSprint):
-  4. Docker up (if @docker_from_sprint <= current sprint)
-  5. Pre-sprint shell hook
-  6. Assemble layered prompt → .fry/prompt.md
-  7. Agent iteration loop:
+  6. Sprint preflight: infer env vars, Docker refs, and external tools from sprint prompt text and warn about missing dependencies
+  7. Docker up (if @docker_from_sprint <= current sprint)
+  8. Pre-sprint shell hook
+  9. Assemble layered prompt → .fry/prompt.md
+ 10. Agent iteration loop:
      │  for iter = 1 to maxIterations:
      │    ├─ Pre-iteration shell hook
      │    ├─ Run AI engine (codex|claude CLI)
      │    ├─ Append output → .fry/sprint-progress.txt
      │    ├─ Check promise token → early exit if found
      │    └─ No-op detection (no git diff) → early exit
-  8. Run sanity checks
-  9. If checks fail: alignment loop (effort-level-aware: fast=skip, standard=3, high=up to 10 with progress detection, max=unlimited with progress detection)
- 10. Sprint audit (if enabled & effort != fast) — two-level loop:
+ 11. Run sanity checks
+ 12. If checks fail: alignment loop (effort-level-aware: fast=skip, standard=3, high=up to 10 with progress detection, max=unlimited with progress detection)
+ 13. Sprint audit (if enabled & effort != fast) — two-level loop:
      │  ├─ Outer loop (audit cycles): audit agent reviews + verifies previous issues
      │  ├─ Inner loop (fix iterations): fix agent → verify agent → repeat until resolved
      │  ├─ Issues tracked per-finding, FIFO ordered (oldest first)
@@ -350,13 +397,14 @@ For each sprint (startSprint → endSprint):
      │  ├─ Verify agent must emit explicit per-issue outcome statuses (for example `RESOLVED`, `BEHAVIOR_UNCHANGED`, `BLOCKED`); unrecoverable missing output fails the audit
      │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`, including repeated-unchanged counters, cache-aware token telemetry, per-cycle productivity summaries, named strategy-shift events, trailing yield, and low-yield strategy/stop metadata
      │  └─ standard/high/max use effort+complexity-aware caps (falling back to legacy defaults when complexity is unknown)
- 11. Git checkpoint commit
- 12. Compact sprint progress → .fry/epic-progress.txt
- 13. Optional sprint review:
+ 14. Git checkpoint commit
+ 15. Compact sprint progress → .fry/epic-progress.txt
+ 16. Write rolling sprint results → .fry/rolling-results.json
+ 17. Optional sprint review:
      │  ├─ Review agent: CONTINUE or DEVIATE
      │  └─ If DEVIATE: replan affected sprints
 
-Final: build audit (if full epic completed) → deferred check re-run → build summary (includes audit results) → auto-archive (if full epic succeeded)
+Final: build audit (if full epic completed; on failure, retries with one-shot fallback engine) → deferred check re-run → build summary (on failure, retries with one-shot fallback engine) → auto-archive (if full epic succeeded). If reporting stages fail even after fallback, status is set to `completed_with_reporting_failure` (core build succeeded but narration failed).
 ```
 
 ### Prompt Layering (8 layers, assembled in `sprint/prompt.go`)
@@ -380,13 +428,21 @@ Final: build audit (if full epic completed) → deferred check re-run → build 
 ```
 fry [run] [epic.md] [start] [end]   # Execute sprints (run is default)
 fry prepare [epic_filename]          # Generate .fry/ artifacts from plans
+fry init                             # Scaffold project structure; auto-detect and scan existing codebases
 fry replan                           # Replan after deviation
 fry exit                             # Gracefully stop at the next safe checkpoint
 fry audit                            # Standalone AI-powered build audit
 fry clean                            # Archive .fry/ + build outputs to .fry-archive/
 fry destroy                          # Remove all fry artifacts completely
-fry version                          # Print version
+fry config get|set                   # Read or write repo-local Fry settings
 fry status                           # Show current build state (no LLM call)
+fry monitor [project-dir]            # Real-time build monitoring (event stream, dashboard, log tail)
+fry events                           # Stream or list build events (--follow --json for real-time)
+fry team start|status|scale|...      # Standalone tmux-backed team runtime
+fry identity                         # Print Fry's compiled-in identity (--full for all layers)
+fry reflect                          # Trigger identity reflection from accumulated memories
+fry agent prompt                     # Print the agent system prompt
+fry version                          # Print version
 
 Key flags:
   --engine codex|claude|ollama       # AI engine for build
@@ -425,6 +481,7 @@ Key flags:
   --simple-continue                  # Resume from first incomplete sprint without LLM analysis
   --review                           # Enable sprint review between sprints
   --simulate-review verdict          # Simulate review verdict: CONTINUE or DEVIATE
+  --mcp-config path                  # MCP server configuration file (Claude engine only)
   --project-dir path                 # Working directory (default: .)
 ```
 
@@ -534,7 +591,7 @@ make install   # build + cp bin/fry ~/.local/bin/fry; on Darwin also ad-hoc code
 make clean     # rm -rf bin/
 ```
 
-**64 test files** covering all packages. Tests use temp directories, env mocking, and mock engines. Most tests call `t.Parallel()`. No CI/CD configured — local testing only.
+**108 test files** covering all packages. Tests use temp directories, env mocking, and mock engines. Most tests call `t.Parallel()`. No CI/CD configured — local testing only.
 
 ---
 
@@ -570,6 +627,9 @@ make clean     # rm -rf bin/
 | `self-improvement.md` | Automated self-improvement pipeline |
 | `consciousness.md` | Experience synthesis and identity pipeline |
 | `triage.md` | Complexity classification, interactive confirmation, effort suggestion |
+| `codebase-awareness.md` | Existing codebase detection, scanning, memories, and pipeline integration |
+| `agent.md` | Agent foundation: invocation, artifact schema, system prompt generation |
+| `steering.md` | Mid-build human intervention: directives, holds, pauses, graceful exits |
 
 ---
 

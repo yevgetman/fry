@@ -849,6 +849,58 @@ fry reflect                          # Trigger reflection
 
 ---
 
+## `fry agent`
+
+Agent foundation commands for Fry's conversational interface.
+
+### `fry agent prompt`
+
+```
+fry agent prompt
+```
+
+Print the agent system prompt, including artifact schema, lifecycle instructions, and identity. This is a read-only command that outputs the prompt used when Fry is invoked as a conversational agent.
+
+### Examples
+
+```bash
+fry agent prompt                     # Print the full agent system prompt
+```
+
+---
+
+## `fry events`
+
+Stream or list build events from the observer event log (`.fry/observer/events.jsonl`).
+
+```
+fry events [flags]
+```
+
+### Flags
+
+| Flag | Description |
+|---|---|
+| `--follow` | Follow the event stream in real time (tail -f style) |
+| `--json` | Output events as JSON lines (one JSON object per line) |
+| `--project-dir <path>` | Project directory to read events from (default: current directory) |
+
+### Behavior
+
+- Without `--follow`: prints all recorded events and exits
+- With `--follow`: tails the event log, printing new events as they are emitted (Ctrl+C to stop)
+- Events include build phase transitions, sprint starts/completions, audit cycles, team lifecycle events, and observer wake-ups
+
+### Examples
+
+```bash
+fry events                           # List all recorded events
+fry events --follow                  # Stream events in real time
+fry events --follow --json           # Stream as JSON lines (for programmatic consumption)
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Description |

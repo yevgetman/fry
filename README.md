@@ -127,6 +127,9 @@ Each sprint runs as an iterative loop where the AI agent gets a prompt, does wor
 - **Dynamic sprint review** -- optional mid-build review with replanning
 - **Observer** -- metacognitive layer that watches builds, notices patterns, writes durable checkpoints, preserves scratchpad continuity on resume, and quarantines malformed outputs instead of promoting raw transcripts. Identity is compiled into the binary and read-only during builds. Non-fatal; effort-level gated. See [Observer](docs/observer.md).
 - **Experience upload** -- telemetry sends anonymized checkpoint summaries and session lifecycle events to the central consciousness API (enabled by default; `fry init` creates `~/.fry/settings.json`). Uploads are queued locally and retried automatically; `fry status --consciousness` reports local checkpoint and upload health. Control via `--telemetry` / `--no-telemetry`, `FRY_TELEMETRY` env var, or `~/.fry/settings.json`. See [Consciousness](docs/consciousness.md).
+- **Sprint preflight** -- before each sprint, Fry infers environment prerequisites (env vars, Docker refs, external tools) from the sprint prompt text and warns about missing dependencies
+- **Harness self-validation** -- before the sprint loop starts, Fry validates sanity check file targets (absolute paths, path traversal, missing parent directories, empty targets) and reports issues so broken checks don't silently pass
+- **Reporting failure recovery** -- if the build audit or summary generation fails (e.g. quota exhaustion), Fry automatically retries with a one-shot fallback engine and records the outcome as `completed_with_reporting_failure` rather than marking the entire build as failed
 - **Writing mode** -- `--mode writing` re-orients the pipeline for books, guides, and reports with content-oriented audit criteria and a final `manuscript.md`
 - **Colored output** -- terminal output is colorized for readability (phase banners in cyan, PASS in green, FAIL in red, warnings in yellow). Respects `NO_COLOR`, `TERM=dumb`, and `--no-color`. Log files are always plain text.
 
@@ -243,6 +246,9 @@ Task files are JSON arrays or `{ "tasks": [...] }` objects. Each task can specif
 | `fry monitor` | Real-time build monitoring — enriched event stream, verbose granular mode, dashboard with live audit-cycle state, or log tail |
 | `fry clean` | Archive `.fry/` and build outputs to `.fry-archive/` |
 | `fry destroy` | Remove all fry artifacts as if fry was never run |
+| `fry config` | Read or write repo-local Fry settings (engine, etc.) |
+| `fry agent prompt` | Print the agent system prompt (artifact schema, lifecycle, identity) |
+| `fry events` | Stream or list build events from the observer event log |
 | `fry version` | Print fry version |
 
 ```bash
@@ -279,7 +285,7 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | Document | Description |
 |---|---|
 | [Getting Started](docs/getting-started.md) | Prerequisites, installation, first build walkthrough |
-| [Commands](docs/commands.md) | Full CLI reference: `run`, `config`, `exit`, `prepare`, `replan`, `version` |
+| [Commands](docs/commands.md) | Full CLI reference for all commands and flags |
 | [Architecture](docs/architecture.md) | Internal package map and runtime layering, including the standalone team runtime |
 | [Effort Levels](docs/effort-levels.md) | Effort triage: `fast`, `standard`, `high`, `max` -- controls sprint count, density, and review rigor |
 | [Epic Format](docs/epic-format.md) | Epic file syntax: global directives, sprint blocks, validation rules, sizing guidelines |
@@ -306,8 +312,9 @@ See [Commands](docs/commands.md) for complete flag and argument reference.
 | [Build Monitoring](docs/monitor.md) | Real-time monitoring: enriched event stream, dashboard, log tail, NDJSON output |
 | [Observer](docs/observer.md) | Metacognitive layer: event stream, identity, wake-ups, effort-level gating |
 | [Consciousness](docs/consciousness.md) | Experience synthesis and identity pipeline |
-| [Architecture](docs/architecture.md) | Internal package structure, data flow, build system |
 | [Codebase Awareness](docs/codebase-awareness.md) | Existing codebase detection, scanning, memories, and pipeline integration |
+| [Agent Foundation](docs/agent.md) | Agent invocation, artifact schema, system prompt generation |
+| [Build Steering](docs/steering.md) | Mid-build human intervention: directives, holds, pauses, graceful exits |
 
 ## License
 
