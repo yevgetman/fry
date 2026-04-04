@@ -273,3 +273,11 @@ The `reporting_failure` field in `build-status.json` records which stage failed 
 When the build audit or summary generation fails with a transient engine error (quota exhaustion, rate limit, server error, timeout, or network failure), Fry automatically retries once with the fallback engine before recording a reporting failure. The fallback uses the same engine pairing as sprint execution (Claude &harr; Codex by default, or the `--fallback-engine` override).
 
 The fallback is one-shot and does not permanently pin the engine — it only affects the current reporting stage. If both primary and fallback fail, the original error is recorded in the `reporting_failure` field.
+
+## Resumable Reporting State
+
+Fry persists durable artifacts so that failed final-stage reporting can be retried without reconstructing everything from raw logs:
+
+- **`.fry/build-audit-prompt.md`** — The exact assembled prompt is preserved after invocation (not deleted). A later retry can re-read and re-invoke this prompt directly.
+- **`.fry/summary-prompt.md`** — Same: preserved for the summary generation stage.
+- **`.fry/rolling-results.json`** — A compact JSON array of per-sprint outcomes (number, name, status, duration) updated after every sprint completion. Provides durable structured input for final-stage prompt assembly even if the build is interrupted and resumed.

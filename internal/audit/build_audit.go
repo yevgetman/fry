@@ -70,7 +70,8 @@ func RunBuildAudit(ctx context.Context, opts BuildAuditOpts) (*AuditResult, erro
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
 		return nil, fmt.Errorf("run build audit: write prompt: %w", err)
 	}
-	defer func() { _ = os.Remove(promptPath) }()
+	// Prompt file is preserved for resumability — a later retry can
+	// re-invoke the same prompt without reconstructing it from raw logs.
 
 	// Create log file
 	buildLogsDir := filepath.Join(opts.ProjectDir, config.BuildLogsDir)

@@ -136,6 +136,9 @@ To scaffold this structure in a new project, run `fry init`. This creates `plans
 | `.fry/build-phase.txt` | Current build phase (triage, prepare, sprint, audit, build-audit, complete, failed) for `fry status` detection | `fry run` at runtime |
 | `.fry/build-status.json` | Machine-readable build status snapshot (latest-run pointer); updated atomically after every state change for agent polling. Also contains run lineage metadata (`run` field with `run_id`, `run_type`, `parent_run_id`). | `fry run` at runtime |
 | `.fry/runs/<run-id>/build-status.json` | Immutable per-run status snapshot. Each build/continue/resume invocation writes to its own run directory so later retries cannot erase earlier run history. Viewable via `fry status --run <id>`. | `fry run` at runtime |
+| `.fry/rolling-results.json` | Compact per-sprint outcomes (number, name, status, duration) updated after every sprint. Provides durable structured input for resumable final-stage reporting. | `fry run` at runtime |
+| `.fry/build-audit-prompt.md` | Exact assembled build audit prompt; preserved after invocation for resumability. | `fry run` at runtime |
+| `.fry/summary-prompt.md` | Exact assembled summary generation prompt; preserved after invocation for resumability. | `fry run` at runtime |
 | `.fry/confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, deleted after response) | `fry run --confirm-file` or `fry prepare --confirm-file` |
 | `.fry/confirm-response.json` | Agent's response to the prompt (transient, deleted after read) | Written by agent |
 

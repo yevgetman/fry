@@ -1056,6 +1056,7 @@ var runCmd = &cobra.Command{
 			// Update build status with sprint result
 			updateBuildStatusSprint(buildStatus, spr.Number, result)
 			writeCurrentBuildStatus()
+			writeRollingResults(projectPath, buildStatus)
 
 			if isPassStatus(result.Status) {
 				if steering.HasStopRequest(projectPath) {
@@ -3058,6 +3059,24 @@ func gitBranchFromHead(projectDir string) string {
 func writeBuildStatus(projectDir string, status *agent.BuildStatus) {
 	if err := agent.WriteBuildStatus(projectDir, status); err != nil {
 		frlog.Log("WARNING: could not write build status: %v", err)
+	}
+}
+
+func writeRollingResults(projectDir string, status *agent.BuildStatus) {
+	if status == nil {
+		return
+	}
+	rolling := make([]agent.RollingSprintResult, len(status.Sprints))
+	for i, s := range status.Sprints {
+		rolling[i] = agent.RollingSprintResult{
+			Number:      s.Number,
+			Name:        s.Name,
+			Status:      s.Status,
+			DurationSec: s.DurationSec,
+		}
+	}
+	if err := agent.WriteRollingResults(projectDir, rolling); err != nil {
+		frlog.Log("WARNING: could not write rolling results: %v", err)
 	}
 }
 

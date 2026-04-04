@@ -624,3 +624,50 @@ func TestBuildStatus_NoReportingFailure_OmittedFromJSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "reporting_failure")
 }
+
+func TestWriteRollingResults(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	results := []RollingSprintResult{
+		{Number: 1, Name: "Setup", Status: "PASS", DurationSec: 42.5},
+		{Number: 2, Name: "Core", Status: "PASS (aligned)", DurationSec: 120.0},
+	}
+	require.NoError(t, WriteRollingResults(dir, results))
+
+	read, err := ReadRollingResults(dir)
+	require.NoError(t, err)
+	require.Len(t, read, 2)
+	assert.Equal(t, 1, read[0].Number)
+	assert.Equal(t, "Setup", read[0].Name)
+	assert.Equal(t, "PASS", read[0].Status)
+	assert.Equal(t, 42.5, read[0].DurationSec)
+	assert.Equal(t, "PASS (aligned)", read[1].Status)
+}
+
+func TestReadRollingResults_NotFound(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	results, err := ReadRollingResults(dir)
+	assert.NoError(t, err)
+	assert.Nil(t, results)
+}
+
+func TestWriteRollingResults_Overwrites(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	require.NoError(t, WriteRollingResults(dir, []RollingSprintResult{
+		{Number: 1, Name: "S1", Status: "PASS"},
+	}))
+	require.NoError(t, WriteRollingResults(dir, []RollingSprintResult{
+		{Number: 1, Name: "S1", Status: "PASS"},
+		{Number: 2, Name: "S2", Status: "FAIL"},
+	}))
+
+	read, err := ReadRollingResults(dir)
+	require.NoError(t, err)
+	require.Len(t, read, 2)
+	assert.Equal(t, "FAIL", read[1].Status)
+}

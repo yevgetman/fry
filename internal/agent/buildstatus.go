@@ -318,3 +318,42 @@ func LatestRunID(projectDir string) string {
 	}
 	return status.Run.RunID
 }
+
+// RollingSprintResult is a compact per-sprint outcome persisted after each
+// sprint for resumable final-stage reporting.
+type RollingSprintResult struct {
+	Number      int     `json:"number"`
+	Name        string  `json:"name"`
+	Status      string  `json:"status"`
+	DurationSec float64 `json:"duration_sec,omitempty"`
+}
+
+// WriteRollingResults persists a compact sprint results snapshot to
+// .fry/rolling-results.json so that final-stage reporting can resume
+// from durable state rather than reconstructing from raw logs.
+func WriteRollingResults(projectDir string, results []RollingSprintResult) error {
+	data, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal rolling results: %w", err)
+	}
+	data = append(data, '\n')
+	return atomicWrite(filepath.Join(projectDir, config.RollingResultsFile), data)
+}
+
+// ReadRollingResults reads the rolling results snapshot.
+// Returns nil, nil if the file does not exist.
+func ReadRollingResults(projectDir string) ([]RollingSprintResult, error) {
+	path := filepath.Join(projectDir, config.RollingResultsFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read rolling results: %w", err)
+	}
+	var results []RollingSprintResult
+	if err := json.Unmarshal(data, &results); err != nil {
+		return nil, fmt.Errorf("parse rolling results: %w", err)
+	}
+	return results, nil
+}

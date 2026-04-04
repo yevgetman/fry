@@ -96,6 +96,9 @@ const (
 	SummaryFile       = "build-summary.md"
 	SummaryPromptFile = ".fry/summary-prompt.md"
 
+	// Rolling state for resumable reporting
+	RollingResultsFile = ".fry/rolling-results.json"
+
 	// Build report constants
 	BuildReportFile         = ".fry/build-report.json"
 	BuildStatusFile         = ".fry/build-status.json"

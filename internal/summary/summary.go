@@ -113,8 +113,8 @@ func GenerateBuildSummary(ctx context.Context, opts SummaryOpts) error {
 
 	frylog.Log("  SUMMARY: build summary written to %s", config.SummaryFile)
 
-	// Cleanup prompt file
-	_ = os.Remove(promptPath)
+	// Prompt file is preserved for resumability — a later retry can
+	// re-invoke the same prompt without reconstructing it from raw logs.
 
 	return nil
 }
