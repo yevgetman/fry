@@ -69,8 +69,12 @@ fry/
 │   │   ├── runner.go            # Check execution with timeout
 │   │   └── collector.go         # Failure report aggregation
 │   ├── heal/heal.go             # Alignment loop on sanity check failure (package name `heal` is backward-compatible)
-│   ├── agent/
+│   ├── agent/                   # Build state assembly, build status persistence, and runtime events for `fry status`
 │   │   ├── buildstatus.go       # BuildStatus, RunMeta, RunSummary types; WriteBuildStatus (atomic + per-run snapshot); ScanRuns
+│   │   ├── state.go             # ReadBuildState: assembles live BuildState from .fry/ artifacts (events, lock, exit reason)
+│   │   ├── events.go            # Build event helpers
+│   │   ├── prompt.go            # Agent prompt helpers
+│   │   ├── artifacts.go         # Build artifact path helpers
 │   │   └── types.go             # BuildState (runtime status for `fry status --json`)
 │   ├── agentrun/agentrun.go     # Shared dual-log agent execution helper used by sprint and heal packages
 │   ├── audit/
