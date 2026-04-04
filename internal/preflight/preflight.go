@@ -133,3 +133,66 @@ func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
+// SprintPreflightResult captures prerequisite check outcomes for a sprint.
+type SprintPreflightResult struct {
+	MissingEnvVars []string // env vars referenced in the prompt but not set
+	MissingTools   []string // tools referenced in the prompt but not on PATH
+	DockerRequired bool     // whether Docker is referenced
+	DockerMissing  bool     // Docker referenced but not available
+}
+
+// HasBlockers returns true if any prerequisite is missing.
+func (r *SprintPreflightResult) HasBlockers() bool {
+	return len(r.MissingEnvVars) > 0 || len(r.MissingTools) > 0 || r.DockerMissing
+}
+
+// Summary returns a human-readable string of missing prerequisites.
+func (r *SprintPreflightResult) Summary() string {
+	var parts []string
+	if len(r.MissingEnvVars) > 0 {
+		parts = append(parts, fmt.Sprintf("missing env vars: %s", strings.Join(r.MissingEnvVars, ", ")))
+	}
+	if len(r.MissingTools) > 0 {
+		parts = append(parts, fmt.Sprintf("missing tools: %s", strings.Join(r.MissingTools, ", ")))
+	}
+	if r.DockerMissing {
+		parts = append(parts, "Docker not available")
+	}
+	return strings.Join(parts, "; ")
+}
+
+// RunSprintPreflight infers environment prerequisites from the sprint prompt
+// and checks whether they are satisfied. Returns nil if there is nothing to check.
+func RunSprintPreflight(promptText string) *SprintPreflightResult {
+	result := &SprintPreflightResult{}
+
+	// Detect env var references: patterns like $VAR, ${VAR}, os.Getenv("VAR"),
+	// process.env.VAR, or .env file references.
+	envVars := inferEnvVars(promptText)
+	for _, v := range envVars {
+		if os.Getenv(v) == "" {
+			result.MissingEnvVars = append(result.MissingEnvVars, v)
+		}
+	}
+
+	// Detect Docker/testcontainers references
+	if dockerRe.MatchString(promptText) {
+		result.DockerRequired = true
+		if _, err := lookPath("docker"); err != nil {
+			result.DockerMissing = true
+		}
+	}
+
+	// Detect common external tool references
+	for _, tool := range inferTools(promptText) {
+		if _, err := lookPath(tool); err != nil {
+			result.MissingTools = append(result.MissingTools, tool)
+		}
+	}
+
+	if !result.DockerRequired && len(result.MissingEnvVars) == 0 && len(result.MissingTools) == 0 {
+		return nil
+	}
+	return result
+}

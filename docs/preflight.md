@@ -43,6 +43,17 @@ Run arbitrary validation commands before the build starts using `@preflight_cmd`
 
 Each command is executed via `bash -c` in the project directory. If any command exits non-zero, the build is aborted.
 
+## Sprint-Scoped Preflight
+
+Before each sprint starts, Fry infers environment prerequisites from the sprint prompt text and checks whether they are satisfied. This catches missing env vars, unavailable Docker, and missing external tools before expensive sprint execution and audit cycles.
+
+**Inferred prerequisites:**
+- **Environment variables**: detected via `$VAR`, `${VAR}`, `os.Getenv("VAR")`, `process.env.VAR`, and prose patterns like "env vars like FOO, BAR". Standard system variables (`HOME`, `PATH`, etc.) are excluded.
+- **Docker**: detected when the prompt mentions Docker, docker-compose, or testcontainers.
+- **External tools**: detected for common tools like Playwright, Cypress, Redis, PostgreSQL, MySQL, Python, Java.
+
+Sprint preflight warnings are non-fatal (the sprint still runs) but are recorded in `build-status.json` under the sprint's `warnings` array. This lets operators immediately see whether audit failures were caused by missing prerequisites rather than real product defects.
+
 ## Terminal Output
 
 ```

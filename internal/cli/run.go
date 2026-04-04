@@ -857,6 +857,19 @@ var runCmd = &cobra.Command{
 				}
 			}
 
+			// Sprint-scoped prerequisite check: infer env vars, Docker, tools from prompt.
+			if pfResult := preflight.RunSprintPreflight(spr.Prompt); pfResult != nil && pfResult.HasBlockers() {
+				frlog.Log("  PREFLIGHT: sprint %d has missing prerequisites: %s", spr.Number, pfResult.Summary())
+				if len(buildStatus.Sprints) > 0 {
+					idx := findSprintStatusIndex(buildStatus, spr.Number)
+					if idx >= 0 {
+						buildStatus.Sprints[idx].Warnings = append(buildStatus.Sprints[idx].Warnings,
+							"missing prerequisites: "+pfResult.Summary())
+						writeCurrentBuildStatus()
+					}
+				}
+			}
+
 			if err := shellhook.Run(ctx, projectPath, ep.PreSprintCmd); err != nil {
 				return err
 			}
