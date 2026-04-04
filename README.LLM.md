@@ -67,6 +67,9 @@ fry/
 │   │   ├── runner.go            # Check execution with timeout
 │   │   └── collector.go         # Failure report aggregation
 │   ├── heal/heal.go             # Alignment loop on sanity check failure (package name `heal` is backward-compatible)
+│   ├── agent/
+│   │   ├── buildstatus.go       # BuildStatus, RunMeta, RunSummary types; WriteBuildStatus (atomic + per-run snapshot); ScanRuns
+│   │   └── types.go             # BuildState (runtime status for `fry status --json`)
 │   ├── agentrun/agentrun.go     # Shared dual-log agent execution helper used by sprint and heal packages
 │   ├── audit/
 │   │   ├── audit.go             # Per-sprint two-level audit: outer audit cycles + inner fix loops
@@ -213,7 +216,8 @@ fry/
 | `consciousness/distilled/` | Distilled checkpoint summaries |
 | `consciousness/upload-queue/` | Pending checkpoint/lifecycle uploads |
 | `build-phase.txt` | Current build phase (triage, prepare, sprint, audit, build-audit, complete, failed) for `fry status` |
-| `build-status.json` | Machine-readable build status snapshot; updated atomically after every state change, including early failures and live sprint-audit stage/cycle/issue tracking, for agent polling |
+| `build-status.json` | Machine-readable build status snapshot (latest-run pointer); updated atomically after every state change. Contains `run` field with `run_id`, `run_type`, and `parent_run_id` for lineage tracking |
+| `runs/<run-id>/build-status.json` | Immutable per-run status snapshot; one per build/continue/resume invocation, queryable via `fry status --run` |
 | `build-report.json` | Machine-readable BuildReport JSON (written at build end with `--json-report`) |
 | `confirm-prompt.json` | File-based interactive prompt for agent LLMs (transient, `--confirm-file`) |
 | `confirm-response.json` | Agent response to interactive prompt (transient, `--confirm-file`) |
@@ -459,6 +463,8 @@ Key flags:
 | `ValidationChecklistFile` | `.fry/validation-checklist.md` | Deferred-failure checklist emitted before deferred check replay |
 | `ExitRequestFile` | `.fry/exit-request.json` | Structured graceful-exit request written by `fry exit` |
 | `ResumePointFile` | `.fry/resume-point.json` | Settled resume checkpoint consumed by continue heuristics |
+| `RunsDir` | `.fry/runs` | Per-run immutable status snapshot directory |
+| `RunPrefix` | `run-` | Prefix for run directory names (`run-YYYYMMDD-HHMMSS`) |
 | `ArchiveDir` | `.fry-archive` | Directory for archived builds |
 | `ArchivePrefix` | `.fry--build--` | Prefix for archive folder names |
 | `TriagePromptFile` | `.fry/triage-prompt.md` | Classifier prompt for triage gate |

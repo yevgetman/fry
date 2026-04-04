@@ -31,6 +31,8 @@ start builds, monitor progress, interpret results, and steer builds mid-flight.
 | Start a build | `fry run -y --project-dir <dir> --json-report --telemetry` |
 | Start from GitHub issue | `fry run -y --gh-issue <url> --project-dir <dir> --json-report --telemetry` |
 | Check status | `fry status --json --project-dir <dir>` |
+| List run history | `fry status --runs --project-dir <dir>` |
+| Show specific run | `fry status --run <run-id> --json --project-dir <dir>` |
 | Graceful exit | `fry exit --project-dir <dir>` |
 | Resume (LLM-driven) | `fry run -y --continue --project-dir <dir> --json-report --telemetry` |
 | Resume (lightweight) | `fry run -y --simple-continue --project-dir <dir> --json-report --telemetry` |

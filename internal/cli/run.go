@@ -675,9 +675,26 @@ var runCmd = &cobra.Command{
 			writeBuildPhase(originalProjectPath, "sprint:worktree")
 		}
 
+		// Build run lineage metadata for immutable per-run snapshots.
+		runMeta := &agent.RunMeta{
+			RunID: agent.GenerateRunID(),
+		}
+		switch {
+		case runResume:
+			runMeta.RunType = agent.RunTypeResume
+		case runContinue || runSimpleContinue:
+			runMeta.RunType = agent.RunTypeContinue
+		default:
+			runMeta.RunType = agent.RunTypeFresh
+		}
+		if runMeta.RunType != agent.RunTypeFresh {
+			runMeta.ParentRunID = agent.LatestRunID(projectPath)
+		}
+
 		// Initialize machine-readable build status for agent polling.
 		buildStatus = &agent.BuildStatus{
 			Version: 1,
+			Run:     runMeta,
 			Build: agent.BuildInfo{
 				Epic:         ep.Name,
 				Effort:       string(ep.EffortLevel),
