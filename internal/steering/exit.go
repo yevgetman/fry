@@ -147,6 +147,9 @@ func ReadStopRequest(projectDir string) (*StopRequest, error) {
 // requested a graceful stop.
 func HasStopRequest(projectDir string) bool {
 	req, err := ReadStopRequest(projectDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fry: warning: reading stop request: %v\n", err)
+	}
 	return err == nil && req != nil
 }
 

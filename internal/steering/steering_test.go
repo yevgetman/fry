@@ -271,6 +271,105 @@ func TestWriteResumePointRoundTrip(t *testing.T) {
 	assert.False(t, read.SettledAt.IsZero())
 }
 
+// --- HasStopRequest tests ---
+
+func TestHasStopRequest_NoFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	assert.False(t, HasStopRequest(dir))
+}
+
+func TestHasStopRequest_ValidRequest(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+
+	created, err := RequestExit(dir)
+	require.NoError(t, err)
+	require.True(t, created)
+
+	assert.True(t, HasStopRequest(dir))
+}
+
+func TestHasStopRequest_CorruptedJSON(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.ExitRequestFile), []byte("{invalid json"), 0o644))
+
+	assert.False(t, HasStopRequest(dir))
+}
+
+func TestHasStopRequest_PauseSentinel(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.AgentPauseFile), nil, 0o644))
+
+	assert.True(t, HasStopRequest(dir))
+}
+
+func TestReadStopRequest_PauseSentinelOnly(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.AgentPauseFile), nil, 0o644))
+
+	req, err := ReadStopRequest(dir)
+	require.NoError(t, err)
+	require.NotNil(t, req)
+	assert.Equal(t, "pause", req.Source)
+}
+
+func TestClearResumePoint(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, WriteResumePoint(dir, ResumePoint{
+		Phase:   "sprint_boundary",
+		Verdict: ResumeVerdictContinueNext,
+		Reason:  "test",
+	}))
+
+	require.NoError(t, ClearResumePoint(dir))
+
+	point, err := ReadResumePoint(dir)
+	require.NoError(t, err)
+	assert.Nil(t, point)
+}
+
+func TestClearStopRequest_ClearsBoth(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, config.FryDir), 0o755))
+
+	created, err := RequestExit(dir)
+	require.NoError(t, err)
+	require.True(t, created)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.AgentPauseFile), nil, 0o644))
+
+	require.NoError(t, ClearStopRequest(dir))
+
+	_, statErr := os.Stat(filepath.Join(dir, config.ExitRequestFile))
+	assert.True(t, os.IsNotExist(statErr))
+	assert.False(t, IsPaused(dir))
+}
+
+func TestWriteResumePoint_SetsVersionWhenZero(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, WriteResumePoint(dir, ResumePoint{
+		Version: 0,
+		Phase:   "sprint_boundary",
+		Verdict: ResumeVerdictResume,
+		Reason:  "test",
+	}))
+
+	point, err := ReadResumePoint(dir)
+	require.NoError(t, err)
+	require.NotNil(t, point)
+	assert.Equal(t, 1, point.Version)
+}
+
 func TestCleanupAllRemovesExitArtifacts(t *testing.T) {
 	t.Parallel()
 
