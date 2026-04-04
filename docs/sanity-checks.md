@@ -147,6 +147,17 @@ When an alignment pass modifies `.fry/verification.md` (e.g., fixing a broken ch
 - When `--always-verify` is set, Fry probes for recognized build system markers: `go.mod`, `package.json`, `Cargo.toml`, `Makefile`, `pyproject.toml`, and `setup.py`. Python projects that use only `requirements.txt` (without `pyproject.toml` or `setup.py`) are **not** detected by the heuristic. If no recognized build system is found, Fry logs a `WARNING: no recognized build system` message and skips heuristic check generation — write a `.fry/verification.md` file manually for your project type
 - If a sprint has no checks defined, it behaves as if no sanity check file exists for that sprint
 
+## Harness Self-Validation
+
+Before the main build loop starts, Fry validates sanity check targets from `.fry/verification.md` to catch harness configuration problems early:
+
+- **Absolute paths**: `@check_file` targets with absolute paths are flagged — they should be relative to the project root.
+- **Path traversal**: Targets that escape the project directory (`../../...`) are flagged.
+- **Missing parent directories**: If a `@check_file` target's parent directory does not exist, Fry warns that the path may be wrong. (The file itself may not exist yet — the sprint creates it — but the directory structure should be plausible.)
+- **Empty targets**: Checks with empty file paths or commands are flagged.
+
+Issues are logged as `HARNESS:` warnings before the first sprint. This prevents the build from wasting audit cycles on false-negative failures caused by harness misconfiguration rather than real product gaps.
+
 ## Safety Limits
 
 - **Output cap**: Output from sanity checks is capped at 10 MB to prevent unbounded memory growth.

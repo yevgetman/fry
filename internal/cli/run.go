@@ -816,6 +816,17 @@ var runCmd = &cobra.Command{
 			flushPendingUploads()
 		}
 
+		// Harness self-check: validate sanity check targets before the build loop.
+		verificationPath := filepath.Join(projectPath, ep.VerificationFile)
+		if harnessChecks, parseErr := verify.ParseVerification(verificationPath); parseErr == nil && len(harnessChecks) > 0 {
+			if harnessResult := verify.ValidateHarness(projectPath, harnessChecks); harnessResult.HasIssues() {
+				frlog.Log("  HARNESS: %d issue(s) found in sanity check targets", len(harnessResult.Issues))
+				for _, issue := range harnessResult.Issues {
+					frlog.Log("  HARNESS: sprint %d — %s: %s (%s)", issue.Sprint, issue.Type, issue.Message, issue.Target)
+				}
+			}
+		}
+
 		exitErr := error(nil)
 		for sprintNum := startSprint; sprintNum <= endSprint; sprintNum++ {
 			if sprintNum < 1 || sprintNum > len(ep.Sprints) {
