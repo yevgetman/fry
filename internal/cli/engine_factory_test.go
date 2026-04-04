@@ -49,3 +49,34 @@ func TestResolveFallbackEngine(t *testing.T) {
 		assert.Contains(t, err.Error(), "must differ from primary")
 	})
 }
+
+func TestBuildOneShot_NoFallbackForOllama(t *testing.T) {
+	t.Parallel()
+
+	p := &enginePlanner{activeName: "ollama"}
+	_, _, err := p.BuildOneShot()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no fallback engine available")
+}
+
+func TestBuildOneShot_ResolvesFallback(t *testing.T) {
+	t.Parallel()
+
+	p := &enginePlanner{activeName: "claude"}
+	eng, name, err := p.BuildOneShot()
+	require.NoError(t, err)
+	assert.Equal(t, "codex", name)
+	assert.NotNil(t, eng)
+}
+
+func TestBuildOneShot_DoesNotPinEngine(t *testing.T) {
+	t.Parallel()
+
+	p := &enginePlanner{activeName: "claude"}
+	_, _, err := p.BuildOneShot()
+	require.NoError(t, err)
+
+	// Active engine should still be claude — not pinned to the fallback
+	assert.Equal(t, "claude", p.Current())
+	assert.False(t, p.pinned)
+}

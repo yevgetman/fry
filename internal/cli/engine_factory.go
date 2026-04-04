@@ -122,6 +122,25 @@ func resolveFallbackEngine(primaryName, override string) (string, bool, error) {
 	}
 }
 
+// BuildOneShot creates a standalone engine from the fallback name without
+// pinning or affecting the active engine. Used for one-shot reporting retries.
+func (p *enginePlanner) BuildOneShot(engineOpts ...engine.EngineOpt) (engine.Engine, string, error) {
+	p.mu.Lock()
+	primaryName := p.activeName
+	fallbackName := p.fallbackName
+	p.mu.Unlock()
+
+	resolved, _, err := resolveFallbackEngine(primaryName, fallbackName)
+	if err != nil || resolved == "" {
+		return nil, "", fmt.Errorf("no fallback engine available for %s", primaryName)
+	}
+	eng, err := newBaseResilientEngine(resolved, engineOpts...)
+	if err != nil {
+		return nil, "", fmt.Errorf("create fallback engine %s: %w", resolved, err)
+	}
+	return eng, resolved, nil
+}
+
 func newBaseResilientEngine(name string, engineOpts ...engine.EngineOpt) (engine.Engine, error) {
 	eng, err := engine.NewEngine(name, engineOpts...)
 	if err != nil {

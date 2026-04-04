@@ -267,3 +267,9 @@ When the core build completes successfully but post-build reporting (build audit
 - **`failed`** — A sprint failed during execution.
 
 The `reporting_failure` field in `build-status.json` records which stage failed (`build_audit`, `summary`, or `build_audit+summary` if both) and the error message. This allows operators and automation to immediately see whether Fry failed to build or failed to narrate the build.
+
+## Quota-Aware Fallback
+
+When the build audit or summary generation fails with a transient engine error (quota exhaustion, rate limit, server error, timeout, or network failure), Fry automatically retries once with the fallback engine before recording a reporting failure. The fallback uses the same engine pairing as sprint execution (Claude &harr; Codex by default, or the `--fallback-engine` override).
+
+The fallback is one-shot and does not permanently pin the engine — it only affects the current reporting stage. If both primary and fallback fail, the original error is recorded in the `reporting_failure` field.

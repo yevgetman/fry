@@ -1742,6 +1742,32 @@ var runCmd = &cobra.Command{
 					Mode:             string(mode),
 				})
 				if auditErr != nil {
+					if fo := engine.DetectFailoverCondition(auditEngine.Name(), "", auditErr); fo.Detected {
+						frlog.Log("  BUILD AUDIT: %s on primary engine, attempting fallback...", fo.Reason)
+						if fbEng, fbName, fbErr := runPlanner.BuildOneShot(mcpOpts...); fbErr == nil {
+							fbModel := engine.ResolveModelForSession(fbName, string(ep.EffortLevel), engine.SessionBuildAudit)
+							frlog.Log("  BUILD AUDIT: retrying with %s (model=%s)", fbName, fbModel)
+							fbResult, fbAuditErr := audit.RunBuildAudit(ctx, audit.BuildAuditOpts{
+								ProjectDir:       projectPath,
+								Epic:             ep,
+								Engine:           fbEng,
+								Results:          summaryCopy,
+								Verbose:          frlog.Verbose,
+								Model:            fbModel,
+								DeferredFailures: deferredContent,
+								Mode:             string(mode),
+							})
+							if fbAuditErr == nil {
+								auditErr = nil
+								result = fbResult
+								frlog.Log("  BUILD AUDIT: fallback succeeded")
+							} else {
+								frlog.Log("WARNING: build audit fallback also failed: %v", fbAuditErr)
+							}
+						}
+					}
+				}
+				if auditErr != nil {
 					frlog.Log("WARNING: build audit failed: %v", auditErr)
 					reportingFailure = &agent.ReportingFailure{Stage: "build_audit", Message: auditErr.Error()}
 				} else {
@@ -1928,7 +1954,7 @@ var runCmd = &cobra.Command{
 		} else {
 			summaryModel := engine.ResolveModel(ep.AgentModel, currentEngineName(), string(ep.EffortLevel), engine.SessionBuildSummary)
 			frlog.Log("▶ BUILD SUMMARY  generating...  engine=%s  model=%s", currentEngineName(), summaryModel)
-			if summaryErr := summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
+			summaryErr := summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
 				ProjectDir:       projectPath,
 				EpicName:         ep.Name,
 				Engine:           summaryEngine,
@@ -1937,7 +1963,32 @@ var runCmd = &cobra.Command{
 				Verbose:          frlog.Verbose,
 				Model:            summaryModel,
 				BuildAuditResult: buildAuditResult,
-			}); summaryErr != nil {
+			})
+			if summaryErr != nil {
+				if fo := engine.DetectFailoverCondition(currentEngineName(), "", summaryErr); fo.Detected {
+					frlog.Log("  BUILD SUMMARY: %s on primary engine, attempting fallback...", fo.Reason)
+					if fbEng, fbName, fbErr := runPlanner.BuildOneShot(mcpOpts...); fbErr == nil {
+						fbModel := engine.ResolveModelForSession(fbName, string(ep.EffortLevel), engine.SessionBuildSummary)
+						frlog.Log("  BUILD SUMMARY: retrying with %s (model=%s)", fbName, fbModel)
+						summaryErr = summary.GenerateBuildSummary(ctx, summary.SummaryOpts{
+							ProjectDir:       projectPath,
+							EpicName:         ep.Name,
+							Engine:           fbEng,
+							Results:          summaryCopy,
+							EffortLevel:      string(ep.EffortLevel),
+							Verbose:          frlog.Verbose,
+							Model:            fbModel,
+							BuildAuditResult: buildAuditResult,
+						})
+						if summaryErr == nil {
+							frlog.Log("  BUILD SUMMARY: fallback succeeded")
+						} else {
+							frlog.Log("WARNING: build summary fallback also failed: %v", summaryErr)
+						}
+					}
+				}
+			}
+			if summaryErr != nil {
 				frlog.Log("WARNING: build summary generation failed: %v", summaryErr)
 				if reportingFailure == nil {
 					reportingFailure = &agent.ReportingFailure{Stage: "summary", Message: summaryErr.Error()}
