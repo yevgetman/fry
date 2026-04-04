@@ -2,6 +2,9 @@ package monitor
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -107,7 +110,10 @@ func (m *Monitor) Run(ctx context.Context) <-chan Snapshot {
 			default:
 			}
 
-			anyChanged := m.pollAll()
+			anyChanged, pollErr := m.pollAll()
+			if pollErr != nil {
+				fmt.Fprintf(os.Stderr, "fry: monitor: poll error: %v\n", pollErr)
+			}
 			shouldEmit := firstPoll || anyChanged
 			firstPoll = false
 
@@ -190,20 +196,24 @@ func (m *Monitor) Run(ctx context.Context) <-chan Snapshot {
 
 // Snapshot takes a single point-in-time snapshot without continuous polling.
 func (m *Monitor) Snapshot() (Snapshot, error) {
-	m.pollAll()
-	return m.compose(), nil
+	_, err := m.pollAll()
+	return m.compose(), err
 }
 
 // pollAll polls every source sequentially and returns true if any changed.
-func (m *Monitor) pollAll() bool {
+func (m *Monitor) pollAll() (bool, error) {
 	anyChanged := false
+	var errs []error
 	for _, src := range m.sources {
-		changed, _ := src.Poll()
+		changed, err := src.Poll()
+		if err != nil {
+			errs = append(errs, err)
+		}
 		if changed {
 			anyChanged = true
 		}
 	}
-	return anyChanged
+	return anyChanged, errors.Join(errs...)
 }
 
 // compose assembles a Snapshot from all source states.
