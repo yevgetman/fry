@@ -157,6 +157,11 @@ func runStatusByRunID(cmd *cobra.Command, projectDir, runID string) error {
 		runID = config.RunPrefix + runID
 	}
 
+	// Reject path traversal in run IDs.
+	if strings.ContainsAny(runID, "/\\") || strings.Contains(runID, "..") {
+		return fmt.Errorf("invalid run ID %q", runID)
+	}
+
 	status, err := agent.ReadRunStatus(buildDir, runID)
 	if err != nil {
 		return fmt.Errorf("read run %s: %w", runID, err)

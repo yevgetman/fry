@@ -80,3 +80,13 @@ func TestBuildOneShot_DoesNotPinEngine(t *testing.T) {
 	assert.Equal(t, "claude", p.Current())
 	assert.False(t, p.pinned)
 }
+
+func TestBuildOneShot_RespectsExplicitFallback(t *testing.T) {
+	t.Parallel()
+
+	p := &enginePlanner{activeName: "claude", fallbackName: "codex"}
+	eng, name, err := p.BuildOneShot()
+	require.NoError(t, err)
+	assert.Equal(t, "codex", name)
+	assert.NotNil(t, eng)
+}

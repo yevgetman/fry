@@ -331,3 +331,24 @@ func TestStatusRun_NotFound(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
+
+func TestStatusRun_RejectsPathTraversal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	tests := []string{
+		"run-foo/../../..",
+		"../../../etc",
+		"run-x\\..\\..\\etc",
+	}
+	for _, input := range tests {
+		var buf bytes.Buffer
+		cmd := newTestCmdWithRunsFlags(t, dir)
+		require.NoError(t, cmd.Flags().Set("run", input))
+		cmd.SetOut(&buf)
+
+		err := statusCmd.RunE(cmd, []string{})
+		assert.Error(t, err, "input %q should be rejected", input)
+		assert.Contains(t, err.Error(), "invalid run ID", "input %q", input)
+	}
+}

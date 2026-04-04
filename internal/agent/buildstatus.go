@@ -173,9 +173,10 @@ type ReportingFailure struct {
 	Message string `json:"message,omitempty"` // error description
 }
 
-// GenerateRunID creates a timestamp-based run identifier.
+// GenerateRunID creates a timestamp-based run identifier with millisecond
+// precision to avoid collisions when two runs start in the same second.
 func GenerateRunID() string {
-	return config.RunPrefix + time.Now().Format("20060102-150405")
+	return config.RunPrefix + time.Now().Format("20060102-150405.000")
 }
 
 // WriteBuildStatus atomically writes the build status to .fry/build-status.json.
@@ -283,7 +284,11 @@ func ScanRuns(projectDir string) ([]RunSummary, error) {
 		}
 		statusPath := filepath.Join(runsRoot, entry.Name(), "build-status.json")
 		status, err := readBuildStatusFrom(statusPath)
-		if err != nil || status == nil {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fry: warning: scan run %s: %v\n", entry.Name(), err)
+			continue
+		}
+		if status == nil {
 			continue
 		}
 		summary := RunSummary{
