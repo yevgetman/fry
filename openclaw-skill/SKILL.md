@@ -547,7 +547,8 @@ The file contains:
 ```
 
 **Key fields for status reporting:**
-- `build.status`: overall build state (`running`, `completed`, `failed`, `paused`)
+- `build.status`: overall build state (`running`, `completed`, `completed_with_reporting_failure`, `failed`, `paused`)
+- `reporting_failure`: present when build audit or summary generation failed after core build completed (fields: `stage`, `message`)
 - `build.current_sprint`: which sprint is active
 - `sprints[].status`: per-sprint outcome (`running`, `PASS`, `PASS (aligned)`, `FAIL`, etc.)
 - `sprints[].sanity_checks`: pass/fail per check with type and target

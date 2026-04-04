@@ -257,3 +257,13 @@ build_audit_20060102_150405.log
 | Context | Sprint diff + sprint progress | Full codebase + plan artifacts |
 
 Both audits use the same six criteria (mode-dependent) and four severity levels. The sprint audit catches issues incrementally during the build; the build audit catches cross-cutting issues that only become visible when viewing the completed project as a whole.
+
+## Reporting Failure Distinction
+
+When the core build completes successfully but post-build reporting (build audit or summary generation) fails, Fry sets the build status to `completed_with_reporting_failure` instead of `completed`. This distinguishes:
+
+- **`completed`** — All sprints passed and all post-build reporting succeeded.
+- **`completed_with_reporting_failure`** — All sprints passed but build audit and/or summary generation failed (e.g., quota exhaustion, model unavailability).
+- **`failed`** — A sprint failed during execution.
+
+The `reporting_failure` field in `build-status.json` records which stage failed (`build_audit`, `summary`, or `build_audit+summary` if both) and the error message. This allows operators and automation to immediately see whether Fry failed to build or failed to narrate the build.

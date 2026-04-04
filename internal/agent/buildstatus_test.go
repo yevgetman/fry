@@ -553,3 +553,74 @@ func TestWriteBuildStatus_NoRunMeta_SkipsSnapshot(t *testing.T) {
 	_, err := os.Stat(filepath.Join(dir, config.RunsDir))
 	assert.True(t, os.IsNotExist(err), "runs dir should not exist when no RunMeta")
 }
+
+func TestBuildStatus_ReportingFailure(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	status := &BuildStatus{
+		Version: 1,
+		Build: BuildInfo{
+			Epic:   "Reporting Test",
+			Status: "completed_with_reporting_failure",
+			Phase:  "complete",
+		},
+		Sprints: []SprintStatus{
+			{Number: 1, Name: "S1", Status: "PASS"},
+		},
+		ReportingFailure: &ReportingFailure{
+			Stage:   "build_audit",
+			Message: "quota exceeded",
+		},
+	}
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	read, err := ReadBuildStatus(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "completed_with_reporting_failure", read.Build.Status)
+	require.NotNil(t, read.ReportingFailure)
+	assert.Equal(t, "build_audit", read.ReportingFailure.Stage)
+	assert.Equal(t, "quota exceeded", read.ReportingFailure.Message)
+}
+
+func TestBuildStatus_ReportingFailure_BothStages(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	status := &BuildStatus{
+		Version: 1,
+		Build: BuildInfo{
+			Epic:   "Both Failures",
+			Status: "completed_with_reporting_failure",
+			Phase:  "complete",
+		},
+		Sprints: []SprintStatus{},
+		ReportingFailure: &ReportingFailure{
+			Stage:   "build_audit+summary",
+			Message: "audit: quota exceeded; summary: quota exceeded",
+		},
+	}
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	read, err := ReadBuildStatus(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "build_audit+summary", read.ReportingFailure.Stage)
+	assert.Contains(t, read.ReportingFailure.Message, "audit:")
+	assert.Contains(t, read.ReportingFailure.Message, "summary:")
+}
+
+func TestBuildStatus_NoReportingFailure_OmittedFromJSON(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	status := &BuildStatus{
+		Version: 1,
+		Build:   BuildInfo{Status: "completed"},
+		Sprints: []SprintStatus{},
+	}
+	require.NoError(t, WriteBuildStatus(dir, status))
+
+	data, err := os.ReadFile(filepath.Join(dir, config.BuildStatusFile))
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "reporting_failure")
+}

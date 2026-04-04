@@ -1691,6 +1691,7 @@ var runCmd = &cobra.Command{
 		// The audit runs when all sprints are complete — either from a full run (sprint 1 to last)
 		// or from a resumed/continued run where prior sprints are recorded in epic-progress.txt.
 		var buildAuditResult *audit.AuditResult
+		var reportingFailure *agent.ReportingFailure
 		fullBuildComplete := auditOnlyResume || startSprint == 1 || allSprintsCompleted(projectPath, ep.TotalSprints, startSprint, summaryCopy)
 		if exitErr == nil && fullBuildComplete && endSprint == ep.TotalSprints && ep.AuditAfterSprint && !runNoAudit && (ep.EffortLevel != epic.EffortFast || runAlwaysVerify) {
 			if steering.HasStopRequest(projectPath) {
@@ -1742,6 +1743,7 @@ var runCmd = &cobra.Command{
 				})
 				if auditErr != nil {
 					frlog.Log("WARNING: build audit failed: %v", auditErr)
+					reportingFailure = &agent.ReportingFailure{Stage: "build_audit", Message: auditErr.Error()}
 				} else {
 					if steering.HasStopRequest(projectPath) {
 						lastSprint := &ep.Sprints[ep.TotalSprints-1]
@@ -1832,6 +1834,7 @@ var runCmd = &cobra.Command{
 				})
 				if auditErr != nil {
 					frlog.Log("WARNING: triage build audit failed: %v", auditErr)
+					reportingFailure = &agent.ReportingFailure{Stage: "build_audit", Message: auditErr.Error()}
 				} else {
 					buildAuditResult = result
 					if result.Passed {
@@ -1936,6 +1939,12 @@ var runCmd = &cobra.Command{
 				BuildAuditResult: buildAuditResult,
 			}); summaryErr != nil {
 				frlog.Log("WARNING: build summary generation failed: %v", summaryErr)
+				if reportingFailure == nil {
+					reportingFailure = &agent.ReportingFailure{Stage: "summary", Message: summaryErr.Error()}
+				} else {
+					reportingFailure.Stage += "+summary"
+					reportingFailure.Message += "; summary: " + summaryErr.Error()
+				}
 			} else {
 				frlog.Log("  BUILD SUMMARY: complete")
 			}
@@ -2270,6 +2279,11 @@ var runCmd = &cobra.Command{
 			buildStatus.Build.Status = "failed"
 			buildStatus.Build.Phase = "failed"
 			writeBuildPhase(projectPath, "failed")
+		} else if reportingFailure != nil {
+			buildStatus.Build.Status = "completed_with_reporting_failure"
+			buildStatus.Build.Phase = "complete"
+			buildStatus.ReportingFailure = reportingFailure
+			writeBuildPhase(projectPath, "complete")
 		} else {
 			buildStatus.Build.Status = "completed"
 			buildStatus.Build.Phase = "complete"

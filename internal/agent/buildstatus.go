@@ -36,9 +36,10 @@ type BuildStatus struct {
 	Version    int               `json:"version"`
 	UpdatedAt  time.Time         `json:"updated_at"`
 	Run        *RunMeta          `json:"run,omitempty"`
-	Build      BuildInfo         `json:"build"`
-	Sprints    []SprintStatus    `json:"sprints"`
-	BuildAudit *BuildAuditStatus `json:"build_audit,omitempty"`
+	Build            BuildInfo         `json:"build"`
+	Sprints          []SprintStatus    `json:"sprints"`
+	BuildAudit       *BuildAuditStatus `json:"build_audit,omitempty"`
+	ReportingFailure *ReportingFailure `json:"reporting_failure,omitempty"`
 }
 
 // BuildInfo contains the top-level build metadata.
@@ -50,7 +51,7 @@ type BuildInfo struct {
 	GitBranch     string    `json:"git_branch,omitempty"`
 	TotalSprints  int       `json:"total_sprints"`
 	CurrentSprint int       `json:"current_sprint"`
-	Status        string    `json:"status"`          // running, completed, failed, paused, triaging, preparing
+	Status        string    `json:"status"`          // running, completed, completed_with_reporting_failure, failed, paused, triaging, preparing
 	Phase         string    `json:"phase,omitempty"` // triage, prepare, sprint, audit, complete
 	StartedAt     time.Time `json:"started_at"`
 }
@@ -162,6 +163,14 @@ type BuildAuditStatus struct {
 	Passed   bool           `json:"passed"`
 	Blocking bool           `json:"blocking"`
 	Findings map[string]int `json:"findings,omitempty"`
+}
+
+// ReportingFailure captures which post-build reporting stage failed.
+// This separates core build completion from reporting failures so that
+// operators can tell whether Fry failed to build or failed to narrate the build.
+type ReportingFailure struct {
+	Stage   string `json:"stage"`             // build_audit, summary
+	Message string `json:"message,omitempty"` // error description
 }
 
 // GenerateRunID creates a timestamp-based run identifier.
