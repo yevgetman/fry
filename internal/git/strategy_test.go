@@ -719,6 +719,88 @@ func TestCopyWorktreeArtifactsReturnsErrorOnWriteFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), config.BuildStatusFile)
 }
 
+// TestRetryMergeMovingUntracked_RestoreError verifies that when a restore
+// fails during rollback, the returned error contains both the merge failure
+// context and the rollback failure context, and that the backup directory is
+// preserved for manual recovery.
+//
+// Setup: two branches diverge on "other.md" (content conflict). test-branch
+// also commits a regular file named "a". Main has an untracked directory "a/"
+// containing "plan.md". retryMergeMovingUntracked backs up "a/plan.md", retries
+// the merge, and git applies the non-conflicting "a" file change — replacing
+// the now-empty directory "a/" with a regular file. When the restore runs,
+// os.MkdirAll("a") fails (ENOTDIR) because "a" is now a file, triggering the
+// rollback-incomplete error path.
+func TestRetryMergeMovingUntracked_RestoreError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %s: %s", strings.Join(args, " "), string(out))
+	}
+
+	run("init")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "test")
+
+	// Initial commit — common ancestor for both branches.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "other.md"), []byte("base"), 0o644))
+	run("add", "other.md")
+	run("commit", "-m", "initial")
+
+	// Capture default branch name (may be "main" or "master").
+	headCmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
+	headCmd.Dir = dir
+	headOut, headErr := headCmd.Output()
+	require.NoError(t, headErr)
+	mainBranch := strings.TrimSpace(string(headOut))
+
+	// test-branch: commit regular file "a" and a conflicting change to "other.md".
+	// During the retry merge, git applies the non-conflicting "a" file change
+	// (replacing the empty directory "a/") before failing on the "other.md"
+	// content conflict.
+	run("checkout", "-b", "test-branch")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("from branch"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "other.md"), []byte("branch other"), 0o644))
+	run("add", "a", "other.md")
+	run("commit", "-m", "branch changes")
+
+	// Back on the default branch: change "other.md" to produce a content conflict.
+	run("checkout", mainBranch)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "other.md"), []byte("main other"), 0o644))
+	run("add", "other.md")
+	run("commit", "-m", "main changes")
+
+	// Create untracked "a/plan.md". retryMergeMovingUntracked backs this up, then
+	// retries the merge. The retry replaces the now-empty "a/" with file "a",
+	// then fails on "other.md". The restore then hits os.MkdirAll("a") with "a"
+	// as a regular file, producing the rollback-incomplete error.
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "a"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a", "plan.md"), []byte("local"), 0o644))
+
+	initialMergeErr := errors.New("error: The following untracked working tree files would be overwritten by merge:\n\ta/plan.md\nPlease move or remove them before you merge.\nAborting")
+
+	retryErr := retryMergeMovingUntracked(ctx, dir, "test-branch", initialMergeErr)
+
+	require.Error(t, retryErr)
+	assert.Contains(t, retryErr.Error(), "merge failed")
+	assert.Contains(t, retryErr.Error(), "rollback incomplete")
+	assert.Contains(t, retryErr.Error(), "restore mkdir")
+
+	// backupDir must be preserved when any restore fails.
+	backupDir := filepath.Join(dir, ".fry-merge-backup")
+	_, statErr := os.Stat(backupDir)
+	assert.NoError(t, statErr, "backupDir should be preserved when restore fails")
+	_, fileStatErr := os.Stat(filepath.Join(backupDir, "a", "plan.md"))
+	assert.NoError(t, fileStatErr, "backed-up file should still exist for manual recovery")
+}
+
 func TestMarkCleanedUp(t *testing.T) {
 	t.Parallel()
 

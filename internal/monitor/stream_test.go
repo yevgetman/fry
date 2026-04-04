@@ -308,3 +308,53 @@ func TestMonitor_SnapshotVerboseFiltersHistoricalLogEvents(t *testing.T) {
 	}
 	assert.Equal(t, []string{"2"}, cycles)
 }
+
+// errSource is a stub Source that always returns a fixed error from Poll.
+type errSource struct {
+	name string
+	err  error
+}
+
+func (s *errSource) Name() string           { return s.name }
+func (s *errSource) Poll() (bool, error)    { return false, s.err }
+
+func TestMonitor_SnapshotPropagatesPollError(t *testing.T) {
+	t.Parallel()
+
+	dir := setupTestProject(t)
+
+	mon := New(Config{
+		ProjectDir:  dir,
+		WorktreeDir: dir,
+	})
+
+	// Inject a failing source.
+	sentinel := fmt.Errorf("source poll failed")
+	mon.sources = []Source{&errSource{name: "test-err", err: sentinel}}
+
+	_, err := mon.Snapshot()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "source poll failed")
+}
+
+func TestMonitor_SnapshotErrorContainsSourceMessage(t *testing.T) {
+	t.Parallel()
+
+	dir := setupTestProject(t)
+
+	mon := New(Config{
+		ProjectDir:  dir,
+		WorktreeDir: dir,
+	})
+
+	// Two failing sources — both errors should be present.
+	mon.sources = []Source{
+		&errSource{name: "src-a", err: fmt.Errorf("error from src-a")},
+		&errSource{name: "src-b", err: fmt.Errorf("error from src-b")},
+	}
+
+	_, err := mon.Snapshot()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "error from src-a")
+	assert.Contains(t, err.Error(), "error from src-b")
+}
