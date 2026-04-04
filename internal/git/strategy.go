@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -430,11 +431,22 @@ func retryMergeMovingUntracked(ctx context.Context, dir, branchName string, merg
 	// Retry the merge
 	if err := runGit(ctx, dir, "merge", branchName, "--no-edit"); err != nil {
 		// Restore files on failure
+		var restoreErrs []error
 		for _, m := range moved {
-			_ = os.MkdirAll(filepath.Dir(m.orig), 0o755)
-			_ = os.Rename(m.backup, m.orig)
+			if mkErr := os.MkdirAll(filepath.Dir(m.orig), 0o755); mkErr != nil {
+				restoreErrs = append(restoreErrs, fmt.Errorf("restore mkdir %s: %w", m.orig, mkErr))
+				continue
+			}
+			if rnErr := os.Rename(m.backup, m.orig); rnErr != nil {
+				restoreErrs = append(restoreErrs, fmt.Errorf("restore rename %s: %w", m.orig, rnErr))
+			}
 		}
-		_ = os.RemoveAll(backupDir)
+		if len(restoreErrs) == 0 {
+			_ = os.RemoveAll(backupDir)
+		}
+		if len(restoreErrs) > 0 {
+			return fmt.Errorf("merge failed: %w; rollback incomplete: %w", err, errors.Join(restoreErrs...))
+		}
 		return err
 	}
 

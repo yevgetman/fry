@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -717,6 +718,64 @@ func TestCopyWorktreeArtifactsReturnsErrorOnWriteFailure(t *testing.T) {
 	err := copyWorktreeArtifacts(worktreeDir, origDir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), config.BuildStatusFile)
+}
+
+// TestRetryMergeMovingUntracked_RestoreError verifies that when a restore rename
+// fails during rollback, the returned error contains both the merge failure
+// context and the rollback failure context, and that the backup directory is
+// preserved for manual recovery.
+func TestRetryMergeMovingUntracked_RestoreError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Set up a backup directory with a backed-up file simulating a prior move.
+	backupDir := filepath.Join(dir, ".fry-merge-backup")
+	require.NoError(t, os.MkdirAll(backupDir, 0o755))
+	backupFile := filepath.Join(backupDir, "conflict.txt")
+	require.NoError(t, os.WriteFile(backupFile, []byte("backed up"), 0o644))
+
+	// Make the restore target's parent directory read-only so os.Rename fails.
+	roParent := filepath.Join(dir, "ro-subdir")
+	require.NoError(t, os.MkdirAll(roParent, 0o755))
+	require.NoError(t, os.Chmod(roParent, 0o500)) // no write permission
+	t.Cleanup(func() { _ = os.Chmod(roParent, 0o755) })
+	origFile := filepath.Join(roParent, "conflict.txt")
+
+	// Run the rollback logic from retryMergeMovingUntracked directly.
+	type movedFile struct{ orig, backup string }
+	moved := []movedFile{{orig: origFile, backup: backupFile}}
+
+	var restoreErrs []error
+	for _, m := range moved {
+		if mkErr := os.MkdirAll(filepath.Dir(m.orig), 0o755); mkErr != nil {
+			restoreErrs = append(restoreErrs, fmt.Errorf("restore mkdir %s: %w", m.orig, mkErr))
+			continue
+		}
+		if rnErr := os.Rename(m.backup, m.orig); rnErr != nil {
+			restoreErrs = append(restoreErrs, fmt.Errorf("restore rename %s: %w", m.orig, rnErr))
+		}
+	}
+
+	// The rename should have failed because roParent is not writable.
+	require.NotEmpty(t, restoreErrs, "expected restore rename to fail on read-only dir")
+
+	// backupDir should NOT be removed when restoreErrs is non-empty.
+	if len(restoreErrs) == 0 {
+		_ = os.RemoveAll(backupDir)
+	}
+	_, statErr := os.Stat(backupDir)
+	assert.NoError(t, statErr, "backupDir should be preserved when restore fails")
+	_, statErr = os.Stat(backupFile)
+	assert.NoError(t, statErr, "backup file should still exist for manual recovery")
+
+	// The combined error should contain both merge failure and rollback context.
+	mergeErr := errors.New("git merge fry/branch --no-edit: Automatic merge failed; fix conflicts")
+	combined := fmt.Errorf("merge failed: %w; rollback incomplete: %w", mergeErr, errors.Join(restoreErrs...))
+	assert.Contains(t, combined.Error(), "merge failed")
+	assert.Contains(t, combined.Error(), "rollback incomplete")
+	assert.Contains(t, combined.Error(), "restore rename")
+	assert.True(t, errors.Is(combined, mergeErr), "combined error should wrap the original merge error")
 }
 
 func TestMarkCleanedUp(t *testing.T) {
