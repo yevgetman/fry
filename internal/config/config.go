@@ -8,7 +8,8 @@ package config
 
 const (
 	FryDir                    = ".fry"
-	ProjectConfigFile         = ".fry/config.json"
+	FryConfigDir              = ".fry-config"
+	ProjectConfigFile         = ".fry-config/config.json"
 	PlansDir                  = "plans"
 	BuildLogsDir              = ".fry/build-logs"
 	AuditSessionsDir          = ".fry/sessions"
@@ -194,10 +195,11 @@ const (
 	ExitRequestFile    = ".fry/exit-request.json"
 	ResumePointFile    = ".fry/resume-point.json"
 
-	// Codebase awareness constants
-	CodebaseFile         = ".fry/codebase.md"
-	FileIndexFile        = ".fry/file-index.txt"
-	CodebaseMemoriesDir  = ".fry/codebase-memories"
+	// Codebase awareness constants — these live in .fry-config/ so they
+	// survive fry clean / archive (which only removes .fry/).
+	CodebaseFile         = ".fry-config/codebase.md"
+	FileIndexFile        = ".fry-config/file-index.txt"
+	CodebaseMemoriesDir  = ".fry-config/codebase-memories"
 	MaxMemoryCount       = 50
 	CompactedMemoryCount = 20
 	MaxMemoryPromptBytes = 10240 // 10KB cap for memory injection into prompt

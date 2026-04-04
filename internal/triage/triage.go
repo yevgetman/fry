@@ -22,7 +22,7 @@ type TriageOpts struct {
 	UserPrompt      string
 	PlanContent     string // contents of plans/plan.md, may be empty
 	ExecContent     string // contents of plans/executive.md, may be empty
-	CodebaseContent string // contents of .fry/codebase.md, may be empty
+	CodebaseContent string // contents of .fry-config/codebase.md, may be empty
 	Engine          engine.Engine
 	Model           string
 	EffortLevel     string

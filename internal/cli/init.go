@@ -15,6 +15,7 @@ import (
 	"github.com/yevgetman/fry/internal/git"
 	frylog "github.com/yevgetman/fry/internal/log"
 	"github.com/yevgetman/fry/internal/scan"
+	"github.com/yevgetman/fry/internal/settings"
 )
 
 var (
@@ -26,7 +27,7 @@ var (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Scaffold the fry project structure in the current directory",
-	Long:  "Scaffold the fry project structure. In an empty directory, creates plans/, assets/, and media/ with a plan template. In an existing project (detected via git history, project markers, or file count), runs a structural scan and a semantic LLM scan to generate .fry/codebase.md. Use --heuristic-only to skip the semantic scan and only run structural heuristics. Composable: if codebase indexing was already completed, scanning is skipped unless --force is passed.",
+	Long:  "Scaffold the fry project structure. Creates plans/, assets/, media/, and .fry-config/ (with an initial config.json). In an existing project (detected via git history, project markers, or file count), runs a structural scan and a semantic LLM scan to generate .fry-config/codebase.md. Use --heuristic-only to skip the semantic scan and only run structural heuristics. Composable: if codebase indexing was already completed, scanning is skipped unless --force is passed. If legacy .fry/ codebase files exist, they are migrated to .fry-config/ automatically.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectPath, err := resolveProjectDir(projectDir)
 		if err != nil {
@@ -42,6 +43,14 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("init: %w", err)
 		}
+
+		// Ensure .fry-config/ directory and initial config.json exist.
+		if err := initFryConfig(projectPath); err != nil {
+			return fmt.Errorf("init: %w", err)
+		}
+
+		// Migrate legacy files from .fry/ to .fry-config/ if present.
+		migrateFromLegacyPaths(projectPath, cmd)
 
 		if err := git.InitGit(ctx, projectPath); err != nil {
 			return fmt.Errorf("init: %w", err)
@@ -66,8 +75,8 @@ var initCmd = &cobra.Command{
 			if alreadyIndexed && !initForce {
 				fmt.Fprintln(cmd.OutOrStdout())
 				fmt.Fprintln(cmd.OutOrStdout(), "Codebase already indexed (use --force to re-index).")
-				fmt.Fprintln(cmd.OutOrStdout(), "  .fry/file-index.txt")
-				fmt.Fprintln(cmd.OutOrStdout(), "  .fry/codebase.md")
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", config.FileIndexFile)
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", config.CodebaseFile)
 			} else {
 				fmt.Fprintln(cmd.OutOrStdout())
 				fmt.Fprintln(cmd.OutOrStdout(), "Existing project detected. Scanning codebase...")
@@ -84,7 +93,7 @@ var initCmd = &cobra.Command{
 
 				printScanSummary(cmd, snap)
 
-				// Semantic scan: generate .fry/codebase.md (default behavior).
+				// Semantic scan: generate .fry-config/codebase.md (default behavior).
 				if initHeuristicOnly {
 					fmt.Fprintln(cmd.OutOrStdout(), "  Semantic scan skipped (--heuristic-only)")
 				} else if err := runSemanticScan(ctx, cmd, projectPath, snap); err != nil {
@@ -224,6 +233,57 @@ func joinMax(items []string, max int) string {
 		return strings.Join(items, ", ")
 	}
 	return strings.Join(items[:max], ", ") + ", ..."
+}
+
+// initFryConfig creates the .fry-config/ directory and initializes config.json
+// with sensible defaults if it doesn't already exist.
+func initFryConfig(projectDir string) error {
+	configDir := filepath.Join(projectDir, config.FryConfigDir)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", config.FryConfigDir, err)
+	}
+
+	// Initialize config.json with defaults if it doesn't exist.
+	configPath := filepath.Join(projectDir, config.ProjectConfigFile)
+	if !fileExists(configPath) {
+		if err := settings.Save(projectDir, settings.Settings{Engine: config.DefaultEngine}); err != nil {
+			return fmt.Errorf("initialize config: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateFromLegacyPaths moves codebase awareness files from the old .fry/
+// location to .fry-config/ if they exist and haven't been migrated yet.
+func migrateFromLegacyPaths(projectDir string, cmd *cobra.Command) {
+	migrations := []struct {
+		oldRel string
+		newRel string
+	}{
+		{".fry/codebase.md", config.CodebaseFile},
+		{".fry/file-index.txt", config.FileIndexFile},
+		{".fry/codebase-memories", config.CodebaseMemoriesDir},
+		{".fry/config.json", config.ProjectConfigFile},
+	}
+
+	for _, m := range migrations {
+		oldPath := filepath.Join(projectDir, m.oldRel)
+		newPath := filepath.Join(projectDir, m.newRel)
+
+		if !fileExists(oldPath) || fileExists(newPath) {
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "fry: warning: migrate %s: %v\n", m.oldRel, err)
+			continue
+		}
+		if err := os.Rename(oldPath, newPath); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "fry: warning: migrate %s: %v\n", m.oldRel, err)
+			continue
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "  migrated %s → %s\n", m.oldRel, m.newRel)
+	}
 }
 
 const starterPlan = `# Build Plan

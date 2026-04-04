@@ -13,7 +13,6 @@ func TestFryDirPathConsistency(t *testing.T) {
 
 	// All .fry/ paths should be rooted under FryDir
 	fryPaths := map[string]string{
-		"ProjectConfigFile":       config.ProjectConfigFile,
 		"BuildLogsDir":           config.BuildLogsDir,
 		"DefaultVerificationFile": config.DefaultVerificationFile,
 		"PromptFile":             config.PromptFile,
@@ -29,6 +28,23 @@ func TestFryDirPathConsistency(t *testing.T) {
 	for name, path := range fryPaths {
 		assert.True(t, strings.HasPrefix(path, config.FryDir+"/"),
 			"%s (%q) should start with %q", name, path, config.FryDir+"/")
+	}
+}
+
+func TestFryConfigDirPathConsistency(t *testing.T) {
+	t.Parallel()
+
+	// Persistent paths should be rooted under FryConfigDir
+	configPaths := map[string]string{
+		"ProjectConfigFile":  config.ProjectConfigFile,
+		"CodebaseFile":       config.CodebaseFile,
+		"FileIndexFile":      config.FileIndexFile,
+		"CodebaseMemoriesDir": config.CodebaseMemoriesDir,
+	}
+
+	for name, path := range configPaths {
+		assert.True(t, strings.HasPrefix(path, config.FryConfigDir+"/"),
+			"%s (%q) should start with %q", name, path, config.FryConfigDir+"/")
 	}
 }
 

@@ -51,6 +51,34 @@ func TestArchiveSuccess(t *testing.T) {
 	assert.Equal(t, "summary", string(data))
 }
 
+func TestArchiveDoesNotTouchFryConfig(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Create .fry/ (build artifacts) and .fry-config/ (persistent config)
+	fryDir := filepath.Join(dir, config.FryDir)
+	require.NoError(t, os.MkdirAll(fryDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "epic.md"), []byte("epic"), 0o644))
+
+	configDir := filepath.Join(dir, config.FryConfigDir)
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.CodebaseFile), []byte("codebase"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.ProjectConfigFile), []byte(`{"engine":"claude"}`), 0o644))
+
+	_, err := Archive(dir)
+	require.NoError(t, err)
+
+	// .fry-config/ and its contents must survive archival
+	data, err := os.ReadFile(filepath.Join(dir, config.CodebaseFile))
+	require.NoError(t, err)
+	assert.Equal(t, "codebase", string(data))
+
+	data, err = os.ReadFile(filepath.Join(dir, config.ProjectConfigFile))
+	require.NoError(t, err)
+	assert.Equal(t, `{"engine":"claude"}`, string(data))
+}
+
 func TestArchiveNoFryDir(t *testing.T) {
 	t.Parallel()
 
@@ -164,19 +192,4 @@ func TestArchiveMultipleBuilds(t *testing.T) {
 	data2, err := os.ReadFile(filepath.Join(dest2, "epic.md"))
 	require.NoError(t, err)
 	assert.Equal(t, "build 2", string(data2))
-}
-
-func TestRestoreArtifactsReturnsErrorWhenFryPathBlocked(t *testing.T) {
-	t.Parallel()
-
-	projectDir := t.TempDir()
-	tempDir := t.TempDir()
-
-	require.NoError(t, os.WriteFile(filepath.Join(projectDir, config.FryDir), []byte("blocked"), 0o644))
-	require.NoError(t, os.MkdirAll(filepath.Join(tempDir, filepath.Dir(config.CodebaseFile)), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(tempDir, config.CodebaseFile), []byte("codebase"), 0o644))
-
-	err := restoreArtifacts(projectDir, tempDir, []string{config.CodebaseFile})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), config.FryDir)
 }

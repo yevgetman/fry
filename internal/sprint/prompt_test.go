@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/yevgetman/fry/internal/config"
 	"github.com/yevgetman/fry/internal/epic"
 )
 
@@ -109,10 +110,10 @@ func TestAssemblePrompt_CodebaseContext_Present(t *testing.T) {
 
 	dir := t.TempDir()
 
-	// Write a codebase.md file.
-	fryDir := filepath.Join(dir, ".fry")
-	require.NoError(t, os.MkdirAll(fryDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(fryDir, "codebase.md"),
+	// Write a codebase.md file in .fry-config/.
+	codebasePath := filepath.Join(dir, config.CodebaseFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(codebasePath), 0o755))
+	require.NoError(t, os.WriteFile(codebasePath,
 		[]byte("# Codebase: Test\n\n## Summary\nA test project with Go and React.\n"), 0o644))
 
 	prompt, err := AssemblePrompt(PromptOpts{

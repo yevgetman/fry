@@ -16,7 +16,7 @@ No LLM call is needed for detection — it's purely deterministic.
 
 ### 2. Structural Scan
 
-A fast, no-LLM scan that produces `.fry/file-index.txt`:
+A fast, no-LLM scan that produces `.fry-config/file-index.txt`:
 
 - **File tree** — walks the directory respecting `.gitignore` (via `git ls-files`)
 - **Languages** — detected from project markers (high confidence) and file extension counts (medium confidence)
@@ -28,7 +28,7 @@ A fast, no-LLM scan that produces `.fry/file-index.txt`:
 
 ### 3. Semantic Scan
 
-A Sonnet-class LLM analyzes the structural snapshot plus key file contents to produce `.fry/codebase.md`:
+A Sonnet-class LLM analyzes the structural snapshot plus key file contents to produce `.fry-config/codebase.md`:
 
 - **Summary** — what the project is, what it does
 - **Architecture** — how it's organized, key modules, data flow
@@ -45,7 +45,7 @@ Use `--heuristic-only` to skip the semantic scan and only run structural heurist
 
 ### 4. Pipeline Integration
 
-When `.fry/codebase.md` exists, it is automatically used throughout the build:
+When `.fry-config/codebase.md` exists, it is automatically used throughout the build:
 
 | Integration Point | How |
 |-------------------|-----|
@@ -57,7 +57,7 @@ When `.fry/codebase.md` exists, it is automatically used throughout the build:
 
 ### 5. Codebase Memories
 
-After each build, Fry extracts project-specific learnings into `.fry/codebase-memories/`:
+After each build, Fry extracts project-specific learnings into `.fry-config/codebase-memories/`:
 
 - **Extraction** — A Haiku-class (cheap) LLM analyzes the build's observer scratchpad, events, sprint results, git diff, and audit findings to extract codebase-specific learnings
 - **Storage** — Each learning is a small `.md` file with frontmatter (confidence, source build, date, reinforced count)
@@ -69,20 +69,20 @@ After each build, Fry extracts project-specific learnings into `.fry/codebase-me
 
 After builds complete:
 
-- If `.fry/codebase.md` exists and significant changes were made (>=5 files), it's incrementally updated
-- If `.fry/codebase.md` doesn't exist (from-scratch project after first build), it's generated for the first time
+- If `.fry-config/codebase.md` exists and significant changes were made (>=5 files), it's incrementally updated
+- If `.fry-config/codebase.md` doesn't exist (from-scratch project after first build), it's generated for the first time
 
 ### 7. Persistence
 
-`.fry/codebase.md`, `.fry/file-index.txt`, and `.fry/codebase-memories/` survive `fry clean`. They are preserved and restored after the build artifacts are archived. Running `fry init` again rescans the codebase.
+`.fry-config/codebase.md`, `.fry-config/file-index.txt`, and `.fry-config/codebase-memories/` live in `.fry-config/` which is not affected by archive/clean. Running `fry init` again rescans the codebase.
 
 ## Artifacts
 
 | Path | Description | Lifecycle |
 |------|-------------|-----------|
-| `.fry/codebase.md` | Semantic codebase understanding | Persistent — survives `fry clean`, updated incrementally |
-| `.fry/file-index.txt` | Structural file index with stats | Persistent — auto-refreshed on `fry run` if stale |
-| `.fry/codebase-memories/` | Accumulated learnings from builds | Persistent — grows over time, compacted at 50+ |
+| `.fry-config/codebase.md` | Semantic codebase understanding | Persistent — lives in `.fry-config/`, updated incrementally |
+| `.fry-config/file-index.txt` | Structural file index with stats | Persistent — auto-refreshed on `fry run` if stale |
+| `.fry-config/codebase-memories/` | Accumulated learnings from builds | Persistent — grows over time, compacted at 50+ |
 
 ## Commands
 
@@ -106,7 +106,7 @@ The codebase awareness features add two new layers to the sprint prompt:
 
 | Layer | Name | Source |
 |-------|------|--------|
-| 0.5 | CODEBASE CONTEXT | `.fry/codebase.md` |
-| 0.75 | CODEBASE MEMORIES | `.fry/codebase-memories/*.md` |
+| 0.5 | CODEBASE CONTEXT | `.fry-config/codebase.md` |
+| 0.75 | CODEBASE MEMORIES | `.fry-config/codebase-memories/*.md` |
 
 These appear before all other layers, giving the agent ground truth about the existing codebase before it reads the plan or sprint instructions.

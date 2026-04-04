@@ -27,6 +27,7 @@ func TestDestroyTargetsFindsAllArtifacts(t *testing.T) {
 	// Create all possible fry artifacts.
 	dirs := []string{
 		config.FryDir,
+		config.FryConfigDir,
 		config.ArchiveDir,
 		config.GitWorktreeDir,
 		config.PlansDir,

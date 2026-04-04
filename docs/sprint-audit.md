@@ -315,8 +315,8 @@ The audit prompt includes:
 
 | Context | Source | Limit |
 |---|---|---|
-| Codebase context | `.fry/codebase.md` | First 8,000 characters |
-| Codebase memories | `.fry/codebase-memories/*.md` | Up to 10KB total |
+| Codebase context | `.fry-config/codebase.md` | First 8,000 characters |
+| Codebase memories | `.fry-config/codebase-memories/*.md` | Up to 10KB total |
 | Executive summary | `plans/executive.md` | First 2,000 characters |
 | Sprint goals | `@prompt` block from the epic | Full content |
 | What was done | `.fry/sprint-progress.txt` | First 50KB |
@@ -326,7 +326,7 @@ The audit prompt includes:
 
 The git diff is refreshed before each audit cycle (via a callback) so that fixes made by the fix agent are reflected in subsequent audits.
 The audit agent uses the current repository state and sprint diff as primary evidence. `sprint-progress.txt` is supporting context only.
-When `.fry/codebase.md` exists, the auditor uses it as ground truth for architecture and conventions. Pre-existing issues should only be raised when the sprint introduced, worsened, or clearly exposed them.
+When `.fry-config/codebase.md` exists, the auditor uses it as ground truth for architecture and conventions. Pre-existing issues should only be raised when the sprint introduced, worsened, or clearly exposed them.
 For moderate- and high-complexity sprints, the audit prompt starts with a targeted reconciliation pass that focuses the agent on numerical consistency before broader review criteria.
 
 ## Context Provided to Fix Agent
@@ -335,8 +335,8 @@ The fix prompt includes:
 
 | Context | Source |
 |---|---|
-| Codebase context | `.fry/codebase.md` (if present) |
-| Codebase memories | `.fry/codebase-memories/*.md` (if present) |
+| Codebase context | `.fry-config/codebase.md` (if present) |
+| Codebase memories | `.fry-config/codebase-memories/*.md` (if present) |
 | Sprint goals | `@prompt` block from the epic |
 | Issues to fix | Structured list, FIFO ordered (oldest first, highest severity within age group) |
 | Previous fix attempts | Relevant subset of prior failed or partial attempts against the same findings |

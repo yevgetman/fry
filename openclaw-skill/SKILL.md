@@ -172,10 +172,10 @@ or >10 non-hidden files), `fry init` automatically runs a structural scan:
 - Detects languages, frameworks, entry points, and test directories
 - Parses dependency manifests (`go.mod`, `package.json`, `requirements.txt`)
 - Analyzes git history (recent commits, frequently changed files, top authors)
-- Writes `.fry/file-index.txt` with a human-readable index and statistics
+- Writes `.fry-config/file-index.txt` with a human-readable index and statistics
 
 On existing projects, `fry init` also runs a **semantic scan** by default using a
-Sonnet-class LLM to generate `.fry/codebase.md` — a comprehensive document covering
+Sonnet-class LLM to generate `.fry-config/codebase.md` — a comprehensive document covering
 architecture, conventions, key files, dependencies, and gotchas. This document is
 injected into sprint prompts as Layer 0.5 context.
 
@@ -187,15 +187,15 @@ fry init --project-dir /path/to/project             # Full scan (structural + se
 fry init --heuristic-only --project-dir /path/to/project  # Structural only
 ```
 
-**Composability:** `fry init` is composable. If `.fry/file-index.txt` and
-`.fry/codebase.md` already exist (from a prior init), scanning is skipped. Use
+**Composability:** `fry init` is composable. If `.fry-config/file-index.txt` and
+`.fry-config/codebase.md` already exist (from a prior init), scanning is skipped. Use
 `--force` to re-index even when index files already exist.
 
 ```bash
 fry init --force --project-dir /path/to/project  # Force re-index
 ```
 
-**Pipeline integration:** When `.fry/codebase.md` exists, it is automatically used
+**Pipeline integration:** When `.fry-config/codebase.md` exists, it is automatically used
 throughout the build pipeline:
 - **Sprint prompts:** Injected as Layer 0.5 (CODEBASE CONTEXT) before executive context
 - **Sprint audit/fix/build-audit prompts:** Included as architecture and conventions context during audit remediation
@@ -203,7 +203,7 @@ throughout the build pipeline:
 - **Triage:** Included in complexity classification
 - **File index:** Auto-refreshed on each `fry run` if stale (newer git commits exist)
 - **Codebase memories:** After each build, Fry extracts project-specific learnings
-  into `.fry/codebase-memories/` (Layer 0.75 in sprint prompts). Memories are
+  into `.fry-config/codebase-memories/` (Layer 0.75 in sprint prompts). Memories are
   deduplicated across builds, reinforced when confirmed, and compacted from 50+ to ~20
   via LLM when the threshold is exceeded. Memories persist across `fry clean`.
 
@@ -662,7 +662,7 @@ After each sprint (standard effort and above), Fry runs a semantic audit:
 - **Budgeted session continuity:** On Claude and Codex, audit-to-audit and fix-to-fix calls reuse same-role sessions until per-role call, prompt-size, token, or carry-forward budgets are exceeded. Fry then refreshes the session and prepends a compact carry-forward summary so the audit can continue without dragging unbounded context forward.
 - **Yield-aware stop rules:** Fry records per-cycle productivity and trailing yield. When progress-based audit cycles keep producing weak fix/verify returns, Fry refreshes context, limits the next cycle to a single issue, and can stop with an explicit low-yield reason instead of burning more cycles in the same mode.
 - **Strategy governor:** Fry records named reactions when health thresholds trip during audit, including batch narrowing for high no-op rates, fix-session refresh on repeated `BEHAVIOR_UNCHANGED` outcomes, and audit-session refresh when token burn or cache pressure spikes.
-- When `.fry/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
+- When `.fry-config/codebase.md` exists, the audit, fix, and build-audit prompts use it as ground-truth architecture context.
 - Relevant intentional divergences from `.fry/deviation-log.md` are injected into audit prompts so the auditor does not flag accepted design differences as defects.
 - If the agent forgets to write `.fry/sprint-audit.txt`, Fry attempts to recover a structured report from the agent's final stdout/log output before failing the audit.
 - **Reopen detection:** If a previously resolved finding is re-raised under different wording (same file family and similar description), Fry suppresses it as a probable reopening rather than treating it as new. Unchanged-code reopenings must include explicit `**New Evidence:**` or they are suppressed as churn; severity escalation only bypasses suppression when the artifact fingerprint changed (a real regression). Suppressed reopenings are logged and shown in the monitor dashboard.
@@ -1060,8 +1060,8 @@ fry clean -y --project-dir /path/to/project
 ```
 
 Creates a timestamped snapshot at `.fry-archive/.fry--build--YYYYMMDD-HHMMSS/`
-and removes the `.fry/` directory. Persistent artifacts (`.fry/codebase.md`,
-`.fry/file-index.txt`, `.fry/codebase-memories/`) are preserved and restored.
+and removes the `.fry/` directory. Persistent artifacts (`.fry-config/codebase.md`,
+`.fry-config/file-index.txt`, `.fry-config/codebase-memories/`) live in `.fry-config/` which is not affected by archive/clean.
 
 To completely remove all fry artifacts (as if fry was never run):
 

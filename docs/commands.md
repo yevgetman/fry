@@ -8,7 +8,7 @@ When invoked without a subcommand, `fry` is equivalent to `fry run`.
 
 ## `fry config`
 
-Read or write repo-local Fry settings stored in `.fry/config.json`.
+Read or write repo-local Fry settings stored in `.fry-config/config.json`.
 
 ```
 fry config <get|set> ...
@@ -38,7 +38,7 @@ Prints the configured value, or a blank line if unset.
 fry config set engine <codex|claude|ollama> [--project-dir <path>]
 ```
 
-Writes `.fry/config.json`, creating `.fry/` if needed.
+Writes `.fry-config/config.json`, creating `.fry-config/` if needed.
 
 ### Examples
 
@@ -493,7 +493,7 @@ fry replan <deviation_spec> [flags]
 
 ## `fry clean`
 
-Archive build artifacts from `.fry/` and root-level build outputs (`build-audit.md`, `build-summary.md`) into a timestamped folder under `.fry-archive/`. Persistent artifacts (`.fry/codebase.md`, `.fry/file-index.txt`, `.fry/codebase-memories/`) are preserved and restored after archival.
+Archive build artifacts from `.fry/` and root-level build outputs (`build-audit.md`, `build-summary.md`) into a timestamped folder under `.fry-archive/`. Persistent artifacts (`.fry-config/codebase.md`, `.fry-config/file-index.txt`, `.fry-config/codebase-memories/`) live in `.fry-config/` which is not affected by archive/clean.
 
 ```
 fry clean [flags]
@@ -609,11 +609,11 @@ fry init [flags]
 **Existing projects** (auto-detected via git history, project markers, or file count):
 
 5. Runs a structural scan: file tree, language/framework detection, dependency parsing, entry point identification, git history analysis.
-6. Writes `.fry/file-index.txt` with a human-readable file index and project stats.
+6. Writes `.fry-config/file-index.txt` with a human-readable file index and project stats.
 7. Prints a scan summary (files, languages, frameworks, dependencies, git commits).
-8. Runs a semantic scan using a Sonnet-class LLM to generate `.fry/codebase.md` — a comprehensive document describing the project's architecture, conventions, key files, dependencies, and gotchas. Use `--heuristic-only` to skip this step.
+8. Runs a semantic scan using a Sonnet-class LLM to generate `.fry-config/codebase.md` — a comprehensive document describing the project's architecture, conventions, key files, dependencies, and gotchas. Use `--heuristic-only` to skip this step.
 
-When `.fry/codebase.md` exists, it is automatically used by:
+When `.fry-config/codebase.md` exists, it is automatically used by:
 - **Sprint prompts** — injected as Layer 0.5 (CODEBASE CONTEXT) before the project context
 - **Sprint audit/fix/build-audit prompts** — included as architecture and conventions context for audit remediation
 - **Prepare pipeline** — included in plan, epic, and sanity check generation so sprints are decomposed with awareness of existing code
@@ -623,7 +623,7 @@ When `.fry/codebase.md` exists, it is automatically used by:
 
 ### Composability
 
-`fry init` is composable — running it multiple times is safe and efficient. If both `.fry/file-index.txt` and `.fry/codebase.md` already exist (from a prior init), the structural and semantic scans are skipped. Directory scaffolding and git initialization still run (both are already idempotent).
+`fry init` is composable — running it multiple times is safe and efficient. If both `.fry-config/file-index.txt` and `.fry-config/codebase.md` already exist (from a prior init), the structural and semantic scans are skipped. Directory scaffolding and git initialization still run (both are already idempotent).
 
 Use `--force` to re-index even when index files already exist.
 

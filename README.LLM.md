@@ -44,7 +44,7 @@ fry/
 │   ├── config/config.go         # All constants: paths, defaults, invocation prompts
 │   ├── confirm/                 # Interactive confirmation via file-based IPC
 │   ├── settings/
-│   │   ├── settings.go          # Repo-local Fry settings (.fry/config.json): Load, Save, GetEngine, SetEngine
+│   │   ├── settings.go          # Repo-local Fry settings (.fry-config/config.json): Load, Save, GetEngine, SetEngine
 │   │   └── settings_test.go     # Tests for repo-local settings persistence and validation
 │   ├── engine/
 │   │   ├── engine.go            # Engine interface + ResolveEngine + NewEngine
@@ -129,7 +129,7 @@ fry/
 │   │   ├── types.go             # StructuralSnapshot, FileEntry, GitHistory, Language, Dependency types
 │   │   ├── detect.go            # IsExistingProject: heuristic detection (git history, markers, file count)
 │   │   ├── structural.go        # RunStructuralScan: file tree, languages, frameworks, deps, git history
-│   │   ├── semantic.go          # RunSemanticScan: LLM-powered codebase analysis → .fry/codebase.md
+│   │   ├── semantic.go          # RunSemanticScan: LLM-powered codebase analysis → .fry-config/codebase.md
 │   │   ├── memories.go          # ExtractCodebaseMemories: post-build learning extraction + dedup
 │   │   └── compact.go           # CompactMemories: reduce memories from 50+ to ~20 via LLM
 │   ├── lock/lock.go             # File-based build concurrency lock + IsLocked check
@@ -392,7 +392,7 @@ For each sprint (startSprint → endSprint):
      │  ├─ Fix loop skips verify on true no-op fix attempts and carries forward per-finding fix history
      │  ├─ Audit prompts include relevant intentional divergences from `.fry/deviation-log.md`
      │  ├─ Claude/Codex reuse same-role audit and fix sessions within the sprint audit; verify remains stateless
-     │  ├─ Audit/fix/build-audit prompts include `.fry/codebase.md` and codebase memories when present
+     │  ├─ Audit/fix/build-audit prompts include `.fry-config/codebase.md` and codebase memories when present
      │  ├─ If the agent forgets to write the audit file, Fry tries to recover a structured report from final stdout/log output before failing
      │  ├─ Verify agent must emit explicit per-issue outcome statuses (for example `RESOLVED`, `BEHAVIOR_UNCHANGED`, `BLOCKED`); unrecoverable missing output fails the audit
      │  ├─ Metrics are recorded per call and written to `.fry/build-logs/sprintN_audit_metrics.json`, including repeated-unchanged counters, cache-aware token telemetry, per-cycle productivity summaries, named strategy-shift events, trailing yield, and low-yield strategy/stop metadata
@@ -555,7 +555,7 @@ Key flags:
 | `ConsciousnessUploadQueueDir` | `.fry/consciousness/upload-queue` | Pending checkpoint/lifecycle uploads |
 | `ConsciousnessPromptFile` | `.fry/consciousness-prompt.md` | Experience synthesis prompt (transient, deleted after use) |
 | `ConsciousnessCheckpointPromptFile` | `.fry/consciousness/checkpoint-prompt.md` | Checkpoint distillation prompt (transient) |
-| `ProjectConfigFile` | `.fry/config.json` | Repo-local Fry settings (currently self-improve engine) |
+| `ProjectConfigFile` | `.fry-config/config.json` | Repo-local Fry settings (currently self-improve engine) |
 | `SettingsFile` | `.fry/settings.json` | User settings under `~/.fry/` (telemetry enabled by default; created by `fry init`) |
 | `PendingUploadsDir` | `.fry/experiences/pending` | Cached uploads for retry |
 | `ConsciousnessAPIURL` | `https://fry-consciousness-api.yevgetman.workers.dev` | Consciousness API endpoint |
@@ -649,7 +649,7 @@ Fry improves itself via an automated loop driven by `.self-improve/orchestrate.s
 
 The roadmap lives in GitHub Issues (labels: category/*, priority/*, effort/*, status/*). Pickup requires `self-improve` plus status; sparse manual issues are normalized from labels, body fields, title prefixes, and lightweight heuristics before export. Build-time effort is derived from a triage pass over approved issues rather than trusting issue-declared effort. See docs/self-improvement.md for the full architecture.
 
-**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (export approved issues → normalize sparse metadata → triage each issue for current-codebase effort sizing → select items → worktree → implement → test → optional post-build heal loop → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). Approved issues are exported through a normalization step so manual issues with sparse metadata still produce usable `approved-items.json` entries, then triaged so selection uses current-codebase effort rather than issue-declared effort. The self-improve orchestrator resolves its engine from `fry config get engine` (repo-local `.fry/config.json`) unless `.self-improve/config` explicitly overrides `PLANNING_ENGINE` or `BUILD_ENGINE`; the same build engine is also used for post-build heals and journal summarization, with optional model overrides via `HEAL_MODEL` and `JOURNAL_MODEL`. After each build, a structured journal entry is written to `build-journal.json` with outcome, items, alignment rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
+**Flow:** Planning (scan codebase + analyze build journal → create findings) → Build (export approved issues → normalize sparse metadata → triage each issue for current-codebase effort sizing → select items → worktree → implement → test → optional post-build heal loop → merge/PR → write journal entry). Planning runs only when roadmap needs replenishment (< 5 items, category gaps, or imbalance). Approved issues are exported through a normalization step so manual issues with sparse metadata still produce usable `approved-items.json` entries, then triaged so selection uses current-codebase effort rather than issue-declared effort. The self-improve orchestrator resolves its engine from `fry config get engine` (repo-local `.fry-config/config.json`) unless `.self-improve/config` explicitly overrides `PLANNING_ENGINE` or `BUILD_ENGINE`; the same build engine is also used for post-build heals and journal summarization, with optional model overrides via `HEAL_MODEL` and `JOURNAL_MODEL`. After each build, a structured journal entry is written to `build-journal.json` with outcome, items, alignment rounds, and AI observations. During planning, the journal feeds **Category J: Build Experience** for pattern-based improvements.
 
 **Key flags:** `--auto-merge` (direct merge to master), `--skip-planning`, `--skip-build`, `--dry-run`.
 

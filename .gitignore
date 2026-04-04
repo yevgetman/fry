@@ -5,6 +5,7 @@ bin/
 .wrangler/
 *.log
 .fry/
+.fry-config/
 .fry-archive/
 .fry-worktrees/
 plans/

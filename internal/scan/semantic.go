@@ -40,7 +40,7 @@ type SemanticScanOpts struct {
 	Verbose     bool
 }
 
-// RunSemanticScan uses an LLM to produce .fry/codebase.md from the structural
+// RunSemanticScan uses an LLM to produce .fry-config/codebase.md from the structural
 // snapshot. It selects key files, assembles a prompt, invokes the engine, and
 // writes the result.
 func RunSemanticScan(ctx context.Context, opts SemanticScanOpts) error {
@@ -93,7 +93,7 @@ func RunSemanticScan(ctx context.Context, opts SemanticScanOpts) error {
 	return nil
 }
 
-// UpdateCodebaseDoc incrementally updates .fry/codebase.md based on a git diff.
+// UpdateCodebaseDoc incrementally updates .fry-config/codebase.md based on a git diff.
 // Only called when significant changes are detected (>=5 files or new packages).
 func UpdateCodebaseDoc(ctx context.Context, projectDir string, diffSummary string, eng engine.Engine, model string) error {
 	codebasePath := filepath.Join(projectDir, config.CodebaseFile)
@@ -145,7 +145,7 @@ func buildUpdatePrompt(existingDoc, diffSummary string) string {
 	}
 	b.WriteString(doc)
 	b.WriteString("\n\n## Instructions\n\n")
-	b.WriteString("Update .fry/codebase.md to reflect the changes. Only modify sections that\n")
+	b.WriteString("Update " + config.CodebaseFile + " to reflect the changes. Only modify sections that\n")
 	b.WriteString("are affected. Do NOT rewrite the entire document. If the changes are minor\n")
 	b.WriteString("and don't affect any section, make no changes.\n")
 	return b.String()

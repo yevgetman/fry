@@ -87,6 +87,7 @@ func init() {
 func destroyTargets(projectDir string) []string {
 	candidates := []string{
 		filepath.Join(projectDir, config.FryDir),          // .fry/
+		filepath.Join(projectDir, config.FryConfigDir),    // .fry-config/
 		filepath.Join(projectDir, config.ArchiveDir),      // .fry-archive/
 		filepath.Join(projectDir, config.GitWorktreeDir),  // .fry-worktrees/
 		filepath.Join(projectDir, config.PlansDir),        // plans/

@@ -32,7 +32,7 @@ type PromptOpts struct {
 func AssemblePrompt(opts PromptOpts) (string, error) {
 	var b strings.Builder
 
-	// Layer 0.5: Codebase context (only if .fry/codebase.md exists)
+	// Layer 0.5: Codebase context (only if codebase.md exists in .fry-config/)
 	codebaseContent := readOptionalPromptFile(filepath.Join(opts.ProjectDir, config.CodebaseFile))
 	if codebaseContent != "" {
 		b.WriteString("# ===== CODEBASE CONTEXT =====\n")
@@ -44,7 +44,7 @@ func AssemblePrompt(opts PromptOpts) (string, error) {
 		b.WriteString("\n")
 	}
 
-	// Layer 0.75: Codebase memories (only if .fry/codebase-memories/ has files)
+	// Layer 0.75: Codebase memories (only if .fry-config/codebase-memories/ has files)
 	memoriesContent := scan.LoadMemoriesForPrompt(opts.ProjectDir)
 	if memoriesContent != "" {
 		b.WriteString("# ===== CODEBASE MEMORIES =====\n")

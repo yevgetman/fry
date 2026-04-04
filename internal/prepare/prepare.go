@@ -40,7 +40,7 @@ type PrepareOpts struct {
 	EnableReview        bool      // include @review_between_sprints in the generated epic
 	Stdin               io.Reader // for interactive confirmation (defaults to os.Stdin)
 	Stdout              io.Writer // for displaying generated content (defaults to os.Stdout)
-	CodebaseContent     string    // contents of .fry/codebase.md (may be empty for new projects)
+	CodebaseContent     string    // contents of .fry-config/codebase.md (may be empty for new projects)
 }
 
 var numberedRulePattern = regexp.MustCompile(`(?m)^[0-9]+\.`)

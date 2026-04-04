@@ -15,7 +15,7 @@ import (
 )
 
 // Memory represents a single codebase-specific learning persisted in
-// .fry/codebase-memories/.
+// .fry-config/codebase-memories/.
 type Memory struct {
 	Filename   string
 	Confidence string // "high", "medium", "low"
