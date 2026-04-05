@@ -108,6 +108,43 @@ func TestDistillCheckpoint_RepairsTranscriptPreamble(t *testing.T) {
 	assert.Equal(t, "Checkpoint stayed clean.", summary.Summary)
 }
 
+type capturingEngine struct {
+	stubEngine
+	invocationPrompt string
+}
+
+func (c *capturingEngine) Run(_ context.Context, prompt string, opts engine.RunOpts) (string, int, error) {
+	c.invocationPrompt = prompt
+	if opts.Stdout != nil {
+		_, _ = opts.Stdout.Write([]byte(c.output))
+	}
+	return c.output, 0, c.err
+}
+
+func TestDistillCheckpoint_InvocationUsesRelativePath(t *testing.T) {
+	t.Parallel()
+
+	eng := &capturingEngine{stubEngine: stubEngine{output: `{"summary":"ok","lessons":[],"risk_signals":[]}`}}
+	_, err := DistillCheckpoint(context.Background(), DistillOpts{
+		ProjectDir:  t.TempDir(),
+		Engine:      eng,
+		Model:       "test",
+		EffortLevel: "standard",
+		Record:      BuildRecord{SessionID: "s1", Engine: "claude", EffortLevel: "standard", TotalSprints: 1},
+		Checkpoint: ObservationCheckpoint{
+			Sequence:       1,
+			CheckpointType: CheckpointTypeObservation,
+			WakePoint:      "after_sprint",
+			SprintNum:      1,
+			ParseStatus:    ParseStatusOK,
+			Observation:    &BuildObservation{Thoughts: "test"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, eng.invocationPrompt, ".fry/consciousness/checkpoint-prompt.md",
+		"invocation prompt should contain relative path, not just basename")
+}
+
 func TestSummarizeExperience_Success(t *testing.T) {
 	t.Parallel()
 

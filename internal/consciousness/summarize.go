@@ -188,7 +188,11 @@ func runConsciousnessSession(ctx context.Context, opts consciousnessRunOpts) (st
 		runOpts.Stderr = logFile
 	}
 
-	invocationPrompt := "Read and execute ALL instructions in " + filepath.Base(opts.PromptPath) + ". Do not create or modify any other files."
+	promptRef := filepath.Base(opts.PromptPath)
+	if rel, relErr := filepath.Rel(opts.ProjectDir, opts.PromptPath); relErr == nil {
+		promptRef = rel
+	}
+	invocationPrompt := "Read and execute ALL instructions in " + promptRef + ". Do not create or modify any other files."
 	output, _, runErr := opts.Engine.Run(ctx, invocationPrompt, runOpts)
 	if runErr != nil {
 		return "", fmt.Errorf("consciousness session: %w", runErr)
