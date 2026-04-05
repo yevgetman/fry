@@ -63,8 +63,8 @@ func TestRunAuditLoopSkipsVerifyOnNoOp(t *testing.T) {
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
 			switch callIndex {
-			// Per-cluster fast-fail: 1 fix call rejected → all clusters skipped → final audit at callIndex 2
-			case 0, 2:
+			// Per-cluster fast-fail: 1 fix call rejected → all clusters skipped
+			case 0:
 				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), highFindings)
 			}
 		},
@@ -111,7 +111,7 @@ func TestRunAuditLoopVerifiesAlreadyFixedClaimOnNoOp(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Passed)
 	require.NotNil(t, result.Metrics)
-	require.Len(t, result.Metrics.Calls, 4)
+	require.Len(t, result.Metrics.Calls, 3) // audit + fix(verify_only) + verify
 	assert.Equal(t, fixValidationVerifyOnly, result.Metrics.Calls[1].ValidationResult)
 	assert.True(t, result.Metrics.Calls[1].AlreadyFixedClaim)
 	assert.Contains(t, eng.prompts, config.AuditVerifyInvocationPrompt)
@@ -382,9 +382,6 @@ func TestRunAuditLoopRollsBackRejectedOutOfScopeDiff(t *testing.T) {
 			case 1:
 				// Fix writes to a DIFFERENT file (out-of-scope) → should be rejected and rolled back
 				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "unrelated.go"), []byte("package main\n// rogue change\n"), 0o644))
-			case 2:
-				// Final re-audit
-				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
 			}
 		},
 	}
@@ -406,7 +403,7 @@ func TestRunAuditLoopRollsBackRejectedOutOfScopeDiff(t *testing.T) {
 	assert.Equal(t, "package main\n", string(data), "rejected out-of-scope change should be rolled back")
 
 	// Metrics should record the rollback
-	require.Len(t, result.Metrics.Calls, 3) // audit + fix + re-audit
+	require.Len(t, result.Metrics.Calls, 2) // audit + fix
 	assert.Equal(t, []string{"unrelated.go"}, result.Metrics.Calls[1].RolledBackFiles)
 }
 

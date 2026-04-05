@@ -861,86 +861,35 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 		}
 	}
 
-	// Log remaining LOW findings at high/max effort
-	if includeLow {
-		lowRemaining := countUnresolvedLow(knownFindings)
-		if lowRemaining > 0 {
-			frylog.Log("  AUDIT: %d LOW issues remain (non-blocking)", lowRemaining)
-		}
-	}
-
-	// Final audit pass to determine current state
-	refreshDiff(&opts)
-	if err := checkStopRequest(opts.ProjectDir, "sprint_audit", "before final audit pass"); err != nil {
-		return nil, err
-	}
-	finalPrompt := buildAuditPrompt(opts, knownFindings, resolved)
-	if err := writePromptFile(promptPath, finalPrompt); err != nil {
-		return nil, fmt.Errorf("run audit loop: write final audit prompt: %w", err)
-	}
-
-	finalAuditModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAudit)
-	frylog.Log(
-		"▶ AUDIT  sprint %d/%d \"%s\"  final pass  engine=%s  model=%s",
-		opts.Sprint.Number, opts.Epic.TotalSprints, opts.Sprint.Name,
-		opts.Engine.Name(), finalAuditModel,
-	)
-
-	finalLogPath := filepath.Join(buildLogsDir,
-		fmt.Sprintf("sprint%d_audit_final_%s.log", opts.Sprint.Number, time.Now().Format("20060102_150405")),
-	)
-	finalPromptBytes := promptFileSize(promptPath)
-	finalStarted := time.Now()
-	finalOutput, err := runAgentWithLog(ctx, opts, config.AuditInvocationPrompt, finalLogPath, finalAuditModel, engine.SessionAudit, auditSession)
-	auditMetrics.Record(CallMetric{
-		SessionType: engine.SessionAudit,
-		Cycle:       lastCycle,
-		PromptBytes: finalPromptBytes,
-		OutputBytes: len(finalOutput),
-		DurationMs:  time.Since(finalStarted).Milliseconds(),
-		Model:       finalAuditModel,
-		Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), finalOutput),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	content, err := readAuditOutput(
-		auditFilePath,
-		config.SprintAuditFile,
-		"final audit session",
-		"AUDIT",
-		"run audit loop",
-		opts.ProjectDir,
-		finalOutput,
-		finalLogPath,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if err := checkStopRequest(opts.ProjectDir, "sprint_audit", "after final audit pass"); err != nil {
-		return nil, err
-	}
-
-	finalFindings := decorateFindings(opts.ProjectDir, parseFindings(string(content)), lastCycle)
-	maxSev := parseAuditSeverity(string(content))
-	finalCounts := countAuditSeverities(string(content))
-	finalBlockers := filterBlockers(finalFindings)
-	finalBlockerCounts := blockerCounts(finalFindings)
+	// Determine result from cycle-level tracked findings.
+	// No final re-audit pass — codebase-level evaluation is deferred to the
+	// build audit that runs after all sprints complete (RunBuildAudit).
+	unresolvedFindings := knownFindings // already filtered to unresolved by collectUnresolved at line 857
+	unresolvedCounts := severityCountsForFindings(unresolvedFindings)
+	unresolvedMaxSev := maxSeverityForFindings(unresolvedFindings)
+	unresolvedBlockers := filterBlockers(unresolvedFindings)
+	unresolvedBlockerCounts := blockerCounts(unresolvedFindings)
 	auditMetrics.OuterCycles = lastCycle
-	auditMetrics.FinalFindingCount = totalSeverityCount(finalCounts)
-	if isAuditPass(maxSev) {
-		frylog.Log("  AUDIT: pass after %d cycles (%s)", lastCycle, formatSeverityCounts(finalCounts))
+	auditMetrics.FinalFindingCount = totalSeverityCount(unresolvedCounts)
+
+	if len(unresolvedFindings) > 0 {
+		frylog.Log("  AUDIT: %s remain after %d cycles", formatSeverityCounts(unresolvedCounts), lastCycle)
+	} else {
+		frylog.Log("  AUDIT: all findings resolved after %d cycles", lastCycle)
+	}
+
+	if isAuditPass(unresolvedMaxSev) {
+		frylog.Log("  AUDIT: pass after %d cycles (%s)", lastCycle, formatSeverityCounts(unresolvedCounts))
 		auditMetrics.ConvergedAtCycle = lastCycle
 		return &AuditResult{
 			Passed: true, Iterations: lastCycle,
-			MaxSeverity: maxSev, SeverityCounts: finalCounts,
+			MaxSeverity: unresolvedMaxSev, SeverityCounts: unresolvedCounts,
 			SuppressedReopenings: suppressedReopenings,
 			RepeatedUnchanged:    repeatedUnchanged,
 			SuppressedUnchanged:  suppressedUnchanged,
 			ReopenedWithEvidence: reopenedWithEvidence,
-			BlockerCounts:        finalBlockerCounts,
-			Blockers:             finalBlockers,
+			BlockerCounts:        unresolvedBlockerCounts,
+			Blockers:             unresolvedBlockers,
 			Complexity:           opts.Complexity,
 			Metrics:              auditMetrics,
 		}, nil
@@ -948,18 +897,18 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 
 	return &AuditResult{
 		Passed:               false,
-		Blocking:             isBlockingSeverity(maxSev) || len(finalBlockers) > 0,
-		Blocked:              len(finalBlockers) > 0,
+		Blocking:             isBlockingSeverity(unresolvedMaxSev) || len(unresolvedBlockers) > 0,
+		Blocked:              len(unresolvedBlockers) > 0,
 		Iterations:           lastCycle,
-		MaxSeverity:          maxSev,
-		SeverityCounts:       finalCounts,
-		UnresolvedFindings:   finalFindings,
+		MaxSeverity:          unresolvedMaxSev,
+		SeverityCounts:       unresolvedCounts,
+		UnresolvedFindings:   unresolvedFindings,
 		SuppressedReopenings: suppressedReopenings,
 		RepeatedUnchanged:    repeatedUnchanged,
 		SuppressedUnchanged:  suppressedUnchanged,
 		ReopenedWithEvidence: reopenedWithEvidence,
-		BlockerCounts:        finalBlockerCounts,
-		Blockers:             finalBlockers,
+		BlockerCounts:        unresolvedBlockerCounts,
+		Blockers:             unresolvedBlockers,
 		Complexity:           opts.Complexity,
 		StopReason:           lowYieldStopReason,
 		Metrics:              auditMetrics,

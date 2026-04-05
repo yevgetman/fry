@@ -1229,8 +1229,8 @@ func TestRunAuditLoopExhaustsCritical(t *testing.T) {
 	assert.Equal(t, "CRITICAL", result.MaxSeverity)
 
 	// Call sequence per cycle: audit + (fix + verify)*2 = 5
-	// Two cycles: 5*2 + 1 final = 11
-	assert.Len(t, eng.prompts, 11)
+	// Two cycles: 5*2 = 10
+	assert.Len(t, eng.prompts, 10)
 }
 
 func TestRunAuditLoopExhaustsModerateAdvisory(t *testing.T) {
@@ -1304,7 +1304,7 @@ func TestRunAuditLoopRecoversMissingAuditOutputsFromAgentResponse(t *testing.T) 
 	require.NotNil(t, result)
 	assert.True(t, result.Passed)
 	assert.Equal(t, 1, result.Iterations)
-	assert.Len(t, eng.prompts, 4)
+	assert.Len(t, eng.prompts, 3)
 }
 
 func TestRunAuditLoopRecoversMissingAuditOutputsFromDiffTranscript(t *testing.T) {
@@ -1591,8 +1591,8 @@ func TestRunAuditLoopProgressStopsOnStale(t *testing.T) {
 	// Cycle 2: outer stale=1. Cycle 3: outer stale=2. Cycle 4: outer stale=3 → break before inner.
 	// Cycles 1-3 each: audit + (fix+verify)*2 (inner stale) = 5
 	// Cycle 4: audit only (breaks immediately after stale detection) = 1
-	// Plus 1 final audit = 3*5 + 1 + 1 = 17
-	assert.Len(t, eng.prompts, 17)
+	// No final pass: 3*5 + 1 = 16
+	assert.Len(t, eng.prompts, 16)
 }
 
 func TestRunAuditLoopProgressContinues(t *testing.T) {
@@ -1625,8 +1625,8 @@ func TestRunAuditLoopProgressContinues(t *testing.T) {
 	// Inner always stales after 2 fix attempts.
 	// Outer: each cycle gets a different description (based on callIndex of the audit call),
 	// so progress is detected (different finding keys).
-	// 20 cycles * 5 calls + 1 final = 101
-	assert.Len(t, eng.prompts, 101)
+	// 20 cycles * 5 calls = 100
+	assert.Len(t, eng.prompts, 100)
 }
 
 func TestRunAuditLoopProgressStopsOnTurnoverChurnAfterWarmup(t *testing.T) {
@@ -1654,8 +1654,8 @@ func TestRunAuditLoopProgressStopsOnTurnoverChurnAfterWarmup(t *testing.T) {
 	// 1, 2, 3 and the loop breaks before the inner loop on cycle 13.
 	// Cycles 1-12: audit + (fix+verify)*2 = 5 calls each => 60
 	// Cycle 13: audit only => 1
-	// Final audit => 1
-	assert.Len(t, eng.prompts, 62)
+	// No final pass: 60 + 1 = 61
+	assert.Len(t, eng.prompts, 61)
 }
 
 func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
@@ -1668,14 +1668,14 @@ func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
 	// Cycle 1: audit(0) fix(1) verify(2) fix(3) verify(4)
 	// Cycle 2: audit(5) fix(6) verify(7) fix(8) verify(9)
 	// Cycle 3: audit(10) fix(11) verify(12) fix(13) verify(14)
-	// Final:   audit(15)
+	// No final pass — result determined from tracked findings.
 	eng := &stubEngine{
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
 			auditPath := filepath.Join(projectDir, config.SprintAuditFile)
 			promptPath := filepath.Join(projectDir, config.AuditPromptFile)
 			switch callIndex {
-			case 0, 5, 10, 15:
+			case 0, 5, 10:
 				writeFile(t, auditPath, repeatedHighFindings)
 			case 1, 3, 6, 8, 11, 13:
 				if callIndex == 6 {
@@ -1713,7 +1713,7 @@ func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
 	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[0].FixYield, 0.001)
 	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[1].VerifyYield, 0.001)
 	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[2].VerifyYield, 0.001)
-	assert.Len(t, eng.prompts, 16)
+	assert.Len(t, eng.prompts, 15)
 	assert.Contains(t, secondCycleFixPrompt, "### Issue 1")
 	assert.NotContains(t, secondCycleFixPrompt, "### Issue 2")
 }
@@ -2184,6 +2184,42 @@ func TestRunAuditLoopMaxEffortHighFindingsStillLoops(t *testing.T) {
 	result, err := RunAuditLoop(context.Background(), opts)
 	require.NoError(t, err)
 	assert.False(t, result.Passed, "MODERATE findings should not pass")
+}
+
+func TestRunAuditLoopConvergesToLowPassesWithoutFinalPass(t *testing.T) {
+	t.Parallel()
+
+	// Cycle 1: HIGH finding. Fix+verify resolves it.
+	// Cycle 2: only LOW remaining. Should PASS from tracked state.
+	// No additional agent call should occur after cycle 2.
+	lowOnlyFindings := "## Findings\n- **Description:** Minor naming convention\n- **Severity:** LOW\n\n## Verdict\nPASS\n"
+
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			path := filepath.Join(projectDir, config.SprintAuditFile)
+			switch callIndex {
+			case 0: // cycle 1 audit: HIGH
+				writeFile(t, path, highFindings)
+			case 2: // verify: resolved
+				writeFile(t, path, "- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 3: // cycle 2 audit: LOW only
+				writeFile(t, path, lowOnlyFindings)
+			}
+		},
+	}
+	opts := makeOpts(t, eng)
+	opts.Epic.MaxAuditIterations = 3
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.True(t, result.Passed)
+	assert.Equal(t, "LOW", result.MaxSeverity)
+	assert.Equal(t, 2, result.Iterations)
+	// Cycle 1: audit(0) + fix(1) + verify(2) = 3
+	// Cycle 2: audit(3) → LOW only → immediate pass = 1
+	// Total: 4 calls, no final pass
+	assert.Len(t, eng.prompts, 4)
 }
 
 // --- Theme matching and reopen detection tests ---
