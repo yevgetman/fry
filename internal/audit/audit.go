@@ -1343,7 +1343,7 @@ func buildUnifiedFixPrompt(opts AuditOpts, cluster remediationCluster, resolved 
 
 	diff := opts.GitDiff
 	if len(diff) > config.MaxAuditDiffBytes {
-		diff = diff[:config.MaxAuditDiffBytes] + "\n...(diff truncated at 100KB)"
+		diff = textutil.TruncateUTF8(diff, config.MaxAuditDiffBytes) + "\n...(diff truncated at 100KB)"
 	}
 	if strings.TrimSpace(diff) != "" {
 		b.WriteString("## Changes Made This Sprint\n")
@@ -1355,16 +1355,21 @@ func buildUnifiedFixPrompt(opts AuditOpts, cluster remediationCluster, resolved 
 	if resolved != nil && resolved.len() > 0 {
 		b.WriteString("## Resolved Themes (Do Not Re-Break)\n\n")
 		b.WriteString("These issues were resolved in earlier audit cycles. Do not introduce regressions.\n\n")
-		i := 0
-		for _, f := range resolved.entries {
-			i++
-			if f.Location != "" {
-				fmt.Fprintf(&b, "%d. [%s] %s (%s)\n", i, f.Location, f.Description, f.Severity)
-			} else {
-				fmt.Fprintf(&b, "%d. %s (%s)\n", i, f.Description, f.Severity)
-			}
+		// Sort keys for deterministic prompt ordering
+		resolvedKeys := make([]string, 0, len(resolved.entries))
+		for k := range resolved.entries {
+			resolvedKeys = append(resolvedKeys, k)
+		}
+		sort.Strings(resolvedKeys)
+		for i, k := range resolvedKeys {
 			if i >= 20 {
 				break
+			}
+			f := resolved.entries[k]
+			if f.Location != "" {
+				fmt.Fprintf(&b, "%d. [%s] %s (%s)\n", i+1, f.Location, f.Description, f.Severity)
+			} else {
+				fmt.Fprintf(&b, "%d. %s (%s)\n", i+1, f.Description, f.Severity)
 			}
 		}
 		b.WriteString("\n")
