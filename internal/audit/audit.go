@@ -151,7 +151,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	maxInner := effectiveInnerIter(opts.Epic, opts.Complexity)
 	includeLow := fixIncludesLow(opts.Epic)
 	lowYieldStopThreshold := effectiveLowYieldStopCycles(opts.Epic)
-	auditMetrics := &AuditMetrics{ContentComplexity: opts.Complexity}
+	auditMetrics := &AuditMetrics{ContentComplexity: opts.Complexity, FixStrategy: config.AuditFixStrategyDefault}
 	fixHistory := &FixHistory{}
 	auditSession := newAuditSessionContinuity(opts.ProjectDir, opts.Sprint.Number, opts.Engine.Name())
 
@@ -499,10 +499,14 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			frylog.Log("  AUDIT: low-yield mode active — limiting cycle %d fix batches to %d issue(s)", cycle, cycleFixBatchLimit)
 		}
 
-		// Inner fix loop
+		// Inner fix loop — per-cluster dispatch with fast-fail
 		innerStaleCount := 0
 		lastResolvedCount := 0
 		fixSession := newFixSessionContinuity(opts.ProjectDir, opts.Sprint.Number, cycle, opts.Engine.Name())
+		// Per-cluster fast-fail: when a cluster fix is rejected, all its finding keys are added here
+		// and skipped in subsequent iterations. Keys persist for the entire cycle intentionally —
+		// the outer re-audit loop handles any findings that couldn't be fixed in this cycle.
+		skippedFindingKeys := make(map[string]bool)
 
 		for fixIter := 1; fixIter <= maxInner; fixIter++ {
 			select {
@@ -568,35 +572,59 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			}
 			targetClusters := clusterFixFindings(unresolved)
 
+			// Per-cluster dispatch: select the first cluster whose findings aren't all skipped
+			var targetCluster *remediationCluster
+			for i := range targetClusters {
+				allSkipped := true
+				for _, f := range targetClusters[i].Findings {
+					if !skippedFindingKeys[f.key()] {
+						allSkipped = false
+						break
+					}
+				}
+				if !allSkipped {
+					targetCluster = &targetClusters[i]
+					break
+				}
+			}
+
+			// If all clusters skipped, no fix can make progress — break to re-audit
+			if targetCluster == nil {
+				frylog.Log("  AUDIT FIX: all %d cluster(s) skipped — moving to re-audit", len(targetClusters))
+				break
+			}
+
+			clusterFindings := targetCluster.Findings
+
 			emitAuditProgress(opts.ProgressFn, AuditProgress{
 				Stage:        "fixing",
 				Cycle:        cycle,
 				MaxCycles:    maxOuter,
 				Fix:          fixIter,
 				MaxFixes:     maxInner,
-				TargetIssues: len(unresolved),
+				TargetIssues: len(clusterFindings),
 				Findings:     severityCountsForFindings(unresolved),
 				Blockers:     activeBlockerCounts,
-				Headlines:    findingHeadlines(unresolved, 3),
+				Headlines:    findingHeadlines(clusterFindings, 3),
 				Complexity:   opts.Complexity,
 				Metrics:      auditMetrics.Snapshot(),
 			})
 
 			fixModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditFix)
-			frylog.Log("  AUDIT FIX  cycle %d  fix %d/%d — targeting %d issues across %d cluster(s)  engine=%s  model=%s",
-				cycle, fixIter, maxInner, len(unresolved), len(targetClusters), opts.Engine.Name(), fixModel)
+			frylog.Log("  AUDIT FIX  cycle %d  fix %d/%d — targeting cluster %d (%s, %d issues)  engine=%s  model=%s",
+				cycle, fixIter, maxInner, targetCluster.ID, targetCluster.Label, len(clusterFindings), opts.Engine.Name(), fixModel)
 
-			// Build and write fix prompt
-			fixContract := newFixContract(unresolved)
+			// Build and write per-cluster fix prompt
+			fixContract := newFixContract(clusterFindings)
 			fixRefreshReason := ""
 			if fixSession != nil {
-				fixRefreshReason = fixSession.MaybeRefresh(len(unresolved))
+				fixRefreshReason = fixSession.MaybeRefresh(len(clusterFindings))
 				if fixRefreshReason != "" {
-					fixPromptOpts.SessionCarryForward = buildSessionCarryForwardSummary(fixRefreshReason, unresolved, fixHistory)
+					fixPromptOpts.SessionCarryForward = buildSessionCarryForwardSummary(fixRefreshReason, clusterFindings, fixHistory)
 					frylog.Log("  AUDIT FIX: refreshing same-role fix session before cycle %d iteration %d (%s)", cycle, fixIter, fixRefreshReason)
 				}
 			}
-			fixPrompt := buildAuditFixPrompt(fixPromptOpts, unresolved, fixHistory)
+			fixPrompt := buildClusterFixPrompt(fixPromptOpts, *targetCluster, fixHistory)
 			if err := writePromptFile(promptPath, fixPrompt); err != nil {
 				return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
 			}
@@ -630,6 +658,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				SessionType:          engine.SessionAuditFix,
 				Cycle:                cycle,
 				Iteration:            fixIter,
+				ClusterID:            targetCluster.ID,
 				SessionRefreshReason: fixRefreshReason,
 				IssueIDs:             fixContract.IssueIDs(),
 				PromptBytes:          fixPromptBytes,
@@ -657,18 +686,22 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 			if diffAssessment.ValidationResult == fixValidationRejected {
 				switch diffAssessment.DiffClassification {
 				case diffClassificationCommentOnly:
-					frylog.Log("  AUDIT FIX: rejected comment-only diff — skipping verify")
+					frylog.Log("  AUDIT FIX: rejected comment-only diff for cluster %d (%s) — skipping cluster", targetCluster.ID, targetCluster.Label)
 				case diffClassificationOutOfScope:
-					frylog.Log("  AUDIT FIX: rejected out-of-scope diff — skipping verify")
+					frylog.Log("  AUDIT FIX: rejected out-of-scope diff for cluster %d (%s) — skipping cluster", targetCluster.ID, targetCluster.Label)
 				default:
-					frylog.Log("  AUDIT FIX: no-op (no file changes) — skipping verify")
+					frylog.Log("  AUDIT FIX: no-op for cluster %d (%s) — skipping cluster", targetCluster.ID, targetCluster.Label)
+				}
+				// Fast-fail: skip all findings in this cluster for subsequent iterations
+				for _, f := range clusterFindings {
+					skippedFindingKeys[f.key()] = true
 				}
 				fixHistory.Record(FixAttempt{
 					Cycle:       cycle,
 					Iteration:   fixIter,
-					Targeted:    targetedFindingLabels(unresolved),
+					Targeted:    targetedFindingLabels(clusterFindings),
 					DiffSummary: diffAssessment.DiffSummary,
-					Outcomes:    buildRejectedOutcomes(unresolved, diffAssessment),
+					Outcomes:    buildRejectedOutcomes(clusterFindings, diffAssessment),
 				})
 				innerStaleCount++
 				if innerStaleCount >= maxInnerStaleIterations {
@@ -681,82 +714,11 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				frylog.Log("  AUDIT FIX: already-fixed claim with no behavioral diff — verifying claim")
 			}
 
-			// Remove stale audit file before verify
-			_ = os.Remove(auditFilePath)
-
-			// Build and write verify prompt
-			verifyPrompt := buildVerifyPrompt(opts, unresolved)
-			if err := writePromptFile(promptPath, verifyPrompt); err != nil {
-				return nil, fmt.Errorf("run audit loop: write verify prompt: %w", err)
-			}
-
-			emitAuditProgress(opts.ProgressFn, AuditProgress{
-				Stage:        "verifying",
-				Cycle:        cycle,
-				MaxCycles:    maxOuter,
-				Fix:          fixIter,
-				MaxFixes:     maxInner,
-				TargetIssues: len(unresolved),
-				Findings:     severityCountsForFindings(unresolved),
-				Blockers:     activeBlockerCounts,
-				Headlines:    findingHeadlines(unresolved, 3),
-				Complexity:   opts.Complexity,
-				Metrics:      auditMetrics.Snapshot(),
-			})
-
-			// Run verify agent
-			verifyModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditVerify)
-			verifyLogPath := filepath.Join(buildLogsDir,
-				fmt.Sprintf("sprint%d_auditverify_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
-			)
-			verifyPromptBytes := promptFileSize(promptPath)
-			verifyStarted := time.Now()
-			verifyOutput, err := runAgentWithLog(ctx, opts, config.AuditVerifyInvocationPrompt, verifyLogPath, verifyModel, engine.SessionAuditVerify, nil)
-			if err != nil {
-				return nil, err
-			}
-
-			// Parse verification results
-			verifyContent, verifyErr := readVerificationOutput(
-				auditFilePath,
-				config.SprintAuditFile,
-				"verify session",
-				"AUDIT",
-				"run audit loop",
-				verifyOutput,
-				verifyLogPath,
-				len(unresolved),
-			)
-			if verifyErr != nil {
+			// Run verify for ALL unresolved findings (not just cluster)
+			if verifyErr := runVerifyPass(ctx, opts, unresolved, activeFindings, cycle, fixIter, maxInner, maxOuter,
+				activeBlockerCounts, auditMetrics, fixHistory, buildLogsDir, auditFilePath, promptPath, includeLow); verifyErr != nil {
 				return nil, verifyErr
 			}
-			_ = os.Remove(auditFilePath)
-			if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("after audit verify %d in cycle %d", fixIter, cycle)); err != nil {
-				return nil, err
-			}
-
-			verifyResults := parseVerificationResults(string(verifyContent), unresolved)
-			verifyResolutions := countResolvedVerificationResults(verifyResults)
-			auditMetrics.BehaviorUnchangedOutcomes += countVerificationResultsWithStatus(verifyResults, verifyStatusBehaviorUnchanged)
-			auditMetrics.Record(CallMetric{
-				SessionType: engine.SessionAuditVerify,
-				Cycle:       cycle,
-				Iteration:   fixIter,
-				PromptBytes: verifyPromptBytes,
-				OutputBytes: len(verifyOutput),
-				DurationMs:  time.Since(verifyStarted).Milliseconds(),
-				Model:       verifyModel,
-				Resolutions: verifyResolutions,
-				Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), verifyOutput),
-			})
-			applyResolutionsByKey(activeFindings, unresolved, verifyResults)
-			fixHistory.Record(FixAttempt{
-				Cycle:       cycle,
-				Iteration:   fixIter,
-				Targeted:    targetedFindingLabels(unresolved),
-				DiffSummary: diffAssessment.DiffSummary,
-				Outcomes:    buildOutcomes(unresolved, verifyResults),
-			})
 
 			nowResolved := countResolved(activeFindings)
 			totalFixable := countFixableProductFindings(activeFindings, includeLow)
@@ -1423,6 +1385,130 @@ func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory
 
 	if history != nil {
 		if rendered := history.ForPrompt(findings, 30_000); rendered != "" {
+			b.WriteString("## Previous Fix Attempts\n\n")
+			b.WriteString("The following approaches have already been tried. Do NOT repeat them.\n")
+			b.WriteString("If a previous approach was close but flawed, fix the flaw instead of starting over.\n\n")
+			b.WriteString(rendered)
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString("## Context\n")
+	fmt.Fprintf(&b, "- Read %s for what was built\n", config.SprintProgressFile)
+	fmt.Fprintf(&b, "- Read %s for strategic context\n\n", config.PlanFile)
+
+	b.WriteString("Run the smallest relevant validation you can before logging what you fixed.\n")
+	fmt.Fprintf(&b, "Append a brief note to %s about what you fixed.\n", config.SprintProgressFile)
+
+	return b.String()
+}
+
+// buildClusterFixPrompt builds a focused fix prompt for a single remediation cluster.
+// Unlike buildAuditFixPrompt which sends all findings with codebase.txt, this inlines
+// only the target files' content so the fix agent operates on a narrow context.
+func buildClusterFixPrompt(opts AuditOpts, cluster remediationCluster, history *FixHistory) string {
+	var b strings.Builder
+	contract := newFixContract(cluster.Findings)
+
+	fmt.Fprintf(&b, "# AUDIT FIX — Sprint %d: %s (Cluster %d: %s)\n\n", opts.Sprint.Number, opts.Sprint.Name, cluster.ID, cluster.Label)
+	if carry := strings.TrimSpace(opts.SessionCarryForward); carry != "" {
+		b.WriteString("## Session Refresh Summary\n\n")
+		b.WriteString(carry)
+		b.WriteString("\n\n")
+	}
+	if guidance := strings.TrimSpace(opts.BehaviorGuidance); guidance != "" {
+		b.WriteString("## Behavior-Unchanged Guidance\n\n")
+		b.WriteString(guidance)
+		b.WriteString("\n\n")
+	}
+
+	skipLow := !fixIncludesLow(opts.Epic)
+	b.WriteString("The sprint audit found issues in this cluster. Fix ONLY the issues listed below.\n")
+	if skipLow {
+		b.WriteString("Do NOT fix LOW issues. ")
+	}
+	b.WriteString("Make minimal changes.\n\n")
+
+	b.WriteString("**Important:** Focus exclusively on fixing the listed issues. Do not search\n")
+	b.WriteString("for new issues. Preserve unrelated behavior, follow existing patterns, and avoid broad refactors.\n\n")
+	b.WriteString("## Fix Contract\n")
+	b.WriteString("Fry will validate your diff against this contract before the fix counts as a real remediation pass.\n")
+	b.WriteString("Empty diffs, comment-only diffs, and changes outside the declared target files are rejected.\n")
+	b.WriteString("If you believe an issue is already fixed, explain that in your final response instead of adding placeholder edits; Fry will verify that claim separately.\n\n")
+
+	for _, issue := range contract.Issues {
+		fmt.Fprintf(&b, "### Issue %d Contract\n", issue.ID)
+		if len(issue.TargetFiles) > 0 {
+			fmt.Fprintf(&b, "- **Target Files:** %s\n", strings.Join(issue.TargetFiles, ", "))
+		} else {
+			b.WriteString("- **Target Files:** (not declared; keep scope minimal and directly tied to the issue)\n")
+		}
+		fmt.Fprintf(&b, "- **Expected Evidence:** %s\n\n", issue.ExpectedEvidence)
+	}
+
+	// Inline target file content instead of full codebase.txt
+	inlinedFiles := make(map[string]struct{})
+	for _, issue := range contract.Issues {
+		for _, target := range issue.TargetFiles {
+			if _, seen := inlinedFiles[target]; seen {
+				continue
+			}
+			inlinedFiles[target] = struct{}{}
+			fullPath := filepath.Join(opts.ProjectDir, target)
+			// Guard against path traversal: target must resolve within the project directory
+			cleanProject := filepath.Clean(opts.ProjectDir) + string(filepath.Separator)
+			if !strings.HasPrefix(filepath.Clean(fullPath)+string(filepath.Separator), cleanProject) && filepath.Clean(fullPath) != filepath.Clean(opts.ProjectDir) {
+				frylog.Log("WARNING: skipping out-of-project target file %s", target)
+				continue
+			}
+			data, err := os.ReadFile(fullPath)
+			if err != nil {
+				frylog.Log("WARNING: cannot inline target file %s: %v", target, err)
+				continue
+			}
+			content := string(data)
+			if len(content) > config.MaxClusterFixFileBytes {
+				content = textutil.TruncateUTF8(content, config.MaxClusterFixFileBytes) + "\n...(truncated)"
+			}
+			fmt.Fprintf(&b, "## Target File: %s\n\n```\n%s\n```\n\n", target, content)
+		}
+	}
+
+	// Sprint goals (condensed — just the prompt, no codebase.txt)
+	b.WriteString("## Sprint Goals\n")
+	b.WriteString(opts.Sprint.Prompt)
+	b.WriteString("\n\n")
+
+	b.WriteString("## Issues to Fix\n\n")
+	for _, f := range cluster.Findings {
+		issueID := 0
+		for _, issue := range contract.Issues {
+			if issue.FindingKey == f.key() {
+				issueID = issue.ID
+				break
+			}
+		}
+		if issueID > 0 {
+			fmt.Fprintf(&b, "### Issue %d\n", issueID)
+		} else {
+			b.WriteString("### Issue\n")
+		}
+		if f.OriginCycle > 0 {
+			fmt.Fprintf(&b, "- **Origin Cycle:** %d\n", f.OriginCycle)
+		}
+		if f.Location != "" {
+			fmt.Fprintf(&b, "- **Location:** %s\n", f.Location)
+		}
+		fmt.Fprintf(&b, "- **Description:** %s\n", f.Description)
+		fmt.Fprintf(&b, "- **Severity:** %s\n", f.Severity)
+		if f.RecommendedFix != "" {
+			fmt.Fprintf(&b, "- **Recommended Fix:** %s\n", f.RecommendedFix)
+		}
+		b.WriteString("\n")
+	}
+
+	if history != nil {
+		if rendered := history.ForPrompt(cluster.Findings, 30_000); rendered != "" {
 			b.WriteString("## Previous Fix Attempts\n\n")
 			b.WriteString("The following approaches have already been tried. Do NOT repeat them.\n")
 			b.WriteString("If a previous approach was close but flawed, fix the flaw instead of starting over.\n\n")
@@ -2375,6 +2461,94 @@ func runAgentWithLog(ctx context.Context, opts AuditOpts, prompt, logPath, model
 		return output, fmt.Errorf("run audit loop: agent run: %w", runErr)
 	}
 	return output, nil
+}
+
+// runVerifyPass runs a verify agent against the provided unresolved findings and applies resolutions.
+// It is extracted to avoid duplication between the normal fix→verify path and the all-clusters-skipped path.
+func runVerifyPass(
+	ctx context.Context,
+	opts AuditOpts,
+	unresolved []Finding,
+	activeFindings []Finding,
+	cycle, fixIter, maxInner, maxOuter int,
+	activeBlockerCounts map[string]int,
+	auditMetrics *AuditMetrics,
+	fixHistory *FixHistory,
+	buildLogsDir, auditFilePath, promptPath string,
+	includeLow bool,
+) error {
+	_ = os.Remove(auditFilePath)
+
+	verifyPrompt := buildVerifyPrompt(opts, unresolved)
+	if err := writePromptFile(promptPath, verifyPrompt); err != nil {
+		return fmt.Errorf("run audit loop: write verify prompt: %w", err)
+	}
+
+	emitAuditProgress(opts.ProgressFn, AuditProgress{
+		Stage:        "verifying",
+		Cycle:        cycle,
+		MaxCycles:    maxOuter,
+		Fix:          fixIter,
+		MaxFixes:     maxInner,
+		TargetIssues: len(unresolved),
+		Findings:     severityCountsForFindings(unresolved),
+		Blockers:     activeBlockerCounts,
+		Headlines:    findingHeadlines(unresolved, 3),
+		Complexity:   opts.Complexity,
+		Metrics:      auditMetrics.Snapshot(),
+	})
+
+	verifyModel := engine.ResolveModel(opts.Epic.AuditModel, opts.Engine.Name(), string(opts.Epic.EffortLevel), engine.SessionAuditVerify)
+	verifyLogPath := filepath.Join(buildLogsDir,
+		fmt.Sprintf("sprint%d_auditverify_%d_%d_%s.log", opts.Sprint.Number, cycle, fixIter, time.Now().Format("20060102_150405")),
+	)
+	verifyPromptBytes := promptFileSize(promptPath)
+	verifyStarted := time.Now()
+	verifyOutput, err := runAgentWithLog(ctx, opts, config.AuditVerifyInvocationPrompt, verifyLogPath, verifyModel, engine.SessionAuditVerify, nil)
+	if err != nil {
+		return err
+	}
+
+	verifyContent, verifyErr := readVerificationOutput(
+		auditFilePath,
+		config.SprintAuditFile,
+		"verify session",
+		"AUDIT",
+		"run audit loop",
+		verifyOutput,
+		verifyLogPath,
+		len(unresolved),
+	)
+	if verifyErr != nil {
+		return verifyErr
+	}
+	_ = os.Remove(auditFilePath)
+	if err := checkStopRequest(opts.ProjectDir, "sprint_audit", fmt.Sprintf("after audit verify %d in cycle %d", fixIter, cycle)); err != nil {
+		return err
+	}
+
+	verifyResults := parseVerificationResults(string(verifyContent), unresolved)
+	verifyResolutions := countResolvedVerificationResults(verifyResults)
+	auditMetrics.BehaviorUnchangedOutcomes += countVerificationResultsWithStatus(verifyResults, verifyStatusBehaviorUnchanged)
+	auditMetrics.Record(CallMetric{
+		SessionType: engine.SessionAuditVerify,
+		Cycle:       cycle,
+		Iteration:   fixIter,
+		PromptBytes: verifyPromptBytes,
+		OutputBytes: len(verifyOutput),
+		DurationMs:  time.Since(verifyStarted).Milliseconds(),
+		Model:       verifyModel,
+		Resolutions: verifyResolutions,
+		Tokens:      tokenmetrics.ParseTokens(opts.Engine.Name(), verifyOutput),
+	})
+	applyResolutionsByKey(activeFindings, unresolved, verifyResults)
+	fixHistory.Record(FixAttempt{
+		Cycle:     cycle,
+		Iteration: fixIter,
+		Targeted:  targetedFindingLabels(unresolved),
+		Outcomes:  buildOutcomes(unresolved, verifyResults),
+	})
+	return nil
 }
 
 func summarizeNoopFingerprint(fingerprint string) string {

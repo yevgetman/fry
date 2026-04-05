@@ -63,7 +63,8 @@ func TestRunAuditLoopSkipsVerifyOnNoOp(t *testing.T) {
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
 			switch callIndex {
-			case 0, 3:
+			// Per-cluster fast-fail: 1 fix call rejected → all clusters skipped → final audit at callIndex 2
+			case 0, 2:
 				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), highFindings)
 			}
 		},
@@ -124,9 +125,10 @@ func TestRunAuditLoopRejectsCommentOnlyFixBeforeVerify(t *testing.T) {
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
 			switch callIndex {
-			case 0, 3:
+			// Per-cluster fast-fail: 1 fix call rejected → cluster skipped → final audit at callIndex 2
+			case 0, 2:
 				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
-			case 1, 2:
+			case 1:
 				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "tracked.go"), []byte("package main\n\n// comment only\n"), 0o644))
 			}
 		},
@@ -140,7 +142,7 @@ func TestRunAuditLoopRejectsCommentOnlyFixBeforeVerify(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, result.Passed)
 	require.NotNil(t, result.Metrics)
-	assert.Equal(t, 2, result.Metrics.Snapshot().RejectedFixCalls)
+	assert.Equal(t, 1, result.Metrics.Snapshot().RejectedFixCalls)
 	for _, prompt := range eng.prompts {
 		assert.NotEqual(t, config.AuditVerifyInvocationPrompt, prompt)
 	}
@@ -294,6 +296,77 @@ func TestRunAuditLoopBehaviorUnchangedSharpensNextFixPrompt(t *testing.T) {
 	assert.Contains(t, secondFixPrompt, "Issue 1")
 	assert.Contains(t, secondFixPrompt, "only a comment was added")
 	assert.Contains(t, secondFixPrompt, "Do not answer with comments")
+}
+
+func TestRunAuditLoopPerClusterFastFailSkipsRejectedCluster(t *testing.T) {
+	t.Parallel()
+
+	// Two findings in different files → two clusters.
+	// Cluster 1 fix rejected (no-op), cluster 2 fix accepted → only cluster 2 reaches verify.
+	findings := "## Findings\n- **Location:** alpha.go:1\n- **Description:** Missing nil guard in alpha handler\n- **Severity:** HIGH\n- **Recommended Fix:** Add guard\n\n- **Location:** beta.go:1\n- **Description:** Missing bounds check in beta parser\n- **Severity:** HIGH\n- **Recommended Fix:** Add bounds check\n\n## Verdict\nFAIL\n"
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			switch callIndex {
+			case 0:
+				// Audit: produce 2 findings
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
+			case 1:
+				// Fix cluster 1: no changes (no-op) → will be rejected and skipped
+			case 2:
+				// Fix cluster 2: make a behavioral change
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "beta.go"), []byte("package main\nfunc parse() { /* bounded */ }\n"), 0o644))
+			case 3:
+				// Verify: confirm resolution of cluster 2's finding
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), "- **Issue:** 1\n- **Status:** STILL_PRESENT\n\n- **Issue:** 2\n- **Status:** RESOLVED\n")
+			case 4:
+				// Final re-audit: one finding remains
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), "## Findings\n- **Location:** alpha.go:1\n- **Description:** Missing nil guard in alpha handler\n- **Severity:** HIGH\n\n## Verdict\nFAIL\n")
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	writeFile(t, filepath.Join(opts.ProjectDir, "alpha.go"), "package main\nfunc handle() {}\n")
+	writeFile(t, filepath.Join(opts.ProjectDir, "beta.go"), "package main\nfunc parse() {}\n")
+	require.NoError(t, frygit.InitGit(context.Background(), opts.ProjectDir))
+	opts.Epic.MaxAuditIterations = 1
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.NotNil(t, result.Metrics)
+
+	// Cluster 1 rejected (no-op), cluster 2 accepted
+	assert.Equal(t, 1, result.Metrics.Snapshot().RejectedFixCalls, "cluster 1 should be rejected")
+	assert.Equal(t, 1, result.Metrics.Snapshot().AcceptedFixCalls, "cluster 2 should be accepted")
+	// Verify should have run for cluster 2
+	assert.Equal(t, 1, result.Metrics.Snapshot().VerifyCalls, "verify should run after accepted cluster fix")
+	// FixStrategy should be per_cluster
+	assert.Equal(t, config.AuditFixStrategyPerCluster, result.Metrics.FixStrategy)
+}
+
+func TestBuildClusterFixPromptInlinesTargetFiles(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	writeFile(t, filepath.Join(opts.ProjectDir, "handler.go"), "package main\nfunc Handle() error { return nil }\n")
+
+	cluster := remediationCluster{
+		ID:    1,
+		Label: "handler: nil guard",
+		Findings: []Finding{
+			{Location: "handler.go:2", Description: "Missing nil check", Severity: "HIGH", RecommendedFix: "Add nil guard"},
+		},
+		TargetFiles: []string{"handler.go"},
+	}
+	prompt := buildClusterFixPrompt(opts, cluster, nil)
+
+	assert.Contains(t, prompt, "Cluster 1: handler: nil guard")
+	assert.Contains(t, prompt, "## Target File: handler.go")
+	assert.Contains(t, prompt, "func Handle()")
+	assert.Contains(t, prompt, "## Fix Contract")
+	assert.Contains(t, prompt, "Missing nil check")
+	assert.NotContains(t, prompt, "## Codebase Context", "cluster prompt should not include full codebase context")
 }
 
 func initAuditGitRepo(t *testing.T, projectDir string) {

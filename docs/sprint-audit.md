@@ -54,10 +54,10 @@ Each outer cycle runs the **audit agent** to review the codebase. On cycle 2+, t
 
 For each audit report, the **fix agent** runs repeatedly until all issues above LOW severity from that report are resolved:
 
-1. **Fix agent** -- reads the structured issue list (FIFO ordered, oldest first) and the remediation clusters Fry derived from shared file family, subsystem, and requirement theme. It is instructed to focus exclusively on the listed issues, address each cluster coherently, and not search for new ones.
-2. **Verify agent** -- checks whether the specific issues have been resolved without modifying code. Reports each issue with a concrete outcome such as `RESOLVED`, `PARTIALLY_RESOLVED`, `BEHAVIOR_UNCHANGED`, `EVIDENCE_INCONCLUSIVE`, `BLOCKED`, or `STILL_PRESENT`.
+1. **Per-cluster fix dispatch** -- Fry clusters findings by shared file family, subsystem, and requirement theme. Each fix iteration targets **one cluster at a time** with a focused prompt that inlines only the target files' content (no full codebase context). This narrow context drives surgical edits rather than broad rewrites. If a cluster's fix is rejected (no-op, comment-only, or out-of-scope), all its findings are **fast-fail skipped** for remaining iterations in that cycle.
+2. **Verify agent** -- after an accepted fix, the verify agent checks whether **all** unresolved issues (not just the fixed cluster) have been resolved without modifying code. Reports each issue with a concrete outcome such as `RESOLVED`, `PARTIALLY_RESOLVED`, `BEHAVIOR_UNCHANGED`, `EVIDENCE_INCONCLUSIVE`, `BLOCKED`, or `STILL_PRESENT`.
 3. If all actionable issues are resolved, the inner loop breaks and triggers a re-audit.
-4. If no new issues are resolved for 2 consecutive fix iterations, the inner loop breaks (stale detection).
+4. If no new issues are resolved for 2 consecutive fix iterations, or all clusters are skipped, the inner loop breaks (stale detection).
 
 ### Inner-loop efficiency
 
@@ -65,7 +65,7 @@ The inner loop carries forward structured history so each fix iteration has more
 
 - **No-op detection** -- Fry fingerprints the worktree before and after each fix pass. If the fix agent made no material file changes (excluding progress artifacts), Fry logs a no-op, skips verify, increments the stale counter, and moves directly to the next fix attempt or re-audit.
 - **Fix contract validation** -- Every fix pass carries a Fry-owned diff contract: numbered issue IDs, declared target files derived from the findings, and expected evidence. Empty diffs, comment-only diffs, and out-of-scope diffs are rejected before they count as real remediation attempts.
-- **Remediation clustering** -- Before each fix pass, Fry groups related findings into remediation clusters using shared file families, shared subsystem paths, and overlapping requirement-theme tokens. Fix prompts target those clusters first, while individual issue IDs remain stable for diff validation and verify.
+- **Remediation clustering** -- Before each fix pass, Fry groups related findings into remediation clusters using shared file families, shared subsystem paths, and overlapping requirement-theme tokens. Each fix call targets a single cluster with an inline-context prompt, while individual issue IDs remain stable for diff validation and verify. Clusters whose fix is rejected on first attempt are fast-fail skipped for remaining inner iterations.
 - **Already-fixed verification routing** -- If the fix agent claims an issue is already fixed and produces no behavioral diff, Fry routes that claim to verify instead of counting the pass as a normal remediation attempt.
 - **Behavior-unchanged verification** -- Verify can explicitly report `BEHAVIOR_UNCHANGED` when a remediation left the executable logic path untouched. The next fix prompt then carries issue-specific guidance with the unchanged path summary and a direct instruction not to answer with comments, rationale-only edits, or other non-behavioral changes.
 - **Fix attempt history** -- The fix prompt includes concise summaries of prior attempts that targeted the same findings, including whether the attempt was a no-op, which issues remained, and any verification notes.
@@ -331,18 +331,18 @@ For moderate- and high-complexity sprints, the audit prompt starts with a target
 
 ## Context Provided to Fix Agent
 
-The fix prompt includes:
+Each fix call targets a single remediation cluster. The per-cluster fix prompt includes:
 
 | Context | Source |
 |---|---|
-| Codebase context | `.fry-config/codebase.md` (if present) |
-| Codebase memories | `.fry-config/codebase-memories/*.md` (if present) |
+| Target file content (inlined) | Actual file content for the cluster's target files (up to 8 KB per file) |
 | Sprint goals | `@prompt` block from the epic |
-| Issues to fix | Structured list, FIFO ordered (oldest first, highest severity within age group) |
+| Issues to fix | Structured list of the cluster's findings, FIFO ordered (oldest first) |
+| Fix contract | Per-issue target files and expected evidence |
 | Previous fix attempts | Relevant subset of prior failed or partial attempts against the same findings |
 | Context pointers | References to `sprint-progress.txt` and `plans/plan.md` |
 
-Issues are grouped by origin audit cycle when multiple cycles have contributed findings. The fix agent is explicitly instructed to focus only on the listed issues, preserve unrelated behavior, follow existing patterns, and not search for new ones.
+Unlike the legacy batch approach which sent all findings with a codebase summary, the per-cluster prompt inlines the actual target file content so the fix agent operates on a narrow, focused context. The fix agent is explicitly instructed to focus only on the listed issues, preserve unrelated behavior, and not search for new ones.
 
 ## Context Provided to Verify Agent
 

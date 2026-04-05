@@ -1721,7 +1721,9 @@ func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
 func TestRunAuditLoopRecordsCachePressureStrategyShift(t *testing.T) {
 	t.Parallel()
 
-	const findings = "## Findings\n- **Location:** tracked.txt:1\n- **Description:** Missing booking validation\n- **Severity:** HIGH\n- **Recommended Fix:** Validate the booking payload.\n- **Location:** tracked-extra.txt:1\n- **Description:** Missing duplicate-submit protection\n- **Severity:** HIGH\n- **Recommended Fix:** Make submits idempotent.\n\n## Verdict\nFAIL\n"
+	// Both findings share the same file so they cluster together under per-cluster dispatch,
+	// preserving the 4-call sequence (audit, fix-cluster, verify, re-audit).
+	const findings = "## Findings\n- **Location:** tracked.txt:1\n- **Description:** Missing booking validation\n- **Severity:** HIGH\n- **Recommended Fix:** Validate the booking payload.\n- **Location:** tracked.txt:10\n- **Description:** Missing duplicate-submit protection\n- **Severity:** HIGH\n- **Recommended Fix:** Make submits idempotent.\n\n## Verdict\nFAIL\n"
 	eng := &stubEngine{
 		name: "claude",
 		outputs: []string{

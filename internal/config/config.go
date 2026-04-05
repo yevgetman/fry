@@ -93,6 +93,11 @@ const (
 	BehaviorUnchangedEscalationThreshold = 2
 	BehaviorUnchangedStopThreshold       = 3
 
+	// Fix strategy constants
+	AuditFixStrategyPerCluster = "per_cluster" // one cluster per fix call with fast-fail
+	AuditFixStrategyDefault    = AuditFixStrategyPerCluster
+	MaxClusterFixFileBytes     = 8_000 // max bytes of target file content inlined per file in cluster fix prompt
+
 	DeferredFailuresFile = ".fry/deferred-failures.md"
 
 	// Summary constants

@@ -14,6 +14,7 @@ type CallMetric struct {
 	SessionType          engine.SessionType      `json:"session_type"`
 	Cycle                int                     `json:"cycle"`
 	Iteration            int                     `json:"iteration"`
+	ClusterID            int                     `json:"cluster_id,omitempty"`
 	SessionRefreshReason string                  `json:"session_refresh_reason,omitempty"`
 	IssueIDs             []int                   `json:"issue_ids,omitempty"`
 	PromptBytes          int                     `json:"prompt_bytes"`
@@ -95,6 +96,7 @@ type AuditMetrics struct {
 	StrategyShifts               []StrategyShift     `json:"strategy_shifts,omitempty"`
 	CycleSummaries               []CycleProductivity `json:"cycle_summaries,omitempty"`
 	OuterCycles                  int                 `json:"outer_cycles"`
+	FixStrategy                  string              `json:"fix_strategy,omitempty"`
 	ContentComplexity            ComplexityTier      `json:"content_complexity,omitempty"`
 	ConvergedAtCycle             int                 `json:"converged_at_cycle,omitempty"`
 	FinalFindingCount            int                 `json:"final_finding_count"`
@@ -425,6 +427,7 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 		StrategyShifts               []StrategyShift      `json:"strategy_shifts,omitempty"`
 		CycleSummaries               []CycleProductivity  `json:"cycle_summaries,omitempty"`
 		OuterCycles                  int                  `json:"outer_cycles"`
+		FixStrategy                  string               `json:"fix_strategy,omitempty"`
 		ContentComplexity            ComplexityTier       `json:"content_complexity,omitempty"`
 		ConvergedAtCycle             int                  `json:"converged_at_cycle,omitempty"`
 		FinalFindingCount            int                  `json:"final_finding_count"`
@@ -450,6 +453,7 @@ func (m *AuditMetrics) MarshalJSON() ([]byte, error) {
 		payload.StrategyShifts = m.StrategyShifts
 		payload.CycleSummaries = m.CycleSummaries
 		payload.OuterCycles = m.OuterCycles
+		payload.FixStrategy = m.FixStrategy
 		payload.ContentComplexity = m.ContentComplexity
 		payload.ConvergedAtCycle = m.ConvergedAtCycle
 		payload.FinalFindingCount = m.FinalFindingCount
