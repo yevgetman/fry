@@ -624,7 +624,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 					frylog.Log("  AUDIT FIX: refreshing same-role fix session before cycle %d iteration %d (%s)", cycle, fixIter, fixRefreshReason)
 				}
 			}
-			fixPrompt := buildClusterFixPrompt(fixPromptOpts, *targetCluster, fixHistory)
+			fixPrompt := buildUnifiedFixPrompt(fixPromptOpts, *targetCluster, resolved, fixHistory)
 			if err := writePromptFile(promptPath, fixPrompt); err != nil {
 				return nil, fmt.Errorf("run audit loop: write fix prompt: %w", err)
 			}
@@ -933,7 +933,13 @@ func runSingleLowFixPass(ctx context.Context, opts AuditOpts, findings []Finding
 
 	promptPath := filepath.Join(opts.ProjectDir, config.AuditPromptFile)
 	fixContract := newFixContract(findings)
-	fixPrompt := buildAuditFixPrompt(opts, findings, nil)
+	lowCluster := remediationCluster{
+		ID:          1,
+		Label:       "LOW findings",
+		Findings:    findings,
+		TargetFiles: clusterTargetFiles(findings),
+	}
+	fixPrompt := buildUnifiedFixPrompt(opts, lowCluster, nil, nil)
 	if err := writePromptFile(promptPath, fixPrompt); err != nil {
 		return fmt.Errorf("run single low fix pass: write fix prompt: %w", err)
 	}
@@ -1247,139 +1253,12 @@ func buildAuditPrompt(opts AuditOpts, previousFindings []Finding, resolvedThemes
 	return b.String()
 }
 
-func buildAuditFixPrompt(opts AuditOpts, findings []Finding, history *FixHistory) string {
-	var b strings.Builder
-	contract := newFixContract(findings)
-
-	fmt.Fprintf(&b, "# AUDIT FIX — Sprint %d: %s\n\n", opts.Sprint.Number, opts.Sprint.Name)
-	if carry := strings.TrimSpace(opts.SessionCarryForward); carry != "" {
-		b.WriteString("## Session Refresh Summary\n\n")
-		b.WriteString(carry)
-		b.WriteString("\n\n")
-	}
-	if guidance := strings.TrimSpace(opts.BehaviorGuidance); guidance != "" {
-		b.WriteString("## Behavior-Unchanged Guidance\n\n")
-		b.WriteString(guidance)
-		b.WriteString("\n\n")
-	}
-	skipLow := !fixIncludesLow(opts.Epic)
-	if opts.Mode == "writing" {
-		b.WriteString("The content audit found issues. Fix ONLY the issues listed below.\n")
-		if skipLow {
-			b.WriteString("Do NOT fix LOW issues. ")
-		}
-		b.WriteString("Make minimal editorial changes.\n\n")
-	} else {
-		b.WriteString("The sprint audit found issues. Fix ONLY the issues listed below.\n")
-		if skipLow {
-			b.WriteString("Do NOT fix LOW issues. ")
-		}
-		b.WriteString("Make minimal changes.\n\n")
-	}
-
-	b.WriteString("**Important:** Focus exclusively on fixing the listed issues. Do not search\n")
-	b.WriteString("for new issues. Address the oldest issues first (listed in priority order).\n\n")
-	b.WriteString("Preserve unrelated behavior, follow existing patterns, and avoid broad refactors unless a listed issue requires one.\n\n")
-	b.WriteString("## Fix Contract\n")
-	b.WriteString("Fry will validate your diff against this contract before the fix counts as a real remediation pass.\n")
-	b.WriteString("Empty diffs, comment-only diffs, and changes outside the declared target files are rejected.\n")
-	b.WriteString("If you believe an issue is already fixed, explain that in your final response instead of adding placeholder edits; Fry will verify that claim separately.\n\n")
-
-	for _, issue := range contract.Issues {
-		fmt.Fprintf(&b, "### Issue %d Contract\n", issue.ID)
-		if len(issue.TargetFiles) > 0 {
-			fmt.Fprintf(&b, "- **Target Files:** %s\n", strings.Join(issue.TargetFiles, ", "))
-		} else {
-			b.WriteString("- **Target Files:** (not declared; keep scope minimal and directly tied to the issue)\n")
-		}
-		fmt.Fprintf(&b, "- **Expected Evidence:** %s\n\n", issue.ExpectedEvidence)
-	}
-
-	appendCodebaseContext(&b, opts.ProjectDir)
-
-	b.WriteString("## Sprint Goals\n")
-	b.WriteString(opts.Sprint.Prompt)
-	b.WriteString("\n\n")
-
-	clusters := clusterFixFindings(findings)
-	issueIDsByKey := make(map[string]int, len(contract.Issues))
-	for _, issue := range contract.Issues {
-		issueIDsByKey[issue.FindingKey] = issue.ID
-	}
-
-	b.WriteString("## Remediation Clusters\n\n")
-	b.WriteString("Clusters are ordered oldest first. Address each cluster as a coherent remediation batch while preserving the per-issue contracts below.\n\n")
-	for _, cluster := range clusters {
-		fmt.Fprintf(&b, "### Cluster %d: %s\n", cluster.ID, cluster.Label)
-		if cluster.Reason != "" {
-			fmt.Fprintf(&b, "- **Why Grouped:** %s\n", cluster.Reason)
-		}
-		if len(cluster.TargetFiles) > 0 {
-			fmt.Fprintf(&b, "- **Target Files:** %s\n", strings.Join(cluster.TargetFiles, ", "))
-		}
-		var clusterIssueIDs []string
-		for _, finding := range cluster.Findings {
-			if issueID := issueIDsByKey[finding.key()]; issueID > 0 {
-				clusterIssueIDs = append(clusterIssueIDs, strconv.Itoa(issueID))
-			}
-		}
-		if len(clusterIssueIDs) > 0 {
-			fmt.Fprintf(&b, "- **Issue IDs:** %s\n", strings.Join(clusterIssueIDs, ", "))
-		}
-		b.WriteString("\n")
-	}
-
-	b.WriteString("## Issues to Fix\n\n")
-	b.WriteString("Issue details stay fully traceable for verification. Within each cluster, preserve issue order.\n\n")
-	for _, cluster := range clusters {
-		fmt.Fprintf(&b, "### Cluster %d: %s\n\n", cluster.ID, cluster.Label)
-		for _, f := range cluster.Findings {
-			issueID := issueIDsByKey[f.key()]
-			if issueID > 0 {
-				fmt.Fprintf(&b, "### Issue %d\n", issueID)
-			} else {
-				b.WriteString("### Issue\n")
-			}
-			fmt.Fprintf(&b, "- **Cluster:** Cluster %d\n", cluster.ID)
-			if f.OriginCycle > 0 {
-				fmt.Fprintf(&b, "- **Origin Cycle:** %d\n", f.OriginCycle)
-			}
-			if f.Location != "" {
-				fmt.Fprintf(&b, "- **Location:** %s\n", f.Location)
-			}
-			fmt.Fprintf(&b, "- **Description:** %s\n", f.Description)
-			fmt.Fprintf(&b, "- **Severity:** %s\n", f.Severity)
-			if f.RecommendedFix != "" {
-				fmt.Fprintf(&b, "- **Recommended Fix:** %s\n", f.RecommendedFix)
-			}
-			b.WriteString("\n")
-		}
-	}
-
-	if history != nil {
-		if rendered := history.ForPrompt(findings, 30_000); rendered != "" {
-			b.WriteString("## Previous Fix Attempts\n\n")
-			b.WriteString("The following approaches have already been tried. Do NOT repeat them.\n")
-			b.WriteString("If a previous approach was close but flawed, fix the flaw instead of starting over.\n\n")
-			b.WriteString(rendered)
-			b.WriteString("\n")
-		}
-	}
-
-	b.WriteString("## Context\n")
-	fmt.Fprintf(&b, "- Read %s for what was built\n", config.SprintProgressFile)
-	fmt.Fprintf(&b, "- Read %s for strategic context\n\n", config.PlanFile)
-
-	b.WriteString("Run the smallest relevant validation you can before logging what you fixed.\n")
-	fmt.Fprintf(&b, "Append a brief note to %s about what you fixed.\n", config.SprintProgressFile)
-
-	return b.String()
-}
-
-// buildClusterFixPrompt builds a focused fix prompt for a single remediation cluster.
-// Unlike buildAuditFixPrompt which sends all findings with codebase.txt, this inlines
-// only the target files' content so the fix agent operates on a narrow context.
-func buildClusterFixPrompt(opts AuditOpts, cluster remediationCluster, history *FixHistory) string {
+// buildUnifiedFixPrompt builds a fix prompt for a single remediation cluster
+// that carries full audit context (codebase, diff, progress, resolved themes)
+// alongside per-cluster fix instructions and inline target files. This gives
+// the fix agent the same understanding the audit agent had when it discovered
+// the issues, eliminating context transfer loss.
+func buildUnifiedFixPrompt(opts AuditOpts, cluster remediationCluster, resolved *resolvedLedger, history *FixHistory) string {
 	var b strings.Builder
 	contract := newFixContract(cluster.Findings)
 
@@ -1395,15 +1274,28 @@ func buildClusterFixPrompt(opts AuditOpts, cluster remediationCluster, history *
 		b.WriteString("\n\n")
 	}
 
+	// Role statement — the fix agent has full audit context
 	skipLow := !fixIncludesLow(opts.Epic)
-	b.WriteString("The sprint audit found issues in this cluster. Fix ONLY the issues listed below.\n")
-	if skipLow {
-		b.WriteString("Do NOT fix LOW issues. ")
+	if opts.Mode == "writing" {
+		b.WriteString("You are the auditor that identified these content issues. You have full codebase context.\n")
+		b.WriteString("Fix ONLY the issues listed below.\n")
+		if skipLow {
+			b.WriteString("Do NOT fix LOW issues. ")
+		}
+		b.WriteString("Make minimal editorial changes.\n\n")
+	} else {
+		b.WriteString("You are the auditor that identified these code issues. You have full codebase context.\n")
+		b.WriteString("Fix ONLY the issues listed below.\n")
+		if skipLow {
+			b.WriteString("Do NOT fix LOW issues. ")
+		}
+		b.WriteString("Make minimal changes.\n\n")
 	}
-	b.WriteString("Make minimal changes.\n\n")
 
 	b.WriteString("**Important:** Focus exclusively on fixing the listed issues. Do not search\n")
 	b.WriteString("for new issues. Preserve unrelated behavior, follow existing patterns, and avoid broad refactors.\n\n")
+
+	// Fix contract
 	b.WriteString("## Fix Contract\n")
 	b.WriteString("Fry will validate your diff against this contract before the fix counts as a real remediation pass.\n")
 	b.WriteString("Empty diffs, comment-only diffs, and changes outside the declared target files are rejected.\n")
@@ -1419,7 +1311,66 @@ func buildClusterFixPrompt(opts AuditOpts, cluster remediationCluster, history *
 		fmt.Fprintf(&b, "- **Expected Evidence:** %s\n\n", issue.ExpectedEvidence)
 	}
 
-	// Inline target file content instead of full codebase.txt
+	// Full audit context — codebase, executive, progress, diff, resolved themes
+	appendCodebaseContext(&b, opts.ProjectDir)
+
+	executivePath := filepath.Join(opts.ProjectDir, config.ExecutiveFile)
+	if data, err := os.ReadFile(executivePath); err == nil {
+		executive := string(data)
+		if len(executive) > maxAuditExecutiveBytes {
+			executive = textutil.TruncateUTF8(executive, maxAuditExecutiveBytes) + "\n...(truncated)"
+		}
+		b.WriteString("## Project Context\n")
+		b.WriteString(executive)
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString("## Sprint Goals\n")
+	b.WriteString(opts.Sprint.Prompt)
+	b.WriteString("\n\n")
+
+	progressPath := filepath.Join(opts.ProjectDir, config.SprintProgressFile)
+	if data, err := os.ReadFile(progressPath); err == nil && len(data) > 0 {
+		progress := string(data)
+		const maxFixProgressBytes = 30_000
+		if len(progress) > maxFixProgressBytes {
+			progress = textutil.TruncateUTF8(progress, maxFixProgressBytes) + "\n...(sprint progress truncated at 30KB)"
+		}
+		b.WriteString("## What Was Done\n")
+		b.WriteString(progress)
+		b.WriteString("\n\n")
+	}
+
+	diff := opts.GitDiff
+	if len(diff) > config.MaxAuditDiffBytes {
+		diff = diff[:config.MaxAuditDiffBytes] + "\n...(diff truncated at 100KB)"
+	}
+	if strings.TrimSpace(diff) != "" {
+		b.WriteString("## Changes Made This Sprint\n")
+		b.WriteString("```diff\n")
+		b.WriteString(diff)
+		b.WriteString("\n```\n\n")
+	}
+
+	if resolved != nil && resolved.len() > 0 {
+		b.WriteString("## Resolved Themes (Do Not Re-Break)\n\n")
+		b.WriteString("These issues were resolved in earlier audit cycles. Do not introduce regressions.\n\n")
+		i := 0
+		for _, f := range resolved.entries {
+			i++
+			if f.Location != "" {
+				fmt.Fprintf(&b, "%d. [%s] %s (%s)\n", i, f.Location, f.Description, f.Severity)
+			} else {
+				fmt.Fprintf(&b, "%d. %s (%s)\n", i, f.Description, f.Severity)
+			}
+			if i >= 20 {
+				break
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	// Inline target file content for byte-level precision
 	inlinedFiles := make(map[string]struct{})
 	for _, issue := range contract.Issues {
 		for _, target := range issue.TargetFiles {
@@ -1447,11 +1398,7 @@ func buildClusterFixPrompt(opts AuditOpts, cluster remediationCluster, history *
 		}
 	}
 
-	// Sprint goals (condensed — just the prompt, no codebase.txt)
-	b.WriteString("## Sprint Goals\n")
-	b.WriteString(opts.Sprint.Prompt)
-	b.WriteString("\n\n")
-
+	// Issues to fix
 	b.WriteString("## Issues to Fix\n\n")
 	for _, f := range cluster.Findings {
 		issueID := 0
@@ -1489,10 +1436,6 @@ func buildClusterFixPrompt(opts AuditOpts, cluster remediationCluster, history *
 			b.WriteString("\n")
 		}
 	}
-
-	b.WriteString("## Context\n")
-	fmt.Fprintf(&b, "- Read %s for what was built\n", config.SprintProgressFile)
-	fmt.Fprintf(&b, "- Read %s for strategic context\n\n", config.PlanFile)
 
 	b.WriteString("Run the smallest relevant validation you can before logging what you fixed.\n")
 	fmt.Fprintf(&b, "Append a brief note to %s about what you fixed.\n", config.SprintProgressFile)

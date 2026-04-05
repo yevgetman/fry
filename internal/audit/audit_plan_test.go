@@ -345,7 +345,7 @@ func TestRunAuditLoopPerClusterFastFailSkipsRejectedCluster(t *testing.T) {
 	assert.Equal(t, config.AuditFixStrategyPerCluster, result.Metrics.FixStrategy)
 }
 
-func TestBuildClusterFixPromptInlinesTargetFiles(t *testing.T) {
+func TestBuildUnifiedFixPromptInlinesTargetFiles(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
@@ -359,14 +359,13 @@ func TestBuildClusterFixPromptInlinesTargetFiles(t *testing.T) {
 		},
 		TargetFiles: []string{"handler.go"},
 	}
-	prompt := buildClusterFixPrompt(opts, cluster, nil)
+	prompt := buildUnifiedFixPrompt(opts, cluster, nil, nil)
 
 	assert.Contains(t, prompt, "Cluster 1: handler: nil guard")
 	assert.Contains(t, prompt, "## Target File: handler.go")
 	assert.Contains(t, prompt, "func Handle()")
 	assert.Contains(t, prompt, "## Fix Contract")
 	assert.Contains(t, prompt, "Missing nil check")
-	assert.NotContains(t, prompt, "## Codebase Context", "cluster prompt should not include full codebase context")
 }
 
 func TestRunAuditLoopRollsBackRejectedOutOfScopeDiff(t *testing.T) {

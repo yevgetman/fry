@@ -866,7 +866,7 @@ func TestAuditPromptIncludesSessionRefreshSummary(t *testing.T) {
 	assert.Contains(t, prompt, "Missing error handling")
 }
 
-func TestAuditFixPromptFIFO(t *testing.T) {
+func TestUnifiedFixPromptFIFO(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
@@ -874,18 +874,17 @@ func TestAuditFixPromptFIFO(t *testing.T) {
 		{Description: "Old issue", Severity: "HIGH", OriginCycle: 1},
 		{Description: "New issue", Severity: "CRITICAL", OriginCycle: 2},
 	}
-	prompt := buildAuditFixPrompt(opts, findings, nil)
+	cluster := remediationCluster{ID: 1, Label: "test cluster", Findings: findings}
+	prompt := buildUnifiedFixPrompt(opts, cluster, nil, nil)
 
-	assert.Contains(t, prompt, "## Remediation Clusters")
 	assert.Contains(t, prompt, "## Issues to Fix")
-	assert.Contains(t, prompt, "Clusters are ordered oldest first")
 	assert.Contains(t, prompt, "Old issue")
 	assert.Contains(t, prompt, "New issue")
 	assert.Contains(t, prompt, "- **Origin Cycle:** 1")
 	assert.Contains(t, prompt, "- **Origin Cycle:** 2")
 }
 
-func TestAuditFixPromptGroupsRelatedIssuesIntoClusters(t *testing.T) {
+func TestUnifiedFixPromptListsClusterIssues(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
@@ -904,80 +903,116 @@ func TestAuditFixPromptGroupsRelatedIssuesIntoClusters(t *testing.T) {
 			RecommendedFix: "Reuse the same validation guard before decoding.",
 			OriginCycle:    1,
 		},
-		{
-			Location:       "internal/billing/worker.go:19",
-			Description:    "Billing retry loop ignores context cancellation",
-			Severity:       "HIGH",
-			RecommendedFix: "Stop retrying once the worker context is canceled.",
-			OriginCycle:    2,
-		},
 	}
-	prompt := buildAuditFixPrompt(opts, findings, nil)
+	cluster := remediationCluster{
+		ID:          1,
+		Label:       "internal/api: validation",
+		Findings:    findings,
+		TargetFiles: []string{"internal/api/handler.go"},
+	}
+	prompt := buildUnifiedFixPrompt(opts, cluster, nil, nil)
 
-	assert.Contains(t, prompt, "### Cluster 1:")
-	assert.Contains(t, prompt, "### Cluster 2:")
-	assert.Contains(t, prompt, "**Issue IDs:** 1, 2")
-	assert.Contains(t, prompt, "- **Cluster:** Cluster 1")
-	assert.Contains(t, prompt, "- **Cluster:** Cluster 2")
+	assert.Contains(t, prompt, "Cluster 1: internal/api: validation")
+	assert.Contains(t, prompt, "## Issues to Fix")
+	assert.Contains(t, prompt, "### Issue 1")
+	assert.Contains(t, prompt, "### Issue 2")
+	assert.Contains(t, prompt, "Missing input validation")
+	assert.Contains(t, prompt, "malformed payloads")
 }
 
-func TestAuditFixPromptWritingMode(t *testing.T) {
+func TestUnifiedFixPromptWritingMode(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	opts.Mode = "writing"
-	prompt := buildAuditFixPrompt(opts, []Finding{{Description: "weak transition", Severity: "MODERATE", OriginCycle: 1}}, nil)
-	assert.Contains(t, prompt, "content audit found issues")
+	cluster := remediationCluster{ID: 1, Label: "content", Findings: []Finding{{Description: "weak transition", Severity: "MODERATE", OriginCycle: 1}}}
+	prompt := buildUnifiedFixPrompt(opts, cluster, nil, nil)
+	assert.Contains(t, prompt, "content issues")
 	assert.Contains(t, prompt, "minimal editorial changes")
 }
 
-func TestAuditFixPromptIncludesCodebaseContext(t *testing.T) {
+func TestUnifiedFixPromptIncludesCodebaseContext(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	writeFile(t, filepath.Join(opts.ProjectDir, config.CodebaseFile), "# Codebase: Fry\n\nFollow grouped imports and contextual errors.")
 
-	prompt := buildAuditFixPrompt(opts, []Finding{{Description: "weak error context", Severity: "HIGH", OriginCycle: 1}}, nil)
+	cluster := remediationCluster{ID: 1, Label: "errors", Findings: []Finding{{Description: "weak error context", Severity: "HIGH", OriginCycle: 1}}}
+	prompt := buildUnifiedFixPrompt(opts, cluster, nil, nil)
 
 	assert.Contains(t, prompt, "## Codebase Context")
 	assert.Contains(t, prompt, "Follow grouped imports and contextual errors.")
 	assert.Contains(t, prompt, "Preserve unrelated behavior")
 }
 
-func TestAuditFixPromptIncludesFixContract(t *testing.T) {
+func TestUnifiedFixPromptIncludesFixContract(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
-	prompt := buildAuditFixPrompt(opts, []Finding{{
+	findings := []Finding{{
 		Location:       "internal/audit/audit.go:123",
 		Description:    "missing nil guard",
 		Severity:       "HIGH",
 		RecommendedFix: "Add the nil guard before dereference.",
-	}}, nil)
+	}}
+	cluster := remediationCluster{ID: 1, Label: "audit: nil guard", Findings: findings, TargetFiles: []string{"internal/audit/audit.go"}}
+	prompt := buildUnifiedFixPrompt(opts, cluster, nil, nil)
 
 	assert.Contains(t, prompt, "## Fix Contract")
-	assert.Contains(t, prompt, "## Remediation Clusters")
 	assert.Contains(t, prompt, "### Issue 1 Contract")
 	assert.Contains(t, prompt, "**Target Files:** internal/audit/audit.go")
 	assert.Contains(t, prompt, "already fixed")
 	assert.Contains(t, prompt, "### Issue 1")
 }
 
-func TestAuditFixPromptIncludesSessionRefreshSummary(t *testing.T) {
+func TestUnifiedFixPromptIncludesSessionRefreshSummary(t *testing.T) {
 	t.Parallel()
 
 	opts := makeOpts(t, &stubEngine{name: "codex"})
 	opts.SessionCarryForward = "Session refreshed because token budget reached (16000 tokens).\nRecent failed fix attempts:\n- Attempt 1: no-op."
 
-	prompt := buildAuditFixPrompt(opts, []Finding{{
+	cluster := remediationCluster{ID: 1, Label: "guard", Findings: []Finding{{
 		Description: "missing nil guard",
 		Severity:    "HIGH",
 		OriginCycle: 1,
-	}}, nil)
+	}}}
+	prompt := buildUnifiedFixPrompt(opts, cluster, nil, nil)
 
 	assert.Contains(t, prompt, "## Session Refresh Summary")
 	assert.Contains(t, prompt, "token budget reached (16000 tokens)")
 	assert.Contains(t, prompt, "Recent failed fix attempts")
+}
+
+func TestUnifiedFixPromptIncludesDiffAndProgress(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+	opts.GitDiff = "diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1 +1 @@\n-old\n+new"
+
+	writeFile(t, filepath.Join(opts.ProjectDir, config.SprintProgressFile), "Sprint 1 progress: implemented auth module")
+
+	cluster := remediationCluster{ID: 1, Label: "auth", Findings: []Finding{{Description: "missing auth check", Severity: "HIGH", OriginCycle: 1}}}
+	prompt := buildUnifiedFixPrompt(opts, cluster, nil, nil)
+
+	assert.Contains(t, prompt, "## Changes Made This Sprint")
+	assert.Contains(t, prompt, "diff --git a/main.go b/main.go")
+	assert.Contains(t, prompt, "## What Was Done")
+	assert.Contains(t, prompt, "implemented auth module")
+}
+
+func TestUnifiedFixPromptIncludesResolvedThemes(t *testing.T) {
+	t.Parallel()
+
+	opts := makeOpts(t, &stubEngine{name: "codex"})
+
+	resolved := newResolvedLedger()
+	resolved.add([]Finding{{Location: "src/api.go:10", Description: "SQL injection in query builder", Severity: "CRITICAL", OriginCycle: 1}})
+
+	cluster := remediationCluster{ID: 1, Label: "api", Findings: []Finding{{Description: "missing input validation", Severity: "HIGH", OriginCycle: 2}}}
+	prompt := buildUnifiedFixPrompt(opts, cluster, resolved, nil)
+
+	assert.Contains(t, prompt, "## Resolved Themes (Do Not Re-Break)")
+	assert.Contains(t, prompt, "SQL injection in query builder")
 }
 
 func TestBuildVerifyPrompt(t *testing.T) {

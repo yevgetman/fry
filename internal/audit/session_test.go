@@ -102,14 +102,14 @@ func TestSessionContinuityMaybeRefreshTokenAndCarryBudget(t *testing.T) {
 		engineName:  "claude",
 		role:        "fix",
 		id:          "34429d2b-d11c-4b8b-b84a-896dd59bcc80",
-		promptBytes: 32_000,
-		tokenTotal:  16_000,
+		promptBytes: 48_000,
+		tokenTotal:  20_000,
 	}
 
 	reason := session.MaybeRefresh(config.FixSessionMaxCarry + 1)
 
-	assert.Contains(t, reason, "prompt budget reached (32000 bytes)")
-	assert.Contains(t, reason, "token budget reached (16000 tokens)")
+	assert.Contains(t, reason, "prompt budget reached (48000 bytes)")
+	assert.Contains(t, reason, "token budget reached (20000 tokens)")
 	assert.Contains(t, reason, "carry-forward set too large")
 	assert.Equal(t, "", session.id)
 	assert.Equal(t, 0, session.promptBytes)

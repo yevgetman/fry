@@ -62,7 +62,7 @@ const (
 	MaxAuditDiffBytes           = 100_000
 	AuditInvocationPrompt       = "Read and execute ALL instructions in .fry/audit-prompt.md. This is a sprint audit session. Follow the role, scope, and output instructions in the prompt file. Do NOT modify source or content files."
 	AuditVerifyInvocationPrompt = "Read and execute ALL instructions in .fry/audit-prompt.md. This is an audit verify session. Verify only the listed issues, write the results to .fry/sprint-audit.txt, and do NOT modify source or content files."
-	AuditFixInvocationPrompt    = "Read and execute ALL instructions in .fry/audit-prompt.md. This is an audit fix session. Fix only the listed issues and preserve unrelated behavior."
+	AuditFixInvocationPrompt    = "Read and execute ALL instructions in .fry/audit-prompt.md. This is an audit fix session. You have full codebase context from the audit phase. Fix only the listed issues and preserve unrelated behavior."
 
 	// Two-level audit loop constants
 	DefaultMaxOuterAuditCycles           = 3   // outer audit cycles (medium/default)
@@ -76,8 +76,8 @@ const (
 	AuditSessionMaxTokens                = 12_000
 	AuditSessionMaxCarry                 = 8 // unresolved findings carried into one same-role audit session before refresh
 	FixSessionMaxCalls                   = 4
-	FixSessionMaxPromptBytes             = 32_000
-	FixSessionMaxTokens                  = 16_000
+	FixSessionMaxPromptBytes             = 48_000
+	FixSessionMaxTokens                  = 20_000
 	FixSessionMaxCarry                   = 10 // unresolved findings carried into one same-role fix session before refresh
 	AuditLowYieldTrailingCycles          = 2
 	AuditLowYieldMinFixCalls             = 2
