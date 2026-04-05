@@ -150,6 +150,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 	maxOuter, progressBased := effectiveOuterCycles(opts.Epic, opts.Complexity)
 	maxInner := effectiveInnerIter(opts.Epic, opts.Complexity)
 	includeLow := fixIncludesLow(opts.Epic)
+	lowYieldStopThreshold := effectiveLowYieldStopCycles(opts.Epic)
 	auditMetrics := &AuditMetrics{ContentComplexity: opts.Complexity}
 	fixHistory := &FixHistory{}
 	auditSession := newAuditSessionContinuity(opts.ProjectDir, opts.Sprint.Number, opts.Engine.Name())
@@ -830,7 +831,7 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 					currentCycleSummary.NoOpRate*100,
 				)
 				trailingSummary, _ := auditMetrics.TrailingCycleSummary(config.AuditLowYieldTrailingCycles)
-				if shouldStopForLowYieldCycle(currentCycleSummary, trailingSummary, lowYieldStreak) {
+				if shouldStopForLowYieldCycle(currentCycleSummary, trailingSummary, lowYieldStreak, lowYieldStopThreshold) {
 					lowYieldStopReason = formatLowYieldStopReason(currentCycleSummary, trailingSummary)
 					auditMetrics.LowYieldStopReason = lowYieldStopReason
 					auditMetrics.RecordStrategyShift(StrategyShift{
@@ -2247,6 +2248,24 @@ func currentDefaultInnerIter(ep *epic.Epic) int {
 		return config.MaxInnerFixIterHigh
 	default:
 		return config.DefaultMaxInnerFixIter
+	}
+}
+
+// effectiveLowYieldStopCycles returns the number of consecutive low-yield cycles
+// required before the audit loop terminates early. Higher effort levels tolerate
+// more low-yield cycles to give the fix agent additional attempts with strategy
+// shifts (single-issue mode, session refreshes) before giving up.
+func effectiveLowYieldStopCycles(ep *epic.Epic) int {
+	if ep == nil {
+		return config.AuditLowYieldStopCycles
+	}
+	switch ep.EffortLevel {
+	case epic.EffortMax:
+		return config.AuditLowYieldStopCyclesMax
+	case epic.EffortHigh:
+		return config.AuditLowYieldStopCyclesHigh
+	default:
+		return config.AuditLowYieldStopCycles
 	}
 }
 

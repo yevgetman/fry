@@ -1664,15 +1664,20 @@ func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
 	const repeatedHighFindings = "## Findings\n- **Location:** src/first.go:10\n- **Description:** Missing booking consistency guard\n- **Severity:** HIGH\n- **Recommended Fix:** Add the missing guard and keep booking state transitions consistent.\n- **Location:** src/second.go:20\n- **Description:** Missing idempotency handling for duplicate submits\n- **Severity:** HIGH\n- **Recommended Fix:** Make duplicate submits idempotent.\n\n## Verdict\nFAIL\n"
 	var secondCycleFixPrompt string
 
+	// Call indices for EffortHigh (stopThreshold=3):
+	// Cycle 1: audit(0) fix(1) verify(2) fix(3) verify(4)
+	// Cycle 2: audit(5) fix(6) verify(7) fix(8) verify(9)
+	// Cycle 3: audit(10) fix(11) verify(12) fix(13) verify(14)
+	// Final:   audit(15)
 	eng := &stubEngine{
 		name: "codex",
 		sideEffect: func(projectDir string, callIndex int) {
 			auditPath := filepath.Join(projectDir, config.SprintAuditFile)
 			promptPath := filepath.Join(projectDir, config.AuditPromptFile)
 			switch callIndex {
-			case 0, 5, 10:
+			case 0, 5, 10, 15:
 				writeFile(t, auditPath, repeatedHighFindings)
-			case 1, 3, 6, 8:
+			case 1, 3, 6, 8, 11, 13:
 				if callIndex == 6 {
 					data, err := os.ReadFile(promptPath)
 					require.NoError(t, err)
@@ -1682,7 +1687,7 @@ func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
 			case 2, 4:
 				writeFile(t, auditPath,
 					"- **Issue:** 1\n- **Status:** STILL_PRESENT\n\n- **Issue:** 2\n- **Status:** STILL_PRESENT\n")
-			case 7, 9:
+			case 7, 9, 12, 14:
 				writeFile(t, auditPath,
 					"- **Issue:** 1\n- **Status:** STILL_PRESENT\n")
 			}
@@ -1701,13 +1706,14 @@ func TestRunAuditLoopProgressStopsOnLowYield(t *testing.T) {
 	assert.Equal(t, "HIGH", result.MaxSeverity)
 	assert.Contains(t, result.StopReason, "low_yield")
 	assert.Equal(t, result.StopReason, result.Metrics.LowYieldStopReason)
-	assert.Equal(t, 1, result.Metrics.LowYieldStrategyChanges)
-	assert.Equal(t, 2, result.Metrics.StrategyShiftCount())
+	assert.Equal(t, 2, result.Metrics.LowYieldStrategyChanges)
+	assert.Equal(t, 3, result.Metrics.StrategyShiftCount())
 	assert.Contains(t, result.Metrics.LastStrategyShift(), strategyTriggerLowYield)
-	require.Len(t, result.Metrics.CycleSummaries, 2)
+	require.Len(t, result.Metrics.CycleSummaries, 3)
 	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[0].FixYield, 0.001)
 	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[1].VerifyYield, 0.001)
-	assert.Len(t, eng.prompts, 11)
+	assert.InDelta(t, 0.0, result.Metrics.CycleSummaries[2].VerifyYield, 0.001)
+	assert.Len(t, eng.prompts, 16)
 	assert.Contains(t, secondCycleFixPrompt, "### Issue 1")
 	assert.NotContains(t, secondCycleFixPrompt, "### Issue 2")
 }

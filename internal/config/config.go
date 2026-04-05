@@ -84,7 +84,9 @@ const (
 	AuditLowYieldVerifyYieldFloor        = 0.75
 	AuditLowYieldFixYieldFloor           = 0.50
 	AuditLowYieldNoOpRateFloor           = 0.50
-	AuditLowYieldStopCycles              = 2
+	AuditLowYieldStopCycles              = 2  // default (standard effort)
+	AuditLowYieldStopCyclesHigh          = 3  // high effort — one extra chance in single-issue mode
+	AuditLowYieldStopCyclesMax           = 5  // max effort — persistent retry before giving up
 	AuditGovernorTokenBurnThreshold      = 20_000
 	AuditGovernorCacheReadThreshold      = 100_000
 	AuditGovernorCachePressureMultiplier = 4.0

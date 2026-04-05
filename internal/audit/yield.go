@@ -26,13 +26,24 @@ func isLowYieldStrategyCycle(current CycleProductivity) bool {
 	if current.FixCalls < config.AuditLowYieldMinFixCalls {
 		return false
 	}
-	return current.FixYield <= config.AuditLowYieldFixYieldFloor ||
-		(current.VerifyCalls > 0 && current.VerifyYield <= config.AuditLowYieldVerifyYieldFloor) ||
-		current.NoOpRate >= config.AuditLowYieldNoOpRateFloor
+	if current.FixYield <= config.AuditLowYieldFixYieldFloor {
+		return true
+	}
+	if current.VerifyCalls > 0 && current.VerifyYield <= config.AuditLowYieldVerifyYieldFloor {
+		return true
+	}
+	// High no-op rate is a low-yield signal only when issues aren't being resolved
+	// through the verify path. When the fix agent produces rejected or no-op diffs
+	// but verify confirms resolutions ("rejected-but-landed" pattern), the cycle
+	// is productive and should not be classified as low-yield.
+	if current.NoOpRate >= config.AuditLowYieldNoOpRateFloor && current.VerifyResolutions == 0 {
+		return true
+	}
+	return false
 }
 
-func shouldStopForLowYieldCycle(current, trailing CycleProductivity, streak int) bool {
-	if streak < config.AuditLowYieldStopCycles {
+func shouldStopForLowYieldCycle(current, trailing CycleProductivity, streak, stopThreshold int) bool {
+	if streak < stopThreshold {
 		return false
 	}
 	if current.FixCalls < config.AuditLowYieldMinFixCalls {
@@ -41,7 +52,7 @@ func shouldStopForLowYieldCycle(current, trailing CycleProductivity, streak int)
 	trailingLow := trailing.FixCalls >= config.AuditLowYieldMinFixCalls &&
 		(trailing.FixYield <= config.AuditLowYieldFixYieldFloor ||
 			(trailing.VerifyCalls > 0 && trailing.VerifyYield <= config.AuditLowYieldVerifyYieldFloor) ||
-			trailing.NoOpRate >= config.AuditLowYieldNoOpRateFloor)
+			(trailing.NoOpRate >= config.AuditLowYieldNoOpRateFloor && trailing.VerifyResolutions == 0))
 	currentLow := current.FixYield <= config.AuditLowYieldFixYieldFloor ||
 		(current.VerifyCalls > 0 && current.VerifyYield <= config.AuditLowYieldVerifyYieldFloor)
 	return currentLow && trailingLow
