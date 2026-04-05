@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -361,6 +362,7 @@ type mockExecutor struct {
 	ListUntrackedFn     func(ctx context.Context, dir string, excludePathspecs []string) ([]string, error)
 	StatusPorcelainFn   func(ctx context.Context, dir string) (string, error)
 	LogGrepFn           func(ctx context.Context, dir string, grepPattern string, maxCount int, format string) (string, error)
+	RestoreFilesFn      func(ctx context.Context, dir string, files []string) error
 	WorktreeListFn      func(ctx context.Context, dir string) ([]string, error)
 	WorktreeAddFn       func(ctx context.Context, dir string, worktreePath, branchName string, createBranch bool) error
 	WorktreePruneFn     func(ctx context.Context, dir string) error
@@ -473,6 +475,12 @@ func (m *mockExecutor) LogGrep(ctx context.Context, dir string, grepPattern stri
 		return m.LogGrepFn(ctx, dir, grepPattern, maxCount, format)
 	}
 	return "", nil
+}
+func (m *mockExecutor) RestoreFiles(ctx context.Context, dir string, files []string) error {
+	if m.RestoreFilesFn != nil {
+		return m.RestoreFilesFn(ctx, dir, files)
+	}
+	return nil
 }
 func (m *mockExecutor) WorktreeList(ctx context.Context, dir string) ([]string, error) {
 	if m.WorktreeListFn != nil {
@@ -666,4 +674,41 @@ func TestCollectStateWith_LogGrepFails(t *testing.T) {
 	}
 	_, _, lastCommit := CollectStateWith(context.Background(), t.TempDir(), ex)
 	assert.Equal(t, "", lastCommit)
+}
+
+func TestRestoreFiles_TrackedAndUntracked(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	// Initialize a git repo with a tracked file.
+	require.NoError(t, InitGit(ctx, dir))
+	tracked := filepath.Join(dir, "tracked.go")
+	require.NoError(t, os.WriteFile(tracked, []byte("original\n"), 0o644))
+	require.NoError(t, DefaultExecutor.AddAll(ctx, dir))
+	require.NoError(t, DefaultExecutor.CommitAllowEmpty(ctx, dir, "init"))
+
+	// Modify the tracked file and create a new untracked file.
+	require.NoError(t, os.WriteFile(tracked, []byte("modified\n"), 0o644))
+	untracked := filepath.Join(dir, "newfile.go")
+	require.NoError(t, os.WriteFile(untracked, []byte("brand new\n"), 0o644))
+
+	// RestoreFiles should revert the tracked file and remove the untracked one.
+	err := RestoreFiles(ctx, dir, []string{"tracked.go", "newfile.go"})
+	require.NoError(t, err)
+
+	data, readErr := os.ReadFile(tracked)
+	require.NoError(t, readErr)
+	assert.Equal(t, "original\n", string(data), "tracked file should be restored to HEAD")
+
+	_, statErr := os.Stat(untracked)
+	assert.True(t, os.IsNotExist(statErr), "untracked file should be deleted")
+}
+
+func TestRestoreFiles_EmptyList(t *testing.T) {
+	t.Parallel()
+
+	err := RestoreFiles(context.Background(), t.TempDir(), nil)
+	assert.NoError(t, err)
 }

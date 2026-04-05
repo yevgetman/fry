@@ -692,6 +692,15 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 				default:
 					frylog.Log("  AUDIT FIX: no-op for cluster %d (%s) — skipping cluster", targetCluster.ID, targetCluster.Label)
 				}
+				// Roll back rejected changes so they don't persist in the worktree.
+				if len(diffAssessment.ChangedFiles) > 0 {
+					if rbErr := git.RestoreFiles(ctx, opts.ProjectDir, diffAssessment.ChangedFiles); rbErr != nil {
+						frylog.Log("WARNING: audit: could not roll back rejected fix diff: %v", rbErr)
+					} else {
+						frylog.Log("  AUDIT FIX: rolled back %d file(s) from rejected diff", len(diffAssessment.ChangedFiles))
+						auditMetrics.UpdateLastCallRollback(diffAssessment.ChangedFiles)
+					}
+				}
 				// Fast-fail: skip all findings in this cluster for subsequent iterations
 				for _, f := range clusterFindings {
 					skippedFindingKeys[f.key()] = true
@@ -709,6 +718,21 @@ func RunAuditLoop(ctx context.Context, opts AuditOpts) (*AuditResult, error) {
 					break
 				}
 				continue
+			}
+			// Selective rollback: if accepted but some files are outside the contract scope,
+			// roll back only the out-of-scope files and reclassify as accepted_partial.
+			if diffAssessment.ValidationResult == fixValidationAccepted && len(diffAssessment.OutOfScopeFiles) > 0 {
+				if rbErr := git.RestoreFiles(ctx, opts.ProjectDir, diffAssessment.OutOfScopeFiles); rbErr != nil {
+					frylog.Log("WARNING: audit: could not roll back %d out-of-scope file(s): %v — proceeding as accepted with out-of-scope files intact",
+						len(diffAssessment.OutOfScopeFiles), rbErr)
+					// Record the failed rollback attempt so the divergence is visible in metrics.
+					auditMetrics.UpdateLastCallRollback(diffAssessment.OutOfScopeFiles)
+				} else {
+					frylog.Log("  AUDIT FIX: rolled back %d out-of-scope file(s), keeping in-scope changes for cluster %d (%s)",
+						len(diffAssessment.OutOfScopeFiles), targetCluster.ID, targetCluster.Label)
+					diffAssessment.ValidationResult = fixValidationAcceptedPartial
+					auditMetrics.UpdateLastCallPartial(diffAssessment.OutOfScopeFiles, fixValidationAcceptedPartial)
+				}
 			}
 			if diffAssessment.ValidationResult == fixValidationVerifyOnly {
 				frylog.Log("  AUDIT FIX: already-fixed claim with no behavioral diff — verifying claim")

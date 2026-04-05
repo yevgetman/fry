@@ -369,6 +369,132 @@ func TestBuildClusterFixPromptInlinesTargetFiles(t *testing.T) {
 	assert.NotContains(t, prompt, "## Codebase Context", "cluster prompt should not include full codebase context")
 }
 
+func TestRunAuditLoopRollsBackRejectedOutOfScopeDiff(t *testing.T) {
+	t.Parallel()
+
+	findings := "## Findings\n- **Location:** target.go:1\n- **Description:** Missing nil guard\n- **Severity:** HIGH\n- **Recommended Fix:** Add guard\n\n## Verdict\nFAIL\n"
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			switch callIndex {
+			case 0:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
+			case 1:
+				// Fix writes to a DIFFERENT file (out-of-scope) → should be rejected and rolled back
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "unrelated.go"), []byte("package main\n// rogue change\n"), 0o644))
+			case 2:
+				// Final re-audit
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	writeFile(t, filepath.Join(opts.ProjectDir, "target.go"), "package main\nfunc handle() {}\n")
+	writeFile(t, filepath.Join(opts.ProjectDir, "unrelated.go"), "package main\n")
+	require.NoError(t, frygit.InitGit(context.Background(), opts.ProjectDir))
+	opts.Epic.MaxAuditIterations = 1
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.NotNil(t, result.Metrics)
+	assert.Equal(t, 1, result.Metrics.Snapshot().RejectedFixCalls)
+
+	// The out-of-scope file should have been rolled back to its original content
+	data, readErr := os.ReadFile(filepath.Join(opts.ProjectDir, "unrelated.go"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "package main\n", string(data), "rejected out-of-scope change should be rolled back")
+
+	// Metrics should record the rollback
+	require.Len(t, result.Metrics.Calls, 3) // audit + fix + re-audit
+	assert.Equal(t, []string{"unrelated.go"}, result.Metrics.Calls[1].RolledBackFiles)
+}
+
+func TestRunAuditLoopRollsBackCommentOnlyDiff(t *testing.T) {
+	t.Parallel()
+
+	findings := "## Findings\n- **Location:** tracked.go:1\n- **Description:** Missing error handling\n- **Severity:** HIGH\n- **Recommended Fix:** Add nil guard\n\n## Verdict\nFAIL\n"
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			switch callIndex {
+			case 0, 2:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
+			case 1:
+				// Fix writes only a comment change → should be rejected and rolled back
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "tracked.go"), []byte("package main\n\n// comment only\n"), 0o644))
+			}
+		},
+	}
+	opts := makeOpts(t, eng)
+	writeFile(t, filepath.Join(opts.ProjectDir, "tracked.go"), "package main\n")
+	require.NoError(t, frygit.InitGit(context.Background(), opts.ProjectDir))
+	opts.Epic.MaxAuditIterations = 1
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Metrics.Snapshot().RejectedFixCalls)
+
+	// The comment-only change should have been rolled back
+	data, readErr := os.ReadFile(filepath.Join(opts.ProjectDir, "tracked.go"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "package main\n", string(data), "rejected comment-only change should be rolled back")
+	assert.Equal(t, []string{"tracked.go"}, result.Metrics.Calls[1].RolledBackFiles)
+}
+
+func TestRunAuditLoopSelectiveRollbackOnPartialOutOfScope(t *testing.T) {
+	t.Parallel()
+
+	findings := "## Findings\n- **Location:** target.go:1\n- **Description:** Missing nil guard\n- **Severity:** HIGH\n- **Recommended Fix:** Add guard\n\n## Verdict\nFAIL\n"
+	eng := &stubEngine{
+		name: "codex",
+		sideEffect: func(projectDir string, callIndex int) {
+			switch callIndex {
+			case 0:
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), findings)
+			case 1:
+				// Fix modifies BOTH target file and an unrelated file
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "target.go"), []byte("package main\nfunc handle() error { return nil }\n"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(projectDir, "extra.go"), []byte("package main\n// extra change\n"), 0o644))
+			case 2:
+				// Verify: confirm resolution
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), "- **Issue:** 1\n- **Status:** RESOLVED\n")
+			case 3:
+				// Final re-audit: pass
+				writeFile(t, filepath.Join(projectDir, config.SprintAuditFile), cleanAudit)
+			}
+		},
+	}
+
+	opts := makeOpts(t, eng)
+	writeFile(t, filepath.Join(opts.ProjectDir, "target.go"), "package main\nfunc handle() {}\n")
+	writeFile(t, filepath.Join(opts.ProjectDir, "extra.go"), "package main\n")
+	require.NoError(t, frygit.InitGit(context.Background(), opts.ProjectDir))
+	opts.Epic.MaxAuditIterations = 1
+
+	result, err := RunAuditLoop(context.Background(), opts)
+	require.NoError(t, err)
+	require.True(t, result.Passed)
+	require.NotNil(t, result.Metrics)
+
+	// The fix should be accepted_partial — in-scope changes kept, out-of-scope rolled back
+	fixCall := result.Metrics.Calls[1]
+	assert.Equal(t, fixValidationAcceptedPartial, fixCall.ValidationResult)
+	assert.Equal(t, []string{"extra.go"}, fixCall.RolledBackFiles)
+
+	// Target file should retain the fix
+	targetData, _ := os.ReadFile(filepath.Join(opts.ProjectDir, "target.go"))
+	assert.Contains(t, string(targetData), "error", "in-scope fix should be preserved")
+
+	// Extra file should be rolled back
+	extraData, _ := os.ReadFile(filepath.Join(opts.ProjectDir, "extra.go"))
+	assert.Equal(t, "package main\n", string(extraData), "out-of-scope change should be rolled back")
+
+	// TotalAcceptedFixCalls should count partial as accepted
+	assert.Equal(t, 1, result.Metrics.TotalAcceptedFixCalls())
+	assert.Equal(t, 1, result.Metrics.TotalPartialFixCalls())
+}
+
 func initAuditGitRepo(t *testing.T, projectDir string) {
 	t.Helper()
 	writeFile(t, filepath.Join(projectDir, "tracked.txt"), "base\n")

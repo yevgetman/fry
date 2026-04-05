@@ -27,6 +27,7 @@ type CallMetric struct {
 	DiffClassification   string                  `json:"diff_classification,omitempty"`
 	ValidationResult     string                  `json:"validation_result,omitempty"`
 	AlreadyFixedClaim    bool                    `json:"already_fixed_claim,omitempty"`
+	RolledBackFiles      []string                `json:"rolled_back_files,omitempty"`
 	Resolutions          int                     `json:"resolutions,omitempty"`
 	Tokens               tokenmetrics.TokenUsage `json:"tokens"`
 }
@@ -65,6 +66,7 @@ type AuditMetricsSnapshot struct {
 	DurationMs               int64   `json:"duration_ms"`
 	NoOpFixCalls             int     `json:"no_op_fix_calls"`
 	AcceptedFixCalls         int     `json:"accepted_fix_calls"`
+	PartialFixCalls          int     `json:"partial_fix_calls"`
 	RejectedFixCalls         int     `json:"rejected_fix_calls"`
 	RepeatedUnchanged        int     `json:"repeated_unchanged_findings"`
 	SuppressedUnchanged      int     `json:"suppressed_unchanged_findings"`
@@ -201,11 +203,43 @@ func (m *AuditMetrics) TotalAcceptedFixCalls() int {
 	}
 	total := 0
 	for _, call := range m.Calls {
-		if call.SessionType == engine.SessionAuditFix && call.ValidationResult == fixValidationAccepted {
+		if call.SessionType == engine.SessionAuditFix &&
+			(call.ValidationResult == fixValidationAccepted || call.ValidationResult == fixValidationAcceptedPartial) {
 			total++
 		}
 	}
 	return total
+}
+
+func (m *AuditMetrics) TotalPartialFixCalls() int {
+	if m == nil {
+		return 0
+	}
+	total := 0
+	for _, call := range m.Calls {
+		if call.SessionType == engine.SessionAuditFix && call.ValidationResult == fixValidationAcceptedPartial {
+			total++
+		}
+	}
+	return total
+}
+
+// UpdateLastCallRollback records that the most recent fix call's diff was fully rolled back.
+func (m *AuditMetrics) UpdateLastCallRollback(rolledBackFiles []string) {
+	if m == nil || len(m.Calls) == 0 {
+		return
+	}
+	m.Calls[len(m.Calls)-1].RolledBackFiles = rolledBackFiles
+}
+
+// UpdateLastCallPartial records that the most recent fix call had out-of-scope files
+// rolled back and was reclassified from accepted to accepted_partial.
+func (m *AuditMetrics) UpdateLastCallPartial(rolledBackFiles []string, newResult string) {
+	if m == nil || len(m.Calls) == 0 {
+		return
+	}
+	m.Calls[len(m.Calls)-1].RolledBackFiles = rolledBackFiles
+	m.Calls[len(m.Calls)-1].ValidationResult = newResult
 }
 
 func (m *AuditMetrics) TotalRejectedFixCalls() int {
@@ -395,6 +429,7 @@ func (m *AuditMetrics) Snapshot() AuditMetricsSnapshot {
 		DurationMs:               m.TotalDurationMs(),
 		NoOpFixCalls:             m.TotalNoOpFixCalls(),
 		AcceptedFixCalls:         m.TotalAcceptedFixCalls(),
+		PartialFixCalls:          m.TotalPartialFixCalls(),
 		RejectedFixCalls:         m.TotalRejectedFixCalls(),
 		RepeatedUnchanged:        m.RepeatedUnchangedFindings,
 		SuppressedUnchanged:      m.SuppressedUnchangedFindings,

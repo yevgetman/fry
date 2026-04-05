@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -41,6 +43,9 @@ type Executor interface {
 	ListUntracked(ctx context.Context, dir string, excludePathspecs []string) ([]string, error)
 	StatusPorcelain(ctx context.Context, dir string) (string, error)
 	LogGrep(ctx context.Context, dir string, grepPattern string, maxCount int, format string) (string, error)
+
+	// File restoration
+	RestoreFiles(ctx context.Context, dir string, files []string) error
 
 	// Worktree operations
 	WorktreeList(ctx context.Context, dir string) ([]string, error)
@@ -199,6 +204,37 @@ func (e *ExecExecutor) LogGrep(ctx context.Context, dir string, grepPattern stri
 		args = append(args, "-"+strconv.Itoa(maxCount))
 	}
 	return e.output(ctx, dir, "git", args...)
+}
+
+func (e *ExecExecutor) RestoreFiles(ctx context.Context, dir string, files []string) error {
+	if len(files) == 0 {
+		return nil
+	}
+	// Separate files into those tracked by HEAD (can be restored via git checkout)
+	// and untracked/new files (must be deleted since HEAD has no version).
+	var tracked, untracked []string
+	for _, f := range files {
+		checkCmd := exec.CommandContext(ctx, "git", "cat-file", "-e", "HEAD:"+f)
+		checkCmd.Dir = dir
+		if checkCmd.Run() == nil {
+			tracked = append(tracked, f)
+		} else {
+			untracked = append(untracked, f)
+		}
+	}
+	if len(tracked) > 0 {
+		args := append([]string{"checkout", "HEAD", "--"}, tracked...)
+		if err := e.run(ctx, dir, "git", args...); err != nil {
+			return err
+		}
+	}
+	for _, f := range untracked {
+		fullPath := filepath.Join(dir, f)
+		if removeErr := os.Remove(fullPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return fmt.Errorf("remove untracked file %s: %w", f, removeErr)
+		}
+	}
+	return nil
 }
 
 func (e *ExecExecutor) WorktreeList(ctx context.Context, dir string) ([]string, error) {

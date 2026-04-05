@@ -64,7 +64,7 @@ For each audit report, the **fix agent** runs repeatedly until all issues above 
 The inner loop carries forward structured history so each fix iteration has more context than the last:
 
 - **No-op detection** -- Fry fingerprints the worktree before and after each fix pass. If the fix agent made no material file changes (excluding progress artifacts), Fry logs a no-op, skips verify, increments the stale counter, and moves directly to the next fix attempt or re-audit.
-- **Fix contract validation** -- Every fix pass carries a Fry-owned diff contract: numbered issue IDs, declared target files derived from the findings, and expected evidence. Empty diffs, comment-only diffs, and out-of-scope diffs are rejected before they count as real remediation attempts.
+- **Fix contract validation** -- Every fix pass carries a Fry-owned diff contract: numbered issue IDs, declared target files derived from the findings, and expected evidence. Empty diffs, comment-only diffs, and out-of-scope diffs are rejected before they count as real remediation attempts. Rejected diffs are **rolled back** (`git checkout HEAD -- <files>`) so that no unreviewed changes persist in the worktree. When an accepted diff includes both in-scope and out-of-scope files, Fry selectively rolls back only the out-of-scope files and reclassifies the fix as `accepted_partial`.
 - **Remediation clustering** -- Before each fix pass, Fry groups related findings into remediation clusters using shared file families, shared subsystem paths, and overlapping requirement-theme tokens. Each fix call targets a single cluster with an inline-context prompt, while individual issue IDs remain stable for diff validation and verify. Clusters whose fix is rejected on first attempt are fast-fail skipped for remaining inner iterations.
 - **Already-fixed verification routing** -- If the fix agent claims an issue is already fixed and produces no behavioral diff, Fry routes that claim to verify instead of counting the pass as a normal remediation attempt.
 - **Behavior-unchanged verification** -- Verify can explicitly report `BEHAVIOR_UNCHANGED` when a remediation left the executable logic path untouched. The next fix prompt then carries issue-specific guidance with the unchanged path summary and a direct instruction not to answer with comments, rationale-only edits, or other non-behavioral changes.
@@ -154,6 +154,8 @@ Sprint audit metrics now distinguish between several kinds of churn:
 - **Repeated unchanged findings** -- the auditor restated an already-known issue family against the same artifact fingerprint
 - **Suppressed unchanged findings** -- a reopening against unchanged code was rejected because it lacked `**New Evidence:**`
 - **Reopened with new evidence** -- a reopening against unchanged code was admitted because the auditor supplied explicit justification
+- **Partial fix calls** -- fix diffs that were reclassified from `accepted` to `accepted_partial` because out-of-scope files were selectively rolled back
+- **Rolled-back files** -- per-call list of files restored to HEAD after a rejection or partial acceptance
 - **Behavior-unchanged outcomes** -- verify concluded that the attempted remediation did not materially change the executable code path
 - **Behavior-unchanged escalations** -- Fry narrowed the next fix batch, refreshed fix-session context, or stopped the current fix loop early because the same issue kept coming back behavior-unchanged
 - **Session refreshes** -- Fry reset a same-role audit or fix session because it exceeded a configured continuity budget
@@ -478,7 +480,7 @@ sprint1_audit_final_20060102_150405.log      # Final audit pass
 sprint1_audit_metrics.json                   # Per-call audit metrics for the sprint
 ```
 
-Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, cache-read/cache-creation token detail, no-op rate, accepted versus rejected fix passes, diff classifications, verify yield, per-cycle productivity summaries, low-yield strategy changes, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier and any final low-yield stop reason.
+Fry also writes a machine-readable audit metrics artifact for each sprint at `.fry/build-logs/sprintN_audit_metrics.json`. It records call counts, prompt sizes, durations, token usage, cache-read/cache-creation token detail, no-op rate, accepted versus rejected versus partial fix passes, diff classifications, per-call rolled-back files, verify yield, per-cycle productivity summaries, low-yield strategy changes, convergence cycle, and the classified sprint complexity. Live audit progress in `.fry/build-status.json` includes a compact snapshot of the same metrics plus the current complexity tier and any final low-yield stop reason.
 
 ## Cleanup
 

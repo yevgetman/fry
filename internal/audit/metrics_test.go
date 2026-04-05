@@ -169,3 +169,39 @@ func TestAuditMetricsCycleSummariesAndTrailingYield(t *testing.T) {
 	assert.InDelta(t, 0.5, snapshot.TrailingNoOpRate, 0.001)
 	assert.InDelta(t, 135.0, snapshot.TrailingMsPerResolution, 0.001)
 }
+
+func TestAuditMetricsAcceptedPartialCountsAsAccepted(t *testing.T) {
+	t.Parallel()
+
+	metrics := &AuditMetrics{}
+	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, Cycle: 1, ValidationResult: fixValidationAccepted})
+	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, Cycle: 1, ValidationResult: fixValidationAcceptedPartial})
+	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, Cycle: 1, ValidationResult: fixValidationRejected})
+
+	assert.Equal(t, 2, metrics.TotalAcceptedFixCalls(), "accepted + accepted_partial should both count")
+	assert.Equal(t, 1, metrics.TotalPartialFixCalls())
+	assert.Equal(t, 1, metrics.TotalRejectedFixCalls())
+	assert.Equal(t, 2, metrics.Snapshot().AcceptedFixCalls)
+	assert.Equal(t, 1, metrics.Snapshot().PartialFixCalls)
+}
+
+func TestUpdateLastCallRollback(t *testing.T) {
+	t.Parallel()
+
+	metrics := &AuditMetrics{}
+	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, ValidationResult: fixValidationRejected})
+	metrics.UpdateLastCallRollback([]string{"a.go", "b.go"})
+
+	assert.Equal(t, []string{"a.go", "b.go"}, metrics.Calls[0].RolledBackFiles)
+}
+
+func TestUpdateLastCallPartial(t *testing.T) {
+	t.Parallel()
+
+	metrics := &AuditMetrics{}
+	metrics.Record(CallMetric{SessionType: engine.SessionAuditFix, ValidationResult: fixValidationAccepted})
+	metrics.UpdateLastCallPartial([]string{"extra.go"}, fixValidationAcceptedPartial)
+
+	assert.Equal(t, fixValidationAcceptedPartial, metrics.Calls[0].ValidationResult)
+	assert.Equal(t, []string{"extra.go"}, metrics.Calls[0].RolledBackFiles)
+}

@@ -16,9 +16,10 @@ const (
 	diffClassificationEmpty       = "empty"
 	diffClassificationOutOfScope  = "out_of_scope"
 
-	fixValidationAccepted   = "accepted"
-	fixValidationRejected   = "rejected"
-	fixValidationVerifyOnly = "verify_only"
+	fixValidationAccepted        = "accepted"
+	fixValidationAcceptedPartial = "accepted_partial"
+	fixValidationRejected        = "rejected"
+	fixValidationVerifyOnly      = "verify_only"
 )
 
 type FixContractIssue struct {
@@ -35,6 +36,7 @@ type FixContract struct {
 
 type FixDiffAssessment struct {
 	ChangedFiles       []string
+	OutOfScopeFiles    []string
 	DiffSummary        string
 	DiffClassification string
 	ValidationResult   string
@@ -167,6 +169,11 @@ func assessFixDiff(contract FixContract, diff, fallbackFingerprint, agentOutput 
 		} else {
 			assessment.DiffSummary = "behavioral changes detected"
 		}
+		// Detect out-of-scope files in an otherwise accepted diff.
+		// The caller uses this to selectively roll back non-target files.
+		if contract.ScopeRestricted() && len(changedFiles) > 0 {
+			assessment.OutOfScopeFiles = outOfScopeFiles(contract.TargetFiles(), changedFiles)
+		}
 	}
 
 	return assessment
@@ -246,6 +253,22 @@ func changedFilesIntersect(targets, changed []string) bool {
 		}
 	}
 	return false
+}
+
+// outOfScopeFiles returns the subset of changed files that are not in the target set.
+func outOfScopeFiles(targets, changed []string) []string {
+	targetSet := make(map[string]struct{}, len(targets))
+	for _, t := range targets {
+		targetSet[t] = struct{}{}
+	}
+	var out []string
+	for _, f := range changed {
+		if _, ok := targetSet[f]; !ok {
+			out = append(out, f)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func buildRejectedOutcomes(findings []Finding, assessment FixDiffAssessment) []FixOutcome {

@@ -163,6 +163,21 @@ func WorktreeFingerprintForNoopDetectionWith(ctx context.Context, projectDir str
 	}
 }
 
+// RestoreFiles restores the given files to their HEAD state, discarding
+// worktree modifications. This is used by the audit-fix loop to roll back
+// rejected or out-of-scope changes.
+func RestoreFiles(ctx context.Context, projectDir string, files []string) error {
+	return RestoreFilesWith(ctx, projectDir, files, DefaultExecutor)
+}
+
+// RestoreFilesWith is like RestoreFiles but uses the provided Executor.
+func RestoreFilesWith(ctx context.Context, projectDir string, files []string, ex Executor) error {
+	if len(files) == 0 {
+		return nil
+	}
+	return ex.RestoreFiles(ctx, projectDir, files)
+}
+
 // CollectState returns git working tree state for build resumption reporting.
 func CollectState(ctx context.Context, projectDir string) (clean bool, branch string, lastAutoCommit string) {
 	return CollectStateWith(ctx, projectDir, DefaultExecutor)

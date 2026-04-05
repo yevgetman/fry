@@ -71,6 +71,68 @@ func TestAssessFixDiffRejectsOutOfScopeChanges(t *testing.T) {
 	assert.Equal(t, fixValidationRejected, assessment.ValidationResult)
 }
 
+func TestAssessFixDiffDetectsOutOfScopeFilesInAcceptedDiff(t *testing.T) {
+	t.Parallel()
+
+	contract := newFixContract([]Finding{{Location: "internal/audit/audit.go:123", Description: "Issue A"}})
+	diff := stringsJoin(
+		"diff --git a/internal/audit/audit.go b/internal/audit/audit.go",
+		"--- a/internal/audit/audit.go",
+		"+++ b/internal/audit/audit.go",
+		"@@ -1,2 +1,2 @@",
+		"-oldLine()",
+		"+newLine()",
+		"diff --git a/internal/cli/root.go b/internal/cli/root.go",
+		"--- a/internal/cli/root.go",
+		"+++ b/internal/cli/root.go",
+		"@@ -1,2 +1,2 @@",
+		"-oldCliLine()",
+		"+newCliLine()",
+	)
+
+	assessment := assessFixDiff(contract, diff, "", "")
+	assert.Equal(t, diffClassificationBehavioral, assessment.DiffClassification)
+	assert.Equal(t, fixValidationAccepted, assessment.ValidationResult)
+	assert.Equal(t, []string{"internal/audit/audit.go", "internal/cli/root.go"}, assessment.ChangedFiles)
+	assert.Equal(t, []string{"internal/cli/root.go"}, assessment.OutOfScopeFiles)
+}
+
+func TestAssessFixDiffNoOutOfScopeFilesWhenAllInScope(t *testing.T) {
+	t.Parallel()
+
+	contract := newFixContract([]Finding{{Location: "internal/audit/audit.go:123", Description: "Issue A"}})
+	diff := stringsJoin(
+		"diff --git a/internal/audit/audit.go b/internal/audit/audit.go",
+		"--- a/internal/audit/audit.go",
+		"+++ b/internal/audit/audit.go",
+		"@@ -1,2 +1,2 @@",
+		"-oldLine()",
+		"+newLine()",
+	)
+
+	assessment := assessFixDiff(contract, diff, "", "")
+	assert.Equal(t, fixValidationAccepted, assessment.ValidationResult)
+	assert.Empty(t, assessment.OutOfScopeFiles)
+}
+
+func TestOutOfScopeFilesHelper(t *testing.T) {
+	t.Parallel()
+
+	targets := []string{"a.go", "b.go"}
+	changed := []string{"a.go", "c.go", "d.go"}
+	result := outOfScopeFiles(targets, changed)
+	assert.Equal(t, []string{"c.go", "d.go"}, result)
+}
+
+func TestOutOfScopeFilesHelperAllInScope(t *testing.T) {
+	t.Parallel()
+
+	targets := []string{"a.go", "b.go"}
+	changed := []string{"a.go"}
+	result := outOfScopeFiles(targets, changed)
+	assert.Empty(t, result)
+}
+
 func stringsJoin(lines ...string) string {
 	return strings.Join(lines, "\n")
 }
