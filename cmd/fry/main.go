@@ -307,7 +307,7 @@ func wakeCmd() *cobra.Command {
 	var baseDir string
 	cmd := &cobra.Command{
 		Use:   "wake <name>",
-		Short: "Fire one wake immediately (stub: logs canned entry)",
+		Short: "Fire one wake immediately (invokes claude with mission prompt)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -316,40 +316,17 @@ func wakeCmd() *cobra.Command {
 				return err
 			}
 
-			lk, err := wake.Acquire(missionDir)
+			entry, err := wake.Execute(cmd.Context(), missionDir, m)
 			if err != nil {
 				if err == wake.ErrLocked {
 					fmt.Fprintf(os.Stderr, "skipped — overlap: mission %q is already locked\n", name)
 					return nil
 				}
-				return fmt.Errorf("wake: acquire lock: %w", err)
-			}
-			defer lk.Release()
-
-			now := time.Now().UTC()
-			entry := wakelog.Entry{
-				WakeNumber:        m.CurrentWake + 1,
-				TimestampUTC:      now.Format(time.RFC3339),
-				ElapsedHours:      m.ElapsedHours(now),
-				Phase:             "building",
-				WakeGoal:          "stub wake (M2 verification)",
-				ActionsTaken:      []string{"acquired lock", "appended stub log entry", "released lock"},
-				Blockers:          []string{},
-				PromiseTokenFound: false,
-				ExitCode:          0,
-				WallClockSeconds:  0,
-			}
-			if err := wakelog.Append(missionDir, entry); err != nil {
-				return fmt.Errorf("wake: append log: %w", err)
+				return fmt.Errorf("wake: %w", err)
 			}
 
-			m.CurrentWake++
-			m.LastWakeAt = now
-			if err := m.Save(missionDir); err != nil {
-				return fmt.Errorf("wake: save state: %w", err)
-			}
-
-			fmt.Printf("Wake %d complete for mission %q.\n", m.CurrentWake, name)
+			fmt.Printf("Wake %d complete for mission %q (promise=%v, exit=%d, cost=$%.4f).\n",
+				entry.WakeNumber, name, entry.PromiseTokenFound, entry.ExitCode, entry.CostUSD)
 			return nil
 		},
 	}
