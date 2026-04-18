@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -187,8 +186,8 @@ func Scaffold(o NewOptions) (string, error) {
 		InputMode:       o.InputMode(),
 		Effort:          o.Effort,
 		IntervalSeconds: intervalSec,
-		DurationHours:   math.Round(o.Duration.Hours()*1000) / 1000,
-		OvertimeHours:   math.Round(o.Overtime.Hours()*1000) / 1000,
+		DurationHours:   o.Duration.Hours(),
+		OvertimeHours:   o.Overtime.Hours(),
 		CurrentWake:     0,
 		Status:          state.StatusActive,
 		HardDeadlineUTC: hardDeadline,

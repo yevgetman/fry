@@ -101,3 +101,41 @@ func TestInputMode(t *testing.T) {
 	assert.Equal(t, "spec-dir", NewOptions{SpecDir: "d"}.InputMode())
 	assert.Equal(t, "", NewOptions{}.InputMode())
 }
+
+// TestScaffold_SubHourDurationDeadlinesMatch is a regression test for the
+// float-rounding bug where DurationHours was rounded to 3 decimals, causing
+// SoftDeadline() (recomputed from rounded DurationHours) to drift from
+// HardDeadlineUTC (stored at scaffold time with full precision).
+// For sub-hour durations the drift was ~1s and visibly confusing in `fry status`.
+func TestScaffold_SubHourDurationDeadlinesMatch(t *testing.T) {
+	t.Parallel()
+
+	promptFile := filepath.Join(t.TempDir(), "p.md")
+	require.NoError(t, os.WriteFile(promptFile, []byte("x"), 0o644))
+
+	opts := NewOptions{
+		Name:       "subhour",
+		BaseDir:    t.TempDir(),
+		PromptFile: promptFile,
+		Effort:     "fast",
+		Interval:   30 * time.Second,
+		Duration:   1 * time.Minute,
+		Overtime:   0,
+	}
+	missionDir, err := Scaffold(opts)
+	require.NoError(t, err)
+
+	m, err := state.Load(missionDir)
+	require.NoError(t, err)
+
+	// With Overtime=0, soft deadline must equal hard deadline.
+	soft := m.SoftDeadline()
+	hard := m.HardDeadlineUTC
+	delta := soft.Sub(hard)
+	if delta < 0 {
+		delta = -delta
+	}
+	assert.Lessf(t, delta, time.Millisecond,
+		"soft (%s) and hard (%s) deadlines must match for zero-overtime mission; drift=%s",
+		soft, hard, delta)
+}

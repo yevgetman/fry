@@ -272,12 +272,11 @@ These are design decisions that must be preserved:
 
 Respect these when planning work:
 
-- Test coverage: `cmd/fry`, `chat`, `scheduler`, `wakelog` at 0%; `wake` at 22%. New work closes gaps, never widens them.
+- Test coverage: every package has tests, but `wake.Execute` + `wake.RunClaude` are untested (shell out to external `claude`). `chat.Launch` similarly untested. New work closes gaps, never widens them.
 - No CI pipeline yet. `make` targets are the CI.
 - Linux scheduler is a stub (returns `ErrUnsupported`).
 - No stale-lock recovery (a crashed wake leaves `<mission>/lock/` that blocks future wakes).
 - `fry start` rejects `stopped` / `complete` missions — no resume path.
-- Sub-hour `--duration` values desync `SoftDeadline()` from stored `HardDeadlineUTC` due to float rounding in `DurationHours`.
 
 ---
 

@@ -42,7 +42,8 @@ Honest documentation of what works and what doesn't, written at ship time.
 - `go vet ./...` clean
 - `golangci-lint run` clean (0 issues)
 - `go test -race ./...` green (all tests pass)
-- Non-test LOC: 1917 (under 2000 cap)
+- Non-test LOC: 1916 (under 2000 cap)
+- Test coverage: every package has tests (no 0% packages). Per-package: notes 92%, wakelog 86%, state 72%, cmd/fry 63%, mission 63%, wake 53%, scheduler 44%, chat 39%.
 
 ## What doesn't work / known gaps
 
@@ -55,14 +56,17 @@ The build-plan risk register notes: `lock mtime > 2× interval → assume stale 
 ### Linux support is a stub
 `internal/scheduler/linux.go` returns `ErrUnsupported`. Only macOS is supported in v0.1.
 
-### Chat session not smoke-tested with a live mission
-`fry chat` launches an interactive claude session and passes context correctly. The behavior of the embedded system prompt has been tested manually but not in a formal acceptance loop.
+### `fry chat` subprocess path untested
+`chat.Launch` spawns an interactive `claude` subprocess; only the `AppendSupervisorLog` audit path is unit-tested. The live chat flow has been manually smoke-tested but not in an automated acceptance loop.
 
 ### No CI pipeline
 There is no GitHub Actions or CI configuration. Tests must be run manually: `make test`.
 
 ### `fry start` on a stopped mission
 `fry start` currently rejects missions with status `stopped` or `complete`. To restart a stopped mission the user must manually edit `state.json` or delete and re-create the mission.
+
+### wake.Execute + RunClaude not unit-tested
+The claude-invocation path in `internal/wake/wake.Execute` and `internal/wake/claude.RunClaude` shells out to an external binary and is exercised only via live manual runs. Testing these would require either a fake claude binary on PATH or dependency injection — both deferred.
 
 ## Version
 
