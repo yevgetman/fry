@@ -16,9 +16,9 @@
 
 - [x] **M1** — Filesystem + state (`fry new`, `fry list`, `fry status` work against disk)
 - [x] **M2** — Scheduler + macOS LaunchAgent (`fry start`/`fry stop` install/remove LaunchAgent)
-- [ ] **M3** — Wake: claude invocation + promise token (one real wake end-to-end)
-- [ ] **M4** — Prompt assembly + notes.md round-trip (cross-wake memory demonstrated)
-- [ ] **M5** — Chat session (`fry chat demo` → Claude answers in 1 turn)
+- [x] **M3** — Wake: claude invocation + promise token (one real wake end-to-end)
+- [x] **M4** — Prompt assembly + notes.md round-trip (cross-wake memory demonstrated)
+- [x] **M5** — Chat session (`fry chat demo` → Claude answers in 1 turn)
 - [ ] **M6** — Deadlines + no-op detection + shutdown (dogfood mission auto-transitions to `complete`)
 - [ ] **M7** — Polish + README + ship (all spec §15 gates green)
 - [ ] `SHIPPED.md` at repo root (honest documentation of what works / doesn't)
@@ -26,23 +26,23 @@
 
 ## Current Phase
 
-`building` (M2 complete; M3 begins next wake)
+`building` (M5 complete; M6 begins next wake)
 
 ## Current Wake Number
 
-`3`
+`6`
 
 ## Elapsed Hours Since CREATED_AT
 
-`0.763` (at close of wake 3)
+`1.47` (at close of wake 6)
 
 ## Current Focus
 
-> Wake 3 (M2): M2 fully implemented and verified. internal/scheduler (darwin.go launchctl backend), internal/wake/lock.go (mkdir overlap lock), internal/wakelog/wakelog.go (Append/TailN), fry start/stop/wake/logs all wired. fry start m2test → launchctl list shows com.fry.m2test. All tests passing.
+> Wake 6 (M5): M5 fully implemented. internal/chat/chat.go (Launch() renders systemprompt.md template, appends supervisor_log entry, spawns claude with --add-dir + --append-system-prompt). internal/chat/supervisorlog.go (AppendSupervisorLog helper). internal/chat/systemprompt.md (embedded template with access rules, audit expectations, file layout). chatCmd() wired in cmd/fry/main.go. Build compiles, all tests pass, binary installs. `fry chat --help` confirms command is live.
 
 ## Next Wake Should
 
-Begin M3: implement `internal/wake/claude.go` (spawn `claude -p` subprocess with effort flags, capture stdout), `internal/wake/promise.go` (extract `===WAKE_DONE===` token), and `internal/wake/wake.go` (orchestrate: lock → assemble stub prompt → RunClaude → check promise → Append wakelog → update state → release lock). Replace the stub `fry wake` with the real implementation. Verify with a trivial prompt that writes to artifacts/out.txt and outputs the promise token.
+Begin M6: implement deadline logic in internal/wake/wake.go (soft/overtime/hard stop transitions based on elapsed vs DurationHours+OvertimeHours), no-op detection (compare last 3 wake artifact hashes + notes.md snapshots, flag to supervisor_log if stale), FRY_STATUS_TRANSITION=complete stdout marker parsing. Verify: create a short-duration test mission (5m duration, 2m interval), run `fry wake` manually twice, confirm status transitions to complete when elapsed > duration.
 
 ## Key Decisions Made (append-only)
 
@@ -55,11 +55,12 @@ Begin M3: implement `internal/wake/claude.go` (spawn `claude -p` subprocess with
 - **2026-04-18T15:19:27Z (wake 2):** Legacy fry binary at `/Users/julie/.local/bin/fry` shadows new binary in shell PATH. New binary is correctly at `/Users/julie/go/bin/fry`. All verification must use full path `~/go/bin/fry` or ensure `~/go/bin` precedes `~/.local/bin` in PATH. Runner.sh template sets PATH explicitly — this is safe for scheduled execution.
 - **2026-04-18T15:35:XX Z (wake 3):** `launchctl load` works fine on macOS 25.2 (Darwin) for LaunchAgents — no need for `bootstrap gui/<uid>/<label>`. Closed the open question.
 - **2026-04-18T15:35:XX Z (wake 3):** `lock/` directory is NOT pre-created by scaffold; it is the mutex itself (created by `wake.Acquire`, removed by `wake.Release`). Fixed layout.go and layout_test.go.
+- **2026-04-18T15:50:XX Z (wake 4):** `claude -p --output-format json` → cost field is `total_cost_usd` (NOT `cost_usd`). Result text field is `result`. Closed open question.
 
 ## Open Questions / Things To Resolve (living list)
 
 - [x] LaunchAgent plist: `launchctl load` works on macOS 25.2 — confirmed in wake 3.
-- [ ] Cost parsing from `claude -p --output-format json`: verify exact JSON field name for cost. Read from claude docs or test empirically in M3.
+- [x] Cost parsing from `claude -p --output-format json`: field is `total_cost_usd`. Verified empirically in M3.
 - [ ] Stale lock recovery: build-plan §8 risk register notes `mtime > 2×interval` → assume stale + take over. Implement in M2/M3.
 - [x] `make install` target: resolved — `go install` installs to `~/go/bin/fry`. Confirmed working.
 - [x] `go version`: verified in wake 2 — Go 1.26.1, well above 1.22 requirement.
