@@ -50,8 +50,7 @@ func Execute(ctx context.Context, missionDir string, m *state.Mission) (*wakelog
 		TimestampUTC:     now.Format(time.RFC3339),
 		ElapsedHours:     m.ElapsedHours(now),
 		Phase:            currentPhase(m, now),
-		CurrentMilestone: "M3",
-		WakeGoal:         "Execute claude invocation + check promise token",
+		WakeGoal: "claude invocation",
 		Blockers:         []string{},
 	}
 
@@ -94,6 +93,9 @@ func Execute(ctx context.Context, missionDir string, m *state.Mission) (*wakelog
 	if err := wakelog.Append(missionDir, entry); err != nil {
 		return nil, fmt.Errorf("wake: append log: %w", err)
 	}
+
+	// No-op detection: advisory only, does not stop the mission.
+	DetectNoop(missionDir, 3) //nolint:errcheck
 
 	return &entry, nil
 }
