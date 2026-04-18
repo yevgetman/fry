@@ -9,7 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yevgetman/fry/internal/mission"
+	"github.com/yevgetman/fry/internal/scheduler"
 	"github.com/yevgetman/fry/internal/state"
+	"github.com/yevgetman/fry/internal/wake"
+	"github.com/yevgetman/fry/internal/wakelog"
 )
 
 var version = "dev"
@@ -32,6 +35,10 @@ func rootCmd() *cobra.Command {
 		newCmd(),
 		listCmd(),
 		statusCmd(),
+		startCmd(),
+		stopCmd(),
+		wakeCmd(),
+		logsCmd(),
 	)
 
 	return root
@@ -232,6 +239,175 @@ func statusCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&baseDir, "base-dir", "", "Base directory for missions (default: ~/missions/)")
 	return cmd
+}
+
+func startCmd() *cobra.Command {
+	var baseDir string
+	cmd := &cobra.Command{
+		Use:   "start <name>",
+		Short: "Install the LaunchAgent scheduler for a mission",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			missionDir, m, err := loadMission(name, baseDir)
+			if err != nil {
+				return err
+			}
+			if m.Status == state.StatusStopped || m.Status == state.StatusComplete {
+				fmt.Printf("Mission %q is %s; nothing to start.\n", name, m.Status)
+				return nil
+			}
+			plistPath := filepath.Join(missionDir, "scheduler.plist")
+			sched := scheduler.New()
+			st, _ := sched.Status(m)
+			if st.Running {
+				fmt.Printf("Mission %q scheduler is already running.\n", name)
+				return nil
+			}
+			if err := sched.Install(m, plistPath); err != nil {
+				return fmt.Errorf("start: %w", err)
+			}
+			fmt.Printf("Scheduler installed for mission %q. First wake fires in %ds.\n", name, m.IntervalSeconds)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&baseDir, "base-dir", "", "Base directory for missions (default: ~/missions/)")
+	return cmd
+}
+
+func stopCmd() *cobra.Command {
+	var baseDir string
+	cmd := &cobra.Command{
+		Use:   "stop <name>",
+		Short: "Unload the scheduler for a mission",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			missionDir, m, err := loadMission(name, baseDir)
+			if err != nil {
+				return err
+			}
+			sched := scheduler.New()
+			if err := sched.Uninstall(m); err != nil {
+				return fmt.Errorf("stop: %w", err)
+			}
+			m.Status = state.StatusStopped
+			if err := m.Save(missionDir); err != nil {
+				return fmt.Errorf("stop: save state: %w", err)
+			}
+			fmt.Printf("Scheduler unloaded for mission %q. Mission directory preserved at %s.\n", name, missionDir)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&baseDir, "base-dir", "", "Base directory for missions (default: ~/missions/)")
+	return cmd
+}
+
+func wakeCmd() *cobra.Command {
+	var baseDir string
+	cmd := &cobra.Command{
+		Use:   "wake <name>",
+		Short: "Fire one wake immediately (stub: logs canned entry)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			missionDir, m, err := loadMission(name, baseDir)
+			if err != nil {
+				return err
+			}
+
+			lk, err := wake.Acquire(missionDir)
+			if err != nil {
+				if err == wake.ErrLocked {
+					fmt.Fprintf(os.Stderr, "skipped — overlap: mission %q is already locked\n", name)
+					return nil
+				}
+				return fmt.Errorf("wake: acquire lock: %w", err)
+			}
+			defer lk.Release()
+
+			now := time.Now().UTC()
+			entry := wakelog.Entry{
+				WakeNumber:        m.CurrentWake + 1,
+				TimestampUTC:      now.Format(time.RFC3339),
+				ElapsedHours:      m.ElapsedHours(now),
+				Phase:             "building",
+				WakeGoal:          "stub wake (M2 verification)",
+				ActionsTaken:      []string{"acquired lock", "appended stub log entry", "released lock"},
+				Blockers:          []string{},
+				PromiseTokenFound: false,
+				ExitCode:          0,
+				WallClockSeconds:  0,
+			}
+			if err := wakelog.Append(missionDir, entry); err != nil {
+				return fmt.Errorf("wake: append log: %w", err)
+			}
+
+			m.CurrentWake++
+			m.LastWakeAt = now
+			if err := m.Save(missionDir); err != nil {
+				return fmt.Errorf("wake: save state: %w", err)
+			}
+
+			fmt.Printf("Wake %d complete for mission %q.\n", m.CurrentWake, name)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&baseDir, "base-dir", "", "Base directory for missions (default: ~/missions/)")
+	return cmd
+}
+
+func logsCmd() *cobra.Command {
+	var (
+		baseDir string
+		n       int
+	)
+	cmd := &cobra.Command{
+		Use:   "logs <name>",
+		Short: "Tail wake_log.jsonl for a mission",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			missionDir, _, err := loadMission(name, baseDir)
+			if err != nil {
+				return err
+			}
+			entries, err := wakelog.TailN(missionDir, n)
+			if err != nil {
+				return err
+			}
+			if len(entries) == 0 {
+				fmt.Println("No wake log entries yet.")
+				return nil
+			}
+			for _, e := range entries {
+				fmt.Printf("wake %-3d  %s  phase=%-20s  goal=%s\n",
+					e.WakeNumber, e.TimestampUTC, e.Phase, e.WakeGoal)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&baseDir, "base-dir", "", "Base directory for missions (default: ~/missions/)")
+	cmd.Flags().IntVarP(&n, "num", "n", 10, "Number of entries to show")
+	return cmd
+}
+
+// loadMission resolves baseDir and loads state for the named mission.
+func loadMission(name, baseDir string) (string, *state.Mission, error) {
+	dir := baseDir
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", nil, err
+		}
+		dir = filepath.Join(home, "missions")
+	}
+	missionDir := filepath.Join(dir, name)
+	m, err := state.Load(missionDir)
+	if err != nil {
+		return "", nil, fmt.Errorf("cannot load mission %q: %w", name, err)
+	}
+	return missionDir, m, nil
 }
 
 // parseDurationHours parses a duration string that may be hours like "12h" or minutes.

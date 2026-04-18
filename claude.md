@@ -14,7 +14,7 @@
 
 ## DELIVERABLES STATUS
 
-- [ ] **M1** — Filesystem + state (`fry new`, `fry list`, `fry status` work against disk)
+- [x] **M1** — Filesystem + state (`fry new`, `fry list`, `fry status` work against disk)
 - [ ] **M2** — Scheduler + macOS LaunchAgent (`fry start`/`fry stop` install/remove LaunchAgent)
 - [ ] **M3** — Wake: claude invocation + promise token (one real wake end-to-end)
 - [ ] **M4** — Prompt assembly + notes.md round-trip (cross-wake memory demonstrated)
@@ -26,23 +26,23 @@
 
 ## Current Phase
 
-`bootstrap → building` (transitioning — wake 1 ends bootstrap; wake 2 begins M1 code)
+`building` (M1 complete; M2 begins next wake)
 
 ## Current Wake Number
 
-`1`
+`2`
 
 ## Elapsed Hours Since CREATED_AT
 
-`0.218` (at close of wake 1)
+`0.503` (at close of wake 2)
 
 ## Current Focus
 
-> Wake 1 (bootstrap): Generated claude.md + agents.md. Established mission clock. No code written yet — wake 2 begins M1.
+> Wake 2 (M1): Completed M1 in full. go.mod, internal/state, internal/mission, cmd/fry/main.go, Makefile all written. fry new/list/status working. 9 unit tests passing. Binary installed at ~/go/bin/fry.
 
 ## Next Wake Should
 
-Scaffold M1: run `go mod init github.com/yevgetman/fry`, create `cmd/fry/main.go` with cobra root + `fry version` stub, create `internal/state/state.go` + `internal/state/transitions.go`, create `internal/mission/layout.go` with `Scaffold()` function, add `Makefile` with `build`/`install`/`test` targets, wire `fry new`, `fry list`, `fry status` subcommands. Commit and push.
+Begin M2: implement `internal/scheduler/scheduler.go` (interface), `internal/scheduler/darwin.go` (launchctl backend), `internal/wake/lock.go` (mkdir-based overlap lock), and wire `fry start` + `fry stop` + stub `fry wake` subcommands in cmd/fry/main.go. Verify `fry start demo && launchctl list | grep fry` shows the agent. Commit and push.
 
 ## Key Decisions Made (append-only)
 
@@ -52,14 +52,16 @@ Scaffold M1: run `go mod init github.com/yevgetman/fry`, create `cmd/fry/main.go
 - **2026-04-18T14:49:18Z (wake 1):** Milestones M1–M7 are strictly sequential. No skipping ahead. Blocker in M<N> → document + try alternative within M<N>.
 - **2026-04-18T14:49:18Z (wake 1):** Promise token for wake completion: `===WAKE_DONE===` as the final line of wake stdout.
 - **2026-04-18T14:49:18Z (wake 1):** Scheduler teardown authority: agent signals (`FRY_STATUS_TRANSITION=complete` on stdout), tool terminates. Agent must NOT call `launchctl` directly.
+- **2026-04-18T15:19:27Z (wake 2):** Legacy fry binary at `/Users/julie/.local/bin/fry` shadows new binary in shell PATH. New binary is correctly at `/Users/julie/go/bin/fry`. All verification must use full path `~/go/bin/fry` or ensure `~/go/bin` precedes `~/.local/bin` in PATH. Runner.sh template sets PATH explicitly — this is safe for scheduled execution.
 
 ## Open Questions / Things To Resolve (living list)
 
 - [ ] LaunchAgent plist: confirm `launchctl load` vs `launchctl bootstrap` — newer macOS prefers `bootstrap gui/<uid>/<label>`. Test in M2.
 - [ ] Cost parsing from `claude -p --output-format json`: verify exact JSON field name for cost. Read from claude docs or test empirically in M3.
 - [ ] Stale lock recovery: build-plan §8 risk register notes `mtime > 2×interval` → assume stale + take over. Implement in M2/M3.
-- [ ] `make install` target: confirm destination binary path (`/usr/local/bin/fry` vs `$GOPATH/bin/fry`). Use `go install` for simplicity.
-- [ ] `go version`: verify ≥ 1.22 before M1 coding begins (pre-flight check from build-plan §0).
+- [x] `make install` target: resolved — `go install` installs to `~/go/bin/fry`. Confirmed working.
+- [x] `go version`: verified in wake 2 — Go 1.26.1, well above 1.22 requirement.
+- [ ] PATH shadowing: legacy fry at `~/.local/bin/fry` shadows new binary. Document in README when M7 is reached — users should ensure `~/go/bin` precedes `~/.local/bin` or remove legacy binary.
 
 ## Environment / Paths Cheat Sheet
 

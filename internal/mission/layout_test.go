@@ -41,8 +41,8 @@ func TestScaffoldPrompt(t *testing.T) {
 		assert.NoError(t, err, "missing file: %s", f)
 	}
 
-	// Check subdirs
-	for _, d := range []string{"artifacts", "lock", "logs"} {
+	// Check subdirs (lock/ is NOT pre-created; it is created by Acquire as the mutex)
+	for _, d := range []string{"artifacts", "logs"} {
 		info, err := os.Stat(filepath.Join(missionDir, d))
 		require.NoError(t, err, "missing dir: %s", d)
 		assert.True(t, info.IsDir())

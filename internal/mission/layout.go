@@ -101,8 +101,8 @@ func Scaffold(o NewOptions) (string, error) {
 		return "", fmt.Errorf("mission %q already exists at %s", o.Name, missionDir)
 	}
 
-	// Create directory tree
-	for _, sub := range []string{"artifacts", "lock", "logs"} {
+	// Create directory tree (lock/ is NOT pre-created — it IS the mutex)
+	for _, sub := range []string{"artifacts", "logs"} {
 		if err := os.MkdirAll(filepath.Join(missionDir, sub), 0o755); err != nil {
 			return "", fmt.Errorf("mkdir %s: %w", sub, err)
 		}
