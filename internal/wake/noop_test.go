@@ -17,11 +17,15 @@ func writeWakeLogEntries(t *testing.T, dir string, entries []wakelog.Entry) {
 	if err != nil {
 		t.Fatalf("open wake_log: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	for _, e := range entries {
 		data, _ := json.Marshal(e)
-		f.Write(data)
-		f.WriteString("\n")
+		if _, err := f.Write(data); err != nil {
+			t.Fatalf("write entry: %v", err)
+		}
+		if _, err := f.WriteString("\n"); err != nil {
+			t.Fatalf("write newline: %v", err)
+		}
 	}
 }
 
@@ -31,8 +35,9 @@ func TestDetectNoop_NotEnoughHistory(t *testing.T) {
 		{WakeNumber: 1, PromiseTokenFound: false},
 		{WakeNumber: 2, PromiseTokenFound: false},
 	})
-	// touch supervisor_log.jsonl
-	os.WriteFile(filepath.Join(dir, "supervisor_log.jsonl"), nil, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "supervisor_log.jsonl"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	detected, _, err := DetectNoop(dir, 3)
 	if err != nil {
@@ -50,7 +55,9 @@ func TestDetectNoop_AllFailed(t *testing.T) {
 		{WakeNumber: 2, PromiseTokenFound: false},
 		{WakeNumber: 3, PromiseTokenFound: false},
 	})
-	os.WriteFile(filepath.Join(dir, "supervisor_log.jsonl"), nil, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "supervisor_log.jsonl"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	detected, reason, err := DetectNoop(dir, 3)
 	if err != nil {
@@ -77,7 +84,9 @@ func TestDetectNoop_OneSuccess_NotNoop(t *testing.T) {
 		{WakeNumber: 2, PromiseTokenFound: true},
 		{WakeNumber: 3, PromiseTokenFound: false},
 	})
-	os.WriteFile(filepath.Join(dir, "supervisor_log.jsonl"), nil, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "supervisor_log.jsonl"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	detected, _, err := DetectNoop(dir, 3)
 	if err != nil {
@@ -95,11 +104,13 @@ func TestDetectNoop_WarnOnlyOnce(t *testing.T) {
 		{WakeNumber: 2, PromiseTokenFound: false},
 		{WakeNumber: 3, PromiseTokenFound: false},
 	})
-	os.WriteFile(filepath.Join(dir, "supervisor_log.jsonl"), nil, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "supervisor_log.jsonl"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Call twice; should produce 2 noop_warning entries (dedupe not required by spec)
-	DetectNoop(dir, 3)
-	DetectNoop(dir, 3)
+	_, _, _ = DetectNoop(dir, 3)
+	_, _, _ = DetectNoop(dir, 3)
 
 	data, _ := os.ReadFile(filepath.Join(dir, "supervisor_log.jsonl"))
 	count := strings.Count(string(data), "noop_warning")

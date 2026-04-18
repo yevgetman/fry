@@ -19,30 +19,30 @@
 - [x] **M3** — Wake: claude invocation + promise token (one real wake end-to-end)
 - [x] **M4** — Prompt assembly + notes.md round-trip (cross-wake memory demonstrated)
 - [x] **M5** — Chat session (`fry chat demo` → Claude answers in 1 turn)
-- [ ] **M6** — Deadlines + no-op detection + shutdown (dogfood mission auto-transitions to `complete`)
-- [ ] **M7** — Polish + README + ship (all spec §15 gates green)
-- [ ] `SHIPPED.md` at repo root (honest documentation of what works / doesn't)
+- [x] **M6** — Deadlines + no-op detection + shutdown (dogfood mission auto-transitions to `complete`)
+- [x] **M7** — Polish + README + ship (all spec §15 gates green)
+- [x] `SHIPPED.md` at repo root (honest documentation of what works / doesn't)
 - [ ] End-to-end smoke test: trivial mission runs one wake, logs one entry, self-terminates
 
 ## Current Phase
 
-`building` (M5 complete; M6 begins next wake)
+`complete` (M7 done, SHIPPED.md written, v0.1.0 tagged)
 
 ## Current Wake Number
 
-`6`
+`8`
 
 ## Elapsed Hours Since CREATED_AT
 
-`1.47` (at close of wake 6)
+`2.0` (at close of wake 8)
 
 ## Current Focus
 
-> Wake 6 (M5): M5 fully implemented. internal/chat/chat.go (Launch() renders systemprompt.md template, appends supervisor_log entry, spawns claude with --add-dir + --append-system-prompt). internal/chat/supervisorlog.go (AppendSupervisorLog helper). internal/chat/systemprompt.md (embedded template with access rules, audit expectations, file layout). chatCmd() wired in cmd/fry/main.go. Build compiles, all tests pass, binary installs. `fry chat --help` confirms command is live.
+> Wake 8 (M7): README.md written (pitch, install, quickstart, file layout, how-it-works). SHIPPED.md written (honest gaps: no formal acceptance run, stale lock not implemented, no CI). Fixed all golangci-lint issues (errcheck defer patterns + staticcheck S1005/QF1012). go vet clean, golangci-lint 0 issues, all tests pass. 1917 non-test LOC (under 2000). Committed and tagged v0.1.0.
 
 ## Next Wake Should
 
-Begin M6: implement deadline logic in internal/wake/wake.go (soft/overtime/hard stop transitions based on elapsed vs DurationHours+OvertimeHours), no-op detection (compare last 3 wake artifact hashes + notes.md snapshots, flag to supervisor_log if stale), FRY_STATUS_TRANSITION=complete stdout marker parsing. Verify: create a short-duration test mission (5m duration, 2m interval), run `fry wake` manually twice, confirm status transitions to complete when elapsed > duration.
+Mission complete. All M1–M7 deliverables done. SHIPPED.md exists. Soft shutdown when scheduler next fires.
 
 ## Key Decisions Made (append-only)
 

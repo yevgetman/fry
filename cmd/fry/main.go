@@ -222,8 +222,8 @@ func statusCmd() *cobra.Command {
 			if len(entries) > 0 {
 				fmt.Printf("\nLast %d wake(s):\n", len(entries))
 				for _, e := range entries {
-					wn, _ := e["wake_number"]
-					goal, _ := e["wake_goal"]
+					wn := e["wake_number"]
+					goal := e["wake_goal"]
 					fmt.Printf("  wake %v: %v\n", wn, goal)
 				}
 			}

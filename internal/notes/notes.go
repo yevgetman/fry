@@ -108,7 +108,7 @@ func (n *Notes) render() string {
 	if id == "" {
 		id = "unknown"
 	}
-	sb.WriteString(fmt.Sprintf("# Mission Notes — %s\n\n", id))
+	fmt.Fprintf(&sb, "# Mission Notes — %s\n\n", id)
 
 	sb.WriteString("## Current Focus\n")
 	if n.CurrentFocus != "" {

@@ -63,7 +63,7 @@ func appendNoopWarning(missionDir, reason string) error {
 	if err != nil {
 		return fmt.Errorf("noop: open supervisor_log: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = fmt.Fprintf(f, "%s\n", data)
 	return err
 }

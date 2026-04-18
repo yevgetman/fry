@@ -169,7 +169,7 @@ func Scaffold(o NewOptions) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("touch %s: %w", f, err)
 		}
-		fh.Close()
+		_ = fh.Close()
 	}
 
 	// Build and write state.json
@@ -238,7 +238,7 @@ func renderTemplate(tmplName, dst string, data templateData) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", dst, err)
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 	if err := tmpl.Execute(fh, data); err != nil {
 		return fmt.Errorf("execute template %s: %w", tmplName, err)
 	}
@@ -250,13 +250,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("open %s: %w", src, err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.Create(dst)
 	if err != nil {
 		return fmt.Errorf("create %s: %w", dst, err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return fmt.Errorf("copy %s→%s: %w", src, dst, err)

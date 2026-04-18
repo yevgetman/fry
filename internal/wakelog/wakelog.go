@@ -39,7 +39,7 @@ func Append(missionDir string, e Entry) error {
 	if err != nil {
 		return fmt.Errorf("wakelog.Append: open: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = fmt.Fprintf(f, "%s\n", data)
 	return err
 }

@@ -107,12 +107,12 @@ func Assemble(m *state.Mission, missionDir string, lastN int, now time.Time) (st
 	// L5 — current-wake directive (changes every wake)
 	elapsed := m.ElapsedHours(now)
 	sb.WriteString("# Current Wake Directive\n\n")
-	sb.WriteString(fmt.Sprintf(
+	fmt.Fprintf(&sb,
 		"This is wake %d. Elapsed: %.2fh. Status: %s. Mission directory: %s\n\n"+
 			"Do one unit of work as described above.\n"+
 			"When done, output %s as the final line of stdout.\n",
 		wakeNum, elapsed, m.Status, missionDir, PromiseToken,
-	))
+	)
 
 	return sb.String(), nil
 }

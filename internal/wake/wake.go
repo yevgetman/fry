@@ -25,7 +25,7 @@ func Execute(ctx context.Context, missionDir string, m *state.Mission) (*wakelog
 	if err != nil {
 		return nil, err
 	}
-	defer lk.Release()
+	defer func() { _ = lk.Release() }()
 
 	prompt, err := Assemble(m, missionDir, 5, now)
 	if err != nil {
