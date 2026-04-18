@@ -15,7 +15,7 @@
 ## DELIVERABLES STATUS
 
 - [x] **M1** — Filesystem + state (`fry new`, `fry list`, `fry status` work against disk)
-- [ ] **M2** — Scheduler + macOS LaunchAgent (`fry start`/`fry stop` install/remove LaunchAgent)
+- [x] **M2** — Scheduler + macOS LaunchAgent (`fry start`/`fry stop` install/remove LaunchAgent)
 - [ ] **M3** — Wake: claude invocation + promise token (one real wake end-to-end)
 - [ ] **M4** — Prompt assembly + notes.md round-trip (cross-wake memory demonstrated)
 - [ ] **M5** — Chat session (`fry chat demo` → Claude answers in 1 turn)
@@ -26,23 +26,23 @@
 
 ## Current Phase
 
-`building` (M1 complete; M2 begins next wake)
+`building` (M2 complete; M3 begins next wake)
 
 ## Current Wake Number
 
-`2`
+`3`
 
 ## Elapsed Hours Since CREATED_AT
 
-`0.503` (at close of wake 2)
+`0.763` (at close of wake 3)
 
 ## Current Focus
 
-> Wake 2 (M1): Completed M1 in full. go.mod, internal/state, internal/mission, cmd/fry/main.go, Makefile all written. fry new/list/status working. 9 unit tests passing. Binary installed at ~/go/bin/fry.
+> Wake 3 (M2): M2 fully implemented and verified. internal/scheduler (darwin.go launchctl backend), internal/wake/lock.go (mkdir overlap lock), internal/wakelog/wakelog.go (Append/TailN), fry start/stop/wake/logs all wired. fry start m2test → launchctl list shows com.fry.m2test. All tests passing.
 
 ## Next Wake Should
 
-Begin M2: implement `internal/scheduler/scheduler.go` (interface), `internal/scheduler/darwin.go` (launchctl backend), `internal/wake/lock.go` (mkdir-based overlap lock), and wire `fry start` + `fry stop` + stub `fry wake` subcommands in cmd/fry/main.go. Verify `fry start demo && launchctl list | grep fry` shows the agent. Commit and push.
+Begin M3: implement `internal/wake/claude.go` (spawn `claude -p` subprocess with effort flags, capture stdout), `internal/wake/promise.go` (extract `===WAKE_DONE===` token), and `internal/wake/wake.go` (orchestrate: lock → assemble stub prompt → RunClaude → check promise → Append wakelog → update state → release lock). Replace the stub `fry wake` with the real implementation. Verify with a trivial prompt that writes to artifacts/out.txt and outputs the promise token.
 
 ## Key Decisions Made (append-only)
 
@@ -53,10 +53,12 @@ Begin M2: implement `internal/scheduler/scheduler.go` (interface), `internal/sch
 - **2026-04-18T14:49:18Z (wake 1):** Promise token for wake completion: `===WAKE_DONE===` as the final line of wake stdout.
 - **2026-04-18T14:49:18Z (wake 1):** Scheduler teardown authority: agent signals (`FRY_STATUS_TRANSITION=complete` on stdout), tool terminates. Agent must NOT call `launchctl` directly.
 - **2026-04-18T15:19:27Z (wake 2):** Legacy fry binary at `/Users/julie/.local/bin/fry` shadows new binary in shell PATH. New binary is correctly at `/Users/julie/go/bin/fry`. All verification must use full path `~/go/bin/fry` or ensure `~/go/bin` precedes `~/.local/bin` in PATH. Runner.sh template sets PATH explicitly — this is safe for scheduled execution.
+- **2026-04-18T15:35:XX Z (wake 3):** `launchctl load` works fine on macOS 25.2 (Darwin) for LaunchAgents — no need for `bootstrap gui/<uid>/<label>`. Closed the open question.
+- **2026-04-18T15:35:XX Z (wake 3):** `lock/` directory is NOT pre-created by scaffold; it is the mutex itself (created by `wake.Acquire`, removed by `wake.Release`). Fixed layout.go and layout_test.go.
 
 ## Open Questions / Things To Resolve (living list)
 
-- [ ] LaunchAgent plist: confirm `launchctl load` vs `launchctl bootstrap` — newer macOS prefers `bootstrap gui/<uid>/<label>`. Test in M2.
+- [x] LaunchAgent plist: `launchctl load` works on macOS 25.2 — confirmed in wake 3.
 - [ ] Cost parsing from `claude -p --output-format json`: verify exact JSON field name for cost. Read from claude docs or test empirically in M3.
 - [ ] Stale lock recovery: build-plan §8 risk register notes `mtime > 2×interval` → assume stale + take over. Implement in M2/M3.
 - [x] `make install` target: resolved — `go install` installs to `~/go/bin/fry`. Confirmed working.
