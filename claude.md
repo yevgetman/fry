@@ -22,7 +22,7 @@
 - [x] **M6** — Deadlines + no-op detection + shutdown (dogfood mission auto-transitions to `complete`)
 - [x] **M7** — Polish + README + ship (all spec §15 gates green)
 - [x] `SHIPPED.md` at repo root (honest documentation of what works / doesn't)
-- [ ] End-to-end smoke test: trivial mission runs one wake, logs one entry, self-terminates
+- [x] End-to-end smoke test: trivial mission runs one wake, logs one entry, self-terminates
 
 ## Current Phase
 
@@ -30,19 +30,19 @@
 
 ## Current Wake Number
 
-`8`
+`9`
 
 ## Elapsed Hours Since CREATED_AT
 
-`2.0` (at close of wake 8)
+`2.2` (at close of wake 9)
 
 ## Current Focus
 
-> Wake 8 (M7): README.md written (pitch, install, quickstart, file layout, how-it-works). SHIPPED.md written (honest gaps: no formal acceptance run, stale lock not implemented, no CI). Fixed all golangci-lint issues (errcheck defer patterns + staticcheck S1005/QF1012). go vet clean, golangci-lint 0 issues, all tests pass. 1917 non-test LOC (under 2000). Committed and tagged v0.1.0.
+> Wake 9 (shutdown): All M1–M7 deliverables done. Smoke test verified (trivial mission, 1 wake, hard-deadline self-termination). LaunchAgent unloaded. Final log entry written. Mission complete.
 
 ## Next Wake Should
 
-Mission complete. All M1–M7 deliverables done. SHIPPED.md exists. Soft shutdown when scheduler next fires.
+Mission is complete and LaunchAgent is unloaded. No further wakes will fire.
 
 ## Key Decisions Made (append-only)
 
