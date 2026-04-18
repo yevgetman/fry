@@ -1,0 +1,29 @@
+# build artifacts
+bin/
+dist/
+/fry
+/fry-*
+
+# go
+*.test
+*.out
+coverage.txt
+vendor/
+
+# logs & locks (orchestration artifacts, not source)
+logs/cron.log
+logs/launchd.stdout.log
+logs/launchd.stderr.log
+logs/*.tmp
+
+# macOS
+.DS_Store
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# stray pre-existing scratch from fry-legacy carry-over
+.self-improve/
