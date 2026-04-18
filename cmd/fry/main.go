@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/yevgetman/fry/internal/chat"
 	"github.com/yevgetman/fry/internal/mission"
 	"github.com/yevgetman/fry/internal/scheduler"
 	"github.com/yevgetman/fry/internal/state"
@@ -39,6 +40,7 @@ func rootCmd() *cobra.Command {
 		stopCmd(),
 		wakeCmd(),
 		logsCmd(),
+		chatCmd(),
 	)
 
 	return root
@@ -366,6 +368,25 @@ func logsCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&baseDir, "base-dir", "", "Base directory for missions (default: ~/missions/)")
 	cmd.Flags().IntVarP(&n, "num", "n", 10, "Number of entries to show")
+	return cmd
+}
+
+func chatCmd() *cobra.Command {
+	var baseDir string
+	cmd := &cobra.Command{
+		Use:   "chat <name>",
+		Short: "Open an interactive Claude session with mission context",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			missionDir, m, err := loadMission(name, baseDir)
+			if err != nil {
+				return err
+			}
+			return chat.Launch(missionDir, m)
+		},
+	}
+	cmd.Flags().StringVar(&baseDir, "base-dir", "", "Base directory for missions (default: ~/missions/)")
 	return cmd
 }
 
