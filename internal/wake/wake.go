@@ -3,8 +3,6 @@ package wake
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/yevgetman/fry/internal/scheduler"
@@ -29,7 +27,7 @@ func Execute(ctx context.Context, missionDir string, m *state.Mission) (*wakelog
 	}
 	defer lk.Release()
 
-	prompt, err := buildPrompt(missionDir, m, now)
+	prompt, err := Assemble(m, missionDir, 5, now)
 	if err != nil {
 		return nil, fmt.Errorf("wake: build prompt: %w", err)
 	}
@@ -98,22 +96,6 @@ func Execute(ctx context.Context, missionDir string, m *state.Mission) (*wakelog
 	}
 
 	return &entry, nil
-}
-
-// buildPrompt assembles the wake prompt (M3 stub: reads prompt.md + appends directive).
-func buildPrompt(missionDir string, m *state.Mission, now time.Time) (string, error) {
-	promptPath := filepath.Join(missionDir, "prompt.md")
-	data, err := os.ReadFile(promptPath)
-	if err != nil {
-		return "", fmt.Errorf("read prompt.md: %w", err)
-	}
-	elapsed := m.ElapsedHours(now)
-	directive := fmt.Sprintf(
-		"\n\n---\nThis is wake %d. Elapsed: %.2fh. Mission directory: %s\n"+
-			"Do one unit of work described above. When done, output %s as the final line.\n",
-		m.CurrentWake+1, elapsed, missionDir, PromiseToken,
-	)
-	return string(data) + directive, nil
 }
 
 // hardStop writes a terminal log entry and marks the mission complete without calling claude.
