@@ -86,4 +86,8 @@ No-op detection: if the last 3 wakes all lack a promise token, a `noop_warning` 
 
 ## For more detail
 
-See [`product-spec.md`](product-spec.md) for the full design thesis and [`build-plan.md`](build-plan.md) for milestone details.
+See [`product-spec.md`](product-spec.md) for the full design thesis, [`build-plan.md`](build-plan.md) for milestone details, and [`SHIPPED.md`](SHIPPED.md) for the authoritative list of what works and known gaps.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for codebase development doctrine — mandatory checks, Go conventions, test standards, and architecture invariants.
