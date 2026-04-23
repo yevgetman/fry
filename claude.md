@@ -30,19 +30,19 @@
 
 ## Current Wake Number
 
-`9`
+`161`
 
 ## Elapsed Hours Since CREATED_AT
 
-`2.2` (at close of wake 9)
+`83.6` (at close of wake 161)
 
 ## Current Focus
 
-> Wake 9 (shutdown): All M1–M7 deliverables done. Smoke test verified (trivial mission, 1 wake, hard-deadline self-termination). LaunchAgent unloaded. Final log entry written. Mission complete.
+> Wake 161 (spurious): Mission was already complete since wake 9. LaunchAgent was found still loaded (PID 37394) — unloaded it again. No further wakes should fire.
 
 ## Next Wake Should
 
-Mission is complete and LaunchAgent is unloaded. No further wakes will fire.
+Mission is complete. LaunchAgent confirmed unloaded in wake 161. No further wakes will fire.
 
 ## Key Decisions Made (append-only)
 
