@@ -16,8 +16,8 @@ import (
 // Assemble builds the layered wake prompt:
 //
 //	L0: static wake-contract preamble (stable — cache-friendly)
-//	L1: mission overview (prompt.md)
-//	L2: plan body (plan.md, if present)
+//	L1: mission overview (prompt.md, or plan.md if prompt.md absent)
+//	L2: plan body (plan.md, if present AND prompt.md also present)
 //	L3: notes.md — current focus, next-wake handoff, supervisor injections, decisions
 //	L4: last N wake_log entries
 //	L5: current-wake directive (changes every wake)
@@ -36,20 +36,28 @@ func Assemble(m *state.Mission, missionDir string, lastN int, now time.Time) (st
 	sb.WriteString("- Do NOT run launchctl, systemctl, or any scheduler command directly.\n")
 	sb.WriteString("- Signal mission complete via FRY_STATUS_TRANSITION=complete on stdout.\n\n")
 
-	// L1 — mission overview from prompt.md
-	promptData, err := os.ReadFile(filepath.Join(missionDir, "prompt.md"))
-	if err != nil {
-		return "", fmt.Errorf("prompt.Assemble: read prompt.md: %w", err)
-	}
-	sb.WriteString("# Mission Overview\n\n")
-	sb.Write(promptData)
-	sb.WriteString("\n\n")
-
-	// L2 — plan.md if present (optional input mode)
-	if planData, err := os.ReadFile(filepath.Join(missionDir, "plan.md")); err == nil {
-		sb.WriteString("# Plan\n\n")
+	// L1 — mission overview from prompt.md, falling back to plan.md when the
+	// mission was scaffolded with --plan (no prompt.md on disk).
+	promptData, promptErr := os.ReadFile(filepath.Join(missionDir, "prompt.md"))
+	planData, planErr := os.ReadFile(filepath.Join(missionDir, "plan.md"))
+	switch {
+	case promptErr == nil:
+		sb.WriteString("# Mission Overview\n\n")
+		sb.Write(promptData)
+		sb.WriteString("\n\n")
+		// L2 — include plan.md as a separate section only when prompt.md
+		// supplied L1, so a plan-only mission isn't duplicated.
+		if planErr == nil {
+			sb.WriteString("# Plan\n\n")
+			sb.Write(planData)
+			sb.WriteString("\n\n")
+		}
+	case planErr == nil:
+		sb.WriteString("# Mission Overview\n\n")
 		sb.Write(planData)
 		sb.WriteString("\n\n")
+	default:
+		return "", fmt.Errorf("prompt.Assemble: need prompt.md or plan.md in %s: %w", missionDir, promptErr)
 	}
 
 	// L3 — notes.md sections (changes each wake)

@@ -127,14 +127,36 @@ func TestAssemble_IncludesRecentWakeLog(t *testing.T) {
 	assert.Contains(t, out, "did thing B")
 }
 
-func TestAssemble_MissingPromptIsError(t *testing.T) {
+func TestAssemble_MissingPromptAndPlanIsError(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir() // no prompt.md
+	dir := t.TempDir() // neither prompt.md nor plan.md
 
 	m := &state.Mission{MissionID: "x", CreatedAt: time.Now().UTC(), Status: state.StatusActive}
 	_, err := Assemble(m, dir, 5, time.Now().UTC())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "prompt.md")
+}
+
+func TestAssemble_PlanOnlyUsedAsL1(t *testing.T) {
+	t.Parallel()
+	// When a mission is scaffolded via `fry new --plan`, only plan.md exists
+	// on disk. Assemble must use plan.md as the L1 mission overview, not fail.
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "plan.md"), []byte("# Plan body\nStep 1."), 0o644))
+
+	m := &state.Mission{
+		MissionID: "planonly", CreatedAt: time.Now().UTC().Add(-5 * time.Minute),
+		InputMode: "plan", Effort: "fast", IntervalSeconds: 300, DurationHours: 1,
+		Status: state.StatusActive,
+	}
+	out, err := Assemble(m, dir, 5, time.Now().UTC())
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "# Mission Overview")
+	assert.Contains(t, out, "Step 1.")
+	// L2 "# Plan" section must be absent — the plan body already supplied L1,
+	// don't duplicate it.
+	assert.NotContains(t, out, "# Plan\n", "plan section must not duplicate L1 when plan.md supplied the overview")
 }
 
 func TestAssemble_LayerOrderStableAcrossWakes(t *testing.T) {
